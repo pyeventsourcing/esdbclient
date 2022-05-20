@@ -3,5 +3,5 @@ from unittest import TestCase
 
 
 class TestEsdbClient(TestCase):
-    def test(self):
+    def test(self) -> None:
         pass

@@ -72,7 +72,7 @@ jobs:
           key: os-${{ matrix.os }}-python-${{ matrix.python-version}}-${{ hashFiles('**/poetry.lock') }}
       - name: Start EventStoreDB
         run: |
-          make start-evenstoredb
+          make start-esdb
           sleep 60
       - name: Run tests
         run: make test

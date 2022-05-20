@@ -82,11 +82,11 @@ build:
 publish:
 	$(POETRY) publish
 
-.PHONY: start-eventstoredb
+.PHONY: start-esdb
 start-eventstoredb:
 	docker run -d --name my-eventstoredb -it -p 2113:2113 -p 1113:1113 eventstore/eventstore:21.10.2-buster-slim --insecure
 
-.PHONY: stop-eventstoredb
+.PHONY: stop-esdb
 stop-eventstoredb:
 	docker stop my-eventstoredb
 	docker rm my-eventstoredb
