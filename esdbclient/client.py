@@ -47,11 +47,9 @@ class NewEvent:
 
 
 @dataclass(frozen=True)
-class RecordedEvent:
+class RecordedEvent(NewEvent):
     stream_name: str
     stream_position: int
-    type: str
-    data: bytes
     commit_position: int
 
 
@@ -233,12 +231,12 @@ class Streams:
                 if response.WhichOneof("content") == "stream_not_found":
                     raise StreamNotFound(f"Stream '{stream_name}' not found")
                 yield RecordedEvent(
+                    type=response.event.event.metadata["type"],
+                    data=response.event.event.data,
                     stream_name=response.event.event.stream_identifier.stream_name.decode(
                         "utf8"
                     ),
                     stream_position=response.event.event.stream_revision,
-                    type=response.event.event.metadata["type"],
-                    data=response.event.event.data,
                     commit_position=response.event.commit_position,
                 )
         except RpcError as e:
