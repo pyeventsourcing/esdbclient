@@ -1,24 +1,139 @@
 # -*- coding: utf-8 -*-
+from typing import Any
 from unittest import TestCase
 from uuid import uuid4
 
+from grpc import Call, RpcError, StatusCode
+
 from esdbclient.client import (
+    DeadlineExceeded,
     EsdbClient,
     ExpectedPositionError,
+    GrpcError,
     NewEvent,
     ServiceUnavailable,
     StreamNotFound,
+    handle_rpc_error,
 )
 
 
 class TestEsdbClient(TestCase):
     def test_service_unavailable_exception(self) -> None:
         esdb_client = EsdbClient("localhost:2222")
+
         with self.assertRaises(ServiceUnavailable) as cm:
             list(esdb_client.read_stream_events(str(uuid4())))
         self.assertEqual(
             cm.exception.args[0].details(), "failed to connect to all addresses"
         )
+
+        with self.assertRaises(ServiceUnavailable) as cm:
+            esdb_client.append_events(str(uuid4()), expected_position=None, events=[])
+        self.assertEqual(
+            cm.exception.args[0].details(), "failed to connect to all addresses"
+        )
+
+    def test_handle_deadline_exceeded_error(self) -> None:
+        class DeadlineExceededRpcError(RpcError, Call):
+            def initial_metadata(self) -> None:
+                pass
+
+            def trailing_metadata(self) -> None:
+                pass
+
+            def code(self) -> StatusCode:
+                return StatusCode.DEADLINE_EXCEEDED
+
+            def details(self) -> None:
+                pass
+
+            def is_active(self) -> None:
+                pass
+
+            def time_remaining(self) -> None:
+                pass
+
+            def cancel(self) -> None:
+                pass
+
+            def add_callback(self, callback: Any) -> None:
+                pass
+
+        with self.assertRaises(GrpcError) as cm:
+            handle_rpc_error(DeadlineExceededRpcError())
+        self.assertEqual(cm.exception.__class__, DeadlineExceeded)
+
+    def test_handle_unavailable_error(self) -> None:
+        class UnavailableRpcError(RpcError, Call):
+            def initial_metadata(self) -> None:
+                pass
+
+            def trailing_metadata(self) -> None:
+                pass
+
+            def code(self) -> StatusCode:
+                return StatusCode.UNAVAILABLE
+
+            def details(self) -> None:
+                pass
+
+            def is_active(self) -> None:
+                pass
+
+            def time_remaining(self) -> None:
+                pass
+
+            def cancel(self) -> None:
+                pass
+
+            def add_callback(self, callback: Any) -> None:
+                pass
+
+        with self.assertRaises(GrpcError) as cm:
+            handle_rpc_error(UnavailableRpcError())
+        self.assertEqual(cm.exception.__class__, ServiceUnavailable)
+
+    def test_handle_other_call_error(self) -> None:
+        class OtherRpcError(RpcError, Call):
+            def initial_metadata(self) -> None:
+                pass
+
+            def trailing_metadata(self) -> None:
+                pass
+
+            def code(self) -> int:
+                return -1
+
+            def details(self) -> None:
+                pass
+
+            def is_active(self) -> None:
+                pass
+
+            def time_remaining(self) -> None:
+                pass
+
+            def cancel(self) -> None:
+                pass
+
+            def add_callback(self, callback: Any) -> None:
+                pass
+
+        with self.assertRaises(GrpcError) as cm:
+            handle_rpc_error(OtherRpcError())
+        self.assertEqual(cm.exception.__class__, GrpcError)
+
+    def test_handle_non_call_rpc_error(self) -> None:
+
+        # Check non-Call errors are handled.
+        class MyRpcError(RpcError):
+            pass
+
+        msg = "some non-Call error"
+        with self.assertRaises(GrpcError) as cm:
+            handle_rpc_error(MyRpcError(msg))
+        self.assertEqual(cm.exception.__class__, GrpcError)
+        self.assertIsInstance(cm.exception.args[0], MyRpcError)
 
     def test_stream_not_found_exception(self) -> None:
         esdb_client = EsdbClient("localhost:2113")

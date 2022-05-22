@@ -5,8 +5,7 @@ from typing import Iterable, List, Optional, overload
 from uuid import uuid4
 
 import grpc
-from grpc import Channel, RpcError, StatusCode
-from grpc._channel import _MultiThreadedRendezvous
+from grpc import Call, Channel, RpcError, StatusCode
 
 from esdbclient.protos.Grpc.shared_pb2 import UUID, Empty, StreamIdentifier
 from esdbclient.protos.Grpc.streams_pb2 import AppendReq, AppendResp, ReadReq, ReadResp
@@ -25,6 +24,10 @@ class ServiceUnavailable(GrpcError):
     pass
 
 
+class DeadlineExceeded(GrpcError):
+    pass
+
+
 class StreamNotFound(EsdbClientException):
     pass
 
@@ -34,9 +37,11 @@ class ExpectedPositionError(EsdbClientException):
 
 
 def handle_rpc_error(e: RpcError) -> None:
-    if isinstance(e, _MultiThreadedRendezvous):
+    if isinstance(e, Call):
         if e.code() == StatusCode.UNAVAILABLE:
             raise ServiceUnavailable(e)
+        elif e.code() == StatusCode.DEADLINE_EXCEEDED:
+            raise DeadlineExceeded(e)
     raise GrpcError(e) from None
 
 
