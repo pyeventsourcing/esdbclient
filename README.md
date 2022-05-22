@@ -36,16 +36,28 @@ client = EsdbClient(uri='localhost:2113')
 ### Append events
 
 The method `append_events()` can be used to append events to
-a stream. The arguments `stream_name`, `expected_position` and `new_events`
-are required. The `stream_name` is a string. The `stream_position`
-is an optional integer: an integer representing the expected current
-position of the stream; or `None` if the stream is expected not to exist.
+a stream.
+
+The arguments `stream_name`, `expected_position` and `new_events`
+are required.
+
+The `stream_name` argument is a string that uniquely identifies
+the stream in the database.
+
+The `expected_position` argument is an optional integer that specifies
+the expected position of the end of the stream in the database: either
+an integer representing the expected current position of the stream;
+or `None` if the stream is expected not to exist.
+
 The `events` argument is a list of new event objects to be appended to the
 stream. The class `NewEvent` can be used to construct new event objects.
 
 The method `append_events()` returns the "commit position", which is a
 monotonically increasing integer representing the position of the recorded
 event in a "total order" of all recorded events in all streams.
+
+In the example below, a stream is created by appending a new event with
+`expected_position=None`.
 
 ```python
 from uuid import uuid4
@@ -58,22 +70,15 @@ event1 = NewEvent(type="OrderCreated", data=b"{}")
 # Define stream name.
 stream_name1 = str(uuid4())
 
-# Append list of events to new stream (expected_position=None).
+# Append list of events to new stream.
 commit_position1 = client.append_events(
     stream_name=stream_name1, expected_position=None, events=[event1]
 )
 ```
 
-The sequence of stream positions is gapless and zero-based, so the
-expected position of the stream after appending the first event is
-zero. The method `get_stream_position()` can be used to obtain the
-current position of the stream.
-
-```python
-current_position = client.get_stream_position(stream_name=stream_name1)
-
-assert current_position == 0
-```
+In the example below, two subsequent events are appended to an existing
+stream. Since the stream only has one recorded event, the current position
+of the end of the stream is `0`.
 
 ```python
 event2 = NewEvent(type="OrderUpdated", data=b"{}")
@@ -200,13 +205,26 @@ assert events[0].data == event3.data
 ### Get current stream position
 
 The method `get_stream_position()` can be used to get the current
-position of the stream. This is the stream position of the last
-event in the stream.
+stream position of the last event in the stream.
 
 ```python
 current_position = client.get_stream_position(stream_name1)
 
 assert current_position == 2
+```
+
+The sequence of stream positions is intended to be gapless. It is
+also usually zero-based, so that the position of the end of the stream
+when one event has been appended is `0`. The position is `1` after two
+events have been appended, and `2` after three events have been appended.
+
+The position of a stream that does not exist is reported by this method to
+be `None`.
+
+```python
+current_position = client.get_stream_position(stream_name=stream_name1)
+
+assert current_position == None
 ```
 
 ### Read all recorded events
