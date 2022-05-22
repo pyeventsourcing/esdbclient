@@ -361,7 +361,9 @@ new_event = NewEvent(
 )
 ```
 
-The `RecordedEvent` class is be used when reading recorded events.
+### The RecordedEvent class
+
+The `RecordedEvent` class is used when reading recorded events.
 
 The attribute `type` is a unicode string, used to indicate the type of the event
 that was recorded.
