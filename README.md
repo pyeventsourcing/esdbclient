@@ -1,7 +1,8 @@
 # Python gRPC Client for EventStoreDB
 
-This package provides a Python gRPC client for EventStoreDB. It has
-been developed and tested to work with version 21.10 of EventStoreDB,
+This package provides a Python gRPC client for
+[EventStoreDB](https://www.eventstore.com/). It has been
+developed and tested to work with version 21.10 of EventStoreDB,
 and with Python versions 3.7, 3.8, 3.9, and 3.10.
 
 ## Installation
