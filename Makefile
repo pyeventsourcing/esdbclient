@@ -82,11 +82,27 @@ build:
 publish:
 	$(POETRY) publish
 
-.PHONY: start-esdb
+.PHONY: grpc-stubs
+grpc-stubs:
+	python -m grpc_tools.protoc \
+	  --proto_path=./protos \
+	  --python_out=. \
+	  --grpc_python_out=. \
+	  --mypy_out=. \
+	  protos/esdbclient/protos/Grpc/code.proto 	  \
+	  protos/esdbclient/protos/Grpc/shared.proto 	  \
+	  protos/esdbclient/protos/Grpc/status.proto 	  \
+	  protos/esdbclient/protos/Grpc/streams.proto
+# 	  protos/esdbclient/protos/command.proto \
+# 	  protos/esdbclient/protos/control.proto \
+# 	  protos/esdbclient/protos/event.proto \
+# 	  protos/esdbclient/protos/query.proto
+
+.PHONY: start-eventstoredb
 start-eventstoredb:
 	docker run -d --name my-eventstoredb -it -p 2113:2113 -p 1113:1113 eventstore/eventstore:21.10.2-buster-slim --insecure
 
-.PHONY: stop-esdb
+.PHONY: stop-eventstoredb
 stop-eventstoredb:
 	docker stop my-eventstoredb
 	docker rm my-eventstoredb
