@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "esdbclient"
-version = "0.1.dev0"
+version = "0.1"
 description = "EventStoreDB Client"
 authors = [
     "John Bywater <john.bywater@appropriatesoftware.net>",
@@ -16,8 +16,8 @@ classifiers = [
     "Programming Language :: Python",
 ]
 readme = "README.md"
-#homepage = ""
-#repository = ""
+homepage = "https://github.com/pyeventsourcing/esdbclient"
+repository = "https://github.com/pyeventsourcing/esdbclient"
 include = ["esdbclient/py.typed"]
 
 [tool.poetry.dependencies]
