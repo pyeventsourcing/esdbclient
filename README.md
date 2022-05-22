@@ -65,7 +65,7 @@ from uuid import uuid4
 from esdbclient.client import NewEvent
 
 # Construct new event object.
-event1 = NewEvent(type="OrderCreated", data=b"{}")
+event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
 
 # Define stream name.
 stream_name1 = str(uuid4())
@@ -81,8 +81,8 @@ stream. Since the stream only has one recorded event, the current position
 of the end of the stream is `0`.
 
 ```python
-event2 = NewEvent(type="OrderUpdated", data=b"{}")
-event3 = NewEvent(type="OrderDeleted", data=b"{}")
+event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
 
 commit_position2 = client.append_events(
     stream_name1, expected_position=0, events=[event2, event3]
@@ -349,10 +349,14 @@ to be recorded.
 The attribute `data` is a byte string, used to specify the data of the event
 to be recorded.
 
+The attribute `metadata` is a byte string, used to specify metadata for the event
+to be recorded.
+
 ```python
 new_event = NewEvent(
     type="OrderCreated",
     data=b"{}",
+    metadata=b"{}",
 )
 ```
 
@@ -362,6 +366,9 @@ The attribute `type` is a unicode string, used to indicate the type of the event
 that was recorded.
 
 The attribute `data` is a byte string, used to specify the data of the event
+that was recorded.
+
+The attribute `metadata` is a byte string, used to specify metadata for the event
 that was recorded.
 
 The attribute `stream_name` is a unicode string, used to indicate the type of
@@ -380,6 +387,7 @@ from esdbclient.client import RecordedEvent
 new_event = RecordedEvent(
     type="OrderCreated",
     data=b"{}",
+    metadata=b"{}",
     stream_name="stream1",
     stream_position=0,
     commit_position=512,

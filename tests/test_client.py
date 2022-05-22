@@ -84,7 +84,7 @@ class TestEsdbClient(TestCase):
         self.assertEqual(client.get_stream_position(stream_name), None)
 
         # Check get error when attempting to append new event to position 1.
-        event1 = NewEvent(type="OrderCreated", data=b"{}")
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         with self.assertRaises(ExpectedPositionError) as cm:
             client.append_events(stream_name, expected_position=1, events=[event1])
         self.assertEqual(cm.exception.args[0], f"Stream '{stream_name}' does not exist")
@@ -107,7 +107,7 @@ class TestEsdbClient(TestCase):
         self.assertEqual(events[0].type, "OrderCreated")
 
         # Check we can't append another new event at initial position.
-        event2 = NewEvent(type="OrderUpdated", data=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
         with self.assertRaises(ExpectedPositionError) as cm:
             client.append_events(stream_name, expected_position=None, events=[event2])
         self.assertEqual(cm.exception.args[0], "Current position is 0")
@@ -122,7 +122,7 @@ class TestEsdbClient(TestCase):
 
         # NB: Why isn't this +1? because it's "disk position" :-|
         # self.assertEqual(commit_position3 - commit_position2, 1)
-        self.assertEqual(commit_position3 - commit_position2, 140)
+        self.assertEqual(commit_position3 - commit_position2, 142)
 
         # Read the stream (expect two events in 'forwards' order).
         events = list(client.read_stream_events(stream_name))
@@ -159,7 +159,7 @@ class TestEsdbClient(TestCase):
         self.assertEqual(events[0].type, "OrderUpdated")
 
         # Check we can't append another new event at second position.
-        event3 = NewEvent(type="OrderDeleted", data=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
         with self.assertRaises(ExpectedPositionError) as cm:
             client.append_events(stream_name, expected_position=0, events=[event3])
         self.assertEqual(cm.exception.args[0], "Current position is 1")
@@ -174,7 +174,7 @@ class TestEsdbClient(TestCase):
 
         # NB: Why isn't this +1? because it's "disk position" :-|
         # self.assertEqual(commit_position4 - commit_position3, 1)
-        self.assertEqual(commit_position4 - commit_position3, 140)
+        self.assertEqual(commit_position4 - commit_position3, 142)
 
         # Read the stream forwards from start (expect three events).
         events = list(client.read_stream_events(stream_name))
@@ -207,9 +207,9 @@ class TestEsdbClient(TestCase):
 
         num_old_events = len(list(esdb_client.read_all_events()))
 
-        event1 = NewEvent(type="OrderCreated", data=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=b"{}")
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
 
         # Append new events.
         stream_name1 = str(uuid4())

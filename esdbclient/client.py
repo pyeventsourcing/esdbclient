@@ -44,6 +44,7 @@ def handle_rpc_error(e: RpcError) -> None:
 class NewEvent:
     type: str
     data: bytes
+    metadata: bytes
 
 
 @dataclass(frozen=True)
@@ -233,6 +234,7 @@ class Streams:
                 yield RecordedEvent(
                     type=response.event.event.metadata["type"],
                     data=response.event.event.data,
+                    metadata=response.event.event.custom_metadata,
                     stream_name=response.event.event.stream_identifier.stream_name.decode(
                         "utf8"
                     ),
@@ -280,7 +282,7 @@ class Streams:
                             "type": event.type,
                             "content-type": "application/octet-stream",
                         },
-                        custom_metadata=b"",
+                        custom_metadata=event.metadata,
                         data=event.data,
                     )
                 )
