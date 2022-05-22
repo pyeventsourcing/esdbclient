@@ -220,7 +220,8 @@ assert current_position == 2
 The sequence of stream positions is intended to be gapless. It is
 also usually zero-based, so that the position of the end of the stream
 when one event has been appended is `0`. The position is `1` after two
-events have been appended, and `2` after three events have been appended.
+events have been appended, `2` after three events have been appended,
+and so on.
 
 The position of a stream that does not exist is reported by this method to
 be `None`.
