@@ -89,6 +89,10 @@ commit_position2 = client.append_events(
 )
 ```
 
+Please note, whilst the appending in one operation of a list of events
+is atomic (either all or none will be recorded), by design it is only
+possible with EventStoreDB to atomically record events in one stream.
+
 ### Read stream events
 
 The method `read_stream_events()` can be used to read the recorded
@@ -222,7 +226,7 @@ The position of a stream that does not exist is reported by this method to
 be `None`.
 
 ```python
-current_position = client.get_stream_position(stream_name=stream_name1)
+current_position = client.get_stream_position(stream_name="stream-unknown")
 
 assert current_position == None
 ```
@@ -247,7 +251,8 @@ The method `read_stream_events()` supports three optional arguments,
 The argument `position` is an optional integer that can be used to indicate
 the commit position from which to start reading. This argument is `None` by default,
 meaning that all the events will be read from the start, or from the end if `backwards`
-is `True`.
+is `True`. Please note, if given the commit position must be an actually existing
+commit position, and any other numbers will result in an exception being raised.
 
 The argument `backwards` is a boolean which is by default `False` meaning all the
 events will be read forwards by default, so that events are returned in the
@@ -332,6 +337,53 @@ assert events[0].stream_name == stream_name1
 assert events[0].stream_position == 2
 assert events[0].type == event3.type
 assert events[0].data == event3.data
+```
+
+### The NewEvent class
+
+The `NewEvent` class can be used to define new events.
+
+The attribute `type` is a unicode string, used to specify the type of the event
+to be recorded.
+
+The attribute `data` is a byte string, used to specify the data of the event
+to be recorded.
+
+```python
+new_event = NewEvent(
+    type="OrderCreated",
+    data=b"{}",
+)
+```
+
+The `RecordedEvent` class is be used when reading recorded events.
+
+The attribute `type` is a unicode string, used to indicate the type of the event
+that was recorded.
+
+The attribute `data` is a byte string, used to specify the data of the event
+that was recorded.
+
+The attribute `stream_name` is a unicode string, used to indicate the type of
+the name of the stream in which the event was recorded.
+
+The attribute `stream_position` is an integer, used to indicate
+the position in the stream at which the event was recorded.
+
+The attribute `commit_position` is an integer, used to indicate
+the position in total order of all recorded events at which the
+event was recorded.
+
+```python
+from esdbclient.client import RecordedEvent
+
+new_event = RecordedEvent(
+    type="OrderCreated",
+    data=b"{}",
+    stream_name="stream1",
+    stream_position=0,
+    commit_position=512,
+)
 ```
 
 ### Stop EventStoreDB
