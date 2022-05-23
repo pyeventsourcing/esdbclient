@@ -169,7 +169,19 @@ class TestEsdbClient(TestCase):
                 )
             )
 
-    def test_stream_append_and_read(self) -> None:
+    def test_stream_append_and_read_without_occ(self) -> None:
+        client = EsdbClient("localhost:2113")
+        stream_name = str(uuid4())
+
+        event1 = NewEvent(type="Snapshot", data=b"{}", metadata=b"{}")
+
+        # Append new event.
+        client.append_events(stream_name, expected_position=-1, events=[event1])
+        events = list(client.read_stream_events(stream_name, backwards=True, limit=1))
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].type, "Snapshot")
+
+    def test_stream_append_and_read_with_occ(self) -> None:
         client = EsdbClient("localhost:2113")
         stream_name = str(uuid4())
 

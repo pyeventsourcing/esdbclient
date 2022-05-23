@@ -259,12 +259,28 @@ class Streams:
         Appends events to named stream.
 
         :param stream_name: Name of the stream.
-        :param expected_position: Expected stream position.
+        :param expected_position: Expected stream position. This should be
+          `None` for a new stream, otherwise it should be the position of
+          the last recorded event in the stream (an non-negative integer).
+          If a negative integer is given, optimistic concurrency control
+          will be disabled.
         :param new_events: New events to be appended.
         :return: Commit position after events have been appended. This is the
            commit position of the last event to be appended either in this call,
            or in the previous call if zero events were given to be appended.
         """
+        if expected_position is None:
+            no_stream = Empty()
+            any = None
+        else:
+            assert isinstance(expected_position, int)
+            no_stream = None
+            if expected_position >= 0:
+                any = None
+            else:
+                expected_position = None
+                any = Empty()
+
         requests = [
             AppendReq(
                 options=AppendReq.Options(
@@ -272,8 +288,8 @@ class Streams:
                         stream_name=stream_name.encode("utf8")
                     ),
                     revision=expected_position,
-                    no_stream=Empty() if expected_position is None else None,
-                    # any=None,
+                    no_stream=no_stream,
+                    any=any,
                     # stream_exists=None,
                 ),
             )
