@@ -69,7 +69,7 @@ In the example below, a stream is created by appending a new event with
 ```python
 from uuid import uuid4
 
-from esdbclient.client import NewEvent
+from esdbclient.events import NewEvent
 
 # Construct new event object.
 event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -446,7 +446,8 @@ the position in total order of all recorded events at which the
 event was recorded.
 
 ```python
-from esdbclient.client import RecordedEvent
+
+from esdbclient.events import RecordedEvent
 
 new_event = RecordedEvent(
     type="OrderCreated",

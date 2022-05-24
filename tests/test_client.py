@@ -5,15 +5,15 @@ from uuid import uuid4
 
 from grpc import Call, RpcError, StatusCode
 
-from esdbclient.client import (
+from esdbclient.client import EsdbClient
+from esdbclient.esdbapi import handle_rpc_error
+from esdbclient.events import NewEvent
+from esdbclient.exceptions import (
     DeadlineExceeded,
-    EsdbClient,
     ExpectedPositionError,
     GrpcError,
-    NewEvent,
     ServiceUnavailable,
     StreamNotFound,
-    handle_rpc_error,
 )
 
 
