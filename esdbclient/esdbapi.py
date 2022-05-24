@@ -162,7 +162,7 @@ class Streams:
             filter_options = ReadReq.Options.FilterOptions(
                 stream_identifier=None,
                 event_type=ReadReq.Options.FilterOptions.Expression(regex=filter_regex),
-                max=1000,
+                count=Empty(),  # Todo: Figure out what 'window' should be.
             )
         else:
             filter_options = None
