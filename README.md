@@ -5,6 +5,13 @@ This package provides a Python gRPC client for
 developed and tested to work with version 21.10 of EventStoreDB,
 and with Python versions 3.7, 3.8, 3.9, and 3.10.
 
+Methods have typing annotations, the static typing is checked
+with mypy, and the test coverage is 100%.
+
+Not all the features of the EventStoreDB API are presented
+by this client in its current form, however most of the useful
+aspects are presented in an easy-to-use interface (see below).
+
 ## Installation
 
 Use pip to install this package from the
@@ -345,7 +352,8 @@ assert events[0].data == event3.data
 The method `subscribe_all_events()` can be used to create a
 "catch-up subscription" to EventStoreDB. The optional argument
 `position` can be used to specify a commit position from which
-to receive recorded events.
+to receive recorded events. Please note, returned events are those
+after the given commit position.
 
 This method returns an iterable object, a `CatchupSubscription`,
 from which recorded events can be obtained by iterating over the
@@ -385,10 +393,13 @@ for event in subscription:
     events.append(event)
     if len(events) == 3:
         break
+
+del subscription
 ```
 
-The subscription object might be used within a thread, with received
-object put on a queue. However, this client doesn't provide such a thing.
+The `CatchupSubscription` subscription object might be used within a thread,
+with recorded events put on a queue, for processing in a different thread.
+However, this client doesn't provide such a thing.
 
 ### The NewEvent class
 
