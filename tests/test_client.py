@@ -507,7 +507,7 @@ class TestEsdbClient(TestCase):
         self.assertIn("OrderUpdated", types)
         self.assertNotIn("OrderDeleted", types)
 
-    def test_subscribe_all_events(self) -> None:
+    def test_subscribe_all_events_default_filter(self) -> None:
         client = EsdbClient("localhost:2113")
 
         event1 = NewEvent(type="OrderCreated", data=b"{a}", metadata=b"{}")
@@ -537,9 +537,9 @@ class TestEsdbClient(TestCase):
         subscription = client.subscribe_all_events(position=commit_position)
 
         # Append three more events.
-        event1 = NewEvent(type="OrderCreated", data=b"{a}", metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=b"{b}", metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=b"{c}", metadata=b"{}")
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
         stream_name2 = str(uuid4())
         client.append_events(
             stream_name2, expected_position=None, events=[event1, event2, event3]
@@ -550,5 +550,80 @@ class TestEsdbClient(TestCase):
         for event in subscription:
             self.assertEqual(event.stream_name, stream_name2)
             events.append(event)
+            self.assertIn(event.type, ["OrderCreated", "OrderUpdated", "OrderDeleted"])
             if len(events) == 3:
                 break
+
+    def test_subscribe_all_events_no_filter(self) -> None:
+        client = EsdbClient("localhost:2113")
+
+        # Append new events.
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+        stream_name1 = str(uuid4())
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Subscribe from the current commit position.
+        subscription = client.subscribe_all_events(
+            filter_exclude=[],
+            filter_include=[],
+        )
+
+        # Expect to get system events.
+        for event in subscription:
+            if event.type.startswith("$"):
+                break
+
+    def test_subscribe_all_events_include_filter(self) -> None:
+        client = EsdbClient("localhost:2113")
+
+        # Append new events.
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+        stream_name1 = str(uuid4())
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Subscribe from the beginning.
+        subscription = client.subscribe_all_events(
+            filter_exclude=[],
+            filter_include=["OrderCreated"],
+        )
+
+        # Expect to only get "OrderCreated" events.
+        count = 0
+        for event in subscription:
+            if not event.type.startswith("OrderCreated"):
+                self.fail(f"Include filter is broken: {event.type}")
+            count += 1
+            break
+        self.assertEqual(count, 1)
+
+    def test_subscribe_all_events_from_commit_position_zero(self) -> None:
+        client = EsdbClient("localhost:2113")
+
+        # Append new events.
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+        stream_name1 = str(uuid4())
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Subscribe from the beginning.
+        subscription = client.subscribe_all_events(
+            position=0,
+        )
+
+        # Expect to only get "OrderCreated" events.
+        count = 0
+        for event in subscription:
+            count += 1
+            break
+        self.assertEqual(count, 1)

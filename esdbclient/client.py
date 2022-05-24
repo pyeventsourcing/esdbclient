@@ -154,10 +154,10 @@ class EsdbClient:
             filter_exclude=("\\$.*", ".*Snapshot"),
             limit=1,
         )
+        commit_position = 0
         for ev in recorded_events:
-            return ev.commit_position
-        else:
-            return 0
+            commit_position = ev.commit_position
+        return commit_position
 
     def subscribe_all_events(
         self,
