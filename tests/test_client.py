@@ -422,7 +422,8 @@ class TestEsdbClient(TestCase):
         self.assertEqual(events[0].type, "OrderDeleted")
 
         # Check we can read backwards from commit position 1.
-        # NB backwards here doesn't include event at commit position.
+        # NB backwards here doesn't include event at commit position, otherwise
+        # first event would an OrderDeleted event, and we get an OrderUpdated.
         events = list(
             esdb_client.read_all_events(position=commit_position1, backwards=True)
         )
