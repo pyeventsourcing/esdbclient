@@ -29,6 +29,11 @@ Use Docker to run EventStoreDB from the official container image on DockerHub.
 
     $ docker run -d --name my-eventstoredb -it -p 2113:2113 -p 1113:1113 eventstore/eventstore:21.10.2-buster-slim --insecure
 
+Please note, this will start the server without SSL/TLS enabled, allowing
+only "insecure" connections. The current version of this Python client package
+does not support SSL/TLS connections. A later version of this library will support
+"secure" connections.
+
 ### Construct client
 
 The class `EsdbClient` can be constructed with a `uri` that indicates the hostname
