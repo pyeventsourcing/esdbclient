@@ -623,7 +623,7 @@ class TestEsdbClient(TestCase):
 
         # Expect to only get "OrderCreated" events.
         count = 0
-        for event in subscription:
+        for _ in subscription:
             count += 1
             break
         self.assertEqual(count, 1)
