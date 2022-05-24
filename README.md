@@ -340,6 +340,56 @@ assert events[0].type == event3.type
 assert events[0].data == event3.data
 ```
 
+### Catch-up subscriptions
+
+The method `subscribe_all_events()` can be used to create a
+"catch-up subscription" to EventStoreDB. The optional argument
+`position` can be used to specify a commit position from which
+to receive recorded events.
+
+This method returns an iterable object, a `CatchupSubscription`,
+from which recorded events can be obtained by iterating over the
+subscription object.
+
+The recorded events can be processed. The commit position of
+the recorded event should be stored atomically with the results
+of processing the event. The value of the `position` argument can
+then be determined by reading the recorded commit position. This
+will accomplish "exactly once" processing of the events, from the
+point of view of the recorded results of processing the events, so
+long as there is a uniqueness constraint on the recorded commit
+position.
+
+
+```python
+
+# Get the current commit position.
+commit_position = client.get_commit_position()
+
+# Append three more events.
+stream_name = str(uuid4())
+event1 = NewEvent(type="OrderCreated", data=b"", metadata=b"{}")
+event2 = NewEvent(type="OrderUpdated", data=b"", metadata=b"{}")
+event3 = NewEvent(type="OrderDeleted", data=b"", metadata=b"{}")
+client.append_events(
+    stream_name, expected_position=None, events=[event1, event2, event3]
+)
+
+# Subscribe from the last commit position.
+subscription = client.subscribe_all_events(position=commit_position)
+
+# Check the stream name of the newly received events.
+events = []
+for event in subscription:
+    assert event.stream_name == stream_name
+    events.append(event)
+    if len(events) == 3:
+        break
+```
+
+The subscription object might be used within a thread, with received
+object put on a queue. However, this client doesn't provide such a thing.
+
 ### The NewEvent class
 
 The `NewEvent` class can be used to define new events.
