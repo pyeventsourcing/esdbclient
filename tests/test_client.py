@@ -331,33 +331,17 @@ class TestEsdbClient(TestCase):
 
     def test_timeout_stream_append_and_read(self) -> None:
         client = EsdbClient("localhost:2113")
-        stream_name = str(uuid4())
+        stream_name1 = str(uuid4())
 
         # Timeout appending new event.
         with self.assertRaises(DeadlineExceeded):
             client.append_events(
-                stream_name, expected_position=None, events=[], timeout=0
+                stream_name1, expected_position=None, events=[], timeout=0
             )
 
-        # Check recording failed (non-existent stream).
-        with self.assertRaises(StreamNotFound):
-            list(client.read_stream_events(stream_name))
-
-        # Timeout reading non-existent stream.
+        # Timeout reading stream.
         with self.assertRaises(DeadlineExceeded):
-            list(client.read_stream_events(stream_name, timeout=0))
-
-        # Actually append an event.
-        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
-        client.append_events(stream_name, expected_position=None, events=[event1])
-
-        # Check the stream now exists.
-        events = list(client.read_stream_events(stream_name))
-        self.assertEqual(len(events), 1)
-
-        # Timeout reading existent stream.
-        with self.assertRaises(DeadlineExceeded):
-            list(client.read_stream_events(stream_name, timeout=0.0001))
+            list(client.read_stream_events(stream_name1, timeout=0))
 
     def test_read_all_events(self) -> None:
         esdb_client = EsdbClient("localhost:2113")
