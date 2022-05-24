@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import re
 import sys
-from typing import Iterator, List, Optional, Pattern, Sequence
+from typing import Iterable, Iterator, List, Optional, Pattern, Sequence
 
 import grpc
 
@@ -13,7 +13,7 @@ from esdbclient.exceptions import StreamNotFound
 class CatchupSubscription:
     def __init__(
         self,
-        event_generator: Iterator[RecordedEvent],
+        event_generator: Iterable[RecordedEvent],
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
     ):
@@ -28,14 +28,14 @@ class CatchupSubscription:
             self.filter_regex = None
 
     def __iter__(self) -> Iterator[RecordedEvent]:
-        while True:
-            recorded_event = next(self.event_generator)
-            if recorded_event.type == "" and recorded_event.stream_name == "":
-                continue  # Todo: What is this? occurs several times (has commit_position=0)
+        for event in self.event_generator:
+            if event.type == "" and event.stream_name == "":
+                # Todo: What is this? occurs several times (has commit_position=0)
+                continue
             if self.filter_regex is None:
-                yield recorded_event
-            elif re.match(self.filter_regex, recorded_event.type):
-                yield recorded_event
+                yield event
+            elif re.match(self.filter_regex, event.type):
+                yield event
 
 
 class EsdbClient:
@@ -45,12 +45,17 @@ class EsdbClient:
         self.streams = Streams(self.channel)
 
     def append_events(
-        self, stream_name: str, expected_position: Optional[int], events: List[NewEvent]
+        self,
+        stream_name: str,
+        expected_position: Optional[int],
+        events: List[NewEvent],
+        timeout: Optional[float] = None,
     ) -> int:
         return self.streams.append(
             stream_name=stream_name,
             expected_position=expected_position,
             new_events=events,
+            timeout=timeout,
         )
 
     def read_stream_events(
@@ -59,12 +64,14 @@ class EsdbClient:
         position: Optional[int] = None,
         backwards: bool = False,
         limit: int = sys.maxsize,
-    ) -> Iterator[RecordedEvent]:
+        timeout: Optional[float] = None,
+    ) -> Iterable[RecordedEvent]:
         return self.streams.read(
             stream_name=stream_name,
             stream_position=position,
             backwards=backwards,
             limit=limit,
+            timeout=timeout,
         )
 
     def read_all_events(
@@ -74,22 +81,29 @@ class EsdbClient:
         filter_exclude: Sequence[str] = ("\\$.*",),  # Exclude "system events".
         filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
-    ) -> Iterator[RecordedEvent]:
+        timeout: Optional[float] = None,
+    ) -> Iterable[RecordedEvent]:
         return self.streams.read(
             commit_position=position,
             backwards=backwards,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             limit=limit,
+            timeout=timeout,
         )
 
-    def get_stream_position(self, stream_name: str) -> Optional[int]:
+    def get_stream_position(
+        self,
+        stream_name: str,
+        timeout: Optional[float] = None,
+    ) -> Optional[int]:
         try:
             last_event = list(
                 self.streams.read(
                     stream_name=stream_name,
                     backwards=True,
                     limit=1,
+                    timeout=timeout,
                 )
             )[0]
         except StreamNotFound:
@@ -97,11 +111,12 @@ class EsdbClient:
         else:
             return last_event.stream_position
 
-    def get_commit_position(self) -> int:
+    def get_commit_position(self, timeout: Optional[float] = None) -> int:
         recorded_events = self.read_all_events(
             backwards=True,
             filter_exclude=("\\$.*", ".*Snapshot"),
             limit=1,
+            timeout=timeout,
         )
         commit_position = 0
         for ev in recorded_events:
@@ -113,8 +128,13 @@ class EsdbClient:
         position: Optional[int] = None,
         filter_exclude: Sequence[str] = ("\\$.*",),  # Exclude "system events".
         filter_include: Sequence[str] = (),
-    ) -> CatchupSubscription:
-        response = self.streams.read(commit_position=position, subscribe=True)
+        timeout: Optional[float] = None,
+    ) -> Iterable[RecordedEvent]:
+        response = self.streams.read(
+            commit_position=position,
+            subscribe=True,
+            timeout=timeout,
+        )
         return CatchupSubscription(
             event_generator=response,
             filter_exclude=filter_exclude,

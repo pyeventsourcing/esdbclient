@@ -329,6 +329,36 @@ class TestEsdbClient(TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].type, "OrderUpdated")
 
+    def test_timeout_stream_append_and_read(self) -> None:
+        client = EsdbClient("localhost:2113")
+        stream_name = str(uuid4())
+
+        # Timeout appending new event.
+        with self.assertRaises(DeadlineExceeded):
+            client.append_events(
+                stream_name, expected_position=None, events=[], timeout=0
+            )
+
+        # Check recording failed (non-existent stream).
+        with self.assertRaises(StreamNotFound):
+            list(client.read_stream_events(stream_name))
+
+        # Timeout reading non-existent stream.
+        with self.assertRaises(DeadlineExceeded):
+            list(client.read_stream_events(stream_name, timeout=0))
+
+        # Actually append an event.
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        client.append_events(stream_name, expected_position=None, events=[event1])
+
+        # Check the stream now exists.
+        events = list(client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 1)
+
+        # Timeout reading existent stream.
+        with self.assertRaises(DeadlineExceeded):
+            list(client.read_stream_events(stream_name, timeout=0.0001))
+
     def test_read_all_events(self) -> None:
         esdb_client = EsdbClient("localhost:2113")
 
@@ -452,6 +482,30 @@ class TestEsdbClient(TestCase):
         self.assertEqual(events[1].type, "OrderCreated")
         self.assertEqual(events[2].stream_name, stream_name1)
         self.assertEqual(events[2].type, "OrderDeleted")
+
+    def test_timeout_read_all_events(self) -> None:
+        esdb_client = EsdbClient("localhost:2113")
+
+        len(list(esdb_client.read_all_events()))
+
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        esdb_client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        stream_name2 = str(uuid4())
+        esdb_client.append_events(
+            stream_name2, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Timeout reading all events.
+        with self.assertRaises(DeadlineExceeded):
+            list(esdb_client.read_all_events(timeout=0.001))
 
     def test_read_all_filter_include(self) -> None:
         client = EsdbClient("localhost:2113")
@@ -617,9 +671,7 @@ class TestEsdbClient(TestCase):
         )
 
         # Subscribe from the beginning.
-        subscription = client.subscribe_all_events(
-            position=0,
-        )
+        subscription = client.subscribe_all_events()
 
         # Expect to only get "OrderCreated" events.
         count = 0
@@ -627,3 +679,25 @@ class TestEsdbClient(TestCase):
             count += 1
             break
         self.assertEqual(count, 1)
+
+    def test_timeout_subscribe_all_events(self) -> None:
+        client = EsdbClient("localhost:2113")
+
+        # Append new events.
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+        stream_name1 = str(uuid4())
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Subscribe from the beginning.
+        subscription = client.subscribe_all_events(timeout=0.5)
+
+        # Expect to only get "OrderCreated" events.
+        count = 0
+        with self.assertRaises(DeadlineExceeded):
+            for _ in subscription:
+                count += 1
+        self.assertGreater(count, 0)

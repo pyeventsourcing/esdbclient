@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
-from typing import Iterator, List, Optional, Sequence, overload
+from typing import Iterable, List, Optional, Sequence, overload
 from uuid import uuid4
 
 from grpc import Call, Channel, RpcError, StatusCode
@@ -40,7 +40,8 @@ class Streams:
         stream_position: Optional[int] = None,
         backwards: bool = False,
         limit: int = sys.maxsize,
-    ) -> Iterator[RecordedEvent]:
+        timeout: Optional[float] = None,
+    ) -> Iterable[RecordedEvent]:
         ...  # pragma: no cover
 
     @overload
@@ -52,7 +53,8 @@ class Streams:
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
-    ) -> Iterator[RecordedEvent]:
+        timeout: Optional[float] = None,
+    ) -> Iterable[RecordedEvent]:
         ...  # pragma: no cover
 
     @overload
@@ -63,7 +65,8 @@ class Streams:
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         subscribe: Literal[True],
-    ) -> Iterator[RecordedEvent]:
+        timeout: Optional[float] = None,
+    ) -> Iterable[RecordedEvent]:
         ...  # pragma: no cover
 
     def read(
@@ -77,7 +80,8 @@ class Streams:
         filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
         subscribe: bool = False,
-    ) -> Iterator[RecordedEvent]:
+        timeout: Optional[float] = None,
+    ) -> Iterable[RecordedEvent]:
         """
         Returns iterable of recorded events from the server.
 
@@ -113,7 +117,8 @@ class Streams:
         :param filter_include: Sequence of expressions to include.
         :param limit: Maximum number of events in response.
         :param subscribe: Set True to read future events (default False).
-        :return: Iterator of committed events.
+        :param timeout: Optional integer, specifying timeout for operation.
+        :return: Iterable of committed events.
         """
         if stream_name is not None:
             assert isinstance(stream_name, str)
@@ -181,7 +186,7 @@ class Streams:
             )
         )
         try:
-            for response in self.stub.Read(request):
+            for response in self.stub.Read(request, timeout=timeout):
                 assert isinstance(response, ReadResp)
                 if response.WhichOneof("content") == "stream_not_found":
                     raise StreamNotFound(f"Stream '{stream_name}' not found")
@@ -203,6 +208,7 @@ class Streams:
         stream_name: str,
         expected_position: Optional[int],
         new_events: List[NewEvent],
+        timeout: Optional[float] = None,
     ) -> int:
         """
         Appends events to named stream.
@@ -258,7 +264,7 @@ class Streams:
                 )
             )
         try:
-            response = self.stub.Append(iter(requests))
+            response = self.stub.Append(iter(requests), timeout=timeout)
         except RpcError as e:
             handle_rpc_error(e)
 
