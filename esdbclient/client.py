@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
+import re
 import sys
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, Sequence, overload
+from typing import Iterator, List, Optional, Pattern, Sequence, overload
 from uuid import uuid4
 
 import grpc
 from grpc import Call, Channel, RpcError, StatusCode
+from typing_extensions import Literal
 
 from esdbclient.protos.Grpc.shared_pb2 import UUID, Empty, StreamIdentifier
 from esdbclient.protos.Grpc.streams_pb2 import AppendReq, AppendResp, ReadReq, ReadResp
@@ -59,6 +61,34 @@ class RecordedEvent(NewEvent):
     commit_position: int
 
 
+class CatchupSubscription:
+    def __init__(
+        self,
+        event_generator: Iterator[RecordedEvent],
+        filter_exclude: Sequence[str] = (),
+        filter_include: Sequence[str] = (),
+    ):
+        self.event_generator = event_generator
+        if filter_exclude or filter_include:
+            if filter_include:
+                filter_regex = "^" + "|".join(filter_include) + "$"
+            else:
+                filter_regex = "^(?!(" + "|".join(filter_exclude) + ")).*$"
+            self.filter_regex: Optional[Pattern[str]] = re.compile(filter_regex)
+        else:
+            self.filter_regex = None
+
+    def __iter__(self) -> Iterator[RecordedEvent]:
+        while True:
+            recorded_event = next(self.event_generator)
+            if recorded_event.type == "" and recorded_event.stream_name == "":
+                continue  # Todo: What is this? occurs several times (has commit_position=0)
+            if self.filter_regex is None:
+                yield recorded_event
+            elif re.match(self.filter_regex, recorded_event.type):
+                yield recorded_event
+
+
 class EsdbClient:
     def __init__(self, uri: str) -> None:
         self.uri = uri
@@ -80,7 +110,7 @@ class EsdbClient:
         position: Optional[int] = None,
         backwards: bool = False,
         limit: int = sys.maxsize,
-    ) -> Iterable[RecordedEvent]:
+    ) -> Iterator[RecordedEvent]:
         return self.streams.read(
             stream_name=stream_name,
             stream_position=position,
@@ -95,7 +125,7 @@ class EsdbClient:
         filter_exclude: Sequence[str] = ("\\$.*",),  # Exclude "system events".
         filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
-    ) -> Iterable[RecordedEvent]:
+    ) -> Iterator[RecordedEvent]:
         return self.streams.read(
             commit_position=position,
             backwards=backwards,
@@ -118,6 +148,30 @@ class EsdbClient:
         else:
             return last_event.stream_position
 
+    def get_commit_position(self) -> int:
+        recorded_events = self.read_all_events(
+            backwards=True,
+            filter_exclude=("\\$.*", ".*Snapshot"),
+            limit=1,
+        )
+        for ev in recorded_events:
+            return ev.commit_position
+        else:
+            return 0
+
+    def subscribe_all_events(
+        self,
+        position: Optional[int] = None,
+        filter_exclude: Sequence[str] = ("\\$.*",),  # Exclude "system events".
+        filter_include: Sequence[str] = (),
+    ) -> CatchupSubscription:
+        response = self.streams.read(commit_position=position, subscribe=True)
+        return CatchupSubscription(
+            event_generator=response,
+            filter_exclude=filter_exclude,
+            filter_include=filter_include,
+        )
+
 
 class Streams:
     def __init__(self, channel: Channel):
@@ -131,7 +185,7 @@ class Streams:
         stream_position: Optional[int] = None,
         backwards: bool = False,
         limit: int = sys.maxsize,
-    ) -> Iterable[RecordedEvent]:
+    ) -> Iterator[RecordedEvent]:
         ...  # pragma: no cover
 
     @overload
@@ -143,7 +197,18 @@ class Streams:
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
-    ) -> Iterable[RecordedEvent]:
+    ) -> Iterator[RecordedEvent]:
+        ...  # pragma: no cover
+
+    @overload
+    def read(
+        self,
+        *,
+        commit_position: Optional[int] = None,
+        filter_exclude: Sequence[str] = (),
+        filter_include: Sequence[str] = (),
+        subscribe: Literal[True],
+    ) -> Iterator[RecordedEvent]:
         ...  # pragma: no cover
 
     def read(
@@ -156,7 +221,8 @@ class Streams:
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
-    ) -> Iterable[RecordedEvent]:
+        subscribe: bool = False,
+    ) -> Iterator[RecordedEvent]:
         """
         Returns iterable of recorded events from the server.
 
@@ -191,7 +257,8 @@ class Streams:
         :param filter_exclude: Sequence of expressions to exclude.
         :param filter_include: Sequence of expressions to include.
         :param limit: Maximum number of events in response.
-        :return: Iterable of committed events.
+        :param subscribe: Set True to read future events (default False).
+        :return: Iterator of committed events.
         """
         if stream_name is not None:
             assert isinstance(stream_name, str)
@@ -239,6 +306,10 @@ class Streams:
             )
         else:
             filter_options = None
+        if subscribe:
+            subscription_options = ReadReq.Options.SubscriptionOptions()
+        else:
+            subscription_options = None
         request = ReadReq(
             options=ReadReq.Options(
                 stream=stream_options,
@@ -246,7 +317,7 @@ class Streams:
                 read_direction=read_direction,
                 resolve_links=False,
                 count=limit,
-                # subscription=ReadReq.Options.SubscriptionOptions(),
+                subscription=subscription_options,
                 filter=filter_options,
                 no_filter=Empty() if filter_options is None else None,
                 uuid_option=ReadReq.Options.UUIDOption(

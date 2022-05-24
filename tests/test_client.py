@@ -506,3 +506,49 @@ class TestEsdbClient(TestCase):
         self.assertNotIn("OrderCreated", types)
         self.assertIn("OrderUpdated", types)
         self.assertNotIn("OrderDeleted", types)
+
+    def test_subscribe_all_events(self) -> None:
+        client = EsdbClient("localhost:2113")
+
+        event1 = NewEvent(type="OrderCreated", data=b"{a}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{b}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{c}", metadata=b"{}")
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Subscribe to all events, from the start.
+        subscription = client.subscribe_all_events()
+
+        # Iterate over the first three events.
+        events = []
+        for event in subscription:
+            events.append(event)
+            if len(events) == 3:
+                break
+
+        # Get the current commit position.
+        commit_position = client.get_commit_position()
+
+        # Subscribe from the current commit position.
+        subscription = client.subscribe_all_events(position=commit_position)
+
+        # Append three more events.
+        event1 = NewEvent(type="OrderCreated", data=b"{a}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{b}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{c}", metadata=b"{}")
+        stream_name2 = str(uuid4())
+        client.append_events(
+            stream_name2, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Check the stream name of the newly received events.
+        events = []
+        for event in subscription:
+            self.assertEqual(event.stream_name, stream_name2)
+            events.append(event)
+            if len(events) == 3:
+                break
