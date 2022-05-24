@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, overload
+from typing import Iterable, List, Optional, Sequence, overload
 from uuid import uuid4
 
 import grpc
@@ -92,11 +92,15 @@ class EsdbClient:
         self,
         position: Optional[int] = None,
         backwards: bool = False,
+        filter_exclude: Sequence[str] = ("\\$.*",),  # Exclude "system events".
+        filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
     ) -> Iterable[RecordedEvent]:
         return self.streams.read(
             commit_position=position,
             backwards=backwards,
+            filter_exclude=filter_exclude,
+            filter_include=filter_include,
             limit=limit,
         )
 
@@ -136,6 +140,8 @@ class Streams:
         *,
         commit_position: Optional[int] = None,
         backwards: bool = False,
+        filter_exclude: Sequence[str] = (),
+        filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
     ) -> Iterable[RecordedEvent]:
         ...  # pragma: no cover
@@ -147,6 +153,8 @@ class Streams:
         stream_position: Optional[int] = None,
         commit_position: Optional[int] = None,
         backwards: bool = False,
+        filter_exclude: Sequence[str] = (),
+        filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
     ) -> Iterable[RecordedEvent]:
         """
@@ -180,6 +188,8 @@ class Streams:
         :param stream_position: Position in the stream to start reading.
         :param commit_position: Position in the stream to start reading.
         :param backwards: Direction in which to read.
+        :param filter_exclude: Sequence of expressions to exclude.
+        :param filter_include: Sequence of expressions to include.
         :param limit: Maximum number of events in response.
         :return: Iterable of committed events.
         """
@@ -216,6 +226,19 @@ class Streams:
         else:
             read_direction = ReadReq.Options.Backwards
 
+        if all_options is not None and (filter_exclude or filter_include):
+            if filter_include:
+                filter_regex = "^" + "|".join(filter_include) + "$"
+            else:
+                filter_regex = "^(?!(" + "|".join(filter_exclude) + ")).*$"
+
+            filter_options = ReadReq.Options.FilterOptions(
+                stream_identifier=None,
+                event_type=ReadReq.Options.FilterOptions.Expression(regex=filter_regex),
+                max=1000,
+            )
+        else:
+            filter_options = None
         request = ReadReq(
             options=ReadReq.Options(
                 stream=stream_options,
@@ -224,8 +247,8 @@ class Streams:
                 resolve_links=False,
                 count=limit,
                 # subscription=ReadReq.Options.SubscriptionOptions(),
-                # filter=ReadReq.Options.FilterOptions(),
-                no_filter=Empty(),
+                filter=filter_options,
+                no_filter=Empty() if filter_options is None else None,
                 uuid_option=ReadReq.Options.UUIDOption(
                     structured=Empty(), string=Empty()
                 ),

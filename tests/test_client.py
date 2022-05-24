@@ -452,3 +452,57 @@ class TestEsdbClient(TestCase):
         self.assertEqual(events[1].type, "OrderCreated")
         self.assertEqual(events[2].stream_name, stream_name1)
         self.assertEqual(events[2].type, "OrderDeleted")
+
+    def test_read_all_filter_include(self) -> None:
+        client = EsdbClient("localhost:2113")
+
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Read only OrderCreated.
+        events = list(client.read_all_events(filter_include=("OrderCreated",)))
+        types = set([e.type for e in events])
+        self.assertEqual(types, {"OrderCreated"})
+
+        # Read only OrderCreated and OrderDeleted.
+        events = list(
+            client.read_all_events(filter_include=("OrderCreated", "OrderDeleted"))
+        )
+        types = set([e.type for e in events])
+        self.assertEqual(types, {"OrderCreated", "OrderDeleted"})
+
+    def test_read_all_filter_exclude(self) -> None:
+        client = EsdbClient("localhost:2113")
+
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Exclude OrderCreated.
+        events = list(client.read_all_events(filter_exclude=("OrderCreated",)))
+        types = set([e.type for e in events])
+        self.assertNotIn("OrderCreated", types)
+        self.assertIn("OrderUpdated", types)
+        self.assertIn("OrderDeleted", types)
+
+        # Exclude OrderCreated and OrderDeleted.
+        events = list(
+            client.read_all_events(filter_exclude=("OrderCreated", "OrderDeleted"))
+        )
+        types = set([e.type for e in events])
+        self.assertNotIn("OrderCreated", types)
+        self.assertIn("OrderUpdated", types)
+        self.assertNotIn("OrderDeleted", types)
