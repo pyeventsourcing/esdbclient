@@ -14,7 +14,7 @@ aspects are presented in an easy-to-use interface (see below).
 
 ## Installation
 
-Use pip to install this package from the
+Use pip to install this package from
 [the Python Package Index](https://pypi.org/project/esdbclient/).
 
     $ pip install esdbclient
@@ -107,7 +107,8 @@ events in a stream. The argument `stream_name` is required. By default,
 all recorded events in the stream are returned in the order they were
 appended. An iterable object of recorded events is returned.
 
-Read all the recorded events in a stream.
+The example below shows how to read all the recorded events in a stream
+forwards from the start to the end.
 
 ```python
 events = list(client.read_stream_events(stream_name=stream_name1))
@@ -136,7 +137,9 @@ The method `read_stream_events()` also supports three optional arguments,
 The argument `position` is an optional integer that can be used to indicate
 the stream position from which to start reading. This argument is `None` by default,
 meaning that the stream will be read from the start, or from the end if `backwards`
-is `True`.
+is `True`. When reading a stream from a given position, the recorded event at
+the given stream position WILL be included, both when reading forwards from
+that position, and when reading backwards from that position.
 
 The argument `backwards` is a boolean which is by default `False` meaning the
 stream will be read forwards by default, so that events are returned in the
@@ -146,7 +149,8 @@ backwards, so that events are returned in reverse order.
 The argument `limit` is an integer which limits the number of events that will
 be returned.
 
-Read recorded events in a stream from a specific stream position.
+The example below shows how to read recorded events in a stream forwards from
+a specific stream position.
 
 ```python
 events = list(client.read_stream_events(stream_name1, position=1))
@@ -164,7 +168,8 @@ assert events[1].type == event3.type
 assert events[1].data == event3.data
 ```
 
-Read the recorded events in a stream backwards from the end.
+The example below shows how to read all the recorded events in a stream backwards from
+the end of the stream to the start of the stream.
 
 ```python
 events = list(client.read_stream_events(stream_name1, backwards=True))
@@ -182,7 +187,8 @@ assert events[1].type == event2.type
 assert events[1].data == event2.data
 ```
 
-Read a limited number of recorded events in stream.
+The example below shows how to read a limited number (two) of the recorded events
+in stream forwards from the start of the stream.
 
 ```python
 events = list(client.read_stream_events(stream_name1, limit=2))
@@ -200,7 +206,8 @@ assert events[1].type == event2.type
 assert events[1].data == event2.data
 ```
 
-Read a limited number of recorded events backwards from given position.
+The example below shows how to read a limited number of the recorded events
+in a stream backwards from a given stream position.
 
 ```python
 events = list(client.read_stream_events(stream_name1, position=2, backwards=True, limit=1))
@@ -219,12 +226,12 @@ The method `get_stream_position()` can be used to get the current
 stream position of the last event in the stream.
 
 ```python
-current_position = client.get_stream_position(stream_name1)
+stream_position = client.get_stream_position(stream_name1)
 
-assert current_position == 2
+assert stream_position == 2
 ```
 
-The sequence of stream positions is intended to be gapless. It is
+The sequence of stream positions is gapless. It is
 also usually zero-based, so that the position of the end of the stream
 when one event has been appended is `0`. The position is `1` after two
 events have been appended, `2` after three events have been appended,
@@ -234,9 +241,9 @@ The position of a stream that does not exist is reported by this method to
 be `None`.
 
 ```python
-current_position = client.get_stream_position(stream_name="stream-unknown")
+stream_position = client.get_stream_position(stream_name="stream-unknown")
 
-assert current_position == None
+assert stream_position == None
 ```
 
 ### Read all recorded events
@@ -245,7 +252,8 @@ The method `read_all_events()` can be used to read all recorded events
 in all streams in the order they were committed. An iterable object of
 recorded events is returned.
 
-Read events from all streams in the order they were committed.
+The example below shows how to read all events from all streams in the
+order they were recorded.
 
 ```python
 events = list(client.read_all_events())
@@ -259,8 +267,11 @@ The method `read_stream_events()` supports three optional arguments,
 The argument `position` is an optional integer that can be used to indicate
 the commit position from which to start reading. This argument is `None` by default,
 meaning that all the events will be read from the start, or from the end if `backwards`
-is `True`. Please note, if given the commit position must be an actually existing
-commit position, and any other numbers will result in an exception being raised.
+is `True` (see below). Please note, if given, the commit position must be an actually
+existing commit position, because any other numbers will result in an exception being
+raised. Please also note, when reading forwards the event at the given position WILL
+be included. However, when reading backwards the event at the given position will NOT
+be included.
 
 The argument `backwards` is a boolean which is by default `False` meaning all the
 events will be read forwards by default, so that events are returned in the
@@ -270,12 +281,7 @@ backwards, so that events are returned in reverse order.
 The argument `limit` is an integer which limits the number of events that will
 be returned.
 
-Please note, if `backwards` is used in combination with `position`, the recorded
-event at the given commit position will NOT be included. This differs from reading
-events from a stream backwards from a stream position, when the recorded event at
-the given stream position WILL be included.
-
-Read recorded events in a stream from a particular position.
+The example below shows how to read all recorded events from a particular commit position.
 
 ```python
 events = list(client.read_all_events(position=commit_position1))
@@ -298,7 +304,7 @@ assert events[2].type == event3.type
 assert events[2].data == event3.data
 ```
 
-Read all the recorded events backwards from the end.
+The example below shows how to read all recorded events in reverse order.
 
 ```python
 events = list(client.read_all_events(backwards=True))
@@ -321,7 +327,8 @@ assert events[2].type == event1.type
 assert events[2].data == event1.data
 ```
 
-Read a limited number of recorded events from a specific commit position.
+The example below shows how to read a limited number (one) of the recorded events
+in the database forwards from a specific commit position.
 
 ```python
 events = list(client.read_all_events(position=commit_position1, limit=1))
@@ -334,7 +341,8 @@ assert events[0].type == event1.type
 assert events[0].data == event1.data
 ```
 
-Read a limited number of recorded events backwards from the end.
+The example below shows how to read a limited number (one) of the recorded events
+in the database backwards from the end. This gives the last recorded event.
 
 ```python
 events = list(client.read_all_events(backwards=True, limit=1))
@@ -347,6 +355,24 @@ assert events[0].type == event3.type
 assert events[0].data == event3.data
 ```
 
+### Get current commit position
+
+The method `get_commit_position()` can be used to get the current
+commit position of the database.
+
+```python
+commit_position = client.get_commit_position()
+```
+
+The sequence of commit positions is not gapless. It represents the position
+on disk, so there are usually differences between successive commits.
+
+This method is provided as a convenience when testing, and otherwise isn't
+very useful. In particular, when reading all events (see above) or subscribing
+to events (see below), the commit position would normally be read from the
+downstream database, so that you are reading from the last position that was
+successfully processed.
+
 ### Catch-up subscriptions
 
 The method `subscribe_all_events()` can be used to create a
@@ -355,24 +381,39 @@ The method `subscribe_all_events()` can be used to create a
 to receive recorded events. Please note, returned events are those
 after the given commit position.
 
-This method returns an iterable object, a `CatchupSubscription`,
-from which recorded events can be obtained by iterating over the
-subscription object.
+This method returns a subscription object, which is an iterable object,
+from which recorded events can be obtained by iteration.
 
-The recorded events can be processed. The commit position of
-the recorded event should be stored atomically with the results
-of processing the event. The value of the `position` argument can
-then be determined by reading the recorded commit position. This
-will accomplish "exactly once" processing of the events, from the
-point of view of the recorded results of processing the events, so
-long as there is a uniqueness constraint on the recorded commit
-position.
-
+The example below shows how to subscribe to receive all recorded
+events from a specific commit position. Three already-existing
+events are received, and then three new events are recorded, which
+are then received via the subscription.
 
 ```python
 
-# Get the current commit position.
+# Get the commit position (usually from database of materialised views).
 commit_position = client.get_commit_position()
+
+# Append three events.
+stream_name1 = str(uuid4())
+event1 = NewEvent(type="OrderCreated", data=b"", metadata=b"{}")
+event2 = NewEvent(type="OrderUpdated", data=b"", metadata=b"{}")
+event3 = NewEvent(type="OrderDeleted", data=b"", metadata=b"{}")
+client.append_events(
+    stream_name1, expected_position=None, events=[event1, event2, event3]
+)
+
+# Subscribe from the commit position.
+subscription = client.subscribe_all_events(position=commit_position)
+
+# Catch up by receiving the three events from the subscription.
+events = []
+for event in subscription:
+    # Check the stream name is 'stream_name1'.
+    assert event.stream_name == stream_name1
+    events.append(event)
+    if len(events) == 3:
+        break
 
 # Append three more events.
 stream_name = str(uuid4())
@@ -383,23 +424,42 @@ client.append_events(
     stream_name, expected_position=None, events=[event1, event2, event3]
 )
 
-# Subscribe from the last commit position.
-subscription = client.subscribe_all_events(position=commit_position)
-
-# Check the stream name of the newly received events.
+# Receive the three new events from the same subscription.
 events = []
 for event in subscription:
+    # Check the stream name is 'stream_name2'.
     assert event.stream_name == stream_name
     events.append(event)
     if len(events) == 3:
         break
+```
 
+This kind of subscription is not recorded in EventStoreDB. It is simply
+a streaming gRPC call which is kept open by the server, with newly recorded
+events sent to the client. This kind of subscription is closed as soon as
+the subscription object goes out of memory.
+
+```python
+# End the subscription.
 del subscription
 ```
 
-The `CatchupSubscription` subscription object might be used within a thread,
-with recorded events put on a queue, for processing in a different thread.
-However, this client doesn't provide such a thing.
+To accomplish "exactly once" processing of the events, the commit position
+should be recorded atomically and uniquely along with the result of processing
+received events, for example in the same database as materialised views when
+implementing eventually-consistent CQRS, or in the same database as a downstream
+analytics or reporting or archiving application.
+
+The subscription object might be used within a thread dedicated to receiving
+events, with recorded events put on a queue for processing in a different
+thread. This package doesn't provide such a thing, you need to do that yourself.
+Just make sure to resume after an error by reconstructing both the subscription
+and the queue, using your last recorded commit position to resume the subscription.
+
+Many such subscriptions can be created, and all will receive the events they
+are subscribed to receive. Received events do not need to (and cannot) be
+acknowledged back to EventStoreDB.
+
 
 ### The NewEvent class
 
