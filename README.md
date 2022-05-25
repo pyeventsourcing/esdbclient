@@ -112,7 +112,7 @@ event3 = NewEvent(
 )
 
 commit_position2 = client.append_events(
-    stream_name1,
+    stream_name=stream_name1,
     expected_position=0,
     events=[event2, event3],
 )
