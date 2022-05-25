@@ -30,8 +30,8 @@ Use Docker to run EventStoreDB from the official container image on DockerHub.
     $ docker run -d --name my-eventstoredb -it -p 2113:2113 -p 1113:1113 eventstore/eventstore:21.10.2-buster-slim --insecure
 
 Please note, this will start the server without SSL/TLS enabled, allowing
-only "insecure" connections. The current version of this Python client package
-does not support SSL/TLS connections. A later version of this library will support
+only "insecure" connections. This version of this Python client does not
+support SSL/TLS connections. A later version of this library will support
 "secure" connections.
 
 ### Construct client
@@ -136,8 +136,8 @@ assert events[2].type == event3.type
 assert events[2].data == event3.data
 ```
 
-The method `read_stream_events()` also supports three optional arguments,
-`position`, `backwards`, and `limit`.
+The method `read_stream_events()` also supports four optional arguments,
+`position`, `backwards`, `limit`, and `timeout`.
 
 The argument `position` is an optional integer that can be used to indicate
 the stream position from which to start reading. This argument is `None` by default,
@@ -153,6 +153,9 @@ backwards, so that events are returned in reverse order.
 
 The argument `limit` is an integer which limits the number of events that will
 be returned.
+
+The argument `timeout` is a float which sets a deadline for the completion of
+the gRPC operation.
 
 The example below shows how to read recorded events in a stream forwards from
 a specific stream position.
@@ -251,6 +254,10 @@ stream_position = client.get_stream_position(stream_name="stream-unknown")
 assert stream_position == None
 ```
 
+This method takes an optional argument `timeout` which is a float that sets
+a deadline for the completion of the gRPC operation.
+
+
 ### Read all recorded events
 
 The method `read_all_events()` can be used to read all recorded events
@@ -266,8 +273,9 @@ events = list(client.read_all_events())
 assert len(events) >= 3
 ```
 
-The method `read_stream_events()` supports three optional arguments,
-`position`, `backwards`, and `limit`.
+The method `read_stream_events()` supports six optional arguments,
+`position`, `backwards`, `filter_exclude`, `filter_include`, `limit`,
+and `timeout`.
 
 The argument `position` is an optional integer that can be used to indicate
 the commit position from which to start reading. This argument is `None` by default,
@@ -283,8 +291,31 @@ events will be read forwards by default, so that events are returned in the
 order they were committed, If `backwards` is `True`, all the events will be read
 backwards, so that events are returned in reverse order.
 
+The argument `filter_exclude` is a sequence of regular expressions that
+match the type strings of recorded events that should not be included.
+By default, this argument will exclude EventStoreDB "system events",
+which by convention all have type strings that start with the `$` sign.
+But it can be used to also exclude snapshots. This argument is ignored
+if `filter_include` is set.
+
+Please note, characters that have a special meaning in regular expressions
+will need to be escaped with double-backslash when using these characters
+to match strings. For example, to match EventStoreDB "system events" use use
+`\\$.*`.
+
+The argument `filter_include` is a sequence of regular expressions (strings)
+that match the type strings of recorded events that should be included. By
+default, this argument is an empty tuple. If this argument is set to a
+non-empty sequence, the `filter_include` argument is ignored.
+
+Please note, the filtering happens on the EventStoreDB server, and the `limit` argument
+is applied after filtering.
+
 The argument `limit` is an integer which limits the number of events that will
 be returned.
+
+The argument `timeout` is a float which sets a deadline for the completion of
+the gRPC operation.
 
 The example below shows how to read all recorded events from a particular commit position.
 
@@ -378,6 +409,9 @@ to events (see below), the commit position would normally be read from the
 downstream database, so that you are reading from the last position that was
 successfully processed.
 
+This method takes an optional argument `timeout` which is a float that sets
+a deadline for the completion of the gRPC operation.
+
 ### Catch-up subscriptions
 
 The method `subscribe_all_events()` can be used to create a
@@ -465,6 +499,34 @@ Many such subscriptions can be created, and all will receive the events they
 are subscribed to receive. Received events do not need to (and cannot) be
 acknowledged back to EventStoreDB.
 
+This method also support three other optional arguments, `filter_exclude`,
+`filter_include`, and `timeout`.
+
+The argument `filter_exclude` is a sequence of regular expressions that
+match the type strings of recorded events that should not be included.
+By default, this argument will exclude EventStoreDB "system events",
+which by convention all have type strings that start with the `$` sign.
+But it can be used to also exclude snapshots. This argument is ignored
+if `filter_include` is set.
+
+Please note, characters that have a special meaning in regular expressions
+will need to be escaped with double-backslash when using these characters
+to match strings. For example, to match EventStoreDB "system events" use use
+`\\$.*`.
+
+The argument `filter_include` is a sequence of regular expressions (strings)
+that match the type strings of recorded events that should be included. By
+default, this argument is an empty tuple. If this argument is set to a
+non-empty sequence, the `filter_include` argument is ignored.
+
+Please note, in this version of this Python client, the filtering happens
+within the client, rather than on the server, like when reading all events, because
+for some passing these filter options in the read request seems to cause an error
+in EventStoreDB v21.10.
+
+The argument `timeout` is a float which sets a deadline for the completion of
+the gRPC operation. This probably isn't very useful, but is included for
+completeness and consistency with the other methods.
 
 ### The NewEvent class
 
@@ -474,7 +536,9 @@ The attribute `type` is a unicode string, used to specify the type of the event
 to be recorded.
 
 The attribute `data` is a byte string, used to specify the data of the event
-to be recorded.
+to be recorded. Please note, in this version of this Python client,
+writing JSON event data to EventStoreDB isn't supported, but it might be in
+a future version.
 
 The attribute `metadata` is a byte string, used to specify metadata for the event
 to be recorded.
@@ -494,10 +558,10 @@ The `RecordedEvent` class is used when reading recorded events.
 The attribute `type` is a unicode string, used to indicate the type of the event
 that was recorded.
 
-The attribute `data` is a byte string, used to specify the data of the event
+The attribute `data` is a byte string, used to indicate the data of the event
 that was recorded.
 
-The attribute `metadata` is a byte string, used to specify metadata for the event
+The attribute `metadata` is a byte string, used to indicate metadata for the event
 that was recorded.
 
 The attribute `stream_name` is a unicode string, used to indicate the type of
