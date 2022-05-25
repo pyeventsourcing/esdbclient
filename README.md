@@ -688,7 +688,7 @@ the position in total order of all recorded events at which the
 event was recorded.
 
 ```python
-from esdbclient import RecordedEvent
+from esdbclient.events import RecordedEvent
 
 recorded_event = RecordedEvent(
     type='OrderCreated',

@@ -9,35 +9,7 @@ from esdbclient.esdbapi import Streams
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import StreamNotFound
 
-SYSTEM_EVENTS_REGEX = "\\$.*"
-
-
-class CatchupSubscription:
-    def __init__(
-        self,
-        event_generator: Iterable[RecordedEvent],
-        filter_exclude: Sequence[str] = (),
-        filter_include: Sequence[str] = (),
-    ):
-        self.event_generator = event_generator
-        if filter_exclude or filter_include:
-            if filter_include:
-                filter_regex = "^" + "|".join(filter_include) + "$"
-            else:
-                filter_regex = "^(?!(" + "|".join(filter_exclude) + ")).*$"
-            self.filter_regex: Optional[Pattern[str]] = re.compile(filter_regex)
-        else:
-            self.filter_regex = None
-
-    def __iter__(self) -> Iterator[RecordedEvent]:
-        for event in self.event_generator:
-            if event.type == "" and event.stream_name == "":
-                # Todo: What is this? occurs several times (has commit_position=0)
-                continue
-            if self.filter_regex is None:
-                yield event
-            elif re.match(self.filter_regex, event.type):
-                yield event
+ESDB_EVENTS_REGEX = "\\$.*"  # Matches the 'type' of system events.
 
 
 class EsdbClient:
@@ -80,7 +52,7 @@ class EsdbClient:
         self,
         position: Optional[int] = None,
         backwards: bool = False,
-        filter_exclude: Sequence[str] = (SYSTEM_EVENTS_REGEX,),
+        filter_exclude: Sequence[str] = (ESDB_EVENTS_REGEX,),
         filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
@@ -116,7 +88,7 @@ class EsdbClient:
     def get_commit_position(
         self,
         timeout: Optional[float] = None,
-        filter_exclude: Sequence[str] = (SYSTEM_EVENTS_REGEX,),
+        filter_exclude: Sequence[str] = (ESDB_EVENTS_REGEX,),
     ) -> int:
         recorded_events = self.read_all_events(
             backwards=True,
@@ -132,7 +104,7 @@ class EsdbClient:
     def subscribe_all_events(
         self,
         position: Optional[int] = None,
-        filter_exclude: Sequence[str] = (SYSTEM_EVENTS_REGEX,),
+        filter_exclude: Sequence[str] = (ESDB_EVENTS_REGEX,),
         filter_include: Sequence[str] = (),
         timeout: Optional[float] = None,
     ) -> Iterable[RecordedEvent]:
@@ -146,3 +118,31 @@ class EsdbClient:
             filter_exclude=filter_exclude,
             filter_include=filter_include,
         )
+
+
+class CatchupSubscription:
+    def __init__(
+        self,
+        event_generator: Iterable[RecordedEvent],
+        filter_exclude: Sequence[str] = (),
+        filter_include: Sequence[str] = (),
+    ):
+        self.event_generator = event_generator
+        if filter_exclude or filter_include:
+            if filter_include:
+                filter_regex = "^" + "|".join(filter_include) + "$"
+            else:
+                filter_regex = "^(?!(" + "|".join(filter_exclude) + ")).*$"
+            self.filter_regex: Optional[Pattern[str]] = re.compile(filter_regex)
+        else:
+            self.filter_regex = None
+
+    def __iter__(self) -> Iterator[RecordedEvent]:
+        for event in self.event_generator:
+            if event.type == "" and event.stream_name == "":
+                # Todo: What is this? occurs several times (has commit_position=0)
+                continue
+            if self.filter_regex is None:
+                yield event
+            elif re.match(self.filter_regex, event.type):
+                yield event

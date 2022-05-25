@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from esdbclient.client import EsdbClient
-from esdbclient.events import NewEvent, RecordedEvent
+from esdbclient.client import ESDB_EVENTS_REGEX, EsdbClient
+from esdbclient.events import NewEvent
 
-__all__ = ["EsdbClient", "NewEvent", "RecordedEvent"]
+__all__ = ["ESDB_EVENTS_REGEX", "EsdbClient", "NewEvent"]
