@@ -75,7 +75,7 @@ from uuid import uuid4
 from esdbclient.events import NewEvent
 
 # Construct new event object.
-event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+event1 = NewEvent(type='OrderCreated', data=b'{}', metadata=b'{}')
 
 # Define stream name.
 stream_name1 = str(uuid4())
@@ -91,8 +91,8 @@ stream. Since the stream only has one recorded event, the current position
 of the end of the stream is `0`.
 
 ```python
-event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
-event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+event2 = NewEvent(type='OrderUpdated', data=b'{}', metadata=b'{}')
+event3 = NewEvent(type='OrderDeleted', data=b'{}', metadata=b'{}')
 
 commit_position2 = client.append_events(
     stream_name1, expected_position=0, events=[event2, event3]
@@ -249,7 +249,7 @@ The position of a stream that does not exist is reported by this method to
 be `None`.
 
 ```python
-stream_position = client.get_stream_position(stream_name="stream-unknown")
+stream_position = client.get_stream_position(stream_name='stream-unknown')
 
 assert stream_position == None
 ```
@@ -436,9 +436,9 @@ commit_position = client.get_commit_position()
 
 # Append three events.
 stream_name1 = str(uuid4())
-event1 = NewEvent(type="OrderCreated", data=b"", metadata=b"{}")
-event2 = NewEvent(type="OrderUpdated", data=b"", metadata=b"{}")
-event3 = NewEvent(type="OrderDeleted", data=b"", metadata=b"{}")
+event1 = NewEvent(type='OrderCreated', data=b'{}', metadata=b'{}')
+event2 = NewEvent(type='OrderUpdated', data=b'{}', metadata=b'{}')
+event3 = NewEvent(type='OrderDeleted', data=b'{}', metadata=b'{}')
 client.append_events(
     stream_name1, expected_position=None, events=[event1, event2, event3]
 )
@@ -457,9 +457,9 @@ for event in subscription:
 
 # Append three more events.
 stream_name = str(uuid4())
-event1 = NewEvent(type="OrderCreated", data=b"", metadata=b"{}")
-event2 = NewEvent(type="OrderUpdated", data=b"", metadata=b"{}")
-event3 = NewEvent(type="OrderDeleted", data=b"", metadata=b"{}")
+event1 = NewEvent(type='OrderCreated', data=b'{}', metadata=b'{}')
+event2 = NewEvent(type='OrderUpdated', data=b'{}', metadata=b'{}')
+event3 = NewEvent(type='OrderDeleted', data=b'{}', metadata=b'{}')
 client.append_events(
     stream_name, expected_position=None, events=[event1, event2, event3]
 )
@@ -546,9 +546,9 @@ to be recorded.
 
 ```python
 new_event = NewEvent(
-    type="OrderCreated",
-    data=b"{}",
-    metadata=b"{}",
+    type='OrderCreated',
+    data=b'{}',
+    metadata=b'{}',
 )
 ```
 
@@ -580,10 +580,10 @@ event was recorded.
 from esdbclient.events import RecordedEvent
 
 new_event = RecordedEvent(
-    type="OrderCreated",
-    data=b"{}",
-    metadata=b"{}",
-    stream_name="stream1",
+    type='OrderCreated',
+    data=b'{}',
+    metadata=b'{}',
+    stream_name='stream1',
     stream_position=0,
     commit_position=512,
 )
