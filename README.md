@@ -509,11 +509,16 @@ a deadline for the completion of the gRPC operation.
 ### Catch-up subscriptions
 
 The method `subscribe_all_events()` can be used to create a
-"catch-up subscription" to EventStoreDB. The optional argument
-`position` can be used to specify a commit position from which
-to subscribe. This method returns an iterable object, from which
-recorded events after the specified commit position can be
-obtained by iteration, including events that are recorded
+"catch-up subscription" to EventStoreDB.
+
+This method takes an optional `position` argument, which can be
+used to specify a commit position from which to subscribe for
+recorded events. The default value is `None`, which means
+the subscription will operate from the first recorded event
+in the database.
+
+This method returns an iterable object, from which recorded events
+can be obtained by iteration, including events that are recorded
 after the subscription was created.
 
 Many catch-up subscriptions can be created, concurrently or
