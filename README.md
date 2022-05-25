@@ -48,10 +48,8 @@ client = EsdbClient(uri='localhost:2113')
 ### Append events
 
 The method `append_events()` can be used to append events to
-a stream.
-
-The arguments `stream_name`, `expected_position` and `new_events`
-are required.
+a stream. Three required arguments are required, `stream_name`,
+`expected_position` and `new_events`.
 
 The `stream_name` argument is a string that uniquely identifies
 the stream in the database.
@@ -66,7 +64,7 @@ stream. The class `NewEvent` can be used to construct new event objects.
 
 The method `append_events()` returns the "commit position", which is a
 monotonically increasing integer representing the position of the recorded
-event in a "total order" of all recorded events in all streams.
+event in a "total order" of all recorded events in the database.
 
 In the example below, a stream is created by appending a new event with
 `expected_position=None`.
@@ -108,9 +106,10 @@ possible with EventStoreDB to atomically record events in one stream.
 ### Read stream events
 
 The method `read_stream_events()` can be used to read the recorded
-events in a stream. The argument `stream_name` is required. By default,
-all recorded events in the stream are returned in the order they were
-appended. An iterable object of recorded events is returned.
+events in a stream. This method requires one argument, `stream_name`,
+which is the name of the stream to be read. By default, all recorded
+events in the stream are returned in the order they were recorded.
+An iterable object of recorded events is returned.
 
 The example below shows how to read all the recorded events in a stream
 forwards from the start to the end.
@@ -140,13 +139,14 @@ The method `read_stream_events()` also supports four optional arguments,
 `position`, `backwards`, `limit`, and `timeout`.
 
 The argument `position` is an optional integer that can be used to indicate
-the stream position from which to start reading. This argument is `None` by default,
-meaning that the stream will be read from the start, or from the end if `backwards`
-is `True`. When reading a stream from a given position, the recorded event at
-the given stream position WILL be included, both when reading forwards from
-that position, and when reading backwards from that position.
+the position in the stream from which to start reading. This argument is `None`
+by default, which means the stream will be read either from the start of the
+stream (the default behaviour), or from the end of the stream if `backwards` is
+`True`. When reading a stream from a specified position in the stream, the
+recorded event at that position WILL be included, both when reading forwards
+from that position, and when reading backwards from that position.
 
-The argument `backwards` is a boolean which is by default `False` meaning the
+The argument `backwards` is a boolean, by default `False`, which means the
 stream will be read forwards by default, so that events are returned in the
 order they were appended, If `backwards` is `True`, the stream will be read
 backwards, so that events are returned in reverse order.
@@ -261,10 +261,10 @@ a deadline for the completion of the gRPC operation.
 ### Read all recorded events
 
 The method `read_all_events()` can be used to read all recorded events
-in all streams in the order they were committed. An iterable object of
+in the database in the order they were committed. An iterable object of
 recorded events is returned.
 
-The example below shows how to read all events from all streams in the
+The example below shows how to read all events in the database in the
 order they were recorded.
 
 ```python
@@ -277,14 +277,15 @@ The method `read_stream_events()` supports six optional arguments,
 `position`, `backwards`, `filter_exclude`, `filter_include`, `limit`,
 and `timeout`.
 
-The argument `position` is an optional integer that can be used to indicate
-the commit position from which to start reading. This argument is `None` by default,
-meaning that all the events will be read from the start, or from the end if `backwards`
-is `True` (see below). Please note, if given, the commit position must be an actually
-existing commit position, because any other numbers will result in an exception being
-raised. Please also note, when reading forwards the event at the given position WILL
-be included. However, when reading backwards the event at the given position will NOT
-be included.
+The argument `position` is an optional integer that can be used to specify
+the commit position from which to start reading. This argument is `None` by
+default, meaning that all the events will be read either from the start, or
+from the end if `backwards` is `True` (see below). Please note, if specified,
+the specified position must be an actually existing commit position, because
+any other number will (at least in EventStoreDB v21.10) result in a server
+error. Please also note, when reading forwards the event at the given position
+WILL be included. However, when reading backwards the event at the given position
+will NOT be included.
 
 The argument `backwards` is a boolean which is by default `False` meaning all the
 events will be read forwards by default, so that events are returned in the
@@ -295,8 +296,8 @@ The argument `filter_exclude` is a sequence of regular expressions that
 match the type strings of recorded events that should not be included.
 By default, this argument will exclude EventStoreDB "system events",
 which by convention all have type strings that start with the `$` sign.
-But it can be used to also exclude snapshots. This argument is ignored
-if `filter_include` is set.
+But it can be used to also exclude snapshots, if all snapshots are recorded
+with the same type string. This argument is ignored if `filter_include` is set.
 
 Please note, characters that have a special meaning in regular expressions
 will need to be escaped with double-backslash when using these characters
