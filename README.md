@@ -12,6 +12,7 @@ Not all the features of the EventStoreDB API are presented
 by this client in its current form, however many of the most
 useful aspects are presented in an easy-to-use interface (see below).
 
+
 ## Installation
 
 Use pip to install this package from
@@ -20,6 +21,7 @@ Use pip to install this package from
     $ pip install esdbclient
 
 It is recommended to install Python packages into a Python virtual environment.
+
 
 ## Getting started
 
@@ -33,6 +35,7 @@ Please note, this will start the server without SSL/TLS enabled, allowing
 only "insecure" connections. This version of this Python client does not
 support SSL/TLS connections. A future version of this library will support
 "secure" connections.
+
 
 ### Construct client
 
@@ -137,6 +140,7 @@ commit_position2 = client.append_events(
 Please note, whilst the append operation is atomic, so that either all
 or none of a given list of events will be recorded, by design it is only
 possible with EventStoreDB to atomically record events in one stream.
+
 
 ### Get current stream position
 
@@ -501,6 +505,7 @@ from the last position that was successfully processed.
 This method takes an optional argument `timeout` which is a float that sets
 a deadline for the completion of the gRPC operation.
 
+
 ### Catch-up subscriptions
 
 The method `subscribe_all_events()` can be used to create a
@@ -592,6 +597,9 @@ for event in subscription:
         break
 ```
 
+Many catch-up subscriptions can be created, and all will receive all
+the events they are subscribed to receive.
+
 Catch-up subscriptions are not registered in EventStoreDB (they are not
 "persistent subscriptions). It is simply a streaming gRPC call which is
 kept open by the server, with newly recorded events sent to the client
@@ -603,13 +611,6 @@ is closed as soon as the subscription object goes out of memory.
 del subscription
 ```
 
-To accomplish "exactly once" processing of the events, the commit position
-should be recorded atomically and uniquely along with the result of processing
-received events, for example in the same database as materialised views when
-implementing eventually-consistent CQRS, or in the same database as a downstream
-analytics or reporting or archiving application. This avoids "dual writing" in
-the processing of events.
-
 The subscription object might be used directly when processing events. It might
 also be used within a thread dedicated to receiving events, with recorded events
 put on a queue for processing in a different thread. This package doesn't provide
@@ -617,21 +618,6 @@ such thread or queue objects, you would need to do that yourself. Just make sure
 to reconstruct the subscription (and the queue) using your last recorded commit
 position when resuming the subscription after an error, to be sure all events
 are processed once.
-
-Many catch-up subscriptions can be created, and all will receive all the events
-they are subscribed to receive. Received events do not need to be (and indeed
-cannot be) acknowledged back to the EventStoreDB server. Acknowledging events
-is an aspect of "persistent subscriptions", which is a feature of EventStoreDB
-that is not (currently) supported by this client. Whilst there are some advantages
-of persistent subscribers, by recording in the upstream server the position in
-the commit sequence of events that have been processed, there is a danger of
-"dual writing" in the consumption of events. The danger is that if the event
-is successfully processed but then the acknowledgment fails, the event may be
-processed more than once. On the other hand, if the acknowledgment is successful
-but then the processing fails, the event may not be been processed. The only
-protection against this danger is to avoid "dual writing" by atomically recording
-the commit position of an event that has been processed along with the results of
-process the event, that is with both things being recorded in the same transaction.
 
 This method also support three other optional arguments, `filter_exclude`,
 `filter_include`, and `timeout`.
@@ -654,6 +640,29 @@ regular expressions.
 The argument `timeout` is a float which sets a deadline for the completion of
 the gRPC operation. This probably isn't very useful, but is included for
 completeness and consistency with the other methods.
+
+To accomplish "exactly once" processing of the events, the commit position
+of a recorded event (the value of its `commit_position` attribute) should be
+recorded atomically and uniquely along with the result of processing recorded
+events, for example in the same database as materialised views when implementing
+eventually-consistent CQRS, or in the same database as a downstream analytics
+or reporting or archiving application. This avoids "dual writing" in the
+processing of events.
+
+Received events do not need to be (and indeed cannot be) acknowledged back
+to the EventStoreDB server. Acknowledging events is an aspect of "persistent
+subscriptions", which is a feature of EventStoreDB that is not (currently)
+supported by this client. Whilst there are some advantages of persistent
+subscribers, by recording in the upstream server the position in the commit
+sequence of events that have been processed, there is a danger of "dual writing"
+in the consumption of events. The danger is that if the event is successfully
+processed but then the acknowledgment fails, the event may be processed more
+than once. On the other hand, if the acknowledgment is successful but then the
+processing fails, the event may not be been processed. The only protection against
+this danger is to avoid "dual writing" by atomically recording the commit position
+of an event that has been processed along with the results of process the event,
+that is with both things being recorded in the same transaction.
+
 
 ### The NewEvent class
 
