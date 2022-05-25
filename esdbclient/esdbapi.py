@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
-from typing import Iterable, List, Optional, Sequence, overload
+from typing import Iterable, Optional, Sequence, overload
 from uuid import uuid4
 
 from grpc import Call, Channel, RpcError, StatusCode
@@ -19,16 +19,23 @@ from esdbclient.protos.Grpc.streams_pb2 import AppendReq, AppendResp, ReadReq, R
 from esdbclient.protos.Grpc.streams_pb2_grpc import StreamsStub
 
 
-def handle_rpc_error(e: RpcError) -> None:
+def handle_rpc_error(e: RpcError) -> GrpcError:
+    """
+    Converts gRPC errors to client exceptions.
+    """
     if isinstance(e, Call):
         if e.code() == StatusCode.UNAVAILABLE:
-            raise ServiceUnavailable(e)
+            return ServiceUnavailable(e)
         elif e.code() == StatusCode.DEADLINE_EXCEEDED:
-            raise DeadlineExceeded(e)
-    raise GrpcError(e) from None
+            return DeadlineExceeded(e)
+    return GrpcError(e)
 
 
 class Streams:
+    """
+    Encapsulates the 'Streams' gRPC service.
+    """
+
     def __init__(self, channel: Channel):
         self.stub = StreamsStub(channel)
 
@@ -42,7 +49,9 @@ class Streams:
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
     ) -> Iterable[RecordedEvent]:
-        ...  # pragma: no cover
+        """
+        Signature for reading events from an individual stream.
+        """
 
     @overload
     def read(
@@ -55,7 +64,9 @@ class Streams:
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
     ) -> Iterable[RecordedEvent]:
-        ...  # pragma: no cover
+        """
+        Signature for reading events from "all streams".
+        """
 
     @overload
     def read(
@@ -67,7 +78,9 @@ class Streams:
         subscribe: Literal[True],
         timeout: Optional[float] = None,
     ) -> Iterable[RecordedEvent]:
-        ...  # pragma: no cover
+        """
+        Signature for reading events with a catch-up subscription.
+        """
 
     def read(
         self,
@@ -83,43 +96,11 @@ class Streams:
         timeout: Optional[float] = None,
     ) -> Iterable[RecordedEvent]:
         """
-        Returns iterable of recorded events from the server.
+        Constructs and sends a gRPC 'ReadReq' to the 'Read' rpc.
 
-        Either call with `stream_name` and optional `stream_position`
-        to read from a given stream, or call without `stream_name`
-        and with optional `commit_position` to read from "all streams".
-
-        Calling with `backwards=True` will read events in reverse
-        order. Otherwise, events will be read "forwards" in the
-        order they were appended (the default is `backwards=False`).
-
-        Reading forwards without specifying a given position will read from
-        the start of either the named stream or all streams, and the first
-        event will be included. Reading backwards without specifying a given
-        position will read from the end of either the named stream or all
-        streams, and the last event will be included.
-
-        When reading forwards from either a stream position or a given commit
-        position, the event at that position will be included. When reading
-        backwards from a given stream position, the event at that position
-        will also be included. However, please note, when reading backwards
-        from a given commit position, the event at that position will NOT
-        be included.
-
-        Calling with `limit` (an integer) will limit the number of
-        returned events.
-
-        :param stream_name: Name of the stream.
-        :param stream_position: Position in the stream to start reading.
-        :param commit_position: Position in the stream to start reading.
-        :param backwards: Direction in which to read.
-        :param filter_exclude: Sequence of expressions to exclude.
-        :param filter_include: Sequence of expressions to include.
-        :param limit: Maximum number of events in response.
-        :param subscribe: Set True to read future events (default False).
-        :param timeout: Optional integer, specifying timeout for operation.
-        :return: Iterable of committed events.
+        Returns a generator which yields RecordedEvent objects.
         """
+        # Decide read request options.
         if stream_name is not None:
             assert isinstance(stream_name, str)
             assert commit_position is None
@@ -148,11 +129,13 @@ class Streams:
                 end=Empty() if position is None and backwards else None,
             )
 
+        # Decide read direction.
         if backwards is False:
             read_direction = ReadReq.Options.Forwards
         else:
             read_direction = ReadReq.Options.Backwards
 
+        # Decide filter options.
         if all_options is not None and (filter_exclude or filter_include):
             if filter_include:
                 filter_regex = "^" + "|".join(filter_include) + "$"
@@ -170,6 +153,8 @@ class Streams:
             subscription_options = ReadReq.Options.SubscriptionOptions()
         else:
             subscription_options = None
+
+        # Construct a read request.
         request = ReadReq(
             options=ReadReq.Options(
                 stream=stream_options,
@@ -185,6 +170,8 @@ class Streams:
                 ),
             )
         )
+
+        # Send the read request, and iterate over the response.
         try:
             for response in self.stub.Read(request, timeout=timeout):
                 assert isinstance(response, ReadResp)
@@ -201,41 +188,37 @@ class Streams:
                     commit_position=response.event.commit_position,
                 )
         except RpcError as e:
-            handle_rpc_error(e)
+            raise handle_rpc_error(e) from e
 
     def append(
         self,
         stream_name: str,
         expected_position: Optional[int],
-        new_events: List[NewEvent],
+        events: Iterable[NewEvent],
         timeout: Optional[float] = None,
     ) -> int:
         """
-        Appends events to named stream.
+        Constructs and sends a gRPC 'AppendReq' to the 'Append' rpc.
 
-        :param stream_name: Name of the stream.
-        :param expected_position: Expected stream position. This should be
-          `None` for a new stream, otherwise it should be the position of
-          the last recorded event in the stream (an non-negative integer).
-          If a negative integer is given, optimistic concurrency control
-          will be disabled.
-        :param new_events: New events to be appended.
-        :return: Commit position after events have been appended. This is the
-           commit position of the last event to be appended either in this call,
-           or in the previous call if zero events were given to be appended.
+        Returns an integer representing the current commit position.
         """
+        # Consider the expected_position argument.
         if expected_position is None:
+            # Stream is expected not to exist.
             no_stream = Empty()
             any = None
         else:
             assert isinstance(expected_position, int)
             no_stream = None
             if expected_position >= 0:
+                # Stream is expected to exist.
                 any = None
             else:
+                # Disable optimistic concurrency control.
                 expected_position = None
                 any = Empty()
 
+        # Build the list of append requests.
         requests = [
             AppendReq(
                 options=AppendReq.Options(
@@ -245,11 +228,10 @@ class Streams:
                     revision=expected_position,
                     no_stream=no_stream,
                     any=any,
-                    # stream_exists=None,
                 ),
             )
         ]
-        for event in new_events:
+        for event in events:
             requests.append(
                 AppendReq(
                     proposed_message=AppendReq.ProposedMessage(
@@ -263,20 +245,24 @@ class Streams:
                     )
                 )
             )
+
+        # Call the gRPC method.
         try:
             response = self.stub.Append(iter(requests), timeout=timeout)
         except RpcError as e:
-            handle_rpc_error(e)
-
-        assert isinstance(response, AppendResp)
-        if response.WhichOneof("result") == "success":
-            return response.success.position.commit_position
-
-        if (
-            response.wrong_expected_version.WhichOneof("current_revision_option")
-            == "current_revision"
-        ):
-            current_position = response.wrong_expected_version.current_revision
-            raise ExpectedPositionError(f"Current position is {current_position}")
+            raise handle_rpc_error(e) from e
         else:
-            raise ExpectedPositionError(f"Stream '{stream_name}' does not exist")
+            assert isinstance(response, AppendResp)
+            # Check for success.
+            if response.WhichOneof("result") == "success":
+                return response.success.position.commit_position
+
+            # Figure out what went wrong.
+            if (
+                response.wrong_expected_version.WhichOneof("current_revision_option")
+                == "current_revision"
+            ):
+                current_position = response.wrong_expected_version.current_revision
+                raise ExpectedPositionError(f"Current position is {current_position}")
+            else:
+                raise ExpectedPositionError(f"Stream '{stream_name}' does not exist")

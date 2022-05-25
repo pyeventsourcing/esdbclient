@@ -60,7 +60,7 @@ class TestEsdbClient(TestCase):
                 pass
 
         with self.assertRaises(GrpcError) as cm:
-            handle_rpc_error(DeadlineExceededRpcError())
+            raise handle_rpc_error(DeadlineExceededRpcError()) from None
         self.assertEqual(cm.exception.__class__, DeadlineExceeded)
 
     def test_handle_unavailable_error(self) -> None:
@@ -90,7 +90,7 @@ class TestEsdbClient(TestCase):
                 pass
 
         with self.assertRaises(GrpcError) as cm:
-            handle_rpc_error(UnavailableRpcError())
+            raise handle_rpc_error(UnavailableRpcError()) from None
         self.assertEqual(cm.exception.__class__, ServiceUnavailable)
 
     def test_handle_other_call_error(self) -> None:
@@ -120,7 +120,7 @@ class TestEsdbClient(TestCase):
                 pass
 
         with self.assertRaises(GrpcError) as cm:
-            handle_rpc_error(OtherRpcError())
+            raise handle_rpc_error(OtherRpcError()) from None
         self.assertEqual(cm.exception.__class__, GrpcError)
 
     def test_handle_non_call_rpc_error(self) -> None:
@@ -131,7 +131,7 @@ class TestEsdbClient(TestCase):
 
         msg = "some non-Call error"
         with self.assertRaises(GrpcError) as cm:
-            handle_rpc_error(MyRpcError(msg))
+            raise handle_rpc_error(MyRpcError(msg)) from None
         self.assertEqual(cm.exception.__class__, GrpcError)
         self.assertIsInstance(cm.exception.args[0], MyRpcError)
 

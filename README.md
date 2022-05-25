@@ -31,13 +31,13 @@ Use Docker to run EventStoreDB from the official container image on DockerHub.
 
 Please note, this will start the server without SSL/TLS enabled, allowing
 only "insecure" connections. This version of this Python client does not
-support SSL/TLS connections. A later version of this library will support
+support SSL/TLS connections. A future version of this library will support
 "secure" connections.
 
 ### Construct client
 
-The class `EsdbClient` can be constructed with a `uri` that indicates the hostname
-and port number of the EventStoreDB server.
+The class `EsdbClient` can be constructed with a `uri` that indicates the
+hostname and port number of the EventStoreDB server.
 
 ```python
 from esdbclient import EsdbClient
@@ -48,7 +48,21 @@ client = EsdbClient(uri='localhost:2113')
 ### Append events
 
 The method `append_events()` can be used to append events to
-a stream.
+a stream. If the append operation is successful, this method
+will return the database "commit position" as it was when the
+operation was completed. Otherwise, an exception will be raised.
+
+The commit position value can be used to wait for downstream
+processing to have proceeded the appended events, so that for
+example a user interface that depends on eventually consistent
+materialised views can wait after making a command before making
+a query.
+
+A "commit position" is a monotonically increasing integer representing
+the position of the recorded event in a "total order" of all recorded
+events in the database. The sequence of commit positions is not gapless.
+It represents the position of the event record on disk, and there are
+usually large differences between successive commits.
 
 Three arguments are required, `stream_name`, `expected_position`
 and `events`.
@@ -58,15 +72,17 @@ the stream in the database.
 
 The `expected_position` argument is an optional integer that specifies
 the expected position of the end of the stream in the database: either
-an integer representing the expected current position of the stream,
-or `None` if the stream is expected not to exist.
+a positive integer representing the expected current position of the stream,
+or `None` if the stream is expected not to exist. If there is a mismatch
+with the actual position of the end of the stream, an exception
+`ExpectedPositionError` will be raised by the client. This accomplishes
+optimistic concurrency control when appending new events. If you need to
+get the current position of the end of a steam, use the `get_stream_position()`
+method (see below). If you wish to disable optimistic concurrency, set the
+`expected_position` to a negative integer.
 
-The `events` argument is a list of new event objects to be appended to the
-stream. The class `NewEvent` can be used to construct new event objects.
-
-The method `append_events()` returns the "commit position", which is a
-monotonically increasing integer representing the position of the recorded
-event in a "total order" of all recorded events in the database.
+The `events` argument is a sequence of new event objects to be appended to the
+named stream. The class `NewEvent` can be used to construct new event objects.
 
 In the example below, a stream is created by appending a new event with
 `expected_position=None`.
@@ -95,9 +111,9 @@ commit_position1 = client.append_events(
 ```
 
 In the example below, two subsequent events are appended to an existing
-stream. Since the stream only has one recorded event, and the stream
-positions are zero-based, the expected position of the end of the stream
-is `0`.
+stream. The sequences of stream positions are zero-based, and so when a
+stream only has one recorded event, the expected position of the end of
+the stream is `0`.
 
 ```python
 event2 = NewEvent(
@@ -121,6 +137,41 @@ commit_position2 = client.append_events(
 Please note, whilst the append operation is atomic, so that either all
 or none of a given list of events will be recorded, by design it is only
 possible with EventStoreDB to atomically record events in one stream.
+
+### Get current stream position
+
+The method `get_stream_position()` can be used to get the
+position of the end of a stream (the position of the last
+recorded event in the stream).
+
+```python
+stream_position = client.get_stream_position(
+    stream_name=stream_name1
+)
+
+assert stream_position == 2
+```
+
+The sequence of stream positions is gapless. It is zero-based, so that
+the position of the end of the stream when one event has been appended
+is `0`. The position is `1` after two events have been appended, `2`
+after three events have been appended, and so on.
+
+If a stream does not exist, the returned stream position is `None`,
+which corresponds to the required expected position when appending
+events to a stream that does not exist (see above).
+
+```python
+stream_position = client.get_stream_position(
+    stream_name='stream-unknown'
+)
+
+assert stream_position == None
+```
+
+This method takes an optional argument `timeout` which is a float that sets
+a deadline for the completion of the gRPC operation.
+
 
 ### Read stream events
 
@@ -179,7 +230,7 @@ The argument `position` is an optional integer that can be used to indicate
 the position in the stream from which to start reading. This argument is `None`
 by default, which means the stream will be read either from the start of the
 stream (the default behaviour), or from the end of the stream if `backwards` is
-`True`. When reading a stream from a specified position in the stream, the
+`True`. When reading a stream from a specific position in the stream, the
 recorded event at that position WILL be included, both when reading forwards
 from that position, and when reading backwards from that position.
 
@@ -287,40 +338,6 @@ assert events[0].type == event3.type
 assert events[0].data == event3.data
 ```
 
-### Get current stream position
-
-The method `get_stream_position()` can be used to get the current
-stream position of the last event in the stream.
-
-```python
-stream_position = client.get_stream_position(
-    stream_name=stream_name1
-)
-
-assert stream_position == 2
-```
-
-The sequence of stream positions is gapless. It is zero-based, so that
-the position of the end of the stream when one event has been appended
-is `0`. The position is `1` after two events have been appended, `2`
-after three events have been appended, and so on.
-
-If a stream does not exist, the returned stream position is `None`,
-which corresponds to the required expected position when appending
-events to a stream that does not exist (see above).
-
-```python
-stream_position = client.get_stream_position(
-    stream_name='stream-unknown'
-)
-
-assert stream_position == None
-```
-
-This method takes an optional argument `timeout` which is a float that sets
-a deadline for the completion of the gRPC operation.
-
-
 ### Read all recorded events
 
 The method `read_all_events()` can be used to read all recorded events
@@ -345,9 +362,9 @@ the commit position from which to start reading. This argument is `None` by
 default, meaning that all the events will be read either from the start, or
 from the end if `backwards` is `True` (see below). Please note, if specified,
 the specified position must be an actually existing commit position, because
-any other number will (at least in EventStoreDB v21.10) result in a server
-error. Please also note, when reading forwards the event at the given position
-WILL be included. However, when reading backwards the event at the given position
+any other number will result in a server error (at least in EventStoreDB v21.10).
+Please also note, when reading forwards the event at the given position
+WILL be included. However when reading backwards, the event at the given position
 will NOT be included.
 
 The argument `backwards` is a boolean which is by default `False` meaning all the
@@ -357,23 +374,16 @@ backwards, so that events are returned in reverse order.
 
 The argument `filter_exclude` is a sequence of regular expressions that
 match the type strings of recorded events that should not be included.
-By default, this argument will exclude EventStoreDB "system events",
-which by convention all have type strings that start with the `$` sign.
-But it can be used to also exclude snapshots, if all snapshots are recorded
-with the same type string. This argument is ignored if `filter_include` is set.
+This argument is ignored if `filter_include` is set.
 
-Please note, characters that have a special meaning in regular expressions
-will need to be escaped with double-backslash when using these characters
-to match strings. For example, to match EventStoreDB "system events" use use
-`\\$.*`.
-
-The argument `filter_include` is a sequence of regular expressions (strings)
+The argument `filter_include` is a sequence of regular expressions
 that match the type strings of recorded events that should be included. By
 default, this argument is an empty tuple. If this argument is set to a
 non-empty sequence, the `filter_include` argument is ignored.
 
-Please note, the filtering happens on the EventStoreDB server, and the `limit` argument
-is applied after filtering.
+Please note, the filtering happens on the EventStoreDB server, and the
+`limit` argument is applied after filtering. See below for more information
+about filter regular expressions.
 
 The argument `limit` is an integer which limits the number of events that will
 be returned.
@@ -482,14 +492,11 @@ commit position of the database.
 commit_position = client.get_commit_position()
 ```
 
-The sequence of commit positions is not gapless. It represents the position
-on disk, so there are usually differences between successive commits.
-
 This method is provided as a convenience when testing, and otherwise isn't
 very useful. In particular, when reading all events (see above) or subscribing
-to events (see below), the commit position would normally be read from the
-downstream database, so that you are reading from the last position that was
-successfully processed.
+to all events with a catch-up subscription (see below), the commit position
+would normally be read from the downstream database, so that you are reading
+from the last position that was successfully processed.
 
 This method takes an optional argument `timeout` which is a float that sets
 a deadline for the completion of the gRPC operation.
@@ -585,11 +592,11 @@ for event in subscription:
         break
 ```
 
-This kind of subscription is not recorded in EventStoreDB. It is simply
-a streaming gRPC call which is kept open by the server, with newly recorded
-events sent to the client, as the client iterates over the subscription. This
-kind of subscription is closed as soon as the subscription object goes out of
-memory.
+Catch-up subscriptions are not registered in EventStoreDB (they are not
+"persistent subscriptions). It is simply a streaming gRPC call which is
+kept open by the server, with newly recorded events sent to the client
+as the client iterates over the subscription. This kind of subscription
+is closed as soon as the subscription object goes out of memory.
 
 ```python
 # End the subscription.
@@ -600,42 +607,49 @@ To accomplish "exactly once" processing of the events, the commit position
 should be recorded atomically and uniquely along with the result of processing
 received events, for example in the same database as materialised views when
 implementing eventually-consistent CQRS, or in the same database as a downstream
-analytics or reporting or archiving application.
+analytics or reporting or archiving application. This avoids "dual writing" in
+the processing of events.
 
-The subscription object might be used within a thread dedicated to receiving
-events, with recorded events put on a queue for processing in a different
-thread. This package doesn't provide such a thing, you need to do that yourself.
-Just make sure to resume after an error by reconstructing both the subscription
-and the queue, using your last recorded commit position to resume the subscription.
+The subscription object might be used directly when processing events. It might
+also be used within a thread dedicated to receiving events, with recorded events
+put on a queue for processing in a different thread. This package doesn't provide
+such thread or queue objects, you would need to do that yourself. Just make sure
+to reconstruct the subscription (and the queue) using your last recorded commit
+position when resuming the subscription after an error, to be sure all events
+are processed once.
 
-Many such subscriptions can be created, and all will receive the events they
-are subscribed to receive. Received events do not need to (and cannot) be
-acknowledged back to EventStoreDB.
+Many catch-up subscriptions can be created, and all will receive all the events
+they are subscribed to receive. Received events do not need to be (and indeed
+cannot be) acknowledged back to the EventStoreDB server. Acknowledging events
+is an aspect of "persistent subscriptions", which is a feature of EventStoreDB
+that is not (currently) supported by this client. Whilst there are some advantages
+of persistent subscribers, by recording in the upstream server the position in
+the commit sequence of events that have been processed, there is a danger of
+"dual writing" in the consumption of events. The danger is that if the event
+is successfully processed but then the acknowledgment fails, the event may be
+processed more than once. On the other hand, if the acknowledgment is successful
+but then the processing fails, the event may not be been processed. The only
+protection against this danger is to avoid "dual writing" by atomically recording
+the commit position of an event that has been processed along with the results of
+process the event, that is with both things being recorded in the same transaction.
 
 This method also support three other optional arguments, `filter_exclude`,
 `filter_include`, and `timeout`.
 
 The argument `filter_exclude` is a sequence of regular expressions that
 match the type strings of recorded events that should not be included.
-By default, this argument will exclude EventStoreDB "system events",
-which by convention all have type strings that start with the `$` sign.
-But it can be used to also exclude snapshots. This argument is ignored
-if `filter_include` is set.
+This argument is ignored if `filter_include` is set.
 
-Please note, characters that have a special meaning in regular expressions
-will need to be escaped with double-backslash when using these characters
-to match strings. For example, to match EventStoreDB "system events" use use
-`\\$.*`.
-
-The argument `filter_include` is a sequence of regular expressions (strings)
+The argument `filter_include` is a sequence of regular expressions
 that match the type strings of recorded events that should be included. By
 default, this argument is an empty tuple. If this argument is set to a
 non-empty sequence, the `filter_include` argument is ignored.
 
 Please note, in this version of this Python client, the filtering happens
-within the client, rather than on the server, like when reading all events, because
-for some passing these filter options in the read request seems to cause an error
-in EventStoreDB v21.10.
+within the client (rather than on the server as when reading all events) because
+passing these filter options in the read request for subscriptions seems to cause
+an error in EventStoreDB v21.10. See below for more information about filter
+regular expressions.
 
 The argument `timeout` is a float which sets a deadline for the completion of
 the gRPC operation. This probably isn't very useful, but is included for
@@ -699,6 +713,29 @@ recorded_event = RecordedEvent(
     commit_position=512,
 )
 ```
+
+### Filter regular expressions
+
+The `filter_exclude` and `filter_include` arguments in `read_all_events()` and
+`subscribe_all_events()` are applied to the `type` attribute of recorded events.
+
+The default value of the `filter_exclude` arguments is designed to exclude
+EventStoreDB "system events", which otherwise would be included. System
+events, by convention in EventStoreDB, all have `type` strings that
+start with the `$` sign.
+
+Please note, characters that have a special meaning in regular expressions
+will need to be escaped (with double-backslash) when matching these characters
+in type strings.
+
+For example, to match EventStoreDB system events, use the sequence `['\\$.*']`.
+Please note, the constant `ESDB_EVENTS_REGEX` is set to `'\\$.*'`. You
+can import this value (`from esdbclient import ESDB_EVENTS_REGEX`) and use
+it when building longer sequences of regular expressions. For example,
+to exclude system events and snapshots, you might use the sequence
+`[ESDB_EVENTS_REGEX, '.*Snapshot']` as the value of the `filter_exclude`
+argument.
+
 
 ### Stop EventStoreDB
 

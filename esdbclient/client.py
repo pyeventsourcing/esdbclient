@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import re
 import sys
-from typing import Iterable, Iterator, List, Optional, Pattern, Sequence
+from typing import Iterable, Iterator, Optional, Pattern, Sequence
 
 import grpc
 
@@ -13,6 +13,10 @@ ESDB_EVENTS_REGEX = "\\$.*"  # Matches the 'type' of system events.
 
 
 class EsdbClient:
+    """
+    Encapsulates the EventStoreDB gRPC API.
+    """
+
     def __init__(self, uri: str) -> None:
         self.uri = uri
         self.channel = grpc.insecure_channel(self.uri)
@@ -22,13 +26,16 @@ class EsdbClient:
         self,
         stream_name: str,
         expected_position: Optional[int],
-        events: List[NewEvent],
+        events: Iterable[NewEvent],
         timeout: Optional[float] = None,
     ) -> int:
+        """
+        Appends new events to the named stream.
+        """
         return self.streams.append(
             stream_name=stream_name,
             expected_position=expected_position,
-            new_events=events,
+            events=events,
             timeout=timeout,
         )
 
@@ -40,6 +47,9 @@ class EsdbClient:
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
     ) -> Iterable[RecordedEvent]:
+        """
+        Reads recorded events from the named stream.
+        """
         return self.streams.read(
             stream_name=stream_name,
             stream_position=position,
@@ -57,6 +67,9 @@ class EsdbClient:
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
     ) -> Iterable[RecordedEvent]:
+        """
+        Reads recorded events in "all streams" in the database.
+        """
         return self.streams.read(
             commit_position=position,
             backwards=backwards,
@@ -71,6 +84,9 @@ class EsdbClient:
         stream_name: str,
         timeout: Optional[float] = None,
     ) -> Optional[int]:
+        """
+        Returns the current position of the end of a stream.
+        """
         try:
             last_event = list(
                 self.streams.read(
@@ -90,6 +106,9 @@ class EsdbClient:
         timeout: Optional[float] = None,
         filter_exclude: Sequence[str] = (ESDB_EVENTS_REGEX,),
     ) -> int:
+        """
+        Returns the current commit position of the database.
+        """
         recorded_events = self.read_all_events(
             backwards=True,
             filter_exclude=filter_exclude,
@@ -108,19 +127,30 @@ class EsdbClient:
         filter_include: Sequence[str] = (),
         timeout: Optional[float] = None,
     ) -> Iterable[RecordedEvent]:
-        response = self.streams.read(
+        """
+        Returns a catch-up subscription, from which recorded
+        events in "all streams" in the database can be received.
+        """
+        event_generator = self.streams.read(
             commit_position=position,
             subscribe=True,
             timeout=timeout,
         )
         return CatchupSubscription(
-            event_generator=response,
+            event_generator=event_generator,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
         )
 
 
 class CatchupSubscription:
+    """
+    Encapsulates generator of recorded events when
+    reading events in a catch-up subscription.
+
+    Filters recorded events, because the server doesn't.
+    """
+
     def __init__(
         self,
         event_generator: Iterable[RecordedEvent],

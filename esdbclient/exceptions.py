@@ -1,23 +1,36 @@
 # -*- coding: utf-8 -*-
 class EsdbClientException(Exception):
-    pass
+    """
+    Base class for exceptions raised by the client.
+    """
 
 
 class GrpcError(EsdbClientException):
-    pass
+    """
+    Base class for exceptions raised by gRPC.
+    """
 
 
 class ServiceUnavailable(GrpcError):
-    pass
+    """
+    Raised when gRPC service is unavailable.
+    """
 
 
 class DeadlineExceeded(GrpcError):
-    pass
+    """
+    Raised when gRPC operation times out.
+    """
 
 
 class StreamNotFound(EsdbClientException):
-    pass
+    """
+    Raised when EventStoreDB stream is not found.
+    """
 
 
 class ExpectedPositionError(EsdbClientException):
-    pass
+    """
+    Raised when expected position does not match the
+    actual position of the last event in a stream.
+    """
