@@ -9,6 +9,8 @@ from esdbclient.esdbapi import Streams
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import StreamNotFound
 
+SYSTEM_EVENTS_REGEX = "\\$.*"
+
 
 class CatchupSubscription:
     def __init__(
@@ -78,7 +80,7 @@ class EsdbClient:
         self,
         position: Optional[int] = None,
         backwards: bool = False,
-        filter_exclude: Sequence[str] = ("\\$.*",),  # Exclude "system events".
+        filter_exclude: Sequence[str] = (SYSTEM_EVENTS_REGEX,),
         filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
@@ -111,10 +113,14 @@ class EsdbClient:
         else:
             return last_event.stream_position
 
-    def get_commit_position(self, timeout: Optional[float] = None) -> int:
+    def get_commit_position(
+        self,
+        timeout: Optional[float] = None,
+        filter_exclude: Sequence[str] = (SYSTEM_EVENTS_REGEX,),
+    ) -> int:
         recorded_events = self.read_all_events(
             backwards=True,
-            filter_exclude=("\\$.*", ".*Snapshot"),
+            filter_exclude=filter_exclude,
             limit=1,
             timeout=timeout,
         )
@@ -126,7 +132,7 @@ class EsdbClient:
     def subscribe_all_events(
         self,
         position: Optional[int] = None,
-        filter_exclude: Sequence[str] = ("\\$.*",),  # Exclude "system events".
+        filter_exclude: Sequence[str] = (SYSTEM_EVENTS_REGEX,),
         filter_include: Sequence[str] = (),
         timeout: Optional[float] = None,
     ) -> Iterable[RecordedEvent]:
