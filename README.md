@@ -2,15 +2,15 @@
 
 This package provides a Python gRPC client for
 [EventStoreDB](https://www.eventstore.com/). It has been
-developed and tested to work with version 21.10 of EventStoreDB,
+developed and tested to work with EventStoreDB LTS version 21.10,
 and with Python versions 3.7, 3.8, 3.9, and 3.10.
 
 Methods have typing annotations, the static typing is checked
 with mypy, and the test coverage is 100%.
 
 Not all the features of the EventStoreDB API are presented
-by this client in its current form, however most of the useful
-aspects are presented in an easy-to-use interface (see below).
+by this client in its current form, however many of the most
+useful aspects are presented in an easy-to-use interface (see below).
 
 ## Installation
 
@@ -40,7 +40,7 @@ The class `EsdbClient` can be constructed with a `uri` that indicates the hostna
 and port number of the EventStoreDB server.
 
 ```python
-from esdbclient.client import EsdbClient
+from esdbclient import EsdbClient
 
 client = EsdbClient(uri='localhost:2113')
 ```
@@ -72,7 +72,7 @@ In the example below, a stream is created by appending a new event with
 ```python
 from uuid import uuid4
 
-from esdbclient.events import NewEvent
+from esdbclient import NewEvent
 
 # Construct new event object.
 event1 = NewEvent(type='OrderCreated', data=b'{}', metadata=b'{}')
@@ -578,7 +578,7 @@ event was recorded.
 
 ```python
 
-from esdbclient.events import RecordedEvent
+from esdbclient import RecordedEvent
 
 new_event = RecordedEvent(
     type='OrderCreated',
