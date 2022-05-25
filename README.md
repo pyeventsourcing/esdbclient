@@ -48,8 +48,10 @@ client = EsdbClient(uri='localhost:2113')
 ### Append events
 
 The method `append_events()` can be used to append events to
-a stream. Three required arguments are required, `stream_name`,
-`expected_position` and `new_events`.
+a stream.
+
+Three arguments are required, `stream_name`, `expected_position`
+and `events`.
 
 The `stream_name` argument is a string that uniquely identifies
 the stream in the database.
@@ -75,14 +77,20 @@ from uuid import uuid4
 from esdbclient import NewEvent
 
 # Construct new event object.
-event1 = NewEvent(type='OrderCreated', data=b'{}', metadata=b'{}')
+event1 = NewEvent(
+    type='OrderCreated',
+    data=b'{}',
+    metadata=b'{}'
+)
 
 # Define stream name.
 stream_name1 = str(uuid4())
 
 # Append list of events to new stream.
 commit_position1 = client.append_events(
-    stream_name=stream_name1, expected_position=None, events=[event1]
+    stream_name=stream_name1,
+    expected_position=None,
+    events=[event1],
 )
 ```
 
@@ -92,11 +100,21 @@ positions are zero-based, the expected position of the end of the stream
 is `0`.
 
 ```python
-event2 = NewEvent(type='OrderUpdated', data=b'{}', metadata=b'{}')
-event3 = NewEvent(type='OrderDeleted', data=b'{}', metadata=b'{}')
+event2 = NewEvent(
+    type='OrderUpdated',
+    data=b'{}',
+    metadata=b'{}',
+)
+event3 = NewEvent(
+    type='OrderDeleted',
+    data=b'{}',
+    metadata=b'{}',
+)
 
 commit_position2 = client.append_events(
-    stream_name1, expected_position=0, events=[event2, event3]
+    stream_name1,
+    expected_position=0,
+    events=[event2, event3],
 )
 ```
 
@@ -107,17 +125,35 @@ possible with EventStoreDB to atomically record events in one stream.
 ### Read stream events
 
 The method `read_stream_events()` can be used to read the recorded
-events in a stream. This method requires one argument, `stream_name`,
-which is the name of the stream to be read. By default, all recorded
-events in the stream are returned in the order they were recorded.
-An iterable object of recorded events is returned.
+events in a stream. An iterable object of recorded events is returned.
 
-The example below shows how to read all the recorded events in a stream
-forwards from the start to the end.
+One argument is required, `stream_name`, which is the name of the
+stream to be read. By default, the recorded events in the stream
+are returned in the order they were recorded.
+
+The example below shows how to read the recorded events of a stream
+forwards from the start of the stream to the end of the stream.
 
 ```python
-events = list(client.read_stream_events(stream_name=stream_name1))
+response = client.read_stream_events(
+    stream_name=stream_name1
+)
+```
 
+The iterable object is actually a Python generator, and we need to
+iterate over it to actually get the recorded events from gRPC. So
+let's convert it into a list, so that we can call `len()`, and so
+that we can index it to check we have the individual events recorded
+above.
+
+```python
+events = list(response)
+```
+
+Now that we have an actual list of events, we can check we have the
+three events that we recorded in the stream above.
+
+```python
 assert len(events) == 3
 
 assert events[0].stream_name == stream_name1
@@ -159,10 +195,15 @@ The argument `timeout` is a float which sets a deadline for the completion of
 the gRPC operation.
 
 The example below shows how to read recorded events in a stream forwards from
-a specific stream position.
+a specific stream position to the end of the stream.
 
 ```python
-events = list(client.read_stream_events(stream_name1, position=1))
+events = list(
+    client.read_stream_events(
+        stream_name=stream_name1,
+        position=1,
+    )
+)
 
 assert len(events) == 2
 
@@ -177,11 +218,16 @@ assert events[1].type == event3.type
 assert events[1].data == event3.data
 ```
 
-The example below shows how to read all the recorded events in a stream backwards from
+The example below shows how to read the recorded events in a stream backwards from
 the end of the stream to the start of the stream.
 
 ```python
-events = list(client.read_stream_events(stream_name1, backwards=True))
+events = list(
+    client.read_stream_events(
+        stream_name=stream_name1,
+        backwards=True,
+    )
+)
 
 assert len(events) == 3
 
@@ -200,7 +246,12 @@ The example below shows how to read a limited number (two) of the recorded event
 in stream forwards from the start of the stream.
 
 ```python
-events = list(client.read_stream_events(stream_name1, limit=2))
+events = list(
+    client.read_stream_events(
+        stream_name=stream_name1,
+        limit=2,
+    )
+)
 
 assert len(events) == 2
 
@@ -219,7 +270,14 @@ The example below shows how to read a limited number of the recorded events
 in a stream backwards from a given stream position.
 
 ```python
-events = list(client.read_stream_events(stream_name1, position=2, backwards=True, limit=1))
+events = list(
+    client.read_stream_events(
+        stream_name=stream_name1,
+        position=2,
+        backwards=True,
+        limit=1,
+    )
+)
 
 assert len(events) == 1
 
@@ -235,22 +293,26 @@ The method `get_stream_position()` can be used to get the current
 stream position of the last event in the stream.
 
 ```python
-stream_position = client.get_stream_position(stream_name1)
+stream_position = client.get_stream_position(
+    stream_name=stream_name1
+)
 
 assert stream_position == 2
 ```
 
-The sequence of stream positions is gapless. It is
-also usually zero-based, so that the position of the end of the stream
-when one event has been appended is `0`. The position is `1` after two
-events have been appended, `2` after three events have been appended,
-and so on.
+The sequence of stream positions is gapless. It is zero-based, so that
+the position of the end of the stream when one event has been appended
+is `0`. The position is `1` after two events have been appended, `2`
+after three events have been appended, and so on.
 
-The position of a stream that does not exist is reported by this method to
-be `None`.
+If a stream does not exist, the returned stream position is `None`,
+which corresponds to the required expected position when appending
+events to a stream that does not exist (see above).
 
 ```python
-stream_position = client.get_stream_position(stream_name='stream-unknown')
+stream_position = client.get_stream_position(
+    stream_name='stream-unknown'
+)
 
 assert stream_position == None
 ```
@@ -322,7 +384,11 @@ the gRPC operation.
 The example below shows how to read all recorded events from a particular commit position.
 
 ```python
-events = list(client.read_all_events(position=commit_position1))
+events = list(
+    client.read_all_events(
+        position=commit_position1
+    )
+)
 
 assert len(events) == 3
 
@@ -345,7 +411,11 @@ assert events[2].data == event3.data
 The example below shows how to read all recorded events in reverse order.
 
 ```python
-events = list(client.read_all_events(backwards=True))
+events = list(
+    client.read_all_events(
+        backwards=True
+    )
+)
 
 assert len(events) >= 3
 
@@ -369,7 +439,12 @@ The example below shows how to read a limited number (one) of the recorded event
 in the database forwards from a specific commit position.
 
 ```python
-events = list(client.read_all_events(position=commit_position1, limit=1))
+events = list(
+    client.read_all_events(
+        position=commit_position1,
+        limit=1,
+    )
+)
 
 assert len(events) == 1
 
@@ -383,7 +458,12 @@ The example below shows how to read a limited number (one) of the recorded event
 in the database backwards from the end. This gives the last recorded event.
 
 ```python
-events = list(client.read_all_events(backwards=True, limit=1))
+events = list(
+    client.read_all_events(
+        backwards=True,
+        limit=1,
+    )
+)
 
 assert len(events) == 1
 
@@ -437,15 +517,31 @@ commit_position = client.get_commit_position()
 
 # Append three events.
 stream_name1 = str(uuid4())
-event1 = NewEvent(type='OrderCreated', data=b'{}', metadata=b'{}')
-event2 = NewEvent(type='OrderUpdated', data=b'{}', metadata=b'{}')
-event3 = NewEvent(type='OrderDeleted', data=b'{}', metadata=b'{}')
+event1 = NewEvent(
+    type='OrderCreated',
+    data=b'{}',
+    metadata=b'{}',
+)
+event2 = NewEvent(
+    type='OrderUpdated',
+    data=b'{}',
+    metadata=b'{}',
+)
+event3 = NewEvent(
+    type='OrderDeleted',
+    data=b'{}',
+    metadata=b'{}',
+)
 client.append_events(
-    stream_name1, expected_position=None, events=[event1, event2, event3]
+    stream_name=stream_name1,
+    expected_position=None,
+    events=[event1, event2, event3],
 )
 
 # Subscribe from the commit position.
-subscription = client.subscribe_all_events(position=commit_position)
+subscription = client.subscribe_all_events(
+    position=commit_position
+)
 
 # Catch up by receiving the three events from the subscription.
 events = []
@@ -458,11 +554,25 @@ for event in subscription:
 
 # Append three more events.
 stream_name = str(uuid4())
-event1 = NewEvent(type='OrderCreated', data=b'{}', metadata=b'{}')
-event2 = NewEvent(type='OrderUpdated', data=b'{}', metadata=b'{}')
-event3 = NewEvent(type='OrderDeleted', data=b'{}', metadata=b'{}')
+event4 = NewEvent(
+    type='OrderCreated',
+    data=b'{}',
+    metadata=b'{}',
+)
+event5 = NewEvent(
+    type='OrderUpdated',
+    data=b'{}',
+    metadata=b'{}',
+)
+event6 = NewEvent(
+    type='OrderDeleted',
+    data=b'{}',
+    metadata=b'{}',
+)
 client.append_events(
-    stream_name, expected_position=None, events=[event1, event2, event3]
+    stream_name=stream_name,
+    expected_position=None,
+    events=[event4, event5, event6],
 )
 
 # Receive the three new events from the same subscription.
@@ -477,8 +587,9 @@ for event in subscription:
 
 This kind of subscription is not recorded in EventStoreDB. It is simply
 a streaming gRPC call which is kept open by the server, with newly recorded
-events sent to the client. This kind of subscription is closed as soon as
-the subscription object goes out of memory.
+events sent to the client, as the client iterates over the subscription. This
+kind of subscription is closed as soon as the subscription object goes out of
+memory.
 
 ```python
 # End the subscription.
@@ -577,10 +688,9 @@ the position in total order of all recorded events at which the
 event was recorded.
 
 ```python
-
 from esdbclient import RecordedEvent
 
-new_event = RecordedEvent(
+recorded_event = RecordedEvent(
     type='OrderCreated',
     data=b'{}',
     metadata=b'{}',
