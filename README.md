@@ -56,7 +56,7 @@ the stream in the database.
 
 The `expected_position` argument is an optional integer that specifies
 the expected position of the end of the stream in the database: either
-an integer representing the expected current position of the stream;
+an integer representing the expected current position of the stream,
 or `None` if the stream is expected not to exist.
 
 The `events` argument is a list of new event objects to be appended to the
@@ -87,8 +87,9 @@ commit_position1 = client.append_events(
 ```
 
 In the example below, two subsequent events are appended to an existing
-stream. Since the stream only has one recorded event, the current position
-of the end of the stream is `0`.
+stream. Since the stream only has one recorded event, and the stream
+positions are zero-based, the expected position of the end of the stream
+is `0`.
 
 ```python
 event2 = NewEvent(type='OrderUpdated', data=b'{}', metadata=b'{}')
@@ -99,8 +100,8 @@ commit_position2 = client.append_events(
 )
 ```
 
-Please note, whilst the appending in one operation of a list of events
-is atomic (either all or none will be recorded), by design it is only
+Please note, whilst the append operation is atomic, so that either all
+or none of a given list of events will be recorded, by design it is only
 possible with EventStoreDB to atomically record events in one stream.
 
 ### Read stream events
