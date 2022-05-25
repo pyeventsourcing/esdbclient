@@ -517,6 +517,11 @@ after the given commit position.
 This method returns a subscription object, which is an iterable object,
 from which recorded events can be obtained by iteration.
 
+The value of the `commit_position` attribute of recorded events can be
+recorded along with the results of processing recorded events,
+to track progress and to allow event processing to be resumed at
+the correct position.
+
 The example below shows how to subscribe to receive all recorded
 events from a specific commit position. Three already-existing
 events are received, and then three new events are recorded, which
@@ -597,28 +602,6 @@ for event in subscription:
         break
 ```
 
-Many catch-up subscriptions can be created, and all will receive all
-the events they are subscribed to receive.
-
-Catch-up subscriptions are not registered in EventStoreDB (they are not
-"persistent subscriptions). It is simply a streaming gRPC call which is
-kept open by the server, with newly recorded events sent to the client
-as the client iterates over the subscription. This kind of subscription
-is closed as soon as the subscription object goes out of memory.
-
-```python
-# End the subscription.
-del subscription
-```
-
-The subscription object might be used directly when processing events. It might
-also be used within a thread dedicated to receiving events, with recorded events
-put on a queue for processing in a different thread. This package doesn't provide
-such thread or queue objects, you would need to do that yourself. Just make sure
-to reconstruct the subscription (and the queue) using your last recorded commit
-position when resuming the subscription after an error, to be sure all events
-are processed once.
-
 This method also support three other optional arguments, `filter_exclude`,
 `filter_include`, and `timeout`.
 
@@ -641,13 +624,19 @@ The argument `timeout` is a float which sets a deadline for the completion of
 the gRPC operation. This probably isn't very useful, but is included for
 completeness and consistency with the other methods.
 
-To accomplish "exactly once" processing of the events, the commit position
-of a recorded event (the value of its `commit_position` attribute) should be
-recorded atomically and uniquely along with the result of processing recorded
-events, for example in the same database as materialised views when implementing
-eventually-consistent CQRS, or in the same database as a downstream analytics
-or reporting or archiving application. This avoids "dual writing" in the
-processing of events.
+Many catch-up subscriptions can be created, and all will receive all
+the events they are subscribed to receive.
+
+Catch-up subscriptions are not registered in EventStoreDB (they are not
+"persistent subscriptions). It is simply a streaming gRPC call which is
+kept open by the server, with newly recorded events sent to the client
+as the client iterates over the subscription. This kind of subscription
+is closed as soon as the subscription object goes out of memory.
+
+```python
+# End the subscription.
+del subscription
+```
 
 Received events do not need to be (and indeed cannot be) acknowledged back
 to the EventStoreDB server. Acknowledging events is an aspect of "persistent
@@ -663,6 +652,20 @@ this danger is to avoid "dual writing" by atomically recording the commit positi
 of an event that has been processed along with the results of process the event,
 that is with both things being recorded in the same transaction.
 
+To accomplish "exactly once" processing of the events, the commit position
+of a recorded event should be recorded atomically and uniquely along with
+the result of processing recorded events, for example in the same database
+as materialised views when implementing eventually-consistent CQRS, or in
+the same database as a downstream analytics or reporting or archiving
+application. This avoids "dual writing" in the processing of events.
+
+The subscription object might be used directly when processing events. It might
+also be used within a thread dedicated to receiving events, with recorded events
+put on a queue for processing in a different thread. This package doesn't provide
+such thread or queue objects, you would need to do that yourself. Just make sure
+to reconstruct the subscription (and the queue) using your last recorded commit
+position when resuming the subscription after an error, to be sure all events
+are processed once.
 
 ### The NewEvent class
 
