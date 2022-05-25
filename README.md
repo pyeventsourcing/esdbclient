@@ -11,7 +11,8 @@ with mypy, and the test coverage is 100%.
 Not all the features of the EventStoreDB API are presented
 by this client in its current form, however many of the most
 useful aspects are presented in an easy-to-use interface (see below).
-
+For an example of usage, see the [eventsourcing-eventstoredb](
+https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 
 ## Installation
 
