@@ -331,12 +331,34 @@ class TestEsdbClient(TestCase):
 
     def test_timeout_stream_append_and_read(self) -> None:
         client = EsdbClient("localhost:2113")
+
+        # Append three events.
         stream_name1 = str(uuid4())
+        event1 = NewEvent(
+            type="OrderCreated",
+            data=b"{}",
+            metadata=b"{}",
+        )
+        event2 = NewEvent(
+            type="OrderUpdated",
+            data=b"{}",
+            metadata=b"{}",
+        )
+        event3 = NewEvent(
+            type="OrderDeleted",
+            data=b"{}",
+            metadata=b"{}",
+        )
+        client.append_events(
+            stream_name=stream_name1,
+            expected_position=None,
+            events=[event1, event2],
+        )
 
         # Timeout appending new event.
         with self.assertRaises(DeadlineExceeded):
             client.append_events(
-                stream_name1, expected_position=None, events=[], timeout=0
+                stream_name1, expected_position=1, events=[event3], timeout=0
             )
 
         # Timeout reading stream.
@@ -470,8 +492,6 @@ class TestEsdbClient(TestCase):
 
     def test_timeout_read_all_events(self) -> None:
         esdb_client = EsdbClient("localhost:2113")
-
-        len(list(esdb_client.read_all_events()))
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
