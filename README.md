@@ -647,15 +647,20 @@ Received events do not need to be (and indeed cannot be) acknowledged back
 to the EventStoreDB server. Acknowledging events is an aspect of "persistent
 subscriptions", which is a feature of EventStoreDB that is not (currently)
 supported by this client. Whilst there are some advantages of persistent
-subscribers, by recording in the upstream server the position in the commit
+subscriptions, by tracking in the upstream server the position in the commit
 sequence of events that have been processed, there is a danger of "dual writing"
 in the consumption of events. The danger is that if the event is successfully
 processed but then the acknowledgment fails, the event may be processed more
 than once. On the other hand, if the acknowledgment is successful but then the
-processing fails, the event may not be been processed. The only protection against
-this danger is to avoid "dual writing" by atomically recording the commit position
-of an event that has been processed along with the results of process the event,
-that is with both things being recorded in the same transaction.
+processing fails, the event may not be been processed. By either processing
+an events more than once, or failing to process and event, the resulting state
+of the processing of the recorded events might be inaccurate, or possibly
+inconsistent, and perhaps catastrophically so. Of course, such inaccuracies may
+or may not matter in your situation. But catastrophic inconsistencies may halt
+processing until the issue is resolved. The only protection against this danger
+is to avoid "dual writing" by atomically recording the commit position of an
+event that has been processed along with the results of process the event, that
+is with both things being recorded in the same transaction.
 
 To accomplish "exactly once" processing of the events, the commit position
 of a recorded event should be recorded atomically and uniquely along with
