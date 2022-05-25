@@ -56,10 +56,11 @@ will return the database "commit position" as it was when the
 operation was completed. Otherwise, an exception will be raised.
 
 The commit position value can be used to wait for downstream
-processing to have proceeded the appended events, so that for
-example a user interface that depends on eventually consistent
-materialised views can wait after making a command before making
-a query.
+processing to have processed the appended events. For example,
+after making a command, a user interface can wait before
+making a query for an eventually consistent materialised
+view that would be stale if those events have not yet been
+processed.
 
 A "commit position" is a monotonically increasing integer representing
 the position of the recorded event in a "total order" of all recorded
