@@ -52,22 +52,7 @@ client = EsdbClient(uri='localhost:2113')
 ### Append events
 
 The method `append_events()` can be used to append events to
-a stream. If the append operation is successful, this method
-will return the database "commit position" as it was when the
-operation was completed. Otherwise, an exception will be raised.
-
-The commit position value can be used to wait for downstream
-processing to have processed the appended events. For example,
-after making a command, a user interface can wait before
-making a query for an eventually consistent materialised
-view that would be stale if those events have not yet been
-processed.
-
-A "commit position" is a monotonically increasing integer representing
-the position of the recorded event in a "total order" of all recorded
-events in the database. The sequence of commit positions is not gapless.
-It represents the position of the event record on disk, and there are
-usually large differences between successive commits.
+a stream.
 
 Three arguments are required, `stream_name`, `expected_position`
 and `events`.
@@ -114,6 +99,23 @@ commit_position1 = client.append_events(
     events=[event1],
 )
 ```
+
+If the append operation is successful, this method
+will return the database "commit position" as it was when the
+operation was completed. Otherwise, an exception will be raised.
+
+The commit position value can be used to wait for downstream
+processing to have processed the appended events. For example,
+after making a command, a user interface can wait before
+making a query for an eventually consistent materialised
+view that would be stale if those events have not yet been
+processed.
+
+A "commit position" is a monotonically increasing integer representing
+the position of the recorded event in a "total order" of all recorded
+events in the database. The sequence of commit positions is not gapless.
+It represents the position of the event record on disk, and there are
+usually large differences between successive commits.
 
 In the example below, two subsequent events are appended to an existing
 stream. The sequences of stream positions are zero-based, and so when a
