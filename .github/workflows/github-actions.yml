@@ -24,7 +24,7 @@ jobs:
         with:
           path: /home/runner/.local
           key: os-${{ matrix.os }}-python-${{ matrix.python-version}}-${{ hashFiles('**/poetry.lock') }}
-      - name: Install and set up Poetry
+      - name: Install Poetry
         if: steps.cached-dependencies.outputs.cache-hit != 'true'
         run: make install-poetry
       - name: Install packages
