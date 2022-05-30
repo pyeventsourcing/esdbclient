@@ -856,7 +856,7 @@ You can start EventStoreDB using the following command.
 
     $ make start-eventstoredb
 
-You can run tests using the following command.
+You can run tests using the following command (needs EventStoreDB to be running).
 
     $ make test
 
