@@ -61,10 +61,10 @@ The `stream_name` argument is a string that uniquely identifies
 the stream in the database.
 
 The `expected_position` argument is an optional integer that specifies
-the expected position of the end of the stream in the database: either
-a positive integer representing the expected current position of the stream,
-or `None` if the stream is expected not to exist. If there is a mismatch
-with the actual position of the end of the stream, an exception
+the expected position of the end of the stream in the database. That is,
+either a positive integer representing the expected current position of
+the stream, or `None` if the stream is expected not to exist. If there
+is a mismatch with the actual position of the end of the stream, an exception
 `ExpectedPositionError` will be raised by the client. This accomplishes
 optimistic concurrency control when appending new events. If you need to
 get the current position of the end of a steam, use the `get_stream_position()`
@@ -141,9 +141,13 @@ commit_position2 = client.append_events(
 )
 ```
 
-Please note, whilst the append operation is atomic, so that either all
-or none of a given list of events will be recorded, by design it is only
-possible with EventStoreDB to atomically record events in one stream.
+Please note, the append operation is atomic, so that either all
+or none of a given list of events will be recorded. By design it is only
+possible with EventStoreDB to atomically record events in one stream,
+which means each operation must only include events of one stream.
+
+This method takes an optional argument `timeout` which is a float that sets
+a deadline for the completion of the gRPC operation.
 
 
 ### Get current stream position
@@ -161,9 +165,9 @@ assert stream_position == 2
 ```
 
 The sequence of stream positions is gapless. It is zero-based, so that
-the position of the end of the stream when one event has been appended
-is `0`. The position is `1` after two events have been appended, `2`
-after three events have been appended, and so on.
+the position of the end of the stream is `0` after one event has been
+appended. The position is `1` after two events have been appended, and
+`2` after three events have been appended, and so on.
 
 If a stream does not exist, the returned stream position is `None`,
 which corresponds to the required expected position when appending
@@ -200,17 +204,17 @@ response = client.read_stream_events(
 ```
 
 The iterable object is actually a Python generator, and we need to
-iterate over it to actually get the recorded events from gRPC. So
-let's convert it into a list, so that we can call `len()`, and so
-that we can index it to check we have the individual events recorded
-above.
+iterate over it to get the recorded events from gRPC.
+
+Let's construct a list from the generator, so that we can
+check we have the events that were recorded above.
 
 ```python
 events = list(response)
 ```
 
-Now that we have an actual list of events, we can check we have the
-three events that we recorded in the stream above.
+Now that we have a list of events, we can check we got the
+three events that were appended to the stream.
 
 ```python
 assert len(events) == 3
@@ -234,23 +238,23 @@ assert events[2].data == event3.data
 The method `read_stream_events()` also supports four optional arguments,
 `position`, `backwards`, `limit`, and `timeout`.
 
-The argument `position` is an optional integer that can be used to indicate
+The optional argument `position` is an optional integer that can be used to indicate
 the position in the stream from which to start reading. This argument is `None`
 by default, which means the stream will be read either from the start of the
 stream (the default behaviour), or from the end of the stream if `backwards` is
-`True`. When reading a stream from a specific position in the stream, the
+`True` (see below). When reading a stream from a specific position in the stream, the
 recorded event at that position WILL be included, both when reading forwards
 from that position, and when reading backwards from that position.
 
-The argument `backwards` is a boolean, by default `False`, which means the
+The optional argument `backwards` is a boolean, by default `False`, which means the
 stream will be read forwards by default, so that events are returned in the
 order they were appended, If `backwards` is `True`, the stream will be read
 backwards, so that events are returned in reverse order.
 
-The argument `limit` is an integer which limits the number of events that will
-be returned.
+The optional argument `limit` is an integer which limits the number of events that will
+be returned. The default value is "maxint". 
 
-The argument `timeout` is a float which sets a deadline for the completion of
+The optional argument `timeout` is a float which sets a deadline for the completion of
 the gRPC operation.
 
 The example below shows how to read recorded events in a stream forwards from
@@ -365,38 +369,40 @@ The method `read_stream_events()` supports six optional arguments,
 `position`, `backwards`, `filter_exclude`, `filter_include`, `limit`,
 and `timeout`.
 
-The argument `position` is an optional integer that can be used to specify
+The optional argument `position` is an optional integer that can be used to specify
 the commit position from which to start reading. This argument is `None` by
 default, meaning that all the events will be read either from the start, or
 from the end if `backwards` is `True` (see below). Please note, if specified,
 the specified position must be an actually existing commit position, because
 any other number will result in a server error (at least in EventStoreDB v21.10).
-Please also note, when reading forwards the event at the given position
-WILL be included. However when reading backwards, the event at the given position
-will NOT be included.
+Please also note, when reading forwards the event at the specified position
+WILL be included. However when reading backwards, the event at the specified position
+will NOT be included. (This backwards behaviour of excluding the specified
+position differs from the behaviour when reading a stream, I'm not sure why.) 
 
-The argument `backwards` is a boolean which is by default `False` meaning all the
+The optional argument `backwards` is a boolean which is by default `False` meaning the
 events will be read forwards by default, so that events are returned in the
-order they were committed, If `backwards` is `True`, all the events will be read
+order they were committed, If `backwards` is `True`, the events will be read
 backwards, so that events are returned in reverse order.
 
-The argument `filter_exclude` is a sequence of regular expressions that
-match the type strings of recorded events that should not be included.
+The optional argument `filter_exclude` is a sequence of regular expressions that
+match the type strings of recorded events that should not be included. By default,
+this argument will match "system events", so that they will not be included. 
 This argument is ignored if `filter_include` is set.
 
-The argument `filter_include` is a sequence of regular expressions
+The optional argument `filter_include` is a sequence of regular expressions
 that match the type strings of recorded events that should be included. By
 default, this argument is an empty tuple. If this argument is set to a
-non-empty sequence, the `filter_include` argument is ignored.
+non-empty sequence, the `filter_exclude` argument is ignored.
 
 Please note, the filtering happens on the EventStoreDB server, and the
 `limit` argument is applied after filtering. See below for more information
 about filter regular expressions.
 
-The argument `limit` is an integer which limits the number of events that will
+The optional argument `limit` is an integer which limits the number of events that will
 be returned.
 
-The argument `timeout` is a float which sets a deadline for the completion of
+The optional argument `timeout` is a float which sets a deadline for the completion of
 the gRPC operation.
 
 The example below shows how to read all recorded events from a particular commit position.
