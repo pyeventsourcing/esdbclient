@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
 import re
 import sys
-from typing import Iterable, Iterator, Optional, Pattern, Sequence
+from typing import Iterable, Iterator, Optional, Pattern, Sequence, Tuple
 
 import grpc
 
-from esdbclient.esdbapi import Streams
+from esdbclient.esdbapi import (
+    Streams,
+    SubscriptionReadRequest,
+    SubscriptionReadResponse,
+    Subscriptions,
+)
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import StreamNotFound
 
@@ -21,6 +26,7 @@ class EsdbClient:
         self.uri = uri
         self.channel = grpc.insecure_channel(self.uri)
         self.streams = Streams(self.channel)
+        self.subscriptions = Subscriptions(self.channel)
 
     def append_events(
         self,
@@ -141,6 +147,14 @@ class EsdbClient:
             filter_exclude=filter_exclude,
             filter_include=filter_include,
         )
+
+    def create_subscription(self, name: str, position):
+        self.subscriptions.create(name, position=position)
+
+    def read_subscription(
+        self, group_name: str
+    ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
+        return self.subscriptions.read(group_name=group_name)
 
 
 class CatchupSubscription:

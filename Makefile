@@ -86,10 +86,11 @@ grpc-stubs:
 	  --python_out=. \
 	  --grpc_python_out=. \
 	  --mypy_out=. \
-	  protos/esdbclient/protos/Grpc/code.proto 	  \
-	  protos/esdbclient/protos/Grpc/shared.proto 	  \
-	  protos/esdbclient/protos/Grpc/status.proto 	  \
-	  protos/esdbclient/protos/Grpc/streams.proto
+	  protos/esdbclient/protos/Grpc/code.proto     \
+	  protos/esdbclient/protos/Grpc/shared.proto   \
+	  protos/esdbclient/protos/Grpc/status.proto   \
+	  protos/esdbclient/protos/Grpc/streams.proto  \
+	  protos/esdbclient/protos/Grpc/persistent.proto
 # 	  protos/esdbclient/protos/command.proto \
 # 	  protos/esdbclient/protos/control.proto \
 # 	  protos/esdbclient/protos/event.proto \
