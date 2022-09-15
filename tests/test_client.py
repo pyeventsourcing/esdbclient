@@ -23,14 +23,14 @@ class TestEsdbClient(TestCase):
 
         with self.assertRaises(ServiceUnavailable) as cm:
             list(esdb_client.read_stream_events(str(uuid4())))
-        self.assertEqual(
-            cm.exception.args[0].details(), "failed to connect to all addresses"
+        self.assertIn(
+            "failed to connect to all addresses", cm.exception.args[0].details()
         )
 
         with self.assertRaises(ServiceUnavailable) as cm:
             esdb_client.append_events(str(uuid4()), expected_position=None, events=[])
-        self.assertEqual(
-            cm.exception.args[0].details(), "failed to connect to all addresses"
+        self.assertIn(
+            "failed to connect to all addresses", cm.exception.args[0].details()
         )
 
     def test_handle_deadline_exceeded_error(self) -> None:
@@ -124,7 +124,6 @@ class TestEsdbClient(TestCase):
         self.assertEqual(cm.exception.__class__, GrpcError)
 
     def test_handle_non_call_rpc_error(self) -> None:
-
         # Check non-Call errors are handled.
         class MyRpcError(RpcError):
             pass

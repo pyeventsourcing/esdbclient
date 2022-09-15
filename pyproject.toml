@@ -21,9 +21,9 @@ repository = "https://github.com/pyeventsourcing/esdbclient"
 include = ["esdbclient/py.typed"]
 
 [tool.poetry.dependencies]
-python = "^3.7"
-grpcio = "~1.44.0"
-protobuf = "~3.20.0"
+python = ">=3.7,<4.0"
+grpcio = "^1.48.1"
+protobuf = "^4.21.0"
 typing_extensions = "*"
 
 [tool.poetry.dev-dependencies]
@@ -41,6 +41,7 @@ pre-commit-hooks = "*"
 pytest = "*"
 pytest-cov = "*"
 grpcio-tools = "*"
+grpc-stubs = "*"
 types-protobuf = "*"
 mypy-protobuf = "*"
 

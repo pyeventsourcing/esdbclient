@@ -99,6 +99,10 @@ grpc-stubs:
 start-eventstoredb:
 	docker run -d --name my-eventstoredb -it -p 2113:2113 -p 1113:1113 eventstore/eventstore:21.10.2-buster-slim --insecure
 
+.PHONY: start-m1-eventstoredb
+start-m1-eventstoredb:
+	docker run --platform linux/arm64/v8 -d --name my-eventstoredb -it -p 2113:2113 -p 1113:1113 ghcr.io/eventstore/eventstore:21.10.7-alpha-arm64v8 --insecure
+
 .PHONY: stop-eventstoredb
 stop-eventstoredb:
 	docker stop my-eventstoredb

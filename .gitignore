@@ -133,3 +133,6 @@ dmypy.json
 /.idea/
 
 *.sqlite3*
+
+tags*
+.envrc
