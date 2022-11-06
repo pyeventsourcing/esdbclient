@@ -11,6 +11,12 @@ install-poetry:
 
 .PHONY: install-packages
 install-packages:
+	$(POETRY) --version
+	$(POETRY) install --no-root -vv $(opts)
+
+.PHONY: install
+install:
+	$(POETRY) --version
 	$(POETRY) install -vv $(opts)
 
 .PHONY: install-pre-commit-hooks

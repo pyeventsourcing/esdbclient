@@ -845,10 +845,9 @@ using the following command.
 
     $ make install-packages
 
-If you want to skip the installation of your project's package, use the
-`--no-root` option.
+It's also possible to also install the project in 'editable mode'.
 
-    $ make install-packages --no-root
+    $ make install
 
 Please note, if you create the virtual environment in this way, and then try to
 open the project in PyCharm and configure the project to use this virtual
