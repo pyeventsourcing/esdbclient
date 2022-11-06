@@ -3,7 +3,7 @@
 This package provides a Python gRPC client for
 [EventStoreDB](https://www.eventstore.com/). It has been
 developed and tested to work with EventStoreDB LTS version 21.10,
-and with Python versions 3.7, 3.8, 3.9, and 3.10.
+and with Python versions 3.7, 3.8, 3.9, 3.10, and 3.11.
 
 Methods have typing annotations, the static typing is checked
 with mypy, and the test coverage is 100%.
