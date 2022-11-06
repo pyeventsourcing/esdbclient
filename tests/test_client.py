@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
-from typing import Any
 from unittest import TestCase
 from uuid import uuid4
 
-from grpc import Call, RpcError, StatusCode
+from grpc import RpcError, StatusCode
+from grpc._channel import _MultiThreadedRendezvous, _RPCState
+from grpc._cython.cygrpc import IntegratedCall
 
 from esdbclient.client import EsdbClient
 from esdbclient.esdbapi import handle_rpc_error
@@ -17,114 +18,69 @@ from esdbclient.exceptions import (
 )
 
 
+class FakeRpcError(_MultiThreadedRendezvous):
+    def __init__(self, status_code: StatusCode) -> None:
+        super().__init__(
+            state=_RPCState(
+                due=set(),
+                initial_metadata="",
+                trailing_metadata="",
+                code=status_code,
+                details="",
+            ),
+            call=IntegratedCall(None, None),
+            response_deserializer=lambda x: x,
+            deadline=None,
+        )
+
+
+class FakeDeadlineExceededRpcError(FakeRpcError):
+    def __init__(self) -> None:
+        super().__init__(status_code=StatusCode.DEADLINE_EXCEEDED)
+
+
+class FakeUnavailableRpcError(FakeRpcError):
+    def __init__(self) -> None:
+        super().__init__(status_code=StatusCode.UNAVAILABLE)
+
+
+class FakeUnknownRpcError(FakeRpcError):
+    def __init__(self) -> None:
+        super().__init__(status_code=StatusCode.UNKNOWN)
+
+
 class TestEsdbClient(TestCase):
     def test_service_unavailable_exception(self) -> None:
         esdb_client = EsdbClient("localhost:2222")
 
         with self.assertRaises(ServiceUnavailable) as cm:
             list(esdb_client.read_stream_events(str(uuid4())))
-        self.assertEqual(
-            cm.exception.args[0].details(), "failed to connect to all addresses"
+        self.assertIn(
+            "failed to connect to all addresses", cm.exception.args[0].details()
         )
 
         with self.assertRaises(ServiceUnavailable) as cm:
             esdb_client.append_events(str(uuid4()), expected_position=None, events=[])
-        self.assertEqual(
-            cm.exception.args[0].details(), "failed to connect to all addresses"
+        self.assertIn(
+            "failed to connect to all addresses", cm.exception.args[0].details()
         )
 
     def test_handle_deadline_exceeded_error(self) -> None:
-        class DeadlineExceededRpcError(RpcError, Call):
-            def initial_metadata(self) -> None:
-                pass
-
-            def trailing_metadata(self) -> None:
-                pass
-
-            def code(self) -> StatusCode:
-                return StatusCode.DEADLINE_EXCEEDED
-
-            def details(self) -> None:
-                pass
-
-            def is_active(self) -> None:
-                pass
-
-            def time_remaining(self) -> None:
-                pass
-
-            def cancel(self) -> None:
-                pass
-
-            def add_callback(self, callback: Any) -> None:
-                pass
-
         with self.assertRaises(GrpcError) as cm:
-            raise handle_rpc_error(DeadlineExceededRpcError()) from None
+            raise handle_rpc_error(FakeDeadlineExceededRpcError()) from None
         self.assertEqual(cm.exception.__class__, DeadlineExceeded)
 
     def test_handle_unavailable_error(self) -> None:
-        class UnavailableRpcError(RpcError, Call):
-            def initial_metadata(self) -> None:
-                pass
-
-            def trailing_metadata(self) -> None:
-                pass
-
-            def code(self) -> StatusCode:
-                return StatusCode.UNAVAILABLE
-
-            def details(self) -> None:
-                pass
-
-            def is_active(self) -> None:
-                pass
-
-            def time_remaining(self) -> None:
-                pass
-
-            def cancel(self) -> None:
-                pass
-
-            def add_callback(self, callback: Any) -> None:
-                pass
-
         with self.assertRaises(GrpcError) as cm:
-            raise handle_rpc_error(UnavailableRpcError()) from None
+            raise handle_rpc_error(FakeUnavailableRpcError()) from None
         self.assertEqual(cm.exception.__class__, ServiceUnavailable)
 
     def test_handle_other_call_error(self) -> None:
-        class OtherRpcError(RpcError, Call):
-            def initial_metadata(self) -> None:
-                pass
-
-            def trailing_metadata(self) -> None:
-                pass
-
-            def code(self) -> int:
-                return -1
-
-            def details(self) -> None:
-                pass
-
-            def is_active(self) -> None:
-                pass
-
-            def time_remaining(self) -> None:
-                pass
-
-            def cancel(self) -> None:
-                pass
-
-            def add_callback(self, callback: Any) -> None:
-                pass
-
         with self.assertRaises(GrpcError) as cm:
-            raise handle_rpc_error(OtherRpcError()) from None
+            raise handle_rpc_error(FakeUnknownRpcError()) from None
         self.assertEqual(cm.exception.__class__, GrpcError)
 
     def test_handle_non_call_rpc_error(self) -> None:
-
         # Check non-Call errors are handled.
         class MyRpcError(RpcError):
             pass

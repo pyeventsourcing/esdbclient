@@ -5,10 +5,9 @@
 from google.protobuf import (
     descriptor as _descriptor,
     descriptor_pool as _descriptor_pool,
-    message as _message,
-    reflection as _reflection,
     symbol_database as _symbol_database,
 )
+from google.protobuf.internal import builder as _builder
 
 # @@protoc_insertion_point(imports)
 
@@ -28,21 +27,11 @@ DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
     b" \x01(\x0b\x32\x14.google.protobuf.AnyBa\n\x0e\x63om.google.rpcB\x0bStatusProtoP\x01Z7google.golang.org/genproto/googleapis/rpc/status;status\xf8\x01\x01\xa2\x02\x03RPCb\x06proto3"
 )
 
-
-_STATUS = DESCRIPTOR.message_types_by_name["Status"]
-Status = _reflection.GeneratedProtocolMessageType(
-    "Status",
-    (_message.Message,),
-    {
-        "DESCRIPTOR": _STATUS,
-        "__module__": "esdbclient.protos.Grpc.status_pb2"
-        # @@protoc_insertion_point(class_scope:google.rpc.Status)
-    },
+_builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
+_builder.BuildTopDescriptorsAndMessages(
+    DESCRIPTOR, "esdbclient.protos.Grpc.status_pb2", globals()
 )
-_sym_db.RegisterMessage(Status)
-
 if _descriptor._USE_C_DESCRIPTORS == False:
-
     DESCRIPTOR._options = None
     DESCRIPTOR._serialized_options = b"\n\016com.google.rpcB\013StatusProtoP\001Z7google.golang.org/genproto/googleapis/rpc/status;status\370\001\001\242\002\003RPC"
     _STATUS._serialized_start = 113

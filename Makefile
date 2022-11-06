@@ -87,7 +87,7 @@ publish:
 
 .PHONY: grpc-stubs
 grpc-stubs:
-	python -m grpc_tools.protoc \
+	$(POETRY) run python -m grpc_tools.protoc \
 	  --proto_path=./protos \
 	  --python_out=. \
 	  --grpc_python_out=. \

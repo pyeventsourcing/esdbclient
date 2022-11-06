@@ -6,16 +6,24 @@ import builtins
 import google.protobuf.descriptor
 import google.protobuf.empty_pb2
 import google.protobuf.message
+import sys
 import typing
-import typing_extensions
+
+if sys.version_info >= (3, 8):
+    import typing as typing_extensions
+else:
+    import typing_extensions
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
+@typing_extensions.final
 class UUID(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    @typing_extensions.final
     class Structured(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         MOST_SIGNIFICANT_BITS_FIELD_NUMBER: builtins.int
         LEAST_SIGNIFICANT_BITS_FIELD_NUMBER: builtins.int
         most_significant_bits: builtins.int
@@ -40,12 +48,12 @@ class UUID(google.protobuf.message.Message):
     STRING_FIELD_NUMBER: builtins.int
     @property
     def structured(self) -> global___UUID.Structured: ...
-    string: typing.Text
+    string: builtins.str
     def __init__(
         self,
         *,
-        structured: typing.Optional[global___UUID.Structured] = ...,
-        string: typing.Text = ...,
+        structured: global___UUID.Structured | None = ...,
+        string: builtins.str = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -61,20 +69,24 @@ class UUID(google.protobuf.message.Message):
     ) -> None: ...
     def WhichOneof(
         self, oneof_group: typing_extensions.Literal["value", b"value"]
-    ) -> typing.Optional[typing_extensions.Literal["structured", "string"]]: ...
+    ) -> typing_extensions.Literal["structured", "string"] | None: ...
 
 global___UUID = UUID
 
+@typing_extensions.final
 class Empty(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     def __init__(
         self,
     ) -> None: ...
 
 global___Empty = Empty
 
+@typing_extensions.final
 class StreamIdentifier(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     STREAM_NAME_FIELD_NUMBER: builtins.int
     stream_name: builtins.bytes
     def __init__(
@@ -88,8 +100,10 @@ class StreamIdentifier(google.protobuf.message.Message):
 
 global___StreamIdentifier = StreamIdentifier
 
+@typing_extensions.final
 class AllStreamPosition(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     COMMIT_POSITION_FIELD_NUMBER: builtins.int
     PREPARE_POSITION_FIELD_NUMBER: builtins.int
     commit_position: builtins.int
@@ -112,8 +126,10 @@ class AllStreamPosition(google.protobuf.message.Message):
 
 global___AllStreamPosition = AllStreamPosition
 
+@typing_extensions.final
 class WrongExpectedVersion(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     CURRENT_STREAM_REVISION_FIELD_NUMBER: builtins.int
     CURRENT_NO_STREAM_FIELD_NUMBER: builtins.int
     EXPECTED_STREAM_POSITION_FIELD_NUMBER: builtins.int
@@ -134,11 +150,11 @@ class WrongExpectedVersion(google.protobuf.message.Message):
         self,
         *,
         current_stream_revision: builtins.int = ...,
-        current_no_stream: typing.Optional[google.protobuf.empty_pb2.Empty] = ...,
+        current_no_stream: google.protobuf.empty_pb2.Empty | None = ...,
         expected_stream_position: builtins.int = ...,
-        expected_any: typing.Optional[google.protobuf.empty_pb2.Empty] = ...,
-        expected_stream_exists: typing.Optional[google.protobuf.empty_pb2.Empty] = ...,
-        expected_no_stream: typing.Optional[google.protobuf.empty_pb2.Empty] = ...,
+        expected_any: google.protobuf.empty_pb2.Empty | None = ...,
+        expected_stream_exists: google.protobuf.empty_pb2.Empty | None = ...,
+        expected_no_stream: google.protobuf.empty_pb2.Empty | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -188,43 +204,48 @@ class WrongExpectedVersion(google.protobuf.message.Message):
         oneof_group: typing_extensions.Literal[
             "current_stream_revision_option", b"current_stream_revision_option"
         ],
-    ) -> typing.Optional[
-        typing_extensions.Literal["current_stream_revision", "current_no_stream"]
-    ]: ...
+    ) -> (
+        typing_extensions.Literal["current_stream_revision", "current_no_stream"] | None
+    ): ...
     @typing.overload
     def WhichOneof(
         self,
         oneof_group: typing_extensions.Literal[
             "expected_stream_position_option", b"expected_stream_position_option"
         ],
-    ) -> typing.Optional[
+    ) -> (
         typing_extensions.Literal[
             "expected_stream_position",
             "expected_any",
             "expected_stream_exists",
             "expected_no_stream",
         ]
-    ]: ...
+        | None
+    ): ...
 
 global___WrongExpectedVersion = WrongExpectedVersion
 
+@typing_extensions.final
 class AccessDenied(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     def __init__(
         self,
     ) -> None: ...
 
 global___AccessDenied = AccessDenied
 
+@typing_extensions.final
 class StreamDeleted(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     STREAM_IDENTIFIER_FIELD_NUMBER: builtins.int
     @property
     def stream_identifier(self) -> global___StreamIdentifier: ...
     def __init__(
         self,
         *,
-        stream_identifier: typing.Optional[global___StreamIdentifier] = ...,
+        stream_identifier: global___StreamIdentifier | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -241,32 +262,40 @@ class StreamDeleted(google.protobuf.message.Message):
 
 global___StreamDeleted = StreamDeleted
 
+@typing_extensions.final
 class Timeout(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     def __init__(
         self,
     ) -> None: ...
 
 global___Timeout = Timeout
 
+@typing_extensions.final
 class Unknown(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     def __init__(
         self,
     ) -> None: ...
 
 global___Unknown = Unknown
 
+@typing_extensions.final
 class InvalidTransaction(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     def __init__(
         self,
     ) -> None: ...
 
 global___InvalidTransaction = InvalidTransaction
 
+@typing_extensions.final
 class MaximumAppendSizeExceeded(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     MAXAPPENDSIZE_FIELD_NUMBER: builtins.int
     maxAppendSize: builtins.int
     def __init__(
@@ -280,14 +309,16 @@ class MaximumAppendSizeExceeded(google.protobuf.message.Message):
 
 global___MaximumAppendSizeExceeded = MaximumAppendSizeExceeded
 
+@typing_extensions.final
 class BadRequest(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     MESSAGE_FIELD_NUMBER: builtins.int
-    message: typing.Text
+    message: builtins.str
     def __init__(
         self,
         *,
-        message: typing.Text = ...,
+        message: builtins.str = ...,
     ) -> None: ...
     def ClearField(
         self, field_name: typing_extensions.Literal["message", b"message"]

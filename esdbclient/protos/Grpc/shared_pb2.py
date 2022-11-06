@@ -5,10 +5,9 @@
 from google.protobuf import (
     descriptor as _descriptor,
     descriptor_pool as _descriptor_pool,
-    message as _message,
-    reflection as _reflection,
     symbol_database as _symbol_database,
 )
+from google.protobuf.internal import builder as _builder
 
 # @@protoc_insertion_point(imports)
 
@@ -38,166 +37,11 @@ DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
     b" \x01(\tB&\n$com.eventstore.dbclient.proto.sharedb\x06proto3"
 )
 
-
-_UUID = DESCRIPTOR.message_types_by_name["UUID"]
-_UUID_STRUCTURED = _UUID.nested_types_by_name["Structured"]
-_EMPTY = DESCRIPTOR.message_types_by_name["Empty"]
-_STREAMIDENTIFIER = DESCRIPTOR.message_types_by_name["StreamIdentifier"]
-_ALLSTREAMPOSITION = DESCRIPTOR.message_types_by_name["AllStreamPosition"]
-_WRONGEXPECTEDVERSION = DESCRIPTOR.message_types_by_name["WrongExpectedVersion"]
-_ACCESSDENIED = DESCRIPTOR.message_types_by_name["AccessDenied"]
-_STREAMDELETED = DESCRIPTOR.message_types_by_name["StreamDeleted"]
-_TIMEOUT = DESCRIPTOR.message_types_by_name["Timeout"]
-_UNKNOWN = DESCRIPTOR.message_types_by_name["Unknown"]
-_INVALIDTRANSACTION = DESCRIPTOR.message_types_by_name["InvalidTransaction"]
-_MAXIMUMAPPENDSIZEEXCEEDED = DESCRIPTOR.message_types_by_name[
-    "MaximumAppendSizeExceeded"
-]
-_BADREQUEST = DESCRIPTOR.message_types_by_name["BadRequest"]
-UUID = _reflection.GeneratedProtocolMessageType(
-    "UUID",
-    (_message.Message,),
-    {
-        "Structured": _reflection.GeneratedProtocolMessageType(
-            "Structured",
-            (_message.Message,),
-            {
-                "DESCRIPTOR": _UUID_STRUCTURED,
-                "__module__": "esdbclient.protos.Grpc.shared_pb2"
-                # @@protoc_insertion_point(class_scope:event_store.client.UUID.Structured)
-            },
-        ),
-        "DESCRIPTOR": _UUID,
-        "__module__": "esdbclient.protos.Grpc.shared_pb2"
-        # @@protoc_insertion_point(class_scope:event_store.client.UUID)
-    },
+_builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
+_builder.BuildTopDescriptorsAndMessages(
+    DESCRIPTOR, "esdbclient.protos.Grpc.shared_pb2", globals()
 )
-_sym_db.RegisterMessage(UUID)
-_sym_db.RegisterMessage(UUID.Structured)
-
-Empty = _reflection.GeneratedProtocolMessageType(
-    "Empty",
-    (_message.Message,),
-    {
-        "DESCRIPTOR": _EMPTY,
-        "__module__": "esdbclient.protos.Grpc.shared_pb2"
-        # @@protoc_insertion_point(class_scope:event_store.client.Empty)
-    },
-)
-_sym_db.RegisterMessage(Empty)
-
-StreamIdentifier = _reflection.GeneratedProtocolMessageType(
-    "StreamIdentifier",
-    (_message.Message,),
-    {
-        "DESCRIPTOR": _STREAMIDENTIFIER,
-        "__module__": "esdbclient.protos.Grpc.shared_pb2"
-        # @@protoc_insertion_point(class_scope:event_store.client.StreamIdentifier)
-    },
-)
-_sym_db.RegisterMessage(StreamIdentifier)
-
-AllStreamPosition = _reflection.GeneratedProtocolMessageType(
-    "AllStreamPosition",
-    (_message.Message,),
-    {
-        "DESCRIPTOR": _ALLSTREAMPOSITION,
-        "__module__": "esdbclient.protos.Grpc.shared_pb2"
-        # @@protoc_insertion_point(class_scope:event_store.client.AllStreamPosition)
-    },
-)
-_sym_db.RegisterMessage(AllStreamPosition)
-
-WrongExpectedVersion = _reflection.GeneratedProtocolMessageType(
-    "WrongExpectedVersion",
-    (_message.Message,),
-    {
-        "DESCRIPTOR": _WRONGEXPECTEDVERSION,
-        "__module__": "esdbclient.protos.Grpc.shared_pb2"
-        # @@protoc_insertion_point(class_scope:event_store.client.WrongExpectedVersion)
-    },
-)
-_sym_db.RegisterMessage(WrongExpectedVersion)
-
-AccessDenied = _reflection.GeneratedProtocolMessageType(
-    "AccessDenied",
-    (_message.Message,),
-    {
-        "DESCRIPTOR": _ACCESSDENIED,
-        "__module__": "esdbclient.protos.Grpc.shared_pb2"
-        # @@protoc_insertion_point(class_scope:event_store.client.AccessDenied)
-    },
-)
-_sym_db.RegisterMessage(AccessDenied)
-
-StreamDeleted = _reflection.GeneratedProtocolMessageType(
-    "StreamDeleted",
-    (_message.Message,),
-    {
-        "DESCRIPTOR": _STREAMDELETED,
-        "__module__": "esdbclient.protos.Grpc.shared_pb2"
-        # @@protoc_insertion_point(class_scope:event_store.client.StreamDeleted)
-    },
-)
-_sym_db.RegisterMessage(StreamDeleted)
-
-Timeout = _reflection.GeneratedProtocolMessageType(
-    "Timeout",
-    (_message.Message,),
-    {
-        "DESCRIPTOR": _TIMEOUT,
-        "__module__": "esdbclient.protos.Grpc.shared_pb2"
-        # @@protoc_insertion_point(class_scope:event_store.client.Timeout)
-    },
-)
-_sym_db.RegisterMessage(Timeout)
-
-Unknown = _reflection.GeneratedProtocolMessageType(
-    "Unknown",
-    (_message.Message,),
-    {
-        "DESCRIPTOR": _UNKNOWN,
-        "__module__": "esdbclient.protos.Grpc.shared_pb2"
-        # @@protoc_insertion_point(class_scope:event_store.client.Unknown)
-    },
-)
-_sym_db.RegisterMessage(Unknown)
-
-InvalidTransaction = _reflection.GeneratedProtocolMessageType(
-    "InvalidTransaction",
-    (_message.Message,),
-    {
-        "DESCRIPTOR": _INVALIDTRANSACTION,
-        "__module__": "esdbclient.protos.Grpc.shared_pb2"
-        # @@protoc_insertion_point(class_scope:event_store.client.InvalidTransaction)
-    },
-)
-_sym_db.RegisterMessage(InvalidTransaction)
-
-MaximumAppendSizeExceeded = _reflection.GeneratedProtocolMessageType(
-    "MaximumAppendSizeExceeded",
-    (_message.Message,),
-    {
-        "DESCRIPTOR": _MAXIMUMAPPENDSIZEEXCEEDED,
-        "__module__": "esdbclient.protos.Grpc.shared_pb2"
-        # @@protoc_insertion_point(class_scope:event_store.client.MaximumAppendSizeExceeded)
-    },
-)
-_sym_db.RegisterMessage(MaximumAppendSizeExceeded)
-
-BadRequest = _reflection.GeneratedProtocolMessageType(
-    "BadRequest",
-    (_message.Message,),
-    {
-        "DESCRIPTOR": _BADREQUEST,
-        "__module__": "esdbclient.protos.Grpc.shared_pb2"
-        # @@protoc_insertion_point(class_scope:event_store.client.BadRequest)
-    },
-)
-_sym_db.RegisterMessage(BadRequest)
-
 if _descriptor._USE_C_DESCRIPTORS == False:
-
     DESCRIPTOR._options = None
     DESCRIPTOR._serialized_options = b"\n$com.eventstore.dbclient.proto.shared"
     _UUID._serialized_start = 89
