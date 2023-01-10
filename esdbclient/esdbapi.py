@@ -108,7 +108,7 @@ class Streams:
                 stream_identifier=StreamIdentifier(
                     stream_name=stream_name.encode("utf8")
                 ),
-                revision=stream_position,
+                revision=stream_position or 0,
                 start=Empty() if stream_position is None and not backwards else None,
                 end=Empty() if stream_position is None and backwards else None,
             )
@@ -225,7 +225,7 @@ class Streams:
                     stream_identifier=StreamIdentifier(
                         stream_name=stream_name.encode("utf8")
                     ),
-                    revision=expected_position,
+                    revision=expected_position or 0,
                     no_stream=no_stream,
                     any=any,
                 ),
