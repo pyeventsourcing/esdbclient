@@ -102,8 +102,15 @@ grpc-stubs:
 # 	  protos/esdbclient/protos/query.proto
 
 .PHONY: start-eventstoredb
-start-eventstoredb:
-	docker run -d --name my-eventstoredb -it -p 2113:2113 -p 1113:1113 eventstore/eventstore:21.10.2-buster-slim --insecure
+start-eventstoredb: start-eventstoredb-22-10
+
+.PHONY: start-eventstoredb-21-10
+start-eventstoredb-21-10:
+	docker run -d --name my-eventstoredb -it -p 2113:2113 -p 1113:1113 eventstore/eventstore:21.10.9-buster-slim --insecure
+
+.PHONY: start-eventstoredb-22-10
+start-eventstoredb-22-10:
+	docker run -d --name my-eventstoredb -it -p 2113:2113 -p 1113:1113 eventstore/eventstore:22.10.0-buster-slim --insecure
 
 .PHONY: stop-eventstoredb
 stop-eventstoredb:

@@ -59,6 +59,7 @@ jobs:
       matrix:
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
         os: ["ubuntu-20.04", "ubuntu-22.04"]
+        eventstoredb-version: [ "21-10", "22-10" ]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
@@ -72,7 +73,7 @@ jobs:
           key: os-${{ matrix.os }}-python-${{ matrix.python-version}}-${{ hashFiles('**/poetry.lock') }}
       - name: Start EventStoreDB
         run: |
-          make start-eventstoredb
+          make start-eventstoredb-${{ matrix.eventstoredb-version}}
           sleep 60
       - name: Run tests
         run: make test
