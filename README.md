@@ -738,6 +738,7 @@ event was recorded.
 from esdbclient.events import RecordedEvent
 
 recorded_event = RecordedEvent(
+    id=uuid4(),
     type='OrderCreated',
     data=b'{}',
     metadata=b'{}',
@@ -787,6 +788,8 @@ The first thing is to check you have Poetry installed.
     $ poetry --version
 
 If you don't, then please [install Poetry](https://python-poetry.org/docs/#installing-with-the-official-installer).
+
+    $ curl -sSL https://install.python-poetry.org | python3 -
 
 It will help to make sure Poetry's bin directory is in your `PATH` environment variable.
 
