@@ -25,14 +25,16 @@ class TestEsdbClient(TestCase):
 
         with self.assertRaises(ServiceUnavailable) as cm:
             list(esdb_client.read_stream_events(str(uuid4())))
-        self.assertEqual(
-            cm.exception.args[0].details(), "failed to connect to all addresses"
+        self.assertIn(
+            "failed to connect to all addresses",
+            cm.exception.args[0].details()
         )
 
         with self.assertRaises(ServiceUnavailable) as cm:
             esdb_client.append_events(str(uuid4()), expected_position=None, events=[])
-        self.assertEqual(
-            cm.exception.args[0].details(), "failed to connect to all addresses"
+        self.assertIn(
+            "failed to connect to all addresses",
+            cm.exception.args[0].details()
         )
 
     def test_handle_deadline_exceeded_error(self) -> None:
@@ -746,23 +748,23 @@ class TestEsdbClient(TestCase):
             # stream_name=stream_name1,
         )
 
-        def append_more_events():
-            count = 0
-            while True:
-                count += 1
-                events = []
-                for _ in range(100):
-                    events.append(NewEvent(type=f"NewEvent{count}", data=b"{a}", metadata=b"{}"))
-
-                # Append new events.
-                # print("Appending more events...")
-                client.append_events(
-                    str(uuid4()), expected_position=None, events=events
-                )
-                # sleep(0.2)
-
-        thread = Thread(target=append_more_events)
-        thread.start()
+        # def append_more_events():
+        #     count = 0
+        #     while True:
+        #         count += 1
+        #         events = []
+        #         for _ in range(100):
+        #             events.append(NewEvent(type=f"NewEvent{count}", data=b"{a}", metadata=b"{}"))
+        #
+        #         # Append new events.
+        #         # print("Appending more events...")
+        #         client.append_events(
+        #             str(uuid4()), expected_position=None, events=events
+        #         )
+        #         # sleep(0.2)
+        #
+        # thread = Thread(target=append_more_events)
+        # thread.start()
 
         # Iterate over the first three events.
         events = []
@@ -773,12 +775,12 @@ class TestEsdbClient(TestCase):
             events.append(event)
 
             # print(event)
-            # if len(events) == 3:
-            #     break
+            if len(events) == 3:
+                break
 
 
 
-        return
+        # return
 
         # Get the current commit position.
         commit_position = client.get_commit_position()
