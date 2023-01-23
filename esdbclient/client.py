@@ -148,7 +148,7 @@ class EsdbClient:
             filter_include=filter_include,
         )
 
-    def create_subscription(self, name: str, position):
+    def create_subscription(self, name: str, position: int) -> None:
         self.subscriptions.create(name, position=position)
 
     def read_subscription(

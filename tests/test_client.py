@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-from threading import Thread
-from time import sleep
-from typing import Any
+from typing import List
 from unittest import TestCase
 from uuid import uuid4
 
@@ -10,7 +8,7 @@ from grpc._channel import _MultiThreadedRendezvous, _RPCState
 from grpc._cython.cygrpc import IntegratedCall
 
 from esdbclient.client import EsdbClient
-from esdbclient.esdbapi import handle_rpc_error
+from esdbclient.esdbapi import SubscriptionReadRequest, handle_rpc_error
 from esdbclient.events import NewEvent
 from esdbclient.exceptions import (
     DeadlineExceeded,
@@ -19,6 +17,7 @@ from esdbclient.exceptions import (
     ServiceUnavailable,
     StreamNotFound,
 )
+from esdbclient.protos.Grpc.persistent_pb2 import ReadReq as GrpcSubscriptionReadRequest
 
 
 class FakeRpcError(_MultiThreadedRendezvous):
@@ -154,7 +153,7 @@ class TestEsdbClient(TestCase):
         # Check get error when attempting to append empty list to position 1.
         with self.assertRaises(ExpectedPositionError) as cm:
             client.append_events(stream_name, expected_position=1, events=[])
-        self.assertEqual(cm.exception.args[0], f"Stream '{stream_name}' does not exist")
+        self.assertEqual(cm.exception.args[0], f"Stream {stream_name!r} does not exist")
 
         # Append empty list of events.
         commit_position1 = client.append_events(
@@ -173,7 +172,7 @@ class TestEsdbClient(TestCase):
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         with self.assertRaises(ExpectedPositionError) as cm:
             client.append_events(stream_name, expected_position=1, events=[event1])
-        self.assertEqual(cm.exception.args[0], f"Stream '{stream_name}' does not exist")
+        self.assertEqual(cm.exception.args[0], f"Stream {stream_name!r} does not exist")
 
         # Append new event.
         commit_position2 = client.append_events(
@@ -667,16 +666,15 @@ class TestEsdbClient(TestCase):
         self.assertGreater(count, 0)
 
     def test_persistent_subscription(self) -> None:
-
         # Todo: subscribe to specific stream (not all)
         # Todo: "commit position" behaviour (not sure why it isn't working)
-        # Todo: consumer_strategy, RoundRobin and Pinned, need to test with more than one consumer, also code this as enum rather than a string
+        # Todo: consumer_strategy, RoundRobin and Pinned, need to test with more than
+        #  one consumer, also code this as enum rather than a string
         # Todo: Nack? exception handling on callback?
         # Todo: update subscription
         # Todo: delete subscription
         # Todo: filter options
         # Todo: subscribe from end? not interesting, because you can get commit position
-
 
         client = EsdbClient("localhost:2113")
 
@@ -709,7 +707,12 @@ class TestEsdbClient(TestCase):
         #         count += 1
         #         events = []
         #         for _ in range(100):
-        #             events.append(NewEvent(type=f"NewEvent{count}", data=b"{a}", metadata=b"{}"))
+        #             events.append(
+        #                 NewEvent(
+        #                     type=f"NewEvent{count}",
+        #                     data=b"{a}",
+        #                     metadata=b"{}")
+        #                 )
         #
         #         # Append new events.
         #         # print("Appending more events...")
@@ -732,8 +735,6 @@ class TestEsdbClient(TestCase):
             # print(event)
             if len(events) == 3:
                 break
-
-
 
         # return
 
@@ -760,3 +761,29 @@ class TestEsdbClient(TestCase):
             self.assertIn(event.type, ["OrderCreated", "OrderUpdated", "OrderDeleted"])
             if len(events) == 3:
                 break
+
+
+class TestSubscriptionReadRequest(TestCase):
+    def test_ack_200_ids(self) -> None:
+        read_request = SubscriptionReadRequest("group1")
+        read_request_iter = read_request
+        grpc_read_req = next(read_request_iter)
+        self.assertIsInstance(grpc_read_req, GrpcSubscriptionReadRequest)
+
+        # Do one batch of acks.
+        event_ids: List[str] = []
+        for _ in range(100):
+            event_id = str(uuid4())
+            event_ids.append(event_id)
+            read_request.ack(event_id)
+        grpc_read_req = next(read_request_iter)
+        self.assertEqual(len(grpc_read_req.ack.ids), 100)
+
+        # Do another batch of acks.
+        event_ids.clear()
+        for _ in range(100):
+            event_id = str(uuid4())
+            event_ids.append(event_id)
+            read_request.ack(event_id)
+        grpc_read_req = next(read_request_iter)
+        self.assertEqual(len(grpc_read_req.ack.ids), 100)

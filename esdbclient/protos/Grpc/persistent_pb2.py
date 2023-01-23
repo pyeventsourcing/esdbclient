@@ -312,7 +312,9 @@ ReadResp = _reflection.GeneratedProtocolMessageType(
                             "MetadataEntry",
                             (_message.Message,),
                             {
-                                "DESCRIPTOR": _READRESP_READEVENT_RECORDEDEVENT_METADATAENTRY,
+                                "DESCRIPTOR": (
+                                    _READRESP_READEVENT_RECORDEDEVENT_METADATAENTRY
+                                ),
                                 "__module__": "esdbclient.protos.Grpc.persistent_pb2"
                                 # @@protoc_insertion_point(class_scope:event_store.client.persistent_subscriptions.ReadResp.ReadEvent.RecordedEvent.MetadataEntry)
                             },
@@ -381,7 +383,9 @@ CreateReq = _reflection.GeneratedProtocolMessageType(
                             "Expression",
                             (_message.Message,),
                             {
-                                "DESCRIPTOR": _CREATEREQ_ALLOPTIONS_FILTEROPTIONS_EXPRESSION,
+                                "DESCRIPTOR": (
+                                    _CREATEREQ_ALLOPTIONS_FILTEROPTIONS_EXPRESSION
+                                ),
                                 "__module__": "esdbclient.protos.Grpc.persistent_pb2"
                                 # @@protoc_insertion_point(class_scope:event_store.client.persistent_subscriptions.CreateReq.AllOptions.FilterOptions.Expression)
                             },
@@ -682,7 +686,6 @@ _sym_db.RegisterMessage(ListResp)
 
 _PERSISTENTSUBSCRIPTIONS = DESCRIPTOR.services_by_name["PersistentSubscriptions"]
 if _descriptor._USE_C_DESCRIPTORS == False:
-
     DESCRIPTOR._options = None
     DESCRIPTOR._serialized_options = (
         b"\n5com.eventstore.dbclient.proto.persistentsubscriptions"
@@ -690,9 +693,9 @@ if _descriptor._USE_C_DESCRIPTORS == False:
     _READRESP_READEVENT_RECORDEDEVENT_METADATAENTRY._options = None
     _READRESP_READEVENT_RECORDEDEVENT_METADATAENTRY._serialized_options = b"8\001"
     _CREATEREQ_OPTIONS.fields_by_name["stream_identifier"]._options = None
-    _CREATEREQ_OPTIONS.fields_by_name[
-        "stream_identifier"
-    ]._serialized_options = b"\030\001"
+    _CREATEREQ_OPTIONS.fields_by_name["stream_identifier"]._serialized_options = (
+        b"\030\001"
+    )
     _CREATEREQ_SETTINGS.fields_by_name["revision"]._options = None
     _CREATEREQ_SETTINGS.fields_by_name["revision"]._serialized_options = b"\030\001"
     _CREATEREQ_SETTINGS.fields_by_name["named_consumer_strategy"]._options = None
@@ -700,9 +703,9 @@ if _descriptor._USE_C_DESCRIPTORS == False:
         "named_consumer_strategy"
     ]._serialized_options = b"\030\001"
     _UPDATEREQ_OPTIONS.fields_by_name["stream_identifier"]._options = None
-    _UPDATEREQ_OPTIONS.fields_by_name[
-        "stream_identifier"
-    ]._serialized_options = b"\030\001"
+    _UPDATEREQ_OPTIONS.fields_by_name["stream_identifier"]._serialized_options = (
+        b"\030\001"
+    )
     _UPDATEREQ_SETTINGS.fields_by_name["revision"]._options = None
     _UPDATEREQ_SETTINGS.fields_by_name["revision"]._serialized_options = b"\030\001"
     _READREQ._serialized_start = 126
