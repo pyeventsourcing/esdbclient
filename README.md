@@ -779,7 +779,7 @@ Use Docker to stop and remove the EventStoreDB container.
 	$ docker rm my-eventstoredb
 
 
-## Developers
+## Contributors
 
 ### Install Poetry
 
