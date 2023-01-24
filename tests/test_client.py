@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import os
 from typing import List
 from unittest import TestCase
 from uuid import UUID, uuid4
@@ -665,102 +666,133 @@ class TestEsdbClient(TestCase):
                 count += 1
         self.assertGreater(count, 0)
 
-    def test_persistent_subscription(self) -> None:
-        # Todo: subscribe to specific stream (not all)
-        # Todo: "commit position" behaviour (not sure why it isn't working)
-        # Todo: consumer_strategy, RoundRobin and Pinned, need to test with more than
-        #  one consumer, also code this as enum rather than a string
-        # Todo: Nack? exception handling on callback?
-        # Todo: update subscription
-        # Todo: delete subscription
-        # Todo: filter options
-        # Todo: subscribe from end? not interesting, because you can get commit position
-
+    def test_persistent_subscription_from_start(self) -> None:
+        # Construct client.
         client = EsdbClient("localhost:2113")
 
-        # Get the current commit position.
-        # commit_position = client.get_commit_position()
-        # print("Commit position:", commit_position)
-        # return
+        # Create persistent subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        client.create_subscription(group_name=group_name)
 
-        event1 = NewEvent(type="OrderCreated", data=b"{a}", metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=b"{b}", metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=b"{c}", metadata=b"{}")
-
-        # Append new events.
+        # Append three events.
         stream_name1 = str(uuid4())
+
+        def random_data() -> bytes:
+            return os.urandom(16)
+
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
         client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
-        # Subscribe to stream events, from the start.
+        # Read all events.
+        read_req, read_resp = client.read_subscription(group_name=group_name)
+
+        events = []
+        for event in read_resp:
+            read_req.ack(event.id)
+            events.append(event)
+            print(event)
+            if event.data == event3.data:
+                break
+
+        assert events[-3].data == event1.data
+        assert events[-2].data == event2.data
+        assert events[-1].data == event3.data
+
+    def test_persistent_subscription_from_commit_position(self) -> None:
+        # Construct client.
+        client = EsdbClient("localhost:2113")
+
+        # Append three events.
+        stream_name1 = str(uuid4())
+
+        def random_data() -> bytes:
+            return os.urandom(16)
+
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        commit_position = client.append_events(
+            stream_name1, expected_position=None, events=[event1]
+        )
+        client.append_events(stream_name1, expected_position=0, events=[event2, event3])
+
+        # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
+
         client.create_subscription(
-            name=group_name,
-            position=0
-            # stream_name=stream_name1,
+            group_name=group_name,
+            position=commit_position,
         )
 
-        # def append_more_events():
-        #     count = 0
-        #     while True:
-        #         count += 1
-        #         events = []
-        #         for _ in range(100):
-        #             events.append(
-        #                 NewEvent(
-        #                     type=f"NewEvent{count}",
-        #                     data=b"{a}",
-        #                     metadata=b"{}")
-        #                 )
-        #
-        #         # Append new events.
-        #         # print("Appending more events...")
-        #         client.append_events(
-        #             str(uuid4()), expected_position=None, events=events
-        #         )
-        #         # sleep(0.2)
-        #
-        # thread = Thread(target=append_more_events)
-        # thread.start()
+        # Read three events.
+        read_req, read_resp = client.read_subscription(group_name=group_name)
 
-        # Iterate over the first three events.
         events = []
-        read_req, read_resp = client.read_subscription(group_name)
-
         for event in read_resp:
             read_req.ack(event.id)
             events.append(event)
 
-            # print(event)
             if len(events) == 3:
                 break
 
-        # return
+        assert events[0].data == event1.data
+        assert events[1].data == event2.data
+        assert events[2].data == event3.data
 
-        # Get the current commit position.
-        commit_position = client.get_commit_position()
+    def test_persistent_subscription_from_end(self) -> None:
+        # Construct client.
+        client = EsdbClient("localhost:2113")
 
-        # Subscribe from the current commit position.
-        subscription = client.subscribe_all_events(position=commit_position)
-
-        # Append three more events.
-        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
-        stream_name2 = str(uuid4())
-        client.append_events(
-            stream_name2, expected_position=None, events=[event1, event2, event3]
+        # Create persistent subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        client.create_subscription(
+            group_name=group_name,
+            from_end=True,
         )
 
-        # Check the stream name of the newly received events.
+        # Append three events.
+        stream_name1 = str(uuid4())
+
+        def random_data() -> bytes:
+            return os.urandom(16)
+
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Read three events.
+        read_req, read_resp = client.read_subscription(group_name=group_name)
+
         events = []
-        for event in subscription:
-            self.assertEqual(event.stream_name, stream_name2)
+        for event in read_resp:
+            read_req.ack(event.id)
             events.append(event)
-            self.assertIn(event.type, ["OrderCreated", "OrderUpdated", "OrderDeleted"])
             if len(events) == 3:
                 break
+
+        assert events[0].data == event1.data
+        assert events[1].data == event2.data
+        assert events[2].data == event3.data
+
+    # Todo: subscribe to specific stream (not all)
+    # Todo: "commit position" behaviour (not sure why it isn't working)
+    # Todo: consumer_strategy, RoundRobin and Pinned, need to test with more than
+    #  one consumer, also code this as enum rather than a string
+    # Todo: Nack? exception handling on callback?
+    # Todo: update subscription
+    # Todo: delete subscription
+    # Todo: filter options
+    # Todo: subscribe from end? not interesting, because you can get commit position
 
 
 class TestSubscriptionReadRequest(TestCase):

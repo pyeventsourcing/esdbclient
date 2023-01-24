@@ -148,8 +148,12 @@ class EsdbClient:
             filter_include=filter_include,
         )
 
-    def create_subscription(self, name: str, position: int) -> None:
-        self.subscriptions.create(name, position=position)
+    def create_subscription(
+        self, group_name: str, from_end: bool = False, position: Optional[int] = None
+    ) -> None:
+        self.subscriptions.create(
+            group_name=group_name, from_end=from_end, commit_position=position
+        )
 
     def read_subscription(
         self, group_name: str

@@ -105,7 +105,9 @@ class Streams:
 
         Returns a generator which yields RecordedEvent objects.
         """
-        # Decide read request options.
+        # Decide 'stream_option'.
+        stream_options: Optional[grpc_streams.ReadReq.Options.StreamOptions] = None
+        all_options: Optional[grpc_streams.ReadReq.Options.AllOptions] = None
         if stream_name is not None:
             assert isinstance(stream_name, str)
             assert commit_position is None
@@ -121,51 +123,59 @@ class Streams:
                 if stream_position is None and backwards
                 else None,
             )
-            all_options = None
         else:
             assert stream_position is None
             if isinstance(commit_position, int):
-                position = grpc_streams.ReadReq.Options.Position(
-                    commit_position=commit_position,
-                    prepare_position=commit_position,
+                all_options = grpc_streams.ReadReq.Options.AllOptions(
+                    position=grpc_streams.ReadReq.Options.Position(
+                        commit_position=commit_position,
+                        prepare_position=commit_position,
+                    )
+                )
+            elif backwards:
+                all_options = grpc_streams.ReadReq.Options.AllOptions(
+                    end=grpc_shared.Empty()
                 )
             else:
-                position = None
-            stream_options = None
-            all_options = grpc_streams.ReadReq.Options.AllOptions(
-                position=position,
-                start=grpc_shared.Empty()
-                if position is None and not backwards
-                else None,
-                end=grpc_shared.Empty() if position is None and backwards else None,
-            )
+                all_options = grpc_streams.ReadReq.Options.AllOptions(
+                    start=grpc_shared.Empty()
+                )
 
-        # Decide read direction.
+        # Decide 'read_direction'.
         if backwards is False:
             read_direction = grpc_streams.ReadReq.Options.Forwards
         else:
             read_direction = grpc_streams.ReadReq.Options.Backwards
 
-        # Decide filter options.
-        if all_options is not None and (filter_exclude or filter_include):
+        # Decide 'resolve_links'.
+        resolve_links = False
+
+        # Decide 'count_option'.
+        if subscribe:
+            subscription = grpc_streams.ReadReq.Options.SubscriptionOptions()
+            count = sys.maxsize
+        else:
+            subscription = None
+            count = limit
+
+        # Decide 'filter_option'.
+        if filter_exclude or filter_include:
+            no_filter = None
             if filter_include:
                 filter_regex = "^" + "|".join(filter_include) + "$"
             else:
                 filter_regex = "^(?!(" + "|".join(filter_exclude) + ")).*$"
 
-            filter_options = grpc_streams.ReadReq.Options.FilterOptions(
-                stream_identifier=None,
+            filter = grpc_streams.ReadReq.Options.FilterOptions(
                 event_type=grpc_streams.ReadReq.Options.FilterOptions.Expression(
                     regex=filter_regex
                 ),
+                # max=grpc_shared.Empty(),  # Todo: Figure out what 'window' should be.
                 count=grpc_shared.Empty(),  # Todo: Figure out what 'window' should be.
             )
         else:
-            filter_options = None
-        if subscribe:
-            subscription_options = grpc_streams.ReadReq.Options.SubscriptionOptions()
-        else:
-            subscription_options = None
+            filter = None
+            no_filter = grpc_shared.Empty()
 
         # Construct a read request.
         request = grpc_streams.ReadReq(
@@ -173,13 +183,13 @@ class Streams:
                 stream=stream_options,
                 all=all_options,
                 read_direction=read_direction,
-                resolve_links=False,
-                count=limit,
-                subscription=subscription_options,
-                filter=filter_options,
-                no_filter=grpc_shared.Empty() if filter_options is None else None,
+                resolve_links=resolve_links,
+                count=count,
+                subscription=subscription,
+                filter=filter,
+                no_filter=no_filter,
                 uuid_option=grpc_streams.ReadReq.Options.UUIDOption(
-                    structured=grpc_shared.Empty(), string=grpc_shared.Empty()
+                    string=grpc_shared.Empty()
                 ),
             )
         )
@@ -329,15 +339,17 @@ class SubscriptionReadResponse:
             response = next(self.resp)
             assert isinstance(response, grpc_persistent.ReadResp)
             if response.WhichOneof("content") == "event":
+                event = response.event.event
+                stream_name = event.stream_identifier.stream_name.decode("utf8")
+                if stream_name.startswith("$"):
+                    continue
                 return RecordedEvent(
-                    id=UUID(response.event.event.id.string),
-                    type=response.event.event.metadata["type"],
-                    data=response.event.event.data,
-                    metadata=response.event.event.custom_metadata,
-                    stream_name=response.event.event.stream_identifier.stream_name.decode(
-                        "utf8"
-                    ),
-                    stream_position=response.event.event.stream_revision,
+                    id=UUID(event.id.string),
+                    type=event.metadata["type"],
+                    data=event.data,
+                    metadata=event.custom_metadata,
+                    stream_name=stream_name,
+                    stream_position=event.stream_revision,
                     commit_position=response.event.commit_position,
                 )
 
@@ -353,9 +365,30 @@ class Subscriptions:
     def create(
         self,
         group_name: str,
-        position: int,
+        from_end: bool = False,
+        commit_position: Optional[int] = None,
         consumer_strategy: str = "DispatchToSingle",
     ) -> None:
+        # Decide 'stream_option'.
+        stream: Optional[grpc_persistent.CreateReq.StreamOptions] = None
+        # all_: Optional[grpc_persistent.CreateReq.AllOptions] = None
+        if commit_position is not None:
+            all_ = grpc_persistent.CreateReq.AllOptions(
+                position=grpc_persistent.CreateReq.Position(
+                    commit_position=commit_position,
+                    prepare_position=commit_position,
+                ),
+            )
+        elif from_end:
+            all_ = grpc_persistent.CreateReq.AllOptions(
+                end=grpc_shared.Empty(),
+            )
+        else:
+            all_ = grpc_persistent.CreateReq.AllOptions(
+                start=grpc_shared.Empty(),
+            )
+
+        # Construct 'settings'.
         settings = grpc_persistent.CreateReq.Settings(
             resolve_links=False,
             extra_statistics=False,
@@ -370,25 +403,31 @@ class Subscriptions:
             checkpoint_after_ms=100,
             consumer_strategy=consumer_strategy,
         )
+
+        # Construct 'options'.
         options = grpc_persistent.CreateReq.Options(
-            all=grpc_persistent.CreateReq.AllOptions(
-                position=grpc_persistent.CreateReq.Position(
-                    commit_position=position,
-                    prepare_position=position,
-                ),
-                start=grpc_shared.Empty(),
-            ),
+            stream=stream,
+            all=all_,
             group_name=group_name,
             settings=settings,
         )
-        create_req = grpc_persistent.CreateReq(
-            options=options,
-        )
-        self.stub.Create(create_req)
+
+        # Construct RPC request.
+        request = grpc_persistent.CreateReq(options=options)
+
+        # Call 'Create' RPC.
+        try:
+            response = self.stub.Create(request)
+        except RpcError as e:  # pragma: no cover
+            raise handle_rpc_error(e) from e
+        assert isinstance(response, grpc_persistent.CreateResp)
 
     def read(
         self, group_name: str
     ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
         read_req = SubscriptionReadRequest(group_name=group_name)
-        read_resp = self.stub.Read(read_req)
+        try:
+            read_resp = self.stub.Read(read_req)
+        except RpcError as e:  # pragma: no cover
+            raise handle_rpc_error(e) from e
         return (read_req, SubscriptionReadResponse(read_resp))

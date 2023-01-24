@@ -14,6 +14,29 @@ useful aspects are presented in an easy-to-use interface (see below).
 For an example of usage, see the [eventsourcing-eventstoredb](
 https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 
+<!-- TOC -->
+* [Installation](#installation)
+* [Getting started](#getting-started)
+  * [Start EventStoreDB](#start-eventstoredb)
+  * [Construct client](#construct-client)
+  * [Append events](#append-events)
+  * [Get current stream position](#get-current-stream-position)
+  * [Read stream events](#read-stream-events)
+  * [Read all recorded events](#read-all-recorded-events)
+  * [Get current commit position](#get-current-commit-position)
+  * [Catch-up subscriptions](#catch-up-subscriptions)
+  * [Persistent subscriptions](#persistent-subscriptions)
+  * [The NewEvent class](#the-newevent-class)
+  * [The RecordedEvent class](#the-recordedevent-class)
+  * [Filter regular expressions](#filter-regular-expressions)
+  * [Stop EventStoreDB](#stop-eventstoredb)
+* [Contributors](#contributors)
+  * [Install Poetry](#install-poetry)
+  * [Setup for PyCharm users](#setup-for-pycharm-users)
+  * [Setup from command line](#setup-from-command-line)
+  * [Project Makefile commands](#project-makefile-commands)
+<!-- TOC -->
+
 ## Installation
 
 Use pip to install this package from
@@ -554,17 +577,17 @@ commit_position = client.get_commit_position()
 stream_name1 = str(uuid4())
 event1 = NewEvent(
     type='OrderCreated',
-    data=b'{}',
+    data=b'data1',
     metadata=b'{}',
 )
 event2 = NewEvent(
     type='OrderUpdated',
-    data=b'{}',
+    data=b'data2',
     metadata=b'{}',
 )
 event3 = NewEvent(
     type='OrderDeleted',
-    data=b'{}',
+    data=b'data3',
     metadata=b'{}',
 )
 client.append_events(
@@ -591,17 +614,17 @@ for event in subscription:
 stream_name = str(uuid4())
 event4 = NewEvent(
     type='OrderCreated',
-    data=b'{}',
+    data=b'data4',
     metadata=b'{}',
 )
 event5 = NewEvent(
     type='OrderUpdated',
-    data=b'{}',
+    data=b'data5',
     metadata=b'{}',
 )
 event6 = NewEvent(
     type='OrderDeleted',
-    data=b'{}',
+    data=b'data6',
     metadata=b'{}',
 )
 client.append_events(
@@ -687,6 +710,98 @@ such thread or queue objects, you would need to do that yourself. Just make sure
 to reconstruct the subscription (and the queue) using your last recorded commit
 position when resuming the subscription after an error, to be sure all events
 are processed once.
+
+### Persistent subscriptions
+
+The method `create_subscription()` can be used to create a
+"persistent subscription" to EventStoreDB.
+
+This method takes a required `group_name` argument, which is the
+name of a "group" of consumers of the subscription.
+
+This method takes an optional `from_end` argument, which can be
+used to specify that reading from the subscription should only
+yield events that were recorded after the subscription was created.
+
+This method takes an optional `position` argument, which can be
+used to specify that reading from the subscription should only
+yield events from this commit position inclusively.
+
+If neither `from_end` or `position` are specified, reading from
+the subscription will yield all recorded events in the order they
+were recorded.
+
+```python
+# Create a persistent subscription.
+group_name = f"group-{uuid4()}"
+client.create_subscription(group_name=group_name)
+```
+
+The method `create_subscription()` does not return a value, because
+recorded events are obtained using the `read_subscription()` method.
+
+The method `read_subscription()` can be used to read recorded events
+using a persistent subscription.
+
+This method takes a required `group_name` argument, which is
+the name of a "group" of consumers of the subscription specified
+when `create_subscription()` was called.
+
+This method returns a 2-tuple: a "read request" object and a "read response" object.
+
+```python
+read_req, read_resp = client.read_subscription(group_name=group_name)
+```
+
+The "read response" object is an iterator that yields recorded events from
+the specified commit position. The "read request" object can be used to "ack"
+received events.
+
+Let's append three events to a new stream.
+
+```python
+# Append three events.
+event7 = NewEvent(
+    type='OrderCreated',
+    data=b'data7',
+    metadata=b'{}',
+)
+event8 = NewEvent(
+    type='OrderUpdated',
+    data=b'data8',
+    metadata=b'{}',
+)
+event9 = NewEvent(
+    type='OrderDeleted',
+    data=b'data9',
+    metadata=b'{}',
+)
+client.append_events(
+    stream_name=str(uuid4()),
+    expected_position=None,
+    events=[event7, event8, event9],
+)
+```
+
+
+Now let's read the subscription. We call `ack()` with the event ID.
+
+```python
+events = []
+for event in read_resp:
+    events.append(event)
+    read_req.ack(event.id)
+    if event.data == event9.data:
+        break
+```
+
+The received events are the events we appended above.
+
+```python
+assert events[-3].data == event7.data
+assert events[-2].data == event8.data
+assert events[-1].data == event9.data
+```
 
 ### The NewEvent class
 
