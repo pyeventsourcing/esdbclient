@@ -17,7 +17,7 @@ from esdbclient.exceptions import (
     ServiceUnavailable,
     StreamNotFound,
 )
-from esdbclient.protos.Grpc.persistent_pb2 import ReadReq as GrpcSubscriptionReadRequest
+import esdbclient.protos.Grpc.persistent_pb2 as grpc_persistent
 
 
 class FakeRpcError(_MultiThreadedRendezvous):
@@ -768,7 +768,7 @@ class TestSubscriptionReadRequest(TestCase):
         read_request = SubscriptionReadRequest("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, GrpcSubscriptionReadRequest)
+        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
 
         # Do one batch of acks.
         event_ids: List[str] = []
