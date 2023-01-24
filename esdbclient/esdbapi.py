@@ -2,7 +2,7 @@
 import sys
 from queue import Queue
 from typing import Iterable, Optional, Sequence, Tuple, overload
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from grpc import Call, Channel, RpcError, StatusCode
 from typing_extensions import Literal
@@ -114,8 +114,12 @@ class Streams:
                     stream_name=stream_name.encode("utf8")
                 ),
                 revision=stream_position or 0,
-                start=grpc_shared.Empty() if stream_position is None and not backwards else None,
-                end=grpc_shared.Empty() if stream_position is None and backwards else None,
+                start=grpc_shared.Empty()
+                if stream_position is None and not backwards
+                else None,
+                end=grpc_shared.Empty()
+                if stream_position is None and backwards
+                else None,
             )
             all_options = None
         else:
@@ -130,7 +134,9 @@ class Streams:
             stream_options = None
             all_options = grpc_streams.ReadReq.Options.AllOptions(
                 position=position,
-                start=grpc_shared.Empty() if position is None and not backwards else None,
+                start=grpc_shared.Empty()
+                if position is None and not backwards
+                else None,
                 end=grpc_shared.Empty() if position is None and backwards else None,
             )
 
@@ -182,19 +188,20 @@ class Streams:
         try:
             for response in self.stub.Read(request, timeout=timeout):
                 assert isinstance(response, grpc_streams.ReadResp)
-                if response.WhichOneof("content") == "stream_not_found":
+                content_attribute_name = response.WhichOneof("content")
+                if content_attribute_name == "event":
+                    event = response.event.event
+                    yield RecordedEvent(
+                        id=UUID(event.id.string),
+                        type=event.metadata["type"],
+                        data=event.data,
+                        metadata=event.custom_metadata,
+                        stream_name=event.stream_identifier.stream_name.decode("utf8"),
+                        stream_position=event.stream_revision,
+                        commit_position=response.event.commit_position,
+                    )
+                elif content_attribute_name == "stream_not_found":
                     raise StreamNotFound(f"Stream {stream_name!r} not found")
-                yield RecordedEvent(
-                    id=response.event.event.id.string,
-                    type=response.event.event.metadata["type"],
-                    data=response.event.event.data,
-                    metadata=response.event.event.custom_metadata,
-                    stream_name=response.event.event.stream_identifier.stream_name.decode(
-                        "utf8"
-                    ),
-                    stream_position=response.event.event.stream_revision,
-                    commit_position=response.event.commit_position,
-                )
         except RpcError as e:
             raise handle_rpc_error(e) from e
 
@@ -306,8 +313,8 @@ class SubscriptionReadRequest:
                         ack=grpc_persistent.ReadReq.Ack(ids=ids)
                     )
 
-    def ack(self, event_id: str) -> None:
-        self.queue.put(grpc_shared.UUID(string=event_id))
+    def ack(self, event_id: UUID) -> None:
+        self.queue.put(grpc_shared.UUID(string=str(event_id)))
 
 
 class SubscriptionReadResponse:
@@ -323,7 +330,7 @@ class SubscriptionReadResponse:
             assert isinstance(response, grpc_persistent.ReadResp)
             if response.WhichOneof("content") == "event":
                 return RecordedEvent(
-                    id=response.event.event.id.string,
+                    id=UUID(response.event.event.id.string),
                     type=response.event.event.metadata["type"],
                     data=response.event.event.data,
                     metadata=response.event.event.custom_metadata,

@@ -183,9 +183,6 @@ class CatchupSubscription:
 
     def __iter__(self) -> Iterator[RecordedEvent]:
         for event in self.event_generator:
-            if event.type == "" and event.stream_name == "":
-                # Todo: What is this? occurs several times (has commit_position=0)
-                continue
             if self.filter_regex is None:
                 yield event
             elif re.match(self.filter_regex, event.type):

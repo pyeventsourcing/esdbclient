@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 from typing import List
 from unittest import TestCase
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from grpc import RpcError, StatusCode
 from grpc._channel import _MultiThreadedRendezvous, _RPCState
 from grpc._cython.cygrpc import IntegratedCall
 
+import esdbclient.protos.Grpc.persistent_pb2 as grpc_persistent
 from esdbclient.client import EsdbClient
 from esdbclient.esdbapi import SubscriptionReadRequest, handle_rpc_error
 from esdbclient.events import NewEvent
@@ -17,7 +18,6 @@ from esdbclient.exceptions import (
     ServiceUnavailable,
     StreamNotFound,
 )
-import esdbclient.protos.Grpc.persistent_pb2 as grpc_persistent
 
 
 class FakeRpcError(_MultiThreadedRendezvous):
@@ -771,9 +771,9 @@ class TestSubscriptionReadRequest(TestCase):
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
 
         # Do one batch of acks.
-        event_ids: List[str] = []
+        event_ids: List[UUID] = []
         for _ in range(100):
-            event_id = str(uuid4())
+            event_id = uuid4()
             event_ids.append(event_id)
             read_request.ack(event_id)
         grpc_read_req = next(read_request_iter)
@@ -782,7 +782,7 @@ class TestSubscriptionReadRequest(TestCase):
         # Do another batch of acks.
         event_ids.clear()
         for _ in range(100):
-            event_id = str(uuid4())
+            event_id = uuid4()
             event_ids.append(event_id)
             read_request.ack(event_id)
         grpc_read_req = next(read_request_iter)
