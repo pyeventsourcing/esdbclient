@@ -14,27 +14,34 @@ useful aspects are presented in an easy-to-use interface (see below).
 For an example of usage, see the [eventsourcing-eventstoredb](
 https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 
+## Table of contents
+
 <!-- TOC -->
-* [Installation](#installation)
-* [Getting started](#getting-started)
-  * [Start EventStoreDB](#start-eventstoredb)
-  * [Construct client](#construct-client)
-  * [Append events](#append-events)
-  * [Get current stream position](#get-current-stream-position)
-  * [Read stream events](#read-stream-events)
-  * [Read all recorded events](#read-all-recorded-events)
-  * [Get current commit position](#get-current-commit-position)
-  * [Catch-up subscriptions](#catch-up-subscriptions)
-  * [Persistent subscriptions](#persistent-subscriptions)
-  * [The NewEvent class](#the-newevent-class)
-  * [The RecordedEvent class](#the-recordedevent-class)
-  * [Filter regular expressions](#filter-regular-expressions)
-  * [Stop EventStoreDB](#stop-eventstoredb)
-* [Contributors](#contributors)
-  * [Install Poetry](#install-poetry)
-  * [Setup for PyCharm users](#setup-for-pycharm-users)
-  * [Setup from command line](#setup-from-command-line)
-  * [Project Makefile commands](#project-makefile-commands)
+* [Python gRPC Client for EventStoreDB](#python-grpc-client-for-eventstoredb)
+  * [Table of contents](#table-of-contents)
+  * [Installation](#installation)
+  * [Getting started](#getting-started)
+    * [Start EventStoreDB](#start-eventstoredb)
+    * [Stop EventStoreDB](#stop-eventstoredb)
+    * [Construct client](#construct-client)
+  * [Streams](#streams)
+    * [Append events](#append-events)
+    * [Get current stream position](#get-current-stream-position)
+    * [Read stream events](#read-stream-events)
+    * [Read all recorded events](#read-all-recorded-events)
+    * [Get current commit position](#get-current-commit-position)
+  * [Subscriptions](#subscriptions)
+    * [Catch-up subscriptions](#catch-up-subscriptions)
+    * [Persistent subscriptions](#persistent-subscriptions)
+  * [Notes](#notes)
+    * [Filter regular expressions](#filter-regular-expressions)
+    * [The NewEvent class](#the-newevent-class)
+    * [The RecordedEvent class](#the-recordedevent-class)
+  * [Contributors](#contributors)
+    * [Install Poetry](#install-poetry)
+    * [Setup for PyCharm users](#setup-for-pycharm-users)
+    * [Setup from command line](#setup-from-command-line)
+    * [Project Makefile commands](#project-makefile-commands)
 <!-- TOC -->
 
 ## Installation
@@ -60,6 +67,13 @@ only "insecure" connections. This version of this Python client does not
 support SSL/TLS connections. A future version of this library will support
 "secure" connections.
 
+### Stop EventStoreDB
+
+Use Docker to stop and remove the EventStoreDB container.
+
+    $ docker stop my-eventstoredb
+	$ docker rm my-eventstoredb
+
 
 ### Construct client
 
@@ -71,6 +85,8 @@ from esdbclient import EsdbClient
 
 client = EsdbClient(uri='localhost:2113')
 ```
+
+## Streams
 
 ### Append events
 
@@ -399,7 +415,7 @@ from the end if `backwards` is `True` (see below). Please note, if specified,
 the specified position must be an actually existing commit position, because
 any other number will result in a server error (at least in EventStoreDB v21.10).
 Please also note, when reading forwards the event at the specified position
-WILL be included. However when reading backwards, the event at the specified position
+WILL be included. However, when reading backwards, the event at the specified position
 will NOT be included. (This backwards behaviour of excluding the specified
 position differs from the behaviour when reading a stream, I'm not sure why.)
 
@@ -538,6 +554,7 @@ from the last position that was successfully processed.
 This method takes an optional argument `timeout` which is a float that sets
 a deadline for the completion of the gRPC operation.
 
+## Subscriptions
 
 ### Catch-up subscriptions
 
@@ -667,7 +684,7 @@ the gRPC operation. This probably isn't very useful, but is included for
 completeness and consistency with the other methods.
 
 Catch-up subscriptions are not registered in EventStoreDB (they are not
-"persistent subscriptions). It is simply a streaming gRPC call which is
+"persistent" subscriptions). It is simply a streaming gRPC call which is
 kept open by the server, with newly recorded events sent to the client
 as the client iterates over the subscription. This kind of subscription
 is closed as soon as the subscription object goes out of memory.
@@ -677,10 +694,16 @@ is closed as soon as the subscription object goes out of memory.
 del subscription
 ```
 
+To accomplish "exactly once" processing of the events, the commit position
+of a recorded event should be recorded atomically and uniquely along with
+the result of processing recorded events, for example in the same database
+as materialised views when implementing eventually-consistent CQRS, or in
+the same database as a downstream analytics or reporting or archiving
+application. This avoids "dual writing" in the processing of events.
+
 Received events do not need to be (and indeed cannot be) acknowledged back
 to the EventStoreDB server. Acknowledging events is an aspect of "persistent
-subscriptions", which is a feature of EventStoreDB that is not (currently)
-supported by this client. Whilst there are some advantages of persistent
+subscriptions" (see below). Whilst there are some advantages of persistent
 subscriptions, by tracking in the upstream server the position in the commit
 sequence of events that have been processed, there is a danger of "dual writing"
 in the consumption of events. The danger is that if the event is successfully
@@ -691,17 +714,11 @@ an events more than once, or failing to process and event, the resulting state
 of the processing of the recorded events might be inaccurate, or possibly
 inconsistent, and perhaps catastrophically so. Of course, such inaccuracies may
 or may not matter in your situation. But catastrophic inconsistencies may halt
-processing until the issue is resolved. The only protection against this danger
-is to avoid "dual writing" by atomically recording the commit position of an
-event that has been processed along with the results of process the event, that
-is with both things being recorded in the same transaction.
+processing until the issue is resolved. You can avoid "dual writing" in the consumption
+of events by atomically recording the commit position of an event that has been
+processed along with the results of processing that event, that is with both things
+being recorded in the same transaction.
 
-To accomplish "exactly once" processing of the events, the commit position
-of a recorded event should be recorded atomically and uniquely along with
-the result of processing recorded events, for example in the same database
-as materialised views when implementing eventually-consistent CQRS, or in
-the same database as a downstream analytics or reporting or archiving
-application. This avoids "dual writing" in the processing of events.
 
 The subscription object might be used directly when processing events. It might
 also be used within a thread dedicated to receiving events, with recorded events
@@ -803,6 +820,31 @@ assert events[-2].data == event8.data
 assert events[-1].data == event9.data
 ```
 
+## Notes
+
+### Filter regular expressions
+
+The `filter_exclude` and `filter_include` arguments in `read_all_events()` and
+`subscribe_all_events()` are applied to the `type` attribute of recorded events.
+
+The default value of the `filter_exclude` arguments is designed to exclude
+EventStoreDB "system events", which otherwise would be included. System
+events, by convention in EventStoreDB, all have `type` strings that
+start with the `$` sign.
+
+Please note, characters that have a special meaning in regular expressions
+will need to be escaped (with double-backslash) when matching these characters
+in type strings.
+
+For example, to match EventStoreDB system events, use the sequence `['\\$.*']`.
+Please note, the constant `ESDB_EVENTS_REGEX` is set to `'\\$.*'`. You
+can import this value (`from esdbclient import ESDB_EVENTS_REGEX`) and use
+it when building longer sequences of regular expressions. For example,
+to exclude system events and snapshots, you might use the sequence
+`[ESDB_EVENTS_REGEX, '.*Snapshot']` as the value of the `filter_exclude`
+argument.
+
+
 ### The NewEvent class
 
 The `NewEvent` class can be used to define new events.
@@ -862,37 +904,6 @@ recorded_event = RecordedEvent(
     commit_position=512,
 )
 ```
-
-### Filter regular expressions
-
-The `filter_exclude` and `filter_include` arguments in `read_all_events()` and
-`subscribe_all_events()` are applied to the `type` attribute of recorded events.
-
-The default value of the `filter_exclude` arguments is designed to exclude
-EventStoreDB "system events", which otherwise would be included. System
-events, by convention in EventStoreDB, all have `type` strings that
-start with the `$` sign.
-
-Please note, characters that have a special meaning in regular expressions
-will need to be escaped (with double-backslash) when matching these characters
-in type strings.
-
-For example, to match EventStoreDB system events, use the sequence `['\\$.*']`.
-Please note, the constant `ESDB_EVENTS_REGEX` is set to `'\\$.*'`. You
-can import this value (`from esdbclient import ESDB_EVENTS_REGEX`) and use
-it when building longer sequences of regular expressions. For example,
-to exclude system events and snapshots, you might use the sequence
-`[ESDB_EVENTS_REGEX, '.*Snapshot']` as the value of the `filter_exclude`
-argument.
-
-
-### Stop EventStoreDB
-
-Use Docker to stop and remove the EventStoreDB container.
-
-    $ docker stop my-eventstoredb
-	$ docker rm my-eventstoredb
-
 
 ## Contributors
 
