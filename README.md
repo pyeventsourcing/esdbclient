@@ -427,7 +427,7 @@ backwards, so that events are returned in reverse order.
 The optional argument `filter_exclude` is a sequence of regular expressions that
 match the type strings of recorded events that should not be included. By default,
 this argument will match "system events", so that they will not be included.
-This argument is ignored if `filter_include` is set.
+This argument is ignored if `filter_include` is set to a non-empty sequence.
 
 The optional argument `filter_include` is a sequence of regular expressions
 that match the type strings of recorded events that should be included. By
@@ -673,11 +673,9 @@ that match the type strings of recorded events that should be included. By
 default, this argument is an empty tuple. If this argument is set to a
 non-empty sequence, the `filter_exclude` argument is ignored.
 
-Please note, in this version of this Python client, the filtering happens
-within the client (rather than on the server as when reading all events) because
-passing these filter options in the read request for subscriptions seems to cause
-an error in EventStoreDB v21.10. See below for more information about filter
-regular expressions.
+Please note, the filtering happens on the EventStoreDB server, and the
+`limit` argument is applied after filtering. See below for more information
+about filter regular expressions.
 
 The argument `timeout` is a float which sets a deadline for the completion of
 the gRPC operation. This probably isn't very useful, but is included for

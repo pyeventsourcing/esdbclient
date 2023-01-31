@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
-import re
 import sys
-from typing import Iterable, Iterator, Optional, Pattern, Sequence, Tuple
+from typing import Iterable, Iterator, Optional, Sequence, Tuple
 
 import grpc
+from grpc import RpcError
 
 from esdbclient.esdbapi import (
     Streams,
     SubscriptionReadRequest,
     SubscriptionReadResponse,
     Subscriptions,
+    handle_rpc_error,
 )
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import StreamNotFound
@@ -132,7 +133,7 @@ class EsdbClient:
         filter_exclude: Sequence[str] = (ESDB_EVENTS_REGEX,),
         filter_include: Sequence[str] = (),
         timeout: Optional[float] = None,
-    ) -> Iterable[RecordedEvent]:
+    ) -> Iterator[RecordedEvent]:
         """
         Returns a catch-up subscription, from which recorded
         events in "all streams" in the database can be received.
@@ -144,10 +145,7 @@ class EsdbClient:
             subscribe=True,
             timeout=timeout,
         )
-        return CatchupSubscription(
-            event_generator=read_resp,
-            # event_generator=iter(read_resp),
-        )
+        return CatchupSubscription(read_resp=read_resp)
 
     def create_subscription(
         self, group_name: str, from_end: bool = False, position: Optional[int] = None
@@ -162,33 +160,22 @@ class EsdbClient:
         return self.subscriptions.read(group_name=group_name)
 
 
-class CatchupSubscription:
+class CatchupSubscription(Iterator[RecordedEvent]):
     """
-    Encapsulates generator of recorded events when
-    reading events in a catch-up subscription.
-
-    Filters recorded events, because the server doesn't.
+    Encapsulates read response for a catch-up subscription.
     """
 
     def __init__(
         self,
-        event_generator: Iterable[RecordedEvent],
-        filter_exclude: Sequence[str] = (),
-        filter_include: Sequence[str] = (),
+        read_resp: Iterable[RecordedEvent],
     ):
-        self.event_generator = event_generator
-        if filter_exclude or filter_include:
-            if filter_include:
-                filter_regex = "^" + "|".join(filter_include) + "$"
-            else:
-                filter_regex = "^(?!(" + "|".join(filter_exclude) + ")).*$"
-            self.filter_regex: Optional[Pattern[str]] = re.compile(filter_regex)
-        else:
-            self.filter_regex = None
+        self.read_resp = iter(read_resp)
 
     def __iter__(self) -> Iterator[RecordedEvent]:
-        for event in self.event_generator:
-            if self.filter_regex is None:
-                yield event
-            elif re.match(self.filter_regex, event.type):
-                yield event
+        return self
+
+    def __next__(self):
+        try:
+            return next(self.read_resp)
+        except RpcError as e:
+            raise handle_rpc_error(e) from e  # pragma: no cover

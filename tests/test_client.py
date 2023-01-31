@@ -525,6 +525,29 @@ class TestEsdbClient(TestCase):
         self.assertIn("OrderUpdated", types)
         self.assertNotIn("OrderDeleted", types)
 
+    def test_read_all_filter_exclude_ignored_when_filter_include_is_set(self) -> None:
+        client = EsdbClient("localhost:2113")
+
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Both include and exclude.
+        events = list(client.read_all_events(
+            filter_include=("OrderCreated",),
+            filter_exclude=("OrderCreated",)
+        ))
+        types = set([e.type for e in events])
+        self.assertIn("OrderCreated", types)
+        self.assertNotIn("OrderUpdated", types)
+        self.assertNotIn("OrderDeleted", types)
+
     def test_catchup_subscribe_all_events_default_filter(self) -> None:
         client = EsdbClient("localhost:2113")
 
