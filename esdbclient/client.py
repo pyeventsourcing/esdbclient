@@ -67,7 +67,7 @@ class EsdbClient:
 
     def read_all_events(
         self,
-        position: Optional[int] = None,
+        commit_position: Optional[int] = None,
         backwards: bool = False,
         filter_exclude: Sequence[str] = (ESDB_EVENTS_REGEX,),
         filter_include: Sequence[str] = (),
@@ -78,7 +78,7 @@ class EsdbClient:
         Reads recorded events in "all streams" in the database.
         """
         return self.streams.read(
-            commit_position=position,
+            commit_position=commit_position,
             backwards=backwards,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
@@ -129,7 +129,7 @@ class EsdbClient:
 
     def subscribe_all_events(
         self,
-        position: Optional[int] = None,
+        commit_position: Optional[int] = None,
         filter_exclude: Sequence[str] = (ESDB_EVENTS_REGEX,),
         filter_include: Sequence[str] = (),
         timeout: Optional[float] = None,
@@ -139,7 +139,7 @@ class EsdbClient:
         events in "all streams" in the database can be received.
         """
         read_resp = self.streams.read(
-            commit_position=position,
+            commit_position=commit_position,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             subscribe=True,
@@ -148,10 +148,13 @@ class EsdbClient:
         return CatchupSubscription(read_resp=read_resp)
 
     def create_subscription(
-        self, group_name: str, from_end: bool = False, position: Optional[int] = None
+        self,
+        group_name: str,
+        from_end: bool = False,
+        commit_position: Optional[int] = None,
     ) -> None:
         self.subscriptions.create(
-            group_name=group_name, from_end=from_end, commit_position=position
+            group_name=group_name, from_end=from_end, commit_position=commit_position
         )
 
     def read_subscription(
@@ -174,7 +177,7 @@ class CatchupSubscription(Iterator[RecordedEvent]):
     def __iter__(self) -> Iterator[RecordedEvent]:
         return self
 
-    def __next__(self):
+    def __next__(self) -> RecordedEvent:
         try:
             return next(self.read_resp)
         except RpcError as e:

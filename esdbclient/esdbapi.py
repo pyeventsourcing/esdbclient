@@ -153,7 +153,7 @@ class Streams:
         # Decide 'count_option'.
         if subscribe:
             subscription = grpc_streams.ReadReq.Options.SubscriptionOptions()
-            count = sys.maxsize
+            count = 0
         else:
             subscription = None
             count = limit
@@ -173,7 +173,6 @@ class Streams:
                 # max=grpc_shared.Empty(),  # Todo: Figure out what 'window' should be.
                 count=grpc_shared.Empty(),  # Todo: Figure out what 'window' should be.
                 checkpointIntervalMultiplier=5,  # Todo: Figure out what this means.
-
             )
         else:
             filter = None
@@ -190,6 +189,9 @@ class Streams:
                 subscription=subscription,
                 filter=filter,
                 no_filter=no_filter,
+                # control_option=grpc_streams.ReadReq.Options.ControlOption(
+                #     compatibility=1
+                # ),
                 uuid_option=grpc_streams.ReadReq.Options.UUIDOption(
                     string=grpc_shared.Empty()
                 ),
@@ -327,6 +329,8 @@ class SubscriptionReadRequest:
 
     def ack(self, event_id: UUID) -> None:
         self.queue.put(grpc_shared.UUID(string=str(event_id)))
+
+    # Todo: Implement nack().
 
 
 class SubscriptionReadResponse:
