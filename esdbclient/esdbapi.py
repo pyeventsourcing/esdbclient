@@ -172,6 +172,8 @@ class Streams:
                 ),
                 # max=grpc_shared.Empty(),  # Todo: Figure out what 'window' should be.
                 count=grpc_shared.Empty(),  # Todo: Figure out what 'window' should be.
+                checkpointIntervalMultiplier=5,  # Todo: Figure out what this means.
+
             )
         else:
             filter = None

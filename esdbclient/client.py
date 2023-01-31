@@ -137,15 +137,16 @@ class EsdbClient:
         Returns a catch-up subscription, from which recorded
         events in "all streams" in the database can be received.
         """
-        event_generator = self.streams.read(
+        read_resp = self.streams.read(
             commit_position=position,
+            filter_exclude=filter_exclude,
+            filter_include=filter_include,
             subscribe=True,
             timeout=timeout,
         )
         return CatchupSubscription(
-            event_generator=event_generator,
-            filter_exclude=filter_exclude,
-            filter_include=filter_include,
+            event_generator=read_resp,
+            # event_generator=iter(read_resp),
         )
 
     def create_subscription(
