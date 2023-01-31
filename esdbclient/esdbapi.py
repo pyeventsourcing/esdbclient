@@ -105,9 +105,11 @@ class Streams:
 
         Returns a generator which yields RecordedEvent objects.
         """
+
+        # Construct read request options.
+        options = grpc_streams.ReadReq.Options()
+
         # Decide 'stream_option'.
-        stream_options: Optional[grpc_streams.ReadReq.Options.StreamOptions] = None
-        all_options: Optional[grpc_streams.ReadReq.Options.AllOptions] = None
         if stream_name is not None:
             assert isinstance(stream_name, str)
             assert commit_position is None
@@ -116,16 +118,18 @@ class Streams:
                     stream_name=stream_name.encode("utf8")
                 ),
                 revision=stream_position or 0,
-                start=grpc_shared.Empty()
-                if stream_position is None and not backwards
-                else None,
-                end=grpc_shared.Empty()
-                if stream_position is None and backwards
-                else None,
             )
+            # Decide 'revision_option'.
+            if stream_position is not None:
+                stream_options.revision = stream_position
+            elif backwards is False:
+                stream_options.start.CopyFrom(grpc_shared.Empty())
+            else:
+                stream_options.end.CopyFrom(grpc_shared.Empty())
+            options.stream.CopyFrom(stream_options)
         else:
             assert stream_position is None
-            if isinstance(commit_position, int):
+            if commit_position is not None:
                 all_options = grpc_streams.ReadReq.Options.AllOptions(
                     position=grpc_streams.ReadReq.Options.Position(
                         commit_position=commit_position,
@@ -140,27 +144,28 @@ class Streams:
                 all_options = grpc_streams.ReadReq.Options.AllOptions(
                     start=grpc_shared.Empty()
                 )
+            options.all.CopyFrom(all_options)
 
         # Decide 'read_direction'.
         if backwards is False:
-            read_direction = grpc_streams.ReadReq.Options.Forwards
+            options.read_direction = grpc_streams.ReadReq.Options.Forwards
         else:
-            read_direction = grpc_streams.ReadReq.Options.Backwards
+            options.read_direction = grpc_streams.ReadReq.Options.Backwards
 
         # Decide 'resolve_links'.
-        resolve_links = False
+        options.resolve_links = False
 
         # Decide 'count_option'.
         if subscribe:
             subscription = grpc_streams.ReadReq.Options.SubscriptionOptions()
-            count = 0
+            options.subscription.CopyFrom(subscription)
+
         else:
-            subscription = None
-            count = limit
+            options.count = limit
 
         # Decide 'filter_option'.
         if filter_exclude or filter_include:
-            no_filter = None
+            # no_filter = None
             if filter_include:
                 filter_regex = "^" + "|".join(filter_include) + "$"
             else:
@@ -174,33 +179,23 @@ class Streams:
                 count=grpc_shared.Empty(),  # Todo: Figure out what 'window' should be.
                 checkpointIntervalMultiplier=5,  # Todo: Figure out what this means.
             )
+            options.filter.CopyFrom(filter)
         else:
-            filter = None
+            # filter = None
             no_filter = grpc_shared.Empty()
+            options.no_filter.CopyFrom(no_filter)
 
-        # Construct a read request.
-        request = grpc_streams.ReadReq(
-            options=grpc_streams.ReadReq.Options(
-                stream=stream_options,
-                all=all_options,
-                read_direction=read_direction,
-                resolve_links=resolve_links,
-                count=count,
-                subscription=subscription,
-                filter=filter,
-                no_filter=no_filter,
-                # control_option=grpc_streams.ReadReq.Options.ControlOption(
-                #     compatibility=1
-                # ),
-                uuid_option=grpc_streams.ReadReq.Options.UUIDOption(
-                    string=grpc_shared.Empty()
-                ),
-            )
+        # Decide 'uuid_option'.
+        options.uuid_option.CopyFrom(
+            grpc_streams.ReadReq.Options.UUIDOption(string=grpc_shared.Empty())
         )
+
+        # Construct read request.
+        read_req = grpc_streams.ReadReq(options=options)
 
         # Send the read request, and iterate over the response.
         try:
-            for response in self.stub.Read(request, timeout=timeout):
+            for response in self.stub.Read(read_req, timeout=timeout):
                 assert isinstance(response, grpc_streams.ReadResp)
                 content_attribute_name = response.WhichOneof("content")
                 if content_attribute_name == "event":

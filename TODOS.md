@@ -7,3 +7,5 @@ support);
 * Catch-up subscription (stream + $all);
 * Persistent subscription (stream + $all);
 * Doc & sample.
+
+* JSON/bytes new event (https://github.com/pyeventsourcing/esdbclient/issues/5)

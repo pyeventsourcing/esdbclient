@@ -765,7 +765,6 @@ class TestEsdbClient(TestCase):
         for event in read_resp:
             read_req.ack(event.id)
             events.append(event)
-            print(event)
             if event.data == event3.data:
                 break
 
