@@ -29,6 +29,7 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Append events](#append-events)
   * [Get current stream position](#get-current-stream-position)
   * [Read stream events](#read-stream-events)
+  * [Idempotent writes](#idempotent-writes)
   * [Read all recorded events](#read-all-recorded-events)
   * [Get current commit position](#get-current-commit-position)
 * [Subscriptions](#subscriptions)
@@ -223,18 +224,23 @@ was completed. Otherwise, an exception will be raised.
 
 A "commit position" is a monotonically increasing integer representing
 the position of the recorded event in a "total order" of all recorded
-events in the database across all streams. The sequence of commit positions
-is not gapless. It represents the position of the event record on disk, and
-there are usually large differences between successive commits.
+events in the database across all streams. It is the actual position
+of the event record on disk, and there are usually large differences
+between successive commits. The sequence of commit positions
+is NOT gapless.
 
-The "commit position" returned in this way can be used to wait for a
-downstream component to have processed the newly appended events.
-For example, after a user interface command that results in the recording
-of new events, and before a query is issued that depends on an eventually
-consistent materialized view in a downstream component that would be stale
-if those newly appended events have not yet been processed, the user interface
-can poll the downstream component, to see if it has processed an event at that
-commit position, before executing a query for that materialized view.
+The "commit position" returned by `append_events()` is that of the last
+recorded event in the given sequence of new events.
+
+The "commit position" returned in this way can therefore be used to wait
+for a downstream component to have processed all the events that were recorded.
+
+For example, consider a user interface command that results in the recording
+of new events, and a query into an eventually consistent materialized
+view in a downstream component that is updated from these events. If the new
+events have not yet been processed, the view would be stale. The "commit position"
+can be used by the user interface to poll the downstream component until it has
+processed the new events, after which time the view will not be stale.
 
 ### Get current stream position
 
@@ -445,6 +451,67 @@ assert events[0].stream_position == 2
 assert events[0].type == event3.type
 assert events[0].data == event3.data
 ```
+
+### Idempotent writes
+
+Now that we can both append events and read from a stream, we can demonstrate
+the idempotent nature of the `append_events()` operation.
+
+Sometimes it may happen that a new event is successfully recorded and then somehow
+the connection to the database gets interrupted before the successful call can return
+successfully to the client. In case of an error when appending an event, it may be
+desirable to retry appending the same event at the same position. If the event was
+in fact successfully recorded, it is convenient for the retry to return successfully
+without raising an error due to optimistic concurrency control (as described above).
+
+The example below shows the `append_events()` method being called again with
+`event3` and `expected_position=2`.
+
+```python
+# Retry appending event3.
+commit_position_retry = client.append_events(
+    stream_name=stream_name1,
+    expected_position=0,
+    events=[event2, event3],
+)
+```
+
+We can see that the same commit position is returned as above.
+
+```python
+assert commit_position_retry == commit_position2
+```
+
+This works because the `NewEvent` class has an `id` attribute that
+is supplied with a new version-4 UUID when an instance is constructed.
+
+```python
+assert isinstance(event1.id, UUID)
+assert isinstance(event2.id, UUID)
+assert isinstance(event3.id, UUID)
+
+assert event1.id != event2.id
+assert event2.id != event3.id
+```
+
+It is possible to provide an `id` value when constructing instances of
+`NewEvent`, but in the examples above we have been using the default behaviour.
+
+We can see that the `append_events()` method returns successfully, and
+that the stream has been unchanged by calling the method twice with the
+same arguments.
+
+```python
+response = client.read_stream_events(
+    stream_name=stream_name1
+)
+
+events = list(response)
+assert events[0].id == event1.id
+assert events[1].id == event2.id
+assert events[2].id == event3.id
+```
+
 
 ### Read all recorded events
 
