@@ -42,7 +42,7 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Install Poetry](#install-poetry)
   * [Setup for PyCharm users](#setup-for-pycharm-users)
   * [Setup from command line](#setup-from-command-line)
-  * [Project Makefile commands](#project-makefile-commands)_
+  * [Project Makefile commands](#project-makefile-commands)
 <!-- TOC -->
 
 ## Installation
