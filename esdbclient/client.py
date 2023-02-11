@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
+import re
 import sys
-from typing import Iterable, Iterator, Optional, Sequence, Tuple
+from typing import Iterable, Iterator, Optional, Sequence, Tuple, Union
 
 import grpc
 from grpc import RpcError
 
 from esdbclient.esdbapi import (
+    BasicAuthCallCredentials,
     Streams,
     SubscriptionReadRequest,
     SubscriptionReadResponse,
@@ -23,11 +25,41 @@ class EsdbClient:
     Encapsulates the EventStoreDB gRPC API.
     """
 
-    def __init__(self, uri: str) -> None:
-        self.uri = uri
-        self.channel = grpc.insecure_channel(self.uri)
-        self.streams = Streams(self.channel)
-        self.subscriptions = Subscriptions(self.channel)
+    def __init__(
+        self,
+        uri: Optional[str] = None,
+        host: Optional[str] = None,
+        port: Optional[Union[int, str]] = None,
+        server_cert: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+    ) -> None:
+        # Todo: look at connection string for "tls=true" or "tls=false"
+
+        if isinstance(uri, (str, bytes)) and re.match(pattern=r"^\w+:\d+$", string=uri):
+            self.grpc_target = uri
+        elif host is not None:
+            assert port is not None
+            self.grpc_target = f"{host}:{port}"
+        else:
+            raise ValueError("Invalid constructor args")
+        if server_cert is None:
+            self._channel = grpc.insecure_channel(target=self.grpc_target)
+            self._call_credentials = None
+        else:
+            assert username is not None
+            assert password is not None
+            channel_credentials = grpc.ssl_channel_credentials(
+                root_certificates=server_cert.encode()
+            )
+            self._channel = grpc.secure_channel(
+                target=self.grpc_target, credentials=channel_credentials
+            )
+            self._call_credentials = grpc.metadata_call_credentials(
+                BasicAuthCallCredentials(username, password)
+            )
+        self._streams = Streams(self._channel)
+        self._subscriptions = Subscriptions(self._channel)
 
     def append_events(
         self,
@@ -39,7 +71,7 @@ class EsdbClient:
         """
         Appends new events to the named stream.
         """
-        return self.streams.append(
+        return self._streams.append(
             stream_name=stream_name,
             expected_position=expected_position,
             events=events,
@@ -57,12 +89,13 @@ class EsdbClient:
         """
         Reads recorded events from the named stream.
         """
-        return self.streams.read(
+        return self._streams.read(
             stream_name=stream_name,
             stream_position=position,
             backwards=backwards,
             limit=limit,
             timeout=timeout,
+            credentials=self._call_credentials,
         )
 
     def read_all_events(
@@ -77,13 +110,14 @@ class EsdbClient:
         """
         Reads recorded events in "all streams" in the database.
         """
-        return self.streams.read(
+        return self._streams.read(
             commit_position=commit_position,
             backwards=backwards,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             limit=limit,
             timeout=timeout,
+            credentials=self._call_credentials,
         )
 
     def get_stream_position(
@@ -96,11 +130,12 @@ class EsdbClient:
         """
         try:
             last_event = list(
-                self.streams.read(
+                self._streams.read(
                     stream_name=stream_name,
                     backwards=True,
                     limit=1,
                     timeout=timeout,
+                    credentials=self._call_credentials,
                 )
             )[0]
         except StreamNotFound:
@@ -138,12 +173,13 @@ class EsdbClient:
         Returns a catch-up subscription, from which recorded
         events in "all streams" in the database can be received.
         """
-        read_resp = self.streams.read(
+        read_resp = self._streams.read(
             commit_position=commit_position,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             subscribe=True,
             timeout=timeout,
+            credentials=self._call_credentials,
         )
         return CatchupSubscription(read_resp=read_resp)
 
@@ -152,15 +188,29 @@ class EsdbClient:
         group_name: str,
         from_end: bool = False,
         commit_position: Optional[int] = None,
+        # filter_exclude: Sequence[str] = (ESDB_EVENTS_REGEX,),
+        filter_exclude: Sequence[str] = (),
+        filter_include: Sequence[str] = (),
+        timeout: Optional[float] = None,
     ) -> None:
-        self.subscriptions.create(
-            group_name=group_name, from_end=from_end, commit_position=commit_position
+        self._subscriptions.create(
+            group_name=group_name,
+            from_end=from_end,
+            commit_position=commit_position,
+            filter_exclude=filter_exclude,
+            filter_include=filter_include,
+            timeout=timeout,
+            credentials=self._call_credentials,
         )
 
     def read_subscription(
-        self, group_name: str
+        self, group_name: str, timeout: Optional[float] = None
     ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
-        return self.subscriptions.read(group_name=group_name)
+        return self._subscriptions.read(
+            group_name=group_name,
+            timeout=timeout,
+            credentials=self._call_credentials,
+        )
 
 
 class CatchupSubscription(Iterator[RecordedEvent]):

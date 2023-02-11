@@ -1,10 +1,20 @@
 # -*- coding: utf-8 -*-
 import sys
-from queue import Queue
+from base64 import b64encode
+from queue import Empty, Queue
 from typing import Iterable, Optional, Sequence, Tuple, overload
 from uuid import UUID, uuid4
 
-from grpc import Call, Channel, RpcError, StatusCode
+import grpc
+from grpc import (
+    AuthMetadataContext,
+    AuthMetadataPluginCallback,
+    Call,
+    CallCredentials,
+    Channel,
+    RpcError,
+    StatusCode,
+)
 from typing_extensions import Literal
 
 from esdbclient.events import NewEvent, RecordedEvent
@@ -42,7 +52,7 @@ class Streams:
     """
 
     def __init__(self, channel: Channel):
-        self.stub = StreamsStub(channel)
+        self._stub = StreamsStub(channel)
 
     @overload
     def read(
@@ -53,6 +63,7 @@ class Streams:
         backwards: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
+        credentials: Optional[CallCredentials] = None,
     ) -> Iterable[RecordedEvent]:
         """
         Signature for reading events from an individual stream.
@@ -68,6 +79,7 @@ class Streams:
         filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
+        credentials: Optional[CallCredentials] = None,
     ) -> Iterable[RecordedEvent]:
         """
         Signature for reading events from "all streams".
@@ -82,6 +94,7 @@ class Streams:
         filter_include: Sequence[str] = (),
         subscribe: Literal[True],
         timeout: Optional[float] = None,
+        credentials: Optional[CallCredentials] = None,
     ) -> Iterable[RecordedEvent]:
         """
         Signature for reading events with a catch-up subscription.
@@ -99,6 +112,7 @@ class Streams:
         limit: int = sys.maxsize,
         subscribe: bool = False,
         timeout: Optional[float] = None,
+        credentials: Optional[CallCredentials] = None,
     ) -> Iterable[RecordedEvent]:
         """
         Constructs and sends a gRPC 'ReadReq' to the 'Read' rpc.
@@ -106,7 +120,7 @@ class Streams:
         Returns a generator which yields RecordedEvent objects.
         """
 
-        # Construct read request options.
+        # Construct ReadReq.Options.
         options = grpc_streams.ReadReq.Options()
 
         # Decide 'stream_option'.
@@ -165,7 +179,6 @@ class Streams:
 
         # Decide 'filter_option'.
         if filter_exclude or filter_include:
-            # no_filter = None
             if filter_include:
                 filter_regex = "^" + "|".join(filter_include) + "$"
             else:
@@ -175,13 +188,14 @@ class Streams:
                 event_type=grpc_streams.ReadReq.Options.FilterOptions.Expression(
                     regex=filter_regex
                 ),
-                # max=grpc_shared.Empty(),  # Todo: Figure out what 'window' should be.
-                count=grpc_shared.Empty(),  # Todo: Figure out what 'window' should be.
-                checkpointIntervalMultiplier=5,  # Todo: Figure out what this means.
+                # Todo: What does 'window' mean?
+                # max=grpc_shared.Empty(),
+                count=grpc_shared.Empty(),
+                # Todo: What does 'checkpointIntervalMultiplier' mean?
+                checkpointIntervalMultiplier=5,
             )
             options.filter.CopyFrom(filter)
         else:
-            # filter = None
             no_filter = grpc_shared.Empty()
             options.no_filter.CopyFrom(no_filter)
 
@@ -195,7 +209,9 @@ class Streams:
 
         # Send the read request, and iterate over the response.
         try:
-            for response in self.stub.Read(read_req, timeout=timeout):
+            for response in self._stub.Read(
+                read_req, timeout=timeout, credentials=credentials
+            ):
                 assert isinstance(response, grpc_streams.ReadResp)
                 content_attribute_name = response.WhichOneof("content")
                 if content_attribute_name == "event":
@@ -272,7 +288,7 @@ class Streams:
 
         # Call the gRPC method.
         try:
-            response = self.stub.Append(iter(requests), timeout=timeout)
+            response = self._stub.Append(iter(requests), timeout=timeout)
         except RpcError as e:
             raise handle_rpc_error(e) from e
         else:
@@ -315,12 +331,18 @@ class SubscriptionReadRequest:
         else:
             ids = []
             while True:
-                event_id = self.queue.get()
-                ids.append(event_id)
-                if len(ids) >= 100:
-                    return grpc_persistent.ReadReq(
-                        ack=grpc_persistent.ReadReq.Ack(ids=ids)
-                    )
+                try:
+                    event_id = self.queue.get(timeout=0.1)
+                    ids.append(event_id)
+                    if len(ids) >= 100:
+                        return grpc_persistent.ReadReq(
+                            ack=grpc_persistent.ReadReq.Ack(ids=ids)
+                        )
+                except Empty:
+                    if len(ids) >= 1:
+                        return grpc_persistent.ReadReq(
+                            ack=grpc_persistent.ReadReq.Ack(ids=ids)
+                        )
 
     def ack(self, event_id: UUID) -> None:
         self.queue.put(grpc_shared.UUID(string=str(event_id)))
@@ -361,7 +383,7 @@ class Subscriptions:
     """
 
     def __init__(self, channel: Channel):
-        self.stub = PersistentSubscriptionsStub(channel)
+        self._stub = PersistentSubscriptionsStub(channel)
 
     def create(
         self,
@@ -369,26 +391,11 @@ class Subscriptions:
         from_end: bool = False,
         commit_position: Optional[int] = None,
         consumer_strategy: str = "DispatchToSingle",
+        filter_exclude: Sequence[str] = (),
+        filter_include: Sequence[str] = (),
+        timeout: Optional[float] = None,
+        credentials: Optional[CallCredentials] = None,
     ) -> None:
-        # Decide 'stream_option'.
-        stream: Optional[grpc_persistent.CreateReq.StreamOptions] = None
-        # all_: Optional[grpc_persistent.CreateReq.AllOptions] = None
-        if commit_position is not None:
-            all_ = grpc_persistent.CreateReq.AllOptions(
-                position=grpc_persistent.CreateReq.Position(
-                    commit_position=commit_position,
-                    prepare_position=commit_position,
-                ),
-            )
-        elif from_end:
-            all_ = grpc_persistent.CreateReq.AllOptions(
-                end=grpc_shared.Empty(),
-            )
-        else:
-            all_ = grpc_persistent.CreateReq.AllOptions(
-                start=grpc_shared.Empty(),
-            )
-
         # Construct 'settings'.
         settings = grpc_persistent.CreateReq.Settings(
             resolve_links=False,
@@ -398,37 +405,101 @@ class Subscriptions:
             max_checkpoint_count=10,  # server recorded position
             max_subscriber_count=5,
             live_buffer_size=1000,  # how many new events to hold in memory?
-            read_batch_size=20,  # how many events to read from DB records?
+            read_batch_size=8,  # how many events to read from DB records?
             history_buffer_size=200,  # how many recorded events to hold in memory?
             message_timeout_ms=1000,
             checkpoint_after_ms=100,
             consumer_strategy=consumer_strategy,
         )
 
-        # Construct 'options'.
+        # Construct CreateReq.Options.
         options = grpc_persistent.CreateReq.Options(
-            stream=stream,
-            all=all_,
             group_name=group_name,
             settings=settings,
         )
+
+        # Decide 'stream_option'.
+        if False:
+            pass  # pragma: no cover
+            # Todo: Support persistent subscription to a stream.
+            # options.stream.CopyFrom(stream_options)
+        else:
+            if commit_position is not None:
+                all_options = grpc_persistent.CreateReq.AllOptions(
+                    position=grpc_persistent.CreateReq.Position(
+                        commit_position=commit_position,
+                        prepare_position=commit_position,
+                    ),
+                )
+            elif from_end:
+                all_options = grpc_persistent.CreateReq.AllOptions(
+                    end=grpc_shared.Empty(),
+                )
+            else:
+                all_options = grpc_persistent.CreateReq.AllOptions(
+                    start=grpc_shared.Empty(),
+                )
+
+            # Decide 'filter_option'.
+            if filter_exclude or filter_include:
+                if filter_include:
+                    filter_regex = "^" + "|".join(filter_include) + "$"
+                else:
+                    filter_regex = "^(?!(" + "|".join(filter_exclude) + ")).*$"
+
+                filter = grpc_persistent.CreateReq.AllOptions.FilterOptions(
+                    event_type=grpc_persistent.CreateReq.AllOptions.FilterOptions.Expression(
+                        regex=filter_regex
+                    ),
+                    # Todo: What does 'window' mean?
+                    # max=grpc_shared.Empty(),
+                    count=grpc_shared.Empty(),
+                    # Todo: What does 'checkpointIntervalMultiplier' mean?
+                    checkpointIntervalMultiplier=5,
+                )
+                all_options.filter.CopyFrom(filter)
+            else:
+                no_filter = grpc_shared.Empty()
+                all_options.no_filter.CopyFrom(no_filter)
+
+            options.all.CopyFrom(all_options)
 
         # Construct RPC request.
         request = grpc_persistent.CreateReq(options=options)
 
         # Call 'Create' RPC.
         try:
-            response = self.stub.Create(request)
+            response = self._stub.Create(
+                request,
+                timeout=timeout,
+                credentials=credentials,
+            )
         except RpcError as e:  # pragma: no cover
             raise handle_rpc_error(e) from e
         assert isinstance(response, grpc_persistent.CreateResp)
 
     def read(
-        self, group_name: str
+        self,
+        group_name: str,
+        timeout: Optional[float] = None,
+        credentials: Optional[CallCredentials] = None,
     ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
         read_req = SubscriptionReadRequest(group_name=group_name)
         try:
-            read_resp = self.stub.Read(read_req)
+            read_resp = self._stub.Read(
+                read_req, timeout=timeout, credentials=credentials
+            )
         except RpcError as e:  # pragma: no cover
             raise handle_rpc_error(e) from e
         return (read_req, SubscriptionReadResponse(read_resp))
+
+
+class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
+    def __init__(self, username: str, password: str):
+        credentials = b64encode(f"{username}:{password}".encode())
+        self._metadata = (("authorization", (b"Basic " + credentials)),)
+
+    def __call__(
+        self, context: AuthMetadataContext, callback: AuthMetadataPluginCallback
+    ) -> None:
+        callback(self._metadata, None)

@@ -56,18 +56,28 @@ It is recommended to install Python packages into a Python virtual environment.
 
 ### Start EventStoreDB
 
-Use Docker to run EventStoreDB from the official container image on DockerHub.
+Use Docker to run EventStoreDB using the official Docker container image on DockerHub.
 
-    $ docker run -d --name my-eventstoredb -it -p 2113:2113 -p 1113:1113 eventstore/eventstore:21.10.2-buster-slim --insecure
+For development, you can start a "secure" server locally on port 2113 using the following command.
 
-Please note, this will start the server without SSL/TLS enabled, allowing
-only "insecure" connections. This version of this Python client does not
-support SSL/TLS connections. A future version of this library will support
-"secure" connections.
+    $ docker run -d --name my-eventstoredb -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:22.10.0-buster-slim --dev
+
+Alternatively, you can start an "insecure" server locally on port 2113 using the following command.
+
+    $ docker run -d --name my-eventstoredb -it -p 2113:2113 eventstore/eventstore:22.10.0-buster-slim --insecure
+
+To connect to the "insecure" local server using the client in this package, you just need
+to know the local hostname and the port number. To connect to the "secure" local
+development server, you will also need to know that the username is "admin" and
+the password is "changeit". You will also need to get the SSL/TLS certificate from
+the server. You can get the server certificate with the following command.
+
+    $ python -c "import ssl; print(get_server_certificate(addr=('localhost', 2113)))"
+
 
 ### Stop EventStoreDB
 
-Use Docker to stop and remove the EventStoreDB container.
+To stop and remove the `my-eventstoredb` container created above, use the following Docker commands.
 
     $ docker stop my-eventstoredb
 	$ docker rm my-eventstoredb
@@ -75,22 +85,51 @@ Use Docker to stop and remove the EventStoreDB container.
 
 ### Construct client
 
-The class `EsdbClient` can be constructed with a `uri` that indicates the
-hostname and port number of the EventStoreDB server.
+The `EsdbClient` class can be imported from the `esdbclient` package.
 
 ```python
 from esdbclient import EsdbClient
+```
 
-client = EsdbClient(uri='localhost:2113')
+The `EsdbClient` class can be constructed with `host` and `port` arguments.
+The `host` and `port` arguments indicate the hostname and port number of the
+EventStoreDB server.
+
+If the EventStoreDB server is "secure", then also use the `server_cert`,
+`username` and `password` arguments.
+
+The `host` argument is expected to be a Python `str`. The `port` argument is expected
+to be a Python `int`. The `server_cert` is expected to be a Python `str` containing
+the PEM encoded SSL/TLS server certificate. Both `username` and `password` are expected
+to be a Python `str`.
+
+In the example below, the constructor argument values are taken from the operating
+system environment, because the examples in this document are tested with both
+a "secure" and an "insecure" server.
+
+```python
+import os
+
+client = EsdbClient(
+    host=os.getenv("ESDB_HOST"),
+    port=int(os.getenv("ESDB_PORT")),
+    server_cert=os.getenv("ESDB_SERVER_CERT"),
+    username=os.getenv("ESDB_USERNAME"),
+    password=os.getenv("ESDB_PASSWORD"),
+)
 ```
 
 ## Streams
 
+In EventStoreDB, a "stream" is a sequence of recorded events that all have
+the same "stream name". Each recorded event has a "position" in its stream.
+The positions of the recorded events in a stream is a gapless sequence starting
+from zero.
+
 ### Append events
 
 The client has an `append_events()` method, which can be used to append
-new events to a "stream". A stream is a sequence of recorded events that
-is uniquely identified by a "stream name"
+new events to a "stream".
 
 Three arguments are required, `stream_name`, `expected_position`
 and `events`.
@@ -98,29 +137,30 @@ and `events`.
 The `stream_name` argument is required, and is expected to be a Python
 `str` object that uniquely identifies the stream in the database.
 
-The `expected_position` argument is required, is expected to be: either
-a positive integer equal to the position in the stream of the last recorded
-event in the stream (known as the "stream position"); or `None` if new events
-are being appended to a new stream.
+The `expected_position` argument is required, is expected to be: either `None`
+if new events are being appended to a new stream, or an integer equal to the
+position the last recorded event in the stream.
 
-The stream position sequences are zero-based, and so for example when a stream
-has one recorded event, the stream position is `0`, and the correct value of the
-`expected_position` argument when appending the second new event should be `0`.
-The correct value of the `expected_position` argument when appending the first
-event of a new stream (a stream with zero recorded events) is `None`. That is,
-streams are created by appending events with `expected_position=None`, and there
-is no way to create a stream without appending events.
+The stream positions of recorded events start from zero. And so, when appending
+the second new event to a stream that has one recorded event, the correct value
+of the `expected_position` argument is `0`. Similarly, when appending the third
+new event to a stream that has two recorded events, the correct value
+of the `expected_position` argument is `1`.
 
-If there is a mismatch between the given value of this argument and the
-actual stream position when the new events are recorded by the database,
-then an `ExpectedPositionError` exception will be raised. This accomplishes
-optimistic concurrency control when appending new events.
+Streams are created by appending events. The correct value of the `expected_position`
+argument when appending the first event of a new stream (a stream with zero recorded
+events) is `None`. Please note, it is not possible to create an "empty" stream in
+EventStoreDB.
 
-If you wish to disable optimistic concurrency, set the
-`expected_position` to a negative integer.
+If there is a mismatch between the given value of the `expected_position` argument
+and the position of the last recorded event in a stream, then an `ExpectedPositionError`
+exception will be raised. This effectively accomplishes optimistic concurrency control.
 
-If you need to get the current stream position, then use the `get_stream_position()`
-method (see below).
+If you wish to disable optimistic concurrency control when appending new events, you
+can set the `expected_position` to a negative integer.
+
+If you need to discover the current position of the last recorded event in a stream,
+you can use the `get_stream_position()` method (see below).
 
 The `events` argument is required, and is expected to be a sequence of new
 event objects to be appended to the named stream. The `NewEvent` class should
@@ -917,7 +957,6 @@ events = []
 
 def handle_event(event):
     events.append(event)
-    print("Event:", event.stream_name, event.data)
     if event.stream_name == stream_name3:
         if event.data == event9.data:
             raise Exception()

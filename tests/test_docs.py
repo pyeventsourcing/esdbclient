@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+import os
+import ssl
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from unittest import TestCase
@@ -9,6 +11,30 @@ BASE_DIR = Path(__file__).parents[1]
 
 
 class TestDocs(TestCase):
+    ESDB_HOST = "localhost"
+    ESDB_PORT = 2113
+
+    def setUp(self) -> None:
+        os.environ["ESDB_HOST"] = self.ESDB_HOST
+        os.environ["ESDB_PORT"] = str(self.ESDB_PORT)
+        self.setup_environ()
+
+    def setup_environ(self) -> None:
+        server_cert = ssl.get_server_certificate(addr=(self.ESDB_HOST, self.ESDB_PORT))
+        os.environ["ESDB_SERVER_CERT"] = server_cert
+        os.environ["ESDB_USERNAME"] = "admin"
+        os.environ["ESDB_PASSWORD"] = "changeit"
+
+    def tearDown(self) -> None:
+        del os.environ["ESDB_HOST"]
+        del os.environ["ESDB_PORT"]
+        try:
+            del os.environ["ESDB_SERVER_CERT"]
+            del os.environ["ESDB_USERNAME"]
+            del os.environ["ESDB_PASSWORD"]
+        except KeyError:
+            pass
+
     def test_readme(self) -> None:
         self._out = ""
 
@@ -150,3 +176,10 @@ class TestDocs(TestCase):
         #
         # # Close (deletes) the tempfile.
         # tempfile.close()
+
+
+class TestDocsInsecure(TestDocs):
+    ESDB_PORT = 2114
+
+    def setup_environ(self) -> None:
+        pass

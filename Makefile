@@ -75,6 +75,8 @@ fmt: fmt-black fmt-isort
 .PHONY: test
 test:
 	$(POETRY) run python -m pytest -v $(opts) $(call tests,.)
+# 	$(POETRY) run python -m pytest -v tests/test_docs.py
+# 	$(POETRY) run python -m unittest discover tests -v
 
 .PHONY: build
 build:
@@ -102,18 +104,36 @@ grpc-stubs:
 # 	  protos/esdbclient/protos/event.proto \
 # 	  protos/esdbclient/protos/query.proto
 
-.PHONY: start-eventstoredb
-start-eventstoredb: start-eventstoredb-22-10
+.PHONY: start-eventstoredb-21-10-insecure
+start-eventstoredb-21-10-insecure:
+	docker run -d --name my-eventstoredb-insecure -it -p 2114:2113 eventstore/eventstore:21.10.9-buster-slim --insecure
 
-.PHONY: start-eventstoredb-21-10
-start-eventstoredb-21-10:
-	docker run -d --name my-eventstoredb -it -p 2113:2113 -p 1113:1113 eventstore/eventstore:21.10.9-buster-slim --insecure
+.PHONY: start-eventstoredb-21-10-secure
+start-eventstoredb-21-10-secure:
+	docker run -d --name my-eventstoredb-secure -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:21.10.9-buster-slim --dev
 
-.PHONY: start-eventstoredb-22-10
-start-eventstoredb-22-10:
-	docker run -d --name my-eventstoredb -it -p 2113:2113 -p 1113:1113 eventstore/eventstore:22.10.0-buster-slim --insecure
+.PHONY: start-eventstoredb-22-10-insecure
+start-eventstoredb-22-10-insecure:
+	docker run -d --name my-eventstoredb-insecure -it -p 2114:2113 eventstore/eventstore:22.10.0-buster-slim --insecure
 
-.PHONY: stop-eventstoredb
-stop-eventstoredb:
-	docker stop my-eventstoredb
-	docker rm my-eventstoredb
+.PHONY: start-eventstoredb-22-10-secure
+start-eventstoredb-22-10-secure:
+	docker run -d --name my-eventstoredb-secure -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:22.10.0-buster-slim --dev
+
+.PHONY: attach-eventstoredb-insecure
+attach-eventstoredb-insecure:
+	docker exec -it my-eventstoredb-insecure /bin/bash
+
+.PHONY: attach-eventstoredb-secure
+attach-eventstoredb-secure:
+	docker exec -it my-eventstoredb-secure /bin/bash
+
+.PHONY: stop-eventstoredb-insecure
+stop-eventstoredb-insecure:
+	docker stop my-eventstoredb-insecure
+	docker rm my-eventstoredb-insecure
+
+.PHONY: stop-eventstoredb-secure
+stop-eventstoredb-secure:
+	docker stop my-eventstoredb-secure
+	docker rm my-eventstoredb-secure

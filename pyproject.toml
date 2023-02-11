@@ -24,7 +24,7 @@ include = ["esdbclient/py.typed"]
 
 [tool.poetry.dependencies]
 python = ">=3.7,<4.0"
-grpcio = "^1.51.0"
+grpcio = ">=1.51.0,<1.52.0"  # 1.52.0 hangs on fork
 protobuf = "^4.21.0"
 typing_extensions = "*"
 
@@ -82,24 +82,24 @@ omit = [
 exclude_lines = [
   # Have to re-enable the standard pragma
   "pragma: no cover",
-  # Don't complain about missing debug-only code:
-  "def __repr__",
-  "if self.debug",
-  # Don't complain about some magic methods:
-  "def __str__",
-  # Don't complain if tests don't hit defensive assertion code:
-  "raise AssertionError",
-  "raise NotImplementedError",
-  # Don't complain if non-runnable code isn't run:
-  "if 0:",
-  "if __name__ == .__main__.:",
-  # Don't complain about empty realizations
-  "pass",
-  # Don't complain about abstract methods
-  "@abc.abstractmethod"
+#  # Don't complain about missing debug-only code:
+#  "def __repr__",
+#  "if self.debug",
+#  # Don't complain about some magic methods:
+#  "def __str__",
+#  # Don't complain if tests don't hit defensive assertion code:
+#  "raise AssertionError",
+#  "raise NotImplementedError",
+#  # Don't complain if non-runnable code isn't run:
+#  "if 0:",
+#  "if __name__ == .__main__.:",
+#  # Don't complain about empty realizations
+#  "pass",
+#  # Don't complain about abstract methods
+#  "@abc.abstractmethod"
 ]
-ignore_errors = true
-precision = 2
+#ignore_errors = true
+#precision = 2
 
 [tool.isort]
 combine_as_imports = true

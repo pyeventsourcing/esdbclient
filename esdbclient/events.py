@@ -12,6 +12,8 @@ class NewEvent:
     type: str
     data: bytes
     metadata: bytes
+    # Todo: Idempotent write needs to use the same event ID.
+    # event_id: Optional[UUID] = None
 
 
 @dataclass(frozen=True)
