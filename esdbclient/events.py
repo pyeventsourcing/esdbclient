@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
-from dataclasses import dataclass
-from uuid import UUID
+from dataclasses import dataclass, field
+from uuid import UUID, uuid4
+
+from typing_extensions import Literal
+
+ContentType = Literal["application/json", "application/octet-stream"]
 
 
 @dataclass(frozen=True)
@@ -11,17 +15,21 @@ class NewEvent:
 
     type: str
     data: bytes
-    metadata: bytes
-    # Todo: Idempotent write needs to use the same event ID.
-    # event_id: Optional[UUID] = None
+    metadata: bytes = b""
+    content_type: ContentType = "application/json"
+    id: UUID = field(default_factory=uuid4)
 
 
 @dataclass(frozen=True)
-class RecordedEvent(NewEvent):
+class RecordedEvent:
     """
     Encapsulates event data that has been recorded in EventStoreDB.
     """
 
+    type: str
+    data: bytes
+    metadata: bytes
+    content_type: str
     id: UUID
     stream_name: str
     stream_position: int

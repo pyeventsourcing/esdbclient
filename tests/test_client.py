@@ -107,6 +107,18 @@ class TestEsdbClient(TestCase):
         self.assertEqual(cm.exception.__class__, GrpcError)
         self.assertIsInstance(cm.exception.args[0], MyRpcError)
 
+    def construct_esdb_client(self) -> EsdbClient:
+        server_cert = ssl.get_server_certificate(addr=("localhost", 2113))
+        username = "admin"
+        password = "changeit"
+        return EsdbClient(
+            host="localhost",
+            port=2113,
+            server_cert=server_cert,
+            username=username,
+            password=password,
+        )
+
     def test_stream_not_found_exception(self) -> None:
         client = self.construct_esdb_client()
         stream_name = str(uuid4())
@@ -139,30 +151,6 @@ class TestEsdbClient(TestCase):
                 )
             )
 
-    def test_stream_append_and_read_without_occ(self) -> None:
-        client = self.construct_esdb_client()
-        stream_name = str(uuid4())
-
-        event1 = NewEvent(type="Snapshot", data=b"{}", metadata=b"{}")
-
-        # Append new event.
-        client.append_events(stream_name, expected_position=-1, events=[event1])
-        events = list(client.read_stream_events(stream_name, backwards=True, limit=1))
-        self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].type, "Snapshot")
-
-    def construct_esdb_client(self) -> EsdbClient:
-        server_cert = ssl.get_server_certificate(addr=("localhost", 2113))
-        username = "admin"
-        password = "changeit"
-        return EsdbClient(
-            host="localhost",
-            port=2113,
-            server_cert=server_cert,
-            username=username,
-            password=password,
-        )
-
     def test_stream_append_and_read_with_occ(self) -> None:
         client = self.construct_esdb_client()
         stream_name = str(uuid4())
@@ -180,10 +168,10 @@ class TestEsdbClient(TestCase):
         self.assertEqual(cm.exception.args[0], f"Stream {stream_name!r} does not exist")
 
         # Append empty list of events.
-        commit_position1 = client.append_events(
+        commit_position0 = client.append_events(
             stream_name, expected_position=None, events=[]
         )
-        self.assertIsInstance(commit_position1, int)
+        self.assertIsInstance(commit_position0, int)
 
         # Check stream still not found.
         with self.assertRaises(StreamNotFound):
@@ -192,20 +180,46 @@ class TestEsdbClient(TestCase):
         # Check stream position is None.
         self.assertEqual(client.get_stream_position(stream_name), None)
 
+        # Construct three new events.
+        data1 = random_data()
+        event1 = NewEvent(type="OrderCreated", data=data1)
+
+        metadata2 = random_data()
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=metadata2)
+
+        id3 = uuid4()
+        event3 = NewEvent(
+            type="OrderDeleted",
+            data=random_data(),
+            metadata=random_data(),
+            content_type="application/octet-stream",
+            id=id3,
+        )
+
+        # Check the attributes of the new events.
+        self.assertEqual(event1.type, "OrderCreated")
+        self.assertEqual(event1.data, data1)
+        self.assertEqual(event1.metadata, b"")
+        self.assertEqual(event1.content_type, "application/json")
+        self.assertIsInstance(event1.id, UUID)
+
+        self.assertEqual(event2.metadata, metadata2)
+
+        self.assertEqual(event3.content_type, "application/octet-stream")
+        self.assertEqual(event3.id, id3)
+
         # Check get error when attempting to append new event to position 1.
-        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         with self.assertRaises(ExpectedPositionError) as cm:
             client.append_events(stream_name, expected_position=1, events=[event1])
         self.assertEqual(cm.exception.args[0], f"Stream {stream_name!r} does not exist")
 
         # Append new event.
-        commit_position2 = client.append_events(
+        commit_position1 = client.append_events(
             stream_name, expected_position=None, events=[event1]
         )
 
-        # Todo: Why isn't this +1?
-        # self.assertEqual(commit_position2 - commit_position1, 1)
-        self.assertEqual(commit_position2 - commit_position1, 126)
+        # Check commit position is greater.
+        self.assertGreater(commit_position1, commit_position0)
 
         # Check stream position is 0.
         self.assertEqual(client.get_stream_position(stream_name), 0)
@@ -213,110 +227,133 @@ class TestEsdbClient(TestCase):
         # Read the stream forwards from the start (expect one event).
         events = list(client.read_stream_events(stream_name))
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].type, "OrderCreated")
+
+        # Check the attributes of the recorded event.
+        self.assertEqual(events[0].type, event1.type)
+        self.assertEqual(events[0].data, event1.data)
+        self.assertEqual(events[0].metadata, event1.metadata)
+        self.assertEqual(events[0].content_type, event1.content_type)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[0].stream_name, stream_name)
+        self.assertEqual(events[0].stream_position, 0)
+        self.assertEqual(events[0].commit_position, commit_position1)
 
         # Check we can't append another new event at initial position.
-        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+
         with self.assertRaises(ExpectedPositionError) as cm:
             client.append_events(stream_name, expected_position=None, events=[event2])
         self.assertEqual(cm.exception.args[0], "Current position is 0")
 
         # Append another event.
-        commit_position3 = client.append_events(
+        commit_position2 = client.append_events(
             stream_name, expected_position=0, events=[event2]
         )
-
-        # Todo: Write a separate test for idempotent appends.
-        # commit_position3_1 = client.append_events(
-        #     stream_name, expected_position=0, events=[event2]
-        # )
 
         # Check stream position is 1.
         self.assertEqual(client.get_stream_position(stream_name), 1)
 
-        # NB: Why isn't this +1? because it's "disk position" :-|
-        # self.assertEqual(commit_position3 - commit_position2, 1)
-        # self.assertEqual(commit_position3 - commit_position2, 142)
-        self.assertGreater(commit_position3, commit_position2)
+        # Check stream position.
+        self.assertGreater(commit_position2, commit_position1)
 
         # Read the stream (expect two events in 'forwards' order).
         events = list(client.read_stream_events(stream_name))
         self.assertEqual(len(events), 2)
-        self.assertEqual(events[0].type, "OrderCreated")
-        self.assertEqual(events[1].type, "OrderUpdated")
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
 
         # Read the stream backwards from the end.
         events = list(client.read_stream_events(stream_name, backwards=True))
         self.assertEqual(len(events), 2)
-        self.assertEqual(events[1].type, "OrderCreated")
-        self.assertEqual(events[0].type, "OrderUpdated")
+        self.assertEqual(events[0].id, event2.id)
+        self.assertEqual(events[1].id, event1.id)
 
         # Read the stream forwards from position 1.
         events = list(client.read_stream_events(stream_name, position=1))
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].type, "OrderUpdated")
+        self.assertEqual(events[0].id, event2.id)
 
         # Read the stream backwards from position 0.
         events = list(
             client.read_stream_events(stream_name, position=0, backwards=True)
         )
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].type, "OrderCreated")
+        self.assertEqual(events[0].id, event1.id)
 
         # Read the stream forwards from start with limit.
         events = list(client.read_stream_events(stream_name, limit=1))
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].type, "OrderCreated")
+        self.assertEqual(events[0].id, event1.id)
 
         # Read the stream backwards from end with limit.
         events = list(client.read_stream_events(stream_name, backwards=True, limit=1))
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].type, "OrderUpdated")
+        self.assertEqual(events[0].id, event2.id)
 
         # Check we can't append another new event at second position.
-        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
         with self.assertRaises(ExpectedPositionError) as cm:
             client.append_events(stream_name, expected_position=0, events=[event3])
         self.assertEqual(cm.exception.args[0], "Current position is 1")
 
         # Append another new event.
-        commit_position4 = client.append_events(
+        commit_position3 = client.append_events(
             stream_name, expected_position=1, events=[event3]
         )
 
         # Check stream position is 2.
         self.assertEqual(client.get_stream_position(stream_name), 2)
 
-        # NB: Why isn't this +1? because it's "disk position" :-|
-        # self.assertEqual(commit_position4 - commit_position3, 1)
-        # self.assertEqual(commit_position4 - commit_position3, 142)
-        self.assertGreater(commit_position4, commit_position3)
+        # Check the commit position.
+        self.assertGreater(commit_position3, commit_position2)
 
         # Read the stream forwards from start (expect three events).
         events = list(client.read_stream_events(stream_name))
         self.assertEqual(len(events), 3)
-        self.assertEqual(events[0].type, "OrderCreated")
-        self.assertEqual(events[1].type, "OrderUpdated")
-        self.assertEqual(events[2].type, "OrderDeleted")
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
 
         # Read the stream backwards from end (expect three events).
         events = list(client.read_stream_events(stream_name, backwards=True))
         self.assertEqual(len(events), 3)
-        self.assertEqual(events[2].type, "OrderCreated")
-        self.assertEqual(events[1].type, "OrderUpdated")
-        self.assertEqual(events[0].type, "OrderDeleted")
+        self.assertEqual(events[0].id, event3.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event1.id)
 
-        # Read the stream forwards from position with limit.
+        # Read the stream forwards from position 1 with limit 1.
         events = list(client.read_stream_events(stream_name, position=1, limit=1))
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].type, "OrderUpdated")
+        self.assertEqual(events[0].id, event2.id)
 
-        # Read the stream backwards from position with limit.
+        # Read the stream backwards from position 1 with limit 1.
         events = list(
             client.read_stream_events(stream_name, position=1, backwards=True, limit=1)
         )
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].type, "OrderUpdated")
+        self.assertEqual(events[0].id, event2.id)
+
+        # Idempotent write of event2.
+        commit_position2_1 = client.append_events(
+            stream_name, expected_position=0, events=[event2]
+        )
+        self.assertEqual(commit_position2_1, commit_position2)
+
+        events = list(client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+    def test_stream_append_and_read_without_occ(self) -> None:
+        client = self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        event1 = NewEvent(type="Snapshot", data=b"{}", metadata=b"{}")
+
+        # Append new event.
+        client.append_events(stream_name, expected_position=-1, events=[event1])
+        events = list(client.read_stream_events(stream_name, backwards=True, limit=1))
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].type, "Snapshot")
 
     def test_timeout_stream_append_and_read(self) -> None:
         client = self.construct_esdb_client()

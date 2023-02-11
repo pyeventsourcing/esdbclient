@@ -3,7 +3,7 @@ import sys
 from base64 import b64encode
 from queue import Empty, Queue
 from typing import Iterable, Optional, Sequence, Tuple, overload
-from uuid import UUID, uuid4
+from uuid import UUID
 
 import grpc
 from grpc import (
@@ -220,6 +220,7 @@ class Streams:
                         id=UUID(event.id.string),
                         type=event.metadata["type"],
                         data=event.data,
+                        content_type=event.metadata["content-type"],
                         metadata=event.custom_metadata,
                         stream_name=event.stream_identifier.stream_name.decode("utf8"),
                         stream_position=event.stream_revision,
@@ -275,10 +276,10 @@ class Streams:
             requests.append(
                 grpc_streams.AppendReq(
                     proposed_message=grpc_streams.AppendReq.ProposedMessage(
-                        id=grpc_shared.UUID(string=str(uuid4())),
+                        id=grpc_shared.UUID(string=str(event.id)),
                         metadata={
                             "type": event.type,
-                            "content-type": "application/octet-stream",
+                            "content-type": event.content_type,
                         },
                         custom_metadata=event.metadata,
                         data=event.data,
@@ -368,9 +369,10 @@ class SubscriptionReadResponse:
                     continue
                 return RecordedEvent(
                     id=UUID(event.id.string),
-                    type=event.metadata["type"],
+                    type=event.metadata.get("type", ""),
                     data=event.data,
                     metadata=event.custom_metadata,
+                    content_type=event.metadata.get("content-type", ""),
                     stream_name=stream_name,
                     stream_position=event.stream_revision,
                     commit_position=response.event.commit_position,

@@ -176,7 +176,7 @@ possible with EventStoreDB to atomically record new events in one stream.
 In the example below, a new event is appended to a new stream.
 
 ```python
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from esdbclient import NewEvent
 
@@ -184,7 +184,6 @@ from esdbclient import NewEvent
 event1 = NewEvent(
     type='OrderCreated',
     data=b'data1',
-    metadata=b'{}'
 )
 
 # Define stream name.
@@ -205,12 +204,10 @@ stream.
 event2 = NewEvent(
     type='OrderUpdated',
     data=b'data2',
-    metadata=b'{}',
 )
 event3 = NewEvent(
     type='OrderDeleted',
     data=b'data3',
-    metadata=b'{}',
 )
 
 commit_position2 = client.append_events(
@@ -710,17 +707,14 @@ stream_name2 = str(uuid4())
 event4 = NewEvent(
     type='OrderCreated',
     data=b'data4',
-    metadata=b'{}',
 )
 event5 = NewEvent(
     type='OrderUpdated',
     data=b'data5',
-    metadata=b'{}',
 )
 event6 = NewEvent(
     type='OrderDeleted',
     data=b'data6',
-    metadata=b'{}',
 )
 client.append_events(
     stream_name=stream_name2,
@@ -750,17 +744,14 @@ stream_name3 = str(uuid4())
 event7 = NewEvent(
     type='OrderCreated',
     data=b'data7',
-    metadata=b'{}',
 )
 event8 = NewEvent(
     type='OrderUpdated',
     data=b'data8',
-    metadata=b'{}',
 )
 event9 = NewEvent(
     type='OrderDeleted',
     data=b'data9',
-    metadata=b'{}',
 )
 
 client.append_events(
@@ -1034,58 +1025,91 @@ argument.
 
 ### The NewEvent class
 
-The `NewEvent` class can be used to define new events.
+The `NewEvent` class is used when appending events.
 
-The attribute `type` is a unicode string, used to specify the type of the event
-to be recorded.
+The required argument `type` is a Python `str` object, used to indicate the type of
+the event that will be recorded.
 
-The attribute `data` is a byte string, used to specify the data of the event
-to be recorded. Please note, in this version of this Python client,
-writing JSON event data to EventStoreDB isn't supported, but it might be in
-a future version.
+The required argument `data` is a Python `bytes` object, used to indicate the data of
+the event that will be recorded.
 
-The attribute `metadata` is a byte string, used to specify metadata for the event
-to be recorded.
+The optional argument `metadata` is a Python `bytes` object, used to indicate any
+metadata of the event that will be recorded. The default value is an empty `bytes`
+object.
+
+The optional argument `content_type` is a Python `str` object, used to indicate the
+type of the data that will be recorded for this event. The default value is
+`application/json`, which indicates that the `data` was serialised using JSON.
+An alternative value for this argument is `application/octet-stream`.
+
+The optional argument `id` is a Python `UUID` object, used to specify the unique ID
+of the event that will be recorded. This value will default to a new version-4 UUID.
 
 ```python
-new_event = NewEvent(
+new_event1 = NewEvent(
     type='OrderCreated',
-    data=b'{}',
-    metadata=b'{}',
+    data=b'{"name": "Greg"}',
 )
+assert new_event1.type == 'OrderCreated'
+assert new_event1.data == b'{"name": "Greg"}'
+assert new_event1.metadata == b''
+assert new_event1.content_type == 'application/json'
+assert isinstance(new_event1.id, UUID)
+
+event_id = uuid4()
+new_event2 = NewEvent(
+    type='ImageCreated',
+    data=b'01010101010101',
+    metadata=b'{"a": 1}',
+    content_type='application/octet-stream',
+    id=event_id,
+)
+assert new_event2.type == 'ImageCreated'
+assert new_event2.data == b'01010101010101'
+assert new_event2.metadata == b'{"a": 1}'
+assert new_event2.content_type == 'application/octet-stream'
+assert new_event2.id == event_id
 ```
 
 ### The RecordedEvent class
 
-The `RecordedEvent` class is used when reading recorded events.
+The `RecordedEvent` class is used when reading events.
 
-The attribute `type` is a unicode string, used to indicate the type of the event
+The attribute `type` is a Python `str` object, used to indicate the type of event
 that was recorded.
 
-The attribute `data` is a byte string, used to indicate the data of the event
-that was recorded.
+The attribute `data` is a Python `bytes` object, used to indicate the data of the
+event that was recorded.
 
-The attribute `metadata` is a byte string, used to indicate metadata for the event
-that was recorded.
+The attribute `metadata` is a Python `bytes` object, used to indicate the metadata of
+the event that was recorded.
 
-The attribute `stream_name` is a unicode string, used to indicate the type of
-the name of the stream in which the event was recorded.
+The attribute `content_type` is a Python `str` object, used to indicate the type of
+data that was recorded for this event (usually `application/json` to indicate that
+this data can be parsed as JSON, but alternatively `application/octet-stream` to
+indicate that it is something else).
 
-The attribute `stream_position` is an integer, used to indicate
-the position in the stream at which the event was recorded.
+The attribute `id` is a Python `UUID` object, used to indicate the unique ID of the
+event that was recorded.
 
-The attribute `commit_position` is an integer, used to indicate
-the position in total order of all recorded events at which the
-event was recorded.
+The attribute `stream_name` is a Python `str` object, used to indicate the name of the
+stream in which the event was recorded.
+
+The attribute `stream_position` is a Python `int`, used to indicate the position in the
+stream at which the event was recorded.
+
+The attribute `commit_position` is a Python `int`, used to indicate the commit position
+at which the event was recorded.
 
 ```python
 from esdbclient.events import RecordedEvent
 
 recorded_event = RecordedEvent(
-    id=uuid4(),
     type='OrderCreated',
     data=b'{}',
-    metadata=b'{}',
+    metadata=b'',
+    content_type='application/json',
+    id=uuid4(),
     stream_name='stream1',
     stream_position=0,
     commit_position=512,

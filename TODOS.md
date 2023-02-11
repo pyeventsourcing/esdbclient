@@ -27,3 +27,4 @@ Questions:
 * Can't filter persistent subscription to a stream when using StreamOptions, because it doesn't have filter_option field (only AllOptions does)
 * What's the difference between a persistent subscription that uses StreamOptions, and one that uses AllOptions with stream identifier expression that matches a single stream identifier? can filter with AllOptions?
 * Does a persistent subscription never return "system" events?
+* Which content-type variations are possible? which are common? which is most usual?
