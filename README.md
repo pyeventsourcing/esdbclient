@@ -1,12 +1,15 @@
 # Python gRPC Client for EventStoreDB
 
 This package provides a Python gRPC client for
-[EventStoreDB](https://www.eventstore.com/). It has been
-developed and tested to work with EventStoreDB LTS version 21.10,
-and with Python versions 3.7, 3.8, 3.9, 3.10, and 3.11.
+[EventStoreDB](https://www.eventstore.com/).
 
-Methods have typing annotations, the static typing is checked
-with mypy, and the test coverage is 100%.
+This client has been developed and tested to work with EventStoreDB LTS
+versions 21.10 and 21.10, without and without SSL/TLS enabled on both
+these versions, and with Python versions 3.7, 3.8, 3.9, 3.10, and 3.11
+across all of the above. The test coverage is 100% including branch coverage.
+
+All the code in this package has typing annotations. The static typing
+annotations checked relatively strictly with mypy.
 
 Not all the features of the EventStoreDB API are presented
 by this client in its current form, however many of the most
@@ -18,10 +21,10 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 
 <!-- TOC -->
 * [Installation](#installation)
-* [Getting started](#getting-started)
+* [Server](#server)
   * [Start EventStoreDB](#start-eventstoredb)
   * [Stop EventStoreDB](#stop-eventstoredb)
-  * [Construct client](#construct-client)
+* [Client](#client)
 * [Streams](#streams)
   * [Append events](#append-events)
   * [Get current stream position](#get-current-stream-position)
@@ -52,7 +55,7 @@ Use pip to install this package from
 It is recommended to install Python packages into a Python virtual environment.
 
 
-## Getting started
+## Server
 
 ### Start EventStoreDB
 
@@ -83,7 +86,7 @@ To stop and remove the `my-eventstoredb` container created above, use the follow
 	$ docker rm my-eventstoredb
 
 
-### Construct client
+## Client
 
 The `EsdbClient` class can be imported from the `esdbclient` package.
 
