@@ -18,9 +18,9 @@ from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import StreamNotFound
 
 # Matches the 'type' of "system" events.
-ESDB_SYSTEM_EVENTS_REGEX = "\\$.+"
+ESDB_SYSTEM_EVENTS_REGEX = r"\$.+"
 # Matches the 'type' of "PersistentConfig" events.
-ESDB_PERSISTENT_CONFIG_EVENTS_REGEX = "PersistentConfig\\d+"
+ESDB_PERSISTENT_CONFIG_EVENTS_REGEX = r"PersistentConfig\d+"
 
 DEFAULT_EXCLUDE_FILTER = (ESDB_SYSTEM_EVENTS_REGEX, ESDB_PERSISTENT_CONFIG_EVENTS_REGEX)
 
