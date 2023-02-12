@@ -151,7 +151,7 @@ class TestEsdbClient(TestCase):
                 )
             )
 
-    def test_stream_append_and_read_with_occ(self) -> None:
+    def test_append_and_read_stream_with_occ(self) -> None:
         client = self.construct_esdb_client()
         stream_name = str(uuid4())
 
@@ -236,7 +236,8 @@ class TestEsdbClient(TestCase):
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[0].stream_name, stream_name)
         self.assertEqual(events[0].stream_position, 0)
-        self.assertEqual(events[0].commit_position, commit_position1)
+        if events[0].commit_position is not None:  # v21.20 doesn't return this
+            self.assertEqual(events[0].commit_position, commit_position1)
 
         # Check we can't append another new event at initial position.
 
@@ -343,17 +344,46 @@ class TestEsdbClient(TestCase):
         self.assertEqual(events[1].id, event2.id)
         self.assertEqual(events[2].id, event3.id)
 
-    def test_stream_append_and_read_without_occ(self) -> None:
+    def test_append_and_read_stream_without_occ(self) -> None:
         client = self.construct_esdb_client()
         stream_name = str(uuid4())
 
         event1 = NewEvent(type="Snapshot", data=b"{}", metadata=b"{}")
 
         # Append new event.
-        client.append_events(stream_name, expected_position=-1, events=[event1])
+        commit_position = client.append_events(
+            stream_name, expected_position=-1, events=[event1]
+        )
         events = list(client.read_stream_events(stream_name, backwards=True, limit=1))
         self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].type, "Snapshot")
+        self.assertEqual(events[0].id, event1.id)
+
+        # Todo: Check if commit position of recorded event is really None
+        #  when reading stream events in v21.10.
+        if events[0].commit_position is not None:
+            self.assertEqual(events[0].commit_position, commit_position)
+
+    def test_commit_position(self) -> None:
+        client = self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        event1 = NewEvent(type="Snapshot", data=b"{}", metadata=b"{}")
+
+        # Append new event.
+        commit_position = client.append_events(
+            stream_name, expected_position=-1, events=[event1]
+        )
+        # Check we actually have an int.
+        self.assertIsInstance(commit_position, int)
+
+        # Check commit_position() returns expected value.
+        self.assertEqual(client.get_commit_position(), commit_position)
+
+        # Create persistent subscription.
+        client.create_subscription(f"group-{uuid4()}")
+
+        # Check commit_position() still returns expected value.
+        self.assertEqual(client.get_commit_position(), commit_position)
 
     def test_timeout_stream_append_and_read(self) -> None:
         client = self.construct_esdb_client()
@@ -619,9 +649,9 @@ class TestEsdbClient(TestCase):
     def test_catchup_subscribe_all_events_default_filter(self) -> None:
         client = self.construct_esdb_client()
 
-        event1 = NewEvent(type="OrderCreated", data=b"{a}", metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=b"{b}", metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=b"{c}", metadata=b"{}")
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
 
         # Append new events.
         stream_name1 = str(uuid4())
@@ -631,45 +661,40 @@ class TestEsdbClient(TestCase):
 
         # Subscribe to all events, from the start.
         subscription = client.subscribe_all_events()
-
-        # Iterate over the first three events.
         events = []
         for event in subscription:
             events.append(event)
-            if len(events) == 3:
+            if event.id == event3.id:
                 break
 
-        # Get the current commit position.
-        commit_position = client.get_commit_position()
-
-        # Subscribe from the current commit position.
-        subscription = client.subscribe_all_events(commit_position=commit_position)
-
         # Append three more events.
-        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+        event4 = NewEvent(type="OrderCreated", data=random_data())
+        event5 = NewEvent(type="OrderUpdated", data=random_data())
+        event6 = NewEvent(type="OrderDeleted", data=random_data())
         stream_name2 = str(uuid4())
         client.append_events(
-            stream_name2, expected_position=None, events=[event1, event2, event3]
+            stream_name2, expected_position=None, events=[event4, event5, event6]
         )
 
         # Check the stream name of the newly received events.
         events = []
         for event in subscription:
-            self.assertEqual(event.stream_name, stream_name2)
             events.append(event)
-            self.assertIn(event.type, ["OrderCreated", "OrderUpdated", "OrderDeleted"])
-            if len(events) == 3:
+            if event.id == event6.id:
                 break
+
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event4.id)
+        self.assertEqual(events[1].id, event5.id)
+        self.assertEqual(events[2].id, event6.id)
 
     def test_catchup_subscribe_all_events_no_filter(self) -> None:
         client = self.construct_esdb_client()
 
         # Append new events.
-        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
         stream_name1 = str(uuid4())
         client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
@@ -692,9 +717,9 @@ class TestEsdbClient(TestCase):
         client = self.construct_esdb_client()
 
         # Append new events.
-        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
         stream_name1 = str(uuid4())
         client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
@@ -725,9 +750,9 @@ class TestEsdbClient(TestCase):
         client = self.construct_esdb_client()
 
         # Append new events.
-        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
         stream_name1 = str(uuid4())
         client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
@@ -746,24 +771,24 @@ class TestEsdbClient(TestCase):
     def test_catchup_subscribe_all_events_from_commit_position_current(self) -> None:
         client = self.construct_esdb_client()
 
-        position = client.get_commit_position()
-
         # Append new events.
-        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
         stream_name1 = str(uuid4())
-        client.append_events(
-            stream_name1, expected_position=None, events=[event1, event2, event3]
+        commit_position = client.append_events(
+            stream_name1, expected_position=None, events=[event1]
         )
+        client.append_events(stream_name1, expected_position=0, events=[event2, event3])
 
         # Subscribe from the commit position.
-        subscription = client.subscribe_all_events(commit_position=position)
+        subscription = client.subscribe_all_events(commit_position=commit_position)
 
         events = []
         for event in subscription:
-            # Exclude event with given commit position.
-            if event.commit_position == position:
+            # Expect catch-up subscription results are exclusive of given
+            # commit position, so that we expect event1 to be not included.
+            if event.id == event1.id:
                 self.fail("Not exclusive")
 
             # Collect events.
@@ -773,10 +798,9 @@ class TestEsdbClient(TestCase):
             if event.data == event3.data:
                 break
 
-        self.assertEqual(len(events), 3)
-        self.assertEqual(events[0].data, event1.data)
-        self.assertEqual(events[1].data, event2.data)
-        self.assertEqual(events[2].data, event3.data)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event2.id)
+        self.assertEqual(events[1].id, event3.id)
 
     def test_timeout_subscribe_all_events(self) -> None:
         client = self.construct_esdb_client()
@@ -793,7 +817,7 @@ class TestEsdbClient(TestCase):
         # Subscribe from the beginning.
         subscription = client.subscribe_all_events(timeout=0.5)
 
-        # Expect to only get "OrderCreated" events.
+        # Expect to timeout instead of waiting indefinitely for next event.
         count = 0
         with self.assertRaises(DeadlineExceeded):
             for _ in subscription:
@@ -837,31 +861,27 @@ class TestEsdbClient(TestCase):
         # Construct client.
         client = self.construct_esdb_client()
 
-        # Get commit position.
-        position = client.get_commit_position()
-
         # Append three events.
         stream_name1 = str(uuid4())
 
         def random_data() -> bytes:
             return os.urandom(16)
 
-        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
 
-        client.append_events(
-            stream_name1, expected_position=None, events=[event1, event2, event3]
+        commit_position = client.append_events(
+            stream_name1, expected_position=None, events=[event1]
         )
-        # pos1 = client.append_events(stream_name1, expected_position=None, events=[event1])
-        # client.append_events(stream_name1, expected_position=0, events=[event2, event3])
+        client.append_events(stream_name1, expected_position=0, events=[event2, event3])
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
 
         client.create_subscription(
             group_name=group_name,
-            commit_position=position,
+            commit_position=commit_position,
         )
 
         # Read events from subscription.
@@ -870,18 +890,18 @@ class TestEsdbClient(TestCase):
         events = []
         for event in read_resp:
             read_req.ack(event.id)
-            if event.commit_position <= position:
-                # self.fail("Not exclusive")
-                continue
 
             events.append(event)
 
-            if len(events) == 3:
+            if event.id == event3.id:
                 break
 
-        assert events[0].data == event1.data
-        assert events[1].data == event2.data
-        assert events[2].data == event3.data
+        # Expect persistent subscription results are inclusive of given
+        # commit position, so that we expect event1 to be included.
+
+        assert events[0].id == event1.id
+        assert events[1].id == event2.id
+        assert events[2].id == event3.id
 
     def test_persistent_subscription_from_end(self) -> None:
         # Construct client.
@@ -892,6 +912,7 @@ class TestEsdbClient(TestCase):
         client.create_subscription(
             group_name=group_name,
             from_end=True,
+            # filter_exclude=[],
         )
 
         # Append three events.
@@ -900,9 +921,9 @@ class TestEsdbClient(TestCase):
         def random_data() -> bytes:
             return os.urandom(16)
 
-        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
 
         client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
@@ -914,10 +935,18 @@ class TestEsdbClient(TestCase):
         events = []
         for event in read_resp:
             read_req.ack(event.id)
+            print(event.type)
             events.append(event)
-            if len(events) == 3:
+            if event.id == event3.id:
                 break
 
+        # Expect persistent subscription to return only new events appended
+        # after subscription was created. Although persistent subscription is
+        # inclusive when specifying commit position, and "end" surely refers
+        # to a commit position, the event at "end" happens to be the
+        # "PersistentConfig" event, and we are filtering this out by default.
+        # If this test is adjusted to set filter_exclude=[] the "PersistentConfig"
+        # event is returned as the first event from the response.
         assert events[0].data == event1.data
         assert events[1].data == event2.data
         assert events[2].data == event3.data
@@ -1001,44 +1030,48 @@ class TestEsdbClient(TestCase):
             if event.data == event3.data:
                 break
 
-    # def test_persistent_subscription_no_filter(self) -> None:
-    #     # Construct client.
-    #     client = self.construct_esdb_client()
-    #
-    #     # Create persistent subscription.
-    #     group_name = f"my-subscription-{uuid4().hex}"
-    #     client.create_subscription(
-    #         group_name=group_name,
-    #         filter_exclude=[],
-    #         filter_include=[ESDB_EVENTS_REGEX],
-    #     )
-    #
-    #     # Append three events.
-    #     stream_name1 = str(uuid4())
-    #
-    #     def random_data() -> bytes:
-    #         return os.urandom(16)
-    #
-    #     event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
-    #     event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
-    #     event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
-    #
-    #     client.append_events(
-    #         stream_name1, expected_position=None, events=[event1, event2, event3]
-    #     )
-    #
-    #     # Read events from subscription.
-    #     read_req, read_resp = client.read_subscription(group_name=group_name)
-    #
-    #     for event in read_resp:
-    #         # Look for a "system" event.
-    #         read_req.ack(event.id)
-    #         if event.type.startswith("$"):
-    #             return
-    #         else:
-    #             print(event.stream_name)
-    #         if event.data == event3.data:
-    #             self.fail("Expected a 'system' event, but none seen")
+    def test_persistent_subscription_no_filter(self) -> None:
+        # Construct client.
+        client = self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        client.create_subscription(
+            group_name=group_name,
+            filter_exclude=[],
+            filter_include=[],
+        )
+
+        # Append three events.
+        stream_name1 = str(uuid4())
+
+        def random_data() -> bytes:
+            return os.urandom(16)
+
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Read events from subscription.
+        read_req, read_resp = client.read_subscription(group_name=group_name)
+
+        has_seen_system_event = False
+        has_seen_persistent_config_event = False
+        for event in read_resp:
+            # Look for a "system" event.
+            read_req.ack(event.id)
+            if event.type.startswith("$"):
+                has_seen_system_event = True
+            elif event.type.startswith("PersistentConfig"):
+                has_seen_persistent_config_event = True
+            if has_seen_system_event and has_seen_persistent_config_event:
+                break
+            elif event.data == event3.data:
+                self.fail("Expected a 'system' event and a 'PersistentConfig' event")
 
     # Todo: subscribe to specific stream (not all)
     # Todo: "commit position" behaviour (not sure why it isn't working)

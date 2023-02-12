@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass, field
+from typing import Optional
 from uuid import UUID, uuid4
 
 from typing_extensions import Literal
@@ -33,4 +34,4 @@ class RecordedEvent:
     id: UUID
     stream_name: str
     stream_position: int
-    commit_position: int
+    commit_position: Optional[int]

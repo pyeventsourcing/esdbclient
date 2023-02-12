@@ -17,7 +17,12 @@ from esdbclient.esdbapi import (
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import StreamNotFound
 
-ESDB_EVENTS_REGEX = "\\$.*"  # Matches the 'type' of system events.
+# Matches the 'type' of "system" events.
+ESDB_SYSTEM_EVENTS_REGEX = "\\$.+"
+# Matches the 'type' of "PersistentConfig" events.
+ESDB_PERSISTENT_CONFIG_EVENTS_REGEX = "PersistentConfig\\d+"
+
+DEFAULT_EXCLUDE_FILTER = (ESDB_SYSTEM_EVENTS_REGEX, ESDB_PERSISTENT_CONFIG_EVENTS_REGEX)
 
 
 class EsdbClient:
@@ -102,7 +107,7 @@ class EsdbClient:
         self,
         commit_position: Optional[int] = None,
         backwards: bool = False,
-        filter_exclude: Sequence[str] = (ESDB_EVENTS_REGEX,),
+        filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
@@ -146,7 +151,7 @@ class EsdbClient:
     def get_commit_position(
         self,
         timeout: Optional[float] = None,
-        filter_exclude: Sequence[str] = (ESDB_EVENTS_REGEX,),
+        filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
     ) -> int:
         """
         Returns the current commit position of the database.
@@ -159,13 +164,14 @@ class EsdbClient:
         )
         commit_position = 0
         for ev in recorded_events:
+            assert ev.commit_position is not None
             commit_position = ev.commit_position
         return commit_position
 
     def subscribe_all_events(
         self,
         commit_position: Optional[int] = None,
-        filter_exclude: Sequence[str] = (ESDB_EVENTS_REGEX,),
+        filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         timeout: Optional[float] = None,
     ) -> Iterator[RecordedEvent]:
@@ -188,8 +194,7 @@ class EsdbClient:
         group_name: str,
         from_end: bool = False,
         commit_position: Optional[int] = None,
-        # filter_exclude: Sequence[str] = (ESDB_EVENTS_REGEX,),
-        filter_exclude: Sequence[str] = (),
+        filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         timeout: Optional[float] = None,
     ) -> None:

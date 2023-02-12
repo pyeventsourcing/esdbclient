@@ -216,6 +216,11 @@ class Streams:
                 content_attribute_name = response.WhichOneof("content")
                 if content_attribute_name == "event":
                     event = response.event.event
+                    if response.event.WhichOneof("position") == "commit_position":
+                        commit_position = response.event.commit_position
+                    else:
+                        commit_position = None  # pragma: no cover
+
                     yield RecordedEvent(
                         id=UUID(event.id.string),
                         type=event.metadata["type"],
@@ -224,7 +229,7 @@ class Streams:
                         metadata=event.custom_metadata,
                         stream_name=event.stream_identifier.stream_name.decode("utf8"),
                         stream_position=event.stream_revision,
-                        commit_position=response.event.commit_position,
+                        commit_position=commit_position,
                     )
                 elif content_attribute_name == "stream_not_found":
                     raise StreamNotFound(f"Stream {stream_name!r} not found")
@@ -364,18 +369,18 @@ class SubscriptionReadResponse:
             assert isinstance(response, grpc_persistent.ReadResp)
             if response.WhichOneof("content") == "event":
                 event = response.event.event
-                stream_name = event.stream_identifier.stream_name.decode("utf8")
-                if stream_name.startswith("$"):
-                    continue
+                assert response.event.WhichOneof("position") == "commit_position"
+                commit_position = response.event.commit_position
+
                 return RecordedEvent(
                     id=UUID(event.id.string),
                     type=event.metadata.get("type", ""),
                     data=event.data,
                     metadata=event.custom_metadata,
                     content_type=event.metadata.get("content-type", ""),
-                    stream_name=stream_name,
+                    stream_name=event.stream_identifier.stream_name.decode("utf8"),
                     stream_position=event.stream_revision,
-                    commit_position=response.event.commit_position,
+                    commit_position=commit_position,
                 )
 
 

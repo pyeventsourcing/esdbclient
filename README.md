@@ -690,6 +690,8 @@ assert events[0].commit_position < commit_position2
 
 ### Get current commit position
 
+*only supported in EventStoreDB version >= 22.10*
+
 The method `get_commit_position()` can be used to get the current
 commit position of the database.
 
@@ -1081,14 +1083,26 @@ Please note, characters that have a special meaning in regular expressions
 will need to be escaped (with double-backslash) when matching these characters
 in type strings.
 
-For example, to match EventStoreDB system events, use the sequence `['\\$.*']`.
-Please note, the constant `ESDB_EVENTS_REGEX` is set to `'\\$.*'`. You
-can import this value (`from esdbclient import ESDB_EVENTS_REGEX`) and use
-it when building longer sequences of regular expressions. For example,
-to exclude system events and snapshots, you might use the sequence
-`[ESDB_EVENTS_REGEX, '.*Snapshot']` as the value of the `filter_exclude`
-argument.
+For example, to match the type of EventStoreDB system events, use the regular
+expression `'\\$.+'`. Please note, the constant `ESDB_SYSTEM_EVENTS_REGEX` is
+set to `'\\$.+'`. You can import this value
+(`from esdbclient import ESDB_SYSTEM_EVENTS_REGEX`) and use
+it when building longer sequences of regular expressions.
 
+Similarly, to match the type of EventStoreDB persistence subscription events, use the
+regular expression `'PersistentConfig\\d+'`. The constant `ESDB_PERSISTENT_CONFIG_EVENTS_REGEX`
+is set to `'PersistentConfig\\d+'`. You can also import this value
+(`from esdbclient import ESDB_PERSISTENT_CONFIG_EVENTS_REGEX`) and use it when building
+longer sequences of regular expressions.
+
+The constant `DEFAULT_EXCLUDE_FILTER` is a sequence of regular expressions that match
+the events that EventStoreDB generates internally, events that are extraneous to those
+which you append using the `append_events()` method.
+
+For example, to exclude system events and persistence subscription configuration events,
+and snapshots, you might use the sequence `DEFAULT_EXCLUDE_FILTER + ['.*Snapshot']` as
+the value of the `filter_exclude` argument when calling `subscribe_all_events()` or
+ `create_subscription()` or `get_commit_position()`.
 
 ### The NewEvent class
 
@@ -1157,7 +1171,10 @@ this data can be parsed as JSON, but alternatively `application/octet-stream` to
 indicate that it is something else).
 
 The attribute `id` is a Python `UUID` object, used to indicate the unique ID of the
-event that was recorded.
+event that was recorded. Please note, when recorded events are returned from a call
+to `read_stream_events()` in EventStoreDB v21.10, the commit position is not actually
+set in the response. For this reason, this attribute is actually typed as an optional
+value (`Optional[UUID]`), and this case the value of this attribute will be `None`.
 
 The attribute `stream_name` is a Python `str` object, used to indicate the name of the
 stream in which the event was recorded.

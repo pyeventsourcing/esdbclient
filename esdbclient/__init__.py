@@ -1,5 +1,18 @@
 # -*- coding: utf-8 -*-
-from esdbclient.client import ESDB_EVENTS_REGEX, EsdbClient
-from esdbclient.events import NewEvent
+from esdbclient.client import (
+    DEFAULT_EXCLUDE_FILTER,
+    ESDB_PERSISTENT_CONFIG_EVENTS_REGEX,
+    ESDB_SYSTEM_EVENTS_REGEX,
+    EsdbClient,
+)
+from esdbclient.events import ContentType, NewEvent, RecordedEvent
 
-__all__ = ["ESDB_EVENTS_REGEX", "EsdbClient", "NewEvent"]
+__all__ = [
+    "DEFAULT_EXCLUDE_FILTER",
+    "ESDB_PERSISTENT_CONFIG_EVENTS_REGEX",
+    "ESDB_SYSTEM_EVENTS_REGEX",
+    "ContentType",
+    "EsdbClient",
+    "NewEvent",
+    "RecordedEvent",
+]
