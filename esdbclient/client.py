@@ -247,7 +247,7 @@ class EsdbClient:
     def close(self) -> None:
         self._channel.close()
 
-    def __del__(self):
+    def __del__(self) -> None:
         if hasattr(self, "_channel"):
             self.close()
 
