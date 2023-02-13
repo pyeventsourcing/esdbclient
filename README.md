@@ -9,7 +9,7 @@ these versions, and with Python versions 3.7, 3.8, 3.9, 3.10, and 3.11
 across all of the above. The test coverage is 100% including branch coverage.
 
 All the code in this package has typing annotations. The static typing
-annotations checked relatively strictly with mypy.
+annotations are checked relatively strictly with mypy.
 
 Not all the features of the EventStoreDB API are presented
 by this client in its current form, however many of the most
