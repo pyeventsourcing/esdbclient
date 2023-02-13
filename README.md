@@ -24,14 +24,16 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 ## Table of contents
 
 <!-- TOC -->
-* [Installation](#installation)
-* [Server](#server)
-  * [Start EventStoreDB](#start-eventstoredb)
-  * [Stop EventStoreDB](#stop-eventstoredb)
-* [Client](#client)
+* [Install package](#install-package)
+* [EventStoreDB server](#eventstoredb-server)
+  * [Run Docker container](#run-docker-container)
+  * [Stop Docker container](#stop-docker-container)
+* [Client class](#client-class)
+  * [Import class from package](#import-class-from-package)
+  * [Contruct client class](#construct-client-class)
 * [Streams](#streams)
-  * [Append events](#append-events)
-  * [Append event](#append-event)
+  * [Append batch of events](#append-batch-of-events)
+  * [Append single event](#append-single-event)
   * [Get current stream position](#get-current-stream-position)
   * [Get current commit position](#get-current-commit-position)
   * [Read stream events](#read-stream-events)
@@ -51,27 +53,36 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Project Makefile commands](#project-makefile-commands)
 <!-- TOC -->
 
-## Installation
+## Install package
 
-Use pip to install this package from
+It is recommended to install Python packages into a Python virtual environment.
+
+### From PyPI
+
+You can use pip to install this package directly from
 [the Python Package Index](https://pypi.org/project/esdbclient/).
 
     $ pip install esdbclient
 
-It is recommended to install Python packages into a Python virtual environment.
+### With Poetry
 
+You can use Poetry to add this package to your pyproject.toml and install it.
 
-## Server
+    $ poetry add esdbclient
 
-### Start EventStoreDB
+## EventStoreDB server
+
+The EventStoreDB server can be run locally using the official Docker container image.
+
+### Run container
 
 Use Docker to run EventStoreDB using the official Docker container image on DockerHub.
 
-For development, you can start a "secure" server locally on port 2113 using the following command.
+For development, you can start a "secure" server locally on port 2113.
 
     $ docker run -d --name my-eventstoredb -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:22.10.0-buster-slim --dev
 
-Alternatively, you can start an "insecure" server locally on port 2113 using the following command.
+Alternatively, you can start an "insecure" server locally on port 2113.
 
     $ docker run -d --name my-eventstoredb -it -p 2113:2113 eventstore/eventstore:22.10.0-buster-slim --insecure
 
@@ -84,7 +95,7 @@ the server. You can get the server certificate with the following command.
     $ python -c "import ssl; print(get_server_certificate(addr=('localhost', 2113)))"
 
 
-### Stop EventStoreDB
+### Stop container
 
 To stop and remove the `my-eventstoredb` container created above, use the following Docker commands.
 
@@ -92,13 +103,19 @@ To stop and remove the `my-eventstoredb` container created above, use the follow
 	$ docker rm my-eventstoredb
 
 
-## Client
+## Client class
+
+This EventStoreDB client is implemented as a Python class.
+
+### Import class from package
 
 The `EsdbClient` class can be imported from the `esdbclient` package.
 
 ```python
 from esdbclient import EsdbClient
 ```
+
+### Contruct client class
 
 The `EsdbClient` class can be constructed with `host` and `port` arguments.
 The `host` and `port` arguments indicate the hostname and port number of the
@@ -135,7 +152,7 @@ the same "stream name". Each recorded event has a "position" in its stream.
 The positions of the recorded events in a stream is a gapless sequence starting
 from zero.
 
-### Append events
+### Append batch of events
 
 The `append_events()` method can be used to append
 a batch of new events atomically to a "stream".
@@ -248,7 +265,7 @@ can be used by the user interface to poll the downstream component until it has
 processed the new events, after which time the view will not be stale.
 
 
-### Append event
+### Append single event
 
 The `append_event()` method can be used to append
 a single new event to a "stream".
