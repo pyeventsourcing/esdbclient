@@ -852,53 +852,99 @@ the subscription (and the queue) using the last recorded commit position when re
 the subscription after an error, to be sure all events are processed once.
 
 The example below shows how to subscribe to receive all recorded
-events from a specific commit position. Three already-recorded
-events are received, and then three new events are recorded, which
-are then received via the subscription.
+events from the start, and then resuming from a specific commit position.
+Three already-recorded events are received, and then three new events are
+recorded, which are then received via the subscription.
 
 ```python
 
-# Get the commit position (usually from database of materialised views).
-commit_position = client.get_commit_position()
-
-# Append three events to another stream.
+# Append an event to a new stream.
 stream_name2 = str(uuid4())
 event4 = NewEvent(
     type='OrderCreated',
     data=b'data4',
 )
+client.append_events(
+    stream_name=stream_name2,
+    expected_position=None,
+    events=[event4],
+)
+
+# Subscribe from the first recorded event in the database.
+subscription = client.subscribe_all_events()
+received_events = []
+
+# Process events received from the catch-up subscription.
+for event in subscription:
+    last_commit_position = event.commit_position
+    received_events.append(event)
+    if event.id == event4.id:
+        break
+
+assert received_events[-4].id == event1.id
+assert received_events[-3].id == event2.id
+assert received_events[-2].id == event3.id
+assert received_events[-1].id == event4.id
+
+# Append subsequent events to the stream.
 event5 = NewEvent(
     type='OrderUpdated',
     data=b'data5',
 )
+client.append_events(
+    stream_name=stream_name2,
+    expected_position=0,
+    events=[event5],
+)
+
+# Receive subsequent events from the subscription.
+for event in subscription:
+    last_commit_position = event.commit_position
+    received_events.append(event)
+    if event.id == event5.id:
+        break
+
+
+assert received_events[-5].id == event1.id
+assert received_events[-4].id == event2.id
+assert received_events[-3].id == event3.id
+assert received_events[-2].id == event4.id
+assert received_events[-1].id == event5.id
+
+
+# Append more events to the stream.
 event6 = NewEvent(
     type='OrderDeleted',
     data=b'data6',
 )
 client.append_events(
     stream_name=stream_name2,
-    expected_position=None,
-    events=[event4, event5, event6],
+    expected_position=1,
+    events=[event6],
 )
 
-# Subscribe from the commit position.
+
+# Resume subscribing from the last commit position.
 subscription = client.subscribe_all_events(
-    commit_position=commit_position
+    commit_position=last_commit_position
 )
 
-# Catch up by receiving the three events from the subscription.
-events = []
+
+# Catch up by receiving the new event from the subscription.
 for event in subscription:
-    events.append(event)
-    if event.data == event6.data and event.stream_name:
+    received_events.append(event)
+    if event.id == event6.id:
         break
 
-assert events[0].data == event4.data
-assert events[1].data == event5.data
-assert events[2].data == event6.data
+assert received_events[-6].id == event1.id
+assert received_events[-5].id == event2.id
+assert received_events[-4].id == event3.id
+assert received_events[-3].id == event4.id
+assert received_events[-2].id == event5.id
+assert received_events[-1].id == event6.id
 
 
-# Append three more events.
+# Append three more events to a new stream.
 stream_name3 = str(uuid4())
 event7 = NewEvent(
     type='OrderCreated',
@@ -919,17 +965,21 @@ client.append_events(
     events=[event7, event8, event9],
 )
 
-# Receive the three new events from the same subscription.
+# Receive the three new events from the resumed subscription.
 for event in subscription:
-    # Check the stream name.
-    events.append(event)
-    if event.stream_name == stream_name3:
-        if event.data == event9.data:
-            break
+    received_events.append(event)
+    if event.id == event9.id:
+        break
 
-assert events[3].data == event7.data
-assert events[4].data == event8.data
-assert events[5].data == event9.data
+assert received_events[-9].id == event1.id
+assert received_events[-8].id == event2.id
+assert received_events[-7].id == event3.id
+assert received_events[-6].id == event4.id
+assert received_events[-5].id == event5.id
+assert received_events[-4].id == event6.id
+assert received_events[-3].id == event7.id
+assert received_events[-2].id == event8.id
+assert received_events[-1].id == event9.id
 ```
 
 The catch-up subscription gRPC operation is ended as soon as the subscription object
@@ -1302,8 +1352,7 @@ Python executable will be used by the virtual environment.
 
 PyCharm will then create a new Poetry virtual environment for your project, using
 a particular version of Python, and also install into this virtual environment the
-project's package dependencies according to the `pyproject.toml` file, or the
-`poetry.lock` file if that exists in the project files.
+project's package dependencies according to the project's `poetry.lock` file.
 
 You can add different Poetry environments for different Python versions, and switch
 between them using the "Python Interpreter" settings of PyCharm. If you want to use
