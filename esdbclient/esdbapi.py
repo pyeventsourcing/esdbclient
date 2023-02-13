@@ -209,8 +209,7 @@ class Streams:
             )
             options.filter.CopyFrom(filter)
         else:
-            no_filter = shared_pb2.Empty()
-            options.no_filter.CopyFrom(no_filter)
+            options.no_filter.CopyFrom(shared_pb2.Empty())
 
         # Decide 'uuid_option'.
         options.uuid_option.CopyFrom(
