@@ -36,11 +36,11 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 * [Streams](#streams)
   * [Append batch of events](#append-batch-of-events)
   * [Append single event](#append-single-event)
+  * [Read stream events](#read-stream-events)
+  * [Read all events](#read-all-events)
+  * [Idempotent writes](#idempotent-writes)
   * [Get current stream position](#get-current-stream-position)
   * [Get current commit position](#get-current-commit-position)
-  * [Read stream events](#read-stream-events)
-  * [Idempotent writes](#idempotent-writes)
-  * [Read all recorded events](#read-all-recorded-events)
 * [Subscriptions](#subscriptions)
   * [Catch-up subscriptions](#catch-up-subscriptions)
   * [Persistent subscriptions](#persistent-subscriptions)
@@ -282,74 +282,6 @@ This method takes an optional argument `timeout` which is a float that sets
 a deadline for the completion of the gRPC operation.
 
 
-### Get current stream position
-
-The `get_stream_position()` method can be used to
-get the "stream position" of the last recorded event in a stream.
-
-This method has a `stream_name` argument, which is required.
-
-This method also takes an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
-
-The sequence of positions in a stream is gapless. It is zero-based,
-so that a stream with one recorded event has a current stream
-position of `0`. The current stream position is `1` when a stream has
-two events, and it is `2` when there are events, and so on.
-
-In the example below, the current stream position is obtained of the
-stream to which events were appended in the examples above.
-Because the sequence of stream positions is zero-based, and because
-three events were appended, so the current stream position is `2`.
-
-```python
-stream_position = client.get_stream_position(
-    stream_name=stream_name1
-)
-
-assert stream_position == 2
-```
-
-If a stream does not exist, the returned stream position value is `None`,
-which matches the required expected position when appending the first event
-of a new stream (see above).
-
-```python
-stream_position = client.get_stream_position(
-    stream_name=str(uuid4())
-)
-
-assert stream_position == None
-```
-
-This method takes an optional argument `timeout` which is a float that sets
-a deadline for the completion of the gRPC operation.
-
-
-### Get current commit position
-
-The method `get_commit_position()` can be used to get the current
-commit position of the database.
-
-```python
-commit_position = client.get_commit_position()
-```
-
-This method takes an optional argument `timeout` which is a float that sets
-a deadline for the completion of the gRPC operation.
-
-This method can be useful to measure progress of a downstream component
-that is processing all recorded events, by comparing the current commit
-position with the recorded commit position of the last successfully processed
-event in a downstream component.
-
-The value of the `commit_position` argument when reading events either by using
-the `read_all_events()` method or by using a catch-up subscription would usually
-be determined by the recorded commit position of the last successfully processed
-event in a downstream component.
-
-
 ### Read stream events
 
 The `read_stream_events()` method can be used to read the recorded events of a stream.
@@ -513,68 +445,7 @@ assert events[0].type == event3.type
 assert events[0].data == event3.data
 ```
 
-### Idempotent writes
-
-Now that we can both append events and read from a stream, we can demonstrate
-the idempotent nature of the `append_events()` operation.
-
-Sometimes it may happen that a new event is successfully recorded and then somehow
-the connection to the database gets interrupted before the successful call can return
-successfully to the client. In case of an error when appending an event, it may be
-desirable to retry appending the same event at the same position. If the event was
-in fact successfully recorded, it is convenient for the retry to return successfully
-without raising an error due to optimistic concurrency control (as described above).
-
-The example below shows the `append_events()` method being called again with
-`event3` and `expected_position=2`.
-
-```python
-# Retry appending event3.
-commit_position_retry = client.append_events(
-    stream_name=stream_name1,
-    expected_position=0,
-    events=[event2, event3],
-)
-```
-
-We can see that the same commit position is returned as above.
-
-```python
-assert commit_position_retry == commit_position2
-```
-
-This works because the `NewEvent` class has an `id` attribute that
-is supplied with a new version-4 UUID when an instance is constructed.
-
-```python
-assert isinstance(event1.id, UUID)
-assert isinstance(event2.id, UUID)
-assert isinstance(event3.id, UUID)
-
-assert event1.id != event2.id
-assert event2.id != event3.id
-```
-
-It is possible to provide an `id` value when constructing instances of
-`NewEvent`, but in the examples above we have been using the default behaviour.
-
-We can see that the `append_events()` method returns successfully, and
-that the stream has been unchanged by calling the method twice with the
-same arguments.
-
-```python
-response = client.read_stream_events(
-    stream_name=stream_name1
-)
-
-events = list(response)
-assert events[0].id == event1.id
-assert events[1].id == event2.id
-assert events[2].id == event3.id
-```
-
-
-### Read all recorded events
+### Read all events
 
 The method `read_all_events()` can be used to read all recorded events
 in the database in the order they were recorded. An iterable object of
@@ -748,6 +619,134 @@ assert len(events) == 1
 
 assert events[0].commit_position < commit_position2
 ```
+
+### Idempotent writes
+
+Now that we can both append events and read from a stream, we can demonstrate
+the idempotent nature of the `append_events()` operation.
+
+Sometimes it may happen that a new event is successfully recorded and then somehow
+the connection to the database gets interrupted before the successful call can return
+successfully to the client. In case of an error when appending an event, it may be
+desirable to retry appending the same event at the same position. If the event was
+in fact successfully recorded, it is convenient for the retry to return successfully
+without raising an error due to optimistic concurrency control (as described above).
+
+The example below shows the `append_events()` method being called again with
+`event3` and `expected_position=2`.
+
+```python
+# Retry appending event3.
+commit_position_retry = client.append_events(
+    stream_name=stream_name1,
+    expected_position=0,
+    events=[event2, event3],
+)
+```
+
+We can see that the same commit position is returned as above.
+
+```python
+assert commit_position_retry == commit_position2
+```
+
+This works because the `NewEvent` class has an `id` attribute that
+is supplied with a new version-4 UUID when an instance is constructed.
+
+```python
+assert isinstance(event1.id, UUID)
+assert isinstance(event2.id, UUID)
+assert isinstance(event3.id, UUID)
+
+assert event1.id != event2.id
+assert event2.id != event3.id
+```
+
+It is possible to provide an `id` value when constructing instances of
+`NewEvent`, but in the examples above we have been using the default behaviour.
+
+We can see that the `append_events()` method returns successfully, and
+that the stream has been unchanged by calling the method twice with the
+same arguments.
+
+```python
+response = client.read_stream_events(
+    stream_name=stream_name1
+)
+
+events = list(response)
+assert events[0].id == event1.id
+assert events[1].id == event2.id
+assert events[2].id == event3.id
+```
+
+
+### Get current stream position
+
+The `get_stream_position()` method can be used to
+get the "stream position" of the last recorded event in a stream.
+
+This method has a `stream_name` argument, which is required.
+
+This method also takes an optional `timeout` argument, that
+is expected to be a Python `float`, which sets a deadline
+for the completion of the gRPC operation.
+
+The sequence of positions in a stream is gapless. It is zero-based,
+so that a stream with one recorded event has a current stream
+position of `0`. The current stream position is `1` when a stream has
+two events, and it is `2` when there are events, and so on.
+
+In the example below, the current stream position is obtained of the
+stream to which events were appended in the examples above.
+Because the sequence of stream positions is zero-based, and because
+three events were appended, so the current stream position is `2`.
+
+```python
+stream_position = client.get_stream_position(
+    stream_name=stream_name1
+)
+
+assert stream_position == 2
+```
+
+If a stream does not exist, the returned stream position value is `None`,
+which matches the required expected position when appending the first event
+of a new stream (see above).
+
+```python
+stream_position = client.get_stream_position(
+    stream_name=str(uuid4())
+)
+
+assert stream_position == None
+```
+
+This method takes an optional argument `timeout` which is a float that sets
+a deadline for the completion of the gRPC operation.
+
+
+### Get current commit position
+
+The method `get_commit_position()` can be used to get the current
+commit position of the database.
+
+```python
+commit_position = client.get_commit_position()
+```
+
+This method takes an optional argument `timeout` which is a float that sets
+a deadline for the completion of the gRPC operation.
+
+This method can be useful to measure progress of a downstream component
+that is processing all recorded events, by comparing the current commit
+position with the recorded commit position of the last successfully processed
+event in a downstream component.
+
+The value of the `commit_position` argument when reading events either by using
+the `read_all_events()` method or by using a catch-up subscription would usually
+be determined by the recorded commit position of the last successfully processed
+event in a downstream component.
 
 
 ## Subscriptions
