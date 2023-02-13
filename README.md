@@ -743,8 +743,8 @@ including events that are recorded after the subscription was created.
 This iterator object will therefore not stop, unless the connection
 to the database is lost. The connection will be closed when the
 iterator object is deleted from memory, which will happen when the
-iterator object goes out of scope is explicitly deleted (see below),
-and the connection may be closed by the server.
+iterator object goes out of scope or is explicitly deleted (see below).
+The connection may also be closed by the server.
 
 This method takes an optional `commit_position` argument, which can be
 used to specify a commit position from which to subscribe for
@@ -861,7 +861,8 @@ Catch-up subscriptions are not registered in EventStoreDB (they are not
 "persistent" subscriptions). It is simply a streaming gRPC call which is
 kept open by the server, with newly recorded events sent to the client
 as the client iterates over the subscription. This kind of subscription
-is closed as soon as the subscription object goes out of memory.
+is closed as soon as the subscription object goes out of scope of is
+explicitly deleted from memory.
 
 ```python
 # End the subscription.
@@ -875,7 +876,7 @@ recorded when it is restarted. This commit position can be used to specify the c
 position from which to subscribe. Since this commit position represents the position of
 the last successfully processed event in a downstream component, so it will be usual to
 want the next event after this position, because that is the next event that needs to
-be processed. When subscribing for events using a catchup-subscription
+be processed. When subscribing for events using a catch-up subscription
 in EventStoreDB, the event at the specified commit position will NOT be included in
 the sequence of recorded events.
 
