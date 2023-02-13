@@ -503,6 +503,7 @@ class Subscriptions:
         group_name: str,
         from_end: bool = False,
         commit_position: Optional[int] = None,
+        # Todo: Expose alternative consumer strategies.
         consumer_strategy: str = "DispatchToSingle",
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
