@@ -29,10 +29,10 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Append events](#append-events)
   * [Append event](#append-event)
   * [Get current stream position](#get-current-stream-position)
+  * [Get current commit position](#get-current-commit-position)
   * [Read stream events](#read-stream-events)
   * [Idempotent writes](#idempotent-writes)
   * [Read all recorded events](#read-all-recorded-events)
-  * [Get current commit position](#get-current-commit-position)
 * [Subscriptions](#subscriptions)
   * [Catch-up subscriptions](#catch-up-subscriptions)
   * [Persistent subscriptions](#persistent-subscriptions)
@@ -133,8 +133,8 @@ from zero.
 
 ### Append events
 
-The client has an `append_events()` method, which can be used to append
-a batch of new events to a "stream".
+The `append_events()` method can be used to append
+a batch of new events atomically to a "stream".
 
 Three arguments are required, `stream_name`, `expected_position`
 and `events`.
@@ -246,7 +246,7 @@ processed the new events, after which time the view will not be stale.
 
 ### Append event
 
-The client has an `append_event()` method, which can be used to append
+The `append_event()` method can be used to append
 a single new event to a "stream".
 
 Three arguments are required, `stream_name`, `expected_position`
@@ -261,9 +261,8 @@ a deadline for the completion of the gRPC operation.
 
 ### Get current stream position
 
-The client has a `get_stream_position()` method, which can be used to
-get the current "stream position" of a stream (the position in the
-stream of the last recorded event in that stream).
+The `get_stream_position()` method can be used to
+get the "stream position" of the last recorded event in a stream.
 
 This method has a `stream_name` argument, which is required.
 
@@ -305,12 +304,34 @@ This method takes an optional argument `timeout` which is a float that sets
 a deadline for the completion of the gRPC operation.
 
 
+### Get current commit position
+
+The method `get_commit_position()` can be used to get the current
+commit position of the database.
+
+```python
+commit_position = client.get_commit_position()
+```
+
+This method takes an optional argument `timeout` which is a float that sets
+a deadline for the completion of the gRPC operation.
+
+This method can be useful to measure progress of a downstream component
+that is processing all recorded events, by comparing the current commit
+position with the recorded commit position of the last successfully processed
+event in a downstream component.
+
+The value of the `commit_position` argument when reading events either by using
+the `read_all_events()` method or by using a catch-up subscription would usually
+be determined by the recorded commit position of the last successfully processed
+event in a downstream component.
+
+
 ### Read stream events
 
-The client has a `read_stream_events()` method, which can be used to read
-the events of a stream.
+The `read_stream_events()` method can be used to read the recorded events of a stream.
 
-This method returns nn iterable object that yields recorded event objects.
+This method returns an Python iterable object that yields `RecordedEvent` objects.
 These recorded event objects are instances of the `RecordedEvent` class (see below)
 
 This method has one required argument, `stream_name`, which is the name of
@@ -705,46 +726,82 @@ assert len(events) == 1
 assert events[0].commit_position < commit_position2
 ```
 
-### Get current commit position
-
-The method `get_commit_position()` can be used to get the current
-commit position of the database.
-
-```python
-commit_position = client.get_commit_position()
-```
-
-This method takes an optional argument `timeout` which is a float that sets
-a deadline for the completion of the gRPC operation.
-
-This method can be useful to measure progress of a downstream component
-that is processing all recorded events, by comparing the current commit
-position with the recorded commit position of the last successfully processed
-event in a downstream component.
-
-The value of the `commit_position` argument when reading events either by using
-the `read_all_events()` method or by using a catch-up subscription would usually
-be determined by the recorded commit position of the last successfully processed
-event in a downstream component.
 
 ## Subscriptions
 
+A "subscription" in EventStoreDB will return already recorded events, and
+also events that are recorded after the subscription was started.
+
+EventStoreDB supports two kinds of subscriptions: "catch-up" subscriptions
+and "persistent" subscriptions.
+
 ### Catch-up subscriptions
 
-The client has a `subscribe_all_events()` method, which can be used
-to start a "catch-up" subscription.
+Catch-up subscriptions are simply a streaming gRPC call which is
+kept open by the server, with newly recorded events sent to the client
+as the client iterates over the subscription. The recorded events can
+then be processed.
 
-Many catch-up subscriptions can be created, concurrently or
-successively, and all will receive all the events they are
-subscribed to receive.
+Catch-up subscriptions can be filtered to include, or to exclude, certain
+types of recorded event.
 
-This method returns an iterator object which yields recorded events,
-including events that are recorded after the subscription was created.
-This iterator object will therefore not stop, unless the connection
-to the database is lost. The connection will be closed when the
-iterator object is deleted from memory, which will happen when the
-iterator object goes out of scope or is explicitly deleted (see below).
-The connection may also be closed by the server.
+Catch-up subscriptions can start from the beginning, from the end, or from
+a specific commit position.
+
+Many catch-up subscriptions can be created, concurrently or successively, and all
+will receive all the recorded events they have been requested to receive.
+
+Received recorded events are instances of the `RecordedEvent` class (see below).
+Recorded event objects have a commit position, amonst other attributes. The
+commit positions of recorded events that are received and processed by a downstream
+component are usefully recorded by the downstream component so that
+the greatest commit position of already processed recorded events can be determined.
+
+The last recorded commit position can be used to specify the commit position from which
+to subscribe when processing is resumed. Since this commit position will represent the
+position of the last successfully processed event in a downstream component, so it
+will be usual to want the next event after this position, because that is the next
+event that has not yet been processed. For this reason, when subscribing for events
+from a specific commit position using a catch-up subscription in EventStoreDB, the
+recorded event at the specified commit position will NOT be included in the sequence
+of recorded events that are received.
+
+To accomplish "exactly once" processing of recorded events in a downstream
+component, the commit position of a recorded event should be recorded atomically
+and uniquely along with the result of processing recorded events, for example
+in the same database as materialised views when implementing eventually-consistent
+CQRS, or in the same database as a downstream analytics or reporting or archiving
+application. By recording the commit position of recorded events atomically with
+the new state that results from processing recorded events, "dual writing" in the
+consumption of recorded events can be avoided. By also recording the commit position
+uniquely, the new state cannot be recorded twice, and hence the recorded state of the
+downstream component will be updated only once for any recorded event. By using the
+greatest recorded commit position to resume a catch-up subscription, all recorded
+events will eventually be processed. The combination of the "at most once" condition
+and the "at least once" condition gives the "exactly once" condition.
+
+The danger with "dual writing" in the consumption of recorded events is that if a
+recorded event is successfully processed and new state recorded atomically in one
+transaction with the commit position recorded in a separate transaction, one may
+happen and not the other. If the new state is recorded but the position is lost,
+and then the processing is stopped and resumed, the recorded event may be processed
+twice. On the other hand, if the commit position is recorded but the new state is
+lost, the recorded event may effectively not be processed at all. By either
+processing an event more than once, or by failing to process an event, the recorded
+state of the downstream component might be inaccurate, or possibly inconsistent, and
+perhaps catastrophically so. Such consequences may or may not matter in your situation.
+But sometimes inconsistencies may halt processing until the issue is resolved. You can
+avoid "dual writing" in the consumption of events by atomically recording the commit
+position of a recorded event along with the new state that results from processing that
+event in the same atomic transaction. By making the recording of the commit positions
+unique, so that transactions will be rolled back when there is a conflict, you will
+prevent the results of any duplicate processing of a recorded event being committed.
+
+Recorded events received from a catch-up subscription cannot be acknowledged back
+to the EventStoreDB server. Acknowledging events is an aspect of "persistent
+subscriptions".
+
+The`subscribe_all_events()` method can be used to start a "catch-up" subscription.
 
 This method takes an optional `commit_position` argument, which can be
 used to specify a commit position from which to subscribe for
@@ -775,6 +832,20 @@ more information about filter regular expressions.
 The argument `timeout` is a float which sets a deadline for the completion of
 the gRPC operation. This probably isn't very useful, but is included for
 completeness and consistency with the other methods.
+
+This method returns a Python iterator that yields recorded events, including events
+that are recorded after the subscription was created. Iterating over this object will
+therefore not stop, unless the connection to the database is lost. The connection will
+be closed when the iterator object is deleted from memory, which will happen when the
+iterator object goes out of scope or is explicitly deleted (see below). The connection
+may also be closed by the server.
+
+The subscription object can be used directly, but it might be used within a threaded
+loop dedicated to receiving events that can be stopped in a controlled way, with
+recorded events put on a queue for processing in a different thread. This package
+doesn't provide such a threaded or queuing object class. Just make sure to reconstruct
+the subscription (and the queue) using the last recorded commit position when resuming
+the subscription after an error, to be sure all events are processed once.
 
 The example below shows how to subscribe to receive all recorded
 events from a specific commit position. Three already-recorded
@@ -857,47 +928,13 @@ assert events[4].data == event8.data
 assert events[5].data == event9.data
 ```
 
-Catch-up subscriptions are not registered in EventStoreDB (they are not
-"persistent" subscriptions). It is simply a streaming gRPC call which is
-kept open by the server, with newly recorded events sent to the client
-as the client iterates over the subscription. This kind of subscription
-is closed as soon as the subscription object goes out of scope of is
-explicitly deleted from memory.
+The catch-up subscription gRPC operation is ended as soon as the subscription object
+goes out of scope or is explicitly deleted from memory.
 
 ```python
 # End the subscription.
 del subscription
 ```
-
-Please note, when processing events in a downstream component, the commit position of
-the last successfully processed event is usefully recorded by the downstream component
-so that the commit position can be determined by the downstream component from its own
-recorded when it is restarted. This commit position can be used to specify the commit
-position from which to subscribe. Since this commit position represents the position of
-the last successfully processed event in a downstream component, so it will be usual to
-want the next event after this position, because that is the next event that needs to
-be processed. When subscribing for events using a catch-up subscription
-in EventStoreDB, the event at the specified commit position will NOT be included in
-the sequence of recorded events.
-
-To accomplish "exactly once" processing of the events, the commit position
-of a recorded event should be recorded atomically and uniquely along with
-the result of processing recorded events, for example in the same database
-as materialised views when implementing eventually-consistent CQRS, or in
-the same database as a downstream analytics or reporting or archiving
-application. This avoids "dual writing" in the processing of events.
-
-Recorded events received from a catch-up subscription cannot be acknowledged back
-to the EventStoreDB server (there is no need to do this). Acknowledging events is
-an aspect of "persistent subscriptions" (see below).
-
-The subscription object might be used directly when processing events. It might
-also be used within a thread dedicated to receiving events, with recorded events
-put on a queue for processing in a different thread. This package doesn't provide
-such thread or queue objects, you would need to do that yourself. Just make sure
-to reconstruct the subscription (and the queue) using your last recorded commit
-position when resuming the subscription after an error, to be sure all events
-are processed once.
 
 ### Persistent subscriptions
 
@@ -931,6 +968,10 @@ for the completion of the gRPC operation.
 The method `create_subscription()` does not return a value, because
 recorded events are obtained by the group of consumers of the subscription
 using the `read_subscription()` method.
+
+*Please note, in this version of this client the "consumer strategy" is
+set to "DispatchToSingle". Support for choosing other consumer strategies
+supported by EventStoreDB will in future be supported in this client.*
 
 In the example below, a persistent subscription is created.
 
@@ -1079,21 +1120,12 @@ be necessary to check the commit position of the received events and to discard
 any  recorded event object that has a commit position equal to the commit position
 specified in the request.
 
-Whilst there are some advantages of persistent subscriptions, by tracking in the
+Whilst there are some advantages of persistent subscriptions, in particular the
+processing of recorded events by a group of consumers, by tracking in the
 upstream server the position in the commit sequence of events that have been processed,
-there is a danger of "dual writing" in the consumption of events. The danger is that if
-an event is successfully processed but then the acknowledgment fails, the event may be
-received more than once. On the other hand, if the acknowledgment is successful but
-then the processing fails, the event may effectively not be been processed. By either
-processing an events more than once, or failing to process an event, the resulting state
-of the processing of the recorded events might be inaccurate, or possibly
-inconsistent, and perhaps catastrophically so. Any relatively minor consequences may or
-may not matter in your situation. But sometimes inconsistencies may halt processing
-until the issue is resolved. You can avoid "dual writing" in the consumption of events
-by atomically recording the commit position of an event that has been processed along
-with the results of processing that event (that is, with both things being recorded in
-the same transaction), and making these records unique so that transactions will be
-rolled back preventing the results of reprocessing the event being committed.
+there is a danger of "dual writing" in the consumption of events. Reliability
+in processing of recorded events by a group of consumers will rely instead on
+idempotent handling of duplicate messages, and resilience to out-of-order delivery.
 
 ## Notes
 
