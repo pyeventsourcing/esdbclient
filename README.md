@@ -298,12 +298,34 @@ to only use `append_events()` to record new events.
 
 The `read_stream_events()` method can be used to read the recorded events of a stream.
 
-This method returns a Python iterable object that yields `RecordedEvent` objects.
-These recorded event objects are instances of the `RecordedEvent` class (see below)
-
 This method has one required argument, `stream_name`, which is the name of
 the stream from which to read events. By default, the recorded events in the
 stream are returned in the order they were recorded.
+
+The method `read_stream_events()` also supports four optional arguments,
+`stream_position`, `backwards`, `limit`, and `timeout`.
+
+The optional `stream_position` argument is an optional integer that can be used to
+indicate the position in the stream from which to start reading. This argument is
+`None` by default, which means the stream will be read either from the start of the
+stream (the default behaviour), or from the end of the stream if `backwards` is
+`True` (see below). When reading a stream from a specific position in the stream, the
+recorded event at that position WILL be included, both when reading forwards
+from that position, and when reading backwards from that position.
+
+The optional argument `backwards` is a boolean, by default `False`, which means the
+stream will be read forwards by default, so that events are returned in the
+order they were appended, If `backwards` is `True`, the stream will be read
+backwards, so that events are returned in reverse order.
+
+The optional argument `limit` is an integer which limits the number of events that will
+be returned. The default value is `sys.maxint`.
+
+The optional argument `timeout` is a float which sets a deadline for the completion of
+the gRPC operation.
+
+This method returns a Python iterable object that yields `RecordedEvent` objects.
+These recorded event objects are instances of the `RecordedEvent` class (see below)
 
 The example below shows how to read the recorded events of a stream
 forwards from the start of the stream to the end of the stream. The
@@ -341,28 +363,6 @@ assert events[2].stream_position == 2
 assert events[2].type == event3.type
 assert events[2].data == event3.data
 ```
-
-The method `read_stream_events()` also supports four optional arguments,
-`stream_position`, `backwards`, `limit`, and `timeout`.
-
-The optional `stream_position` argument is an optional integer that can be used to
-indicate the position in the stream from which to start reading. This argument is
-`None` by default, which means the stream will be read either from the start of the
-stream (the default behaviour), or from the end of the stream if `backwards` is
-`True` (see below). When reading a stream from a specific position in the stream, the
-recorded event at that position WILL be included, both when reading forwards
-from that position, and when reading backwards from that position.
-
-The optional argument `backwards` is a boolean, by default `False`, which means the
-stream will be read forwards by default, so that events are returned in the
-order they were appended, If `backwards` is `True`, the stream will be read
-backwards, so that events are returned in reverse order.
-
-The optional argument `limit` is an integer which limits the number of events that will
-be returned. The default value is `sys.maxint`.
-
-The optional argument `timeout` is a float which sets a deadline for the completion of
-the gRPC operation.
 
 The example below shows how to read recorded events in a stream forwards from
 a specific stream position to the end of the stream.
@@ -474,13 +474,6 @@ from the end if `backwards` is `True` (see below). Please note, if specified,
 the specified position must be an actually existing commit position, because
 any other number will result in a server error (at least in EventStoreDB v21.10).
 
-Please also note, when reading forwards from a specific commit position, the event
-at the specified position WILL be included. However, when reading backwards, the
-event at the specified position will NOT be included. (This non-inclusive behaviour
-of excluding the specified commit position when reading all streams differs from the
-behaviour when reading a named stream backwards from a specific stream position, I'm
-not sure why.)
-
 The optional argument `backwards` is a boolean which is by default `False` meaning the
 events will be read forwards by default, so that events are returned in the
 order they were committed, If `backwards` is `True`, the events will be read
@@ -496,15 +489,22 @@ that match the type strings of recorded events that should be included. By
 default, this argument is an empty tuple. If this argument is set to a
 non-empty sequence, the `filter_exclude` argument is ignored.
 
-Please note, the filtering happens on the EventStoreDB server, and the
-`limit` argument is applied on the server after filtering. See below for
-more information about filter regular expressions.
-
 The optional argument `limit` is an integer which limits the number of events that will
 be returned. The default value is `sys.maxint`.
 
 The optional argument `timeout` is a float which sets a deadline for the completion of
 the gRPC operation.
+
+The filtering of events is done on the EventStoreDB server. The
+`limit` argument is applied on the server after filtering. See below for
+more information about filter regular expressions.
+
+When reading forwards from a specific commit position, the event at the specified
+position WILL be included. However, when reading backwards, the event at the
+specified position will NOT be included. (This non-inclusive behaviour, of excluding
+the specified commit position when reading all streams backwards, differs from the
+behaviour when reading a stream backwards from a specific stream position, I'm
+not sure why.)
 
 The example below shows how to read all events in the database in the
 order they were recorded.
@@ -515,7 +515,7 @@ events = list(client.read_all_events())
 assert len(events) >= 3
 ```
 
-The example below shows how to read all recorded events from a particular commit position.
+The example below shows how to read all recorded events from a specific commit position.
 
 ```python
 events = list(
@@ -768,6 +768,10 @@ also events that are recorded after the subscription was started.
 EventStoreDB supports two kinds of subscriptions: "catch-up" subscriptions
 and "persistent" subscriptions.
 
+You can subscribe to receive events from all streams, or from a single stream.
+
+Subscriptions can be filtered.
+
 ### Catch-up subscriptions
 
 Catch-up subscriptions are simply a streaming gRPC call which is
@@ -833,6 +837,8 @@ prevent the results of any duplicate processing of a recorded event being commit
 Recorded events received from a catch-up subscription cannot be acknowledged back
 to the EventStoreDB server. Acknowledging events is an aspect of "persistent
 subscriptions".
+
+
 
 The`subscribe_all_events()` method can be used to start a "catch-up" subscription.
 
