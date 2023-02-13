@@ -231,6 +231,7 @@ class Streams:
                     if response.event.WhichOneof("position") == "commit_position":
                         commit_position = response.event.commit_position
                     else:
+                        # We get here with EventStoreDB < 22.10.
                         commit_position = None  # pragma: no cover
 
                     yield RecordedEvent(
