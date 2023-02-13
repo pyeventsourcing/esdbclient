@@ -34,8 +34,8 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Import class from package](#import-class-from-package)
   * [Contruct client class](#construct-client-class)
 * [Streams](#streams)
-  * [Append batch of events](#append-batch-of-events)
-  * [Append single event](#append-single-event)
+  * [Append events](#append-events)
+  * [Append event](#append-event)
   * [Read stream events](#read-stream-events)
   * [Read all events](#read-all-events)
   * [Idempotent writes](#idempotent-writes)
@@ -154,10 +154,11 @@ the same "stream name". Each recorded event has a "position" in its stream.
 The positions of the recorded events in a stream is a gapless sequence starting
 from zero.
 
-### Append batch of events
+### Append events
 
-The `append_events()` method can be used to append
-a batch of new events atomically to a "stream".
+The `append_events()` method can be used to write a sequence of new events atomically
+to a "stream". Writing new events either creates a stream, or appends events to the end
+of a stream. This method is idempotent (see below).
 
 Three arguments are required, `stream_name`, `expected_position`
 and `events`.
@@ -165,20 +166,30 @@ and `events`.
 The `stream_name` argument is required, and is expected to be a Python
 `str` object that uniquely identifies the stream in the database.
 
-The `expected_position` argument is required, is expected to be: either `None`
-if new events are being appended to a new stream, or an integer equal to the
-position the last recorded event in the stream.
+The `expected_position` argument is required, is expected to be: `None`
+if events are being written to a new stream, and otherwise an Python `int`
+equal to the position in the stream of the last recorded event in the stream.
 
-The stream positions of recorded events start from zero. And so, when appending
-the second new event to a stream that has one recorded event, the correct value
-of the `expected_position` argument is `0`. Similarly, when appending the third
-new event to a stream that has two recorded events, the correct value
-of the `expected_position` argument is `1`.
+The `events` argument is required, and is expected to be a sequence of new
+event objects to be appended to the named stream. The `NewEvent` class should
+be used to construct new event objects (see below).
 
-Streams are created by appending events. The correct value of the `expected_position`
-argument when appending the first event of a new stream (a stream with zero recorded
-events) is `None`. Please note, it is not possible to create an "empty" stream in
-EventStoreDB.
+This method takes an optional `timeout` argument, which is a float that sets
+a deadline for the completion of the gRPC operation.
+
+Streams are created by writing events. The correct value of the `expected_position`
+argument when writing the first event of a new stream is `None`. Please note, it is
+not possible to somehow create an "empty" stream in EventStoreDB.
+
+The stream positions of recorded events in a stream start from zero, and form a gapless
+sequence of integers. The stream position of the first recorded event in a stream is
+`0`. And so when appending the second new event to a stream that has one recorded event,
+the correct value of the `expected_position` argument is `0`. Similarly, the stream
+position of the second recorded event in a stream is `1`, and so when appending the
+third new event to a stream that has two recorded events, the correct value of the
+`expected_position` argument is `1`. And so on... (There is a theoretical maximum
+number of recorded events that any stream can have, but I'm not sure what it is;
+maybe 9,223,372,036,854,775,807 because it is implemented as a `long` in C#?)
 
 If there is a mismatch between the given value of the `expected_position` argument
 and the position of the last recorded event in a stream, then an `ExpectedPositionError`
@@ -189,10 +200,6 @@ can set the `expected_position` to a negative integer.
 
 If you need to discover the current position of the last recorded event in a stream,
 you can use the `get_stream_position()` method (see below).
-
-The `events` argument is required, and is expected to be a sequence of new
-event objects to be appended to the named stream. The `NewEvent` class should
-be used to construct new event objects (see below).
 
 Please note, the append events operation is atomic, so that either all
 or none of the given new events will be recorded. By design, it is only
@@ -242,7 +249,7 @@ commit_position2 = client.append_events(
 )
 ```
 
-If the append operation is successful, this method returns an integer
+If the operation is successful, this method returns an integer
 representing the overall "commit position" as it was when the operation
 was completed. Otherwise, an exception will be raised.
 
@@ -250,8 +257,9 @@ A "commit position" is a monotonically increasing integer representing
 the position of the recorded event in a "total order" of all recorded
 events in the database across all streams. It is the actual position
 of the event record on disk, and there are usually large differences
-between successive commits. The sequence of commit positions
-is NOT gapless.
+between successive commits. In consequence, the sequence of commit
+positions is not gapless. Indeed, there are usually large differences
+between the commit positions of successive recorded events.
 
 The "commit position" returned by `append_events()` is that of the last
 recorded event in the given batch of new events.
@@ -264,34 +272,38 @@ of new events, and a query into an eventually consistent materialized
 view in a downstream component that is updated from these events. If the new
 events have not yet been processed, the view would be stale. The "commit position"
 can be used by the user interface to poll the downstream component until it has
-processed the new events, after which time the view will not be stale.
+processed those new events, after which time the view will not be stale.
 
 
-### Append single event
+### Append event
 
-The `append_event()` method can be used to append
-a single new event to a "stream".
+The `append_event()` method can be used to write a single new event to a stream.
 
-Three arguments are required, `stream_name`, `expected_position`
-and `event`.
+Three arguments are required, `stream_name`, `expected_position` and `event`.
 
-This method works in the same way as `append_events()`,
-with the exception that `event` is expected to a single `NewEvent`.
+This method works in the same way as `append_events()`, however `event` is expected
+to be a single `NewEvent`.
 
-This method takes an optional argument `timeout` which is a float that sets
+This method takes an optional `timeout` argument, which is a float that sets
 a deadline for the completion of the gRPC operation.
+
+Since the handling of a command in your application may result in one or many
+new events, and the results of handling a command should be recorded atomically,
+and the writing of new events generated by a command handler is usually a concern
+that is factored out and used everywhere in a project, it is quite usual in a project
+to only use `append_events()` to record new events.
 
 
 ### Read stream events
 
 The `read_stream_events()` method can be used to read the recorded events of a stream.
 
-This method returns an Python iterable object that yields `RecordedEvent` objects.
+This method returns a Python iterable object that yields `RecordedEvent` objects.
 These recorded event objects are instances of the `RecordedEvent` class (see below)
 
 This method has one required argument, `stream_name`, which is the name of
-the stream to be read. By default, the recorded events in the stream
-are returned in the order they were recorded.
+the stream from which to read events. By default, the recorded events in the
+stream are returned in the order they were recorded.
 
 The example below shows how to read the recorded events of a stream
 forwards from the start of the stream to the end of the stream. The
@@ -452,9 +464,8 @@ in the database in the order they were recorded. An iterable object of
 recorded events is returned. This iterable object will stop when it has
 yielded the last recorded event.
 
-The method `read_stream_events()` supports six optional arguments,
-`commit_position`, `backwards`, `filter_exclude`, `filter_include`, `limit`,
-and `timeout`.
+This method supports six optional arguments, `commit_position`, `backwards`,
+`filter_exclude`, `filter_include`, `limit`, and `timeout`.
 
 The optional argument `position` is an optional integer that can be used to specify
 the commit position from which to start reading. This argument is `None` by
