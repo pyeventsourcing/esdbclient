@@ -55,14 +55,14 @@ class FakeUnknownRpcError(FakeRpcError):
 
 
 class TestEsdbClient(TestCase):
-    # def test_close(self) -> None:
-    #     client = self.construct_esdb_client()
-    #     client.close()
-    #     client.close()
-    #
-    #     client = EsdbClient("localhost:2222")
-    #     client.close()
-    #     client.close()
+    def test_close(self) -> None:
+        client = self.construct_esdb_client()
+        client.close()
+        client.close()
+
+        client = EsdbClient("localhost:2222")
+        client.close()
+        client.close()
 
     def test_constructor_args(self) -> None:
         client1 = EsdbClient("localhost:2222")

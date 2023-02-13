@@ -244,9 +244,9 @@ class EsdbClient:
             credentials=self._call_credentials,
         )
 
-    # def close(self) -> None:
-    #     self._channel.close()
-    #
+    def close(self) -> None:
+        self._channel.close()
+
     # def __del__(self) -> None:
     #     if hasattr(self, "_channel"):
     #         self.close()
