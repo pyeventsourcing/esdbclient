@@ -39,3 +39,4 @@ Questions:
 
 * Why does the gRPC error say 'ALREADY_EXISTS' when appending batch to stream that does not exist with "stream_position" set, when appending single event to stream that does not exist with "revision" gives response with "current_no_stream?
   * that is, batch append response doesn't discriminate between the two cases, although append response does - am I missing something?
+* In persistent.proto, is ReadResp.position ever "no_position"? or is there always a commit position now?

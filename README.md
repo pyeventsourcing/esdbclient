@@ -707,8 +707,6 @@ assert events[0].commit_position < commit_position2
 
 ### Get current commit position
 
-*only supported in EventStoreDB version >= 22.10*
-
 The method `get_commit_position()` can be used to get the current
 commit position of the database.
 
@@ -1201,8 +1199,11 @@ indicate that it is something else).
 The attribute `id` is a Python `UUID` object, used to indicate the unique ID of the
 event that was recorded. Please note, when recorded events are returned from a call
 to `read_stream_events()` in EventStoreDB v21.10, the commit position is not actually
-set in the response. For this reason, this attribute is actually typed as an optional
-value (`Optional[UUID]`), and this case the value of this attribute will be `None`.
+set in the response. This attribute is typed as an optional value (`Optional[UUID]`),
+and in the case of using EventStoreDB v21.10 the value of this attribute will be `None`
+when reading recorded events from a stream. Recorded events will however have this
+values set when reading recorded events from `read_all_events()` and from both
+catch-up and persistent subscriptions.
 
 The attribute `stream_name` is a Python `str` object, used to indicate the name of the
 stream in which the event was recorded.
