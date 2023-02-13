@@ -79,7 +79,7 @@ class Streams:
         credentials: Optional[CallCredentials] = None,
     ) -> Iterable[RecordedEvent]:
         """
-        Signature for reading events from an individual stream.
+        Signature for reading events from a stream.
         """
 
     @overload
@@ -95,7 +95,7 @@ class Streams:
         credentials: Optional[CallCredentials] = None,
     ) -> Iterable[RecordedEvent]:
         """
-        Signature for reading events from "all streams".
+        Signature for reading all events.
         """
 
     @overload
@@ -110,7 +110,7 @@ class Streams:
         credentials: Optional[CallCredentials] = None,
     ) -> Iterable[RecordedEvent]:
         """
-        Signature for reading events with a catch-up subscription.
+        Signature for reading all events with a catch-up subscription.
         """
 
     def read(

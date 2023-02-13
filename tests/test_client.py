@@ -167,10 +167,14 @@ class TestESDBClient(TestCase):
             list(client.read_stream_events(stream_name, backwards=True))
 
         with self.assertRaises(StreamNotFound):
-            list(client.read_stream_events(stream_name, position=1))
+            list(client.read_stream_events(stream_name, stream_position=1))
 
         with self.assertRaises(StreamNotFound):
-            list(client.read_stream_events(stream_name, position=1, backwards=True))
+            list(
+                client.read_stream_events(
+                    stream_name, stream_position=1, backwards=True
+                )
+            )
 
         with self.assertRaises(StreamNotFound):
             list(client.read_stream_events(stream_name, limit=10))
@@ -179,12 +183,12 @@ class TestESDBClient(TestCase):
             list(client.read_stream_events(stream_name, backwards=True, limit=10))
 
         with self.assertRaises(StreamNotFound):
-            list(client.read_stream_events(stream_name, position=1, limit=10))
+            list(client.read_stream_events(stream_name, stream_position=1, limit=10))
 
         with self.assertRaises(StreamNotFound):
             list(
                 client.read_stream_events(
-                    stream_name, position=1, backwards=True, limit=10
+                    stream_name, stream_position=1, backwards=True, limit=10
                 )
             )
 
@@ -309,13 +313,13 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[1].id, event1.id)
 
         # Read the stream forwards from position 1.
-        events = list(client.read_stream_events(stream_name, position=1))
+        events = list(client.read_stream_events(stream_name, stream_position=1))
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)
 
         # Read the stream backwards from position 0.
         events = list(
-            client.read_stream_events(stream_name, position=0, backwards=True)
+            client.read_stream_events(stream_name, stream_position=0, backwards=True)
         )
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event1.id)
@@ -361,13 +365,17 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[2].id, event1.id)
 
         # Read the stream forwards from position 1 with limit 1.
-        events = list(client.read_stream_events(stream_name, position=1, limit=1))
+        events = list(
+            client.read_stream_events(stream_name, stream_position=1, limit=1)
+        )
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)
 
         # Read the stream backwards from position 1 with limit 1.
         events = list(
-            client.read_stream_events(stream_name, position=1, backwards=True, limit=1)
+            client.read_stream_events(
+                stream_name, stream_position=1, backwards=True, limit=1
+            )
         )
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)

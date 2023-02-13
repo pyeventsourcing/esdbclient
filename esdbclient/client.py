@@ -113,7 +113,7 @@ class ESDBClient:
     def read_stream_events(
         self,
         stream_name: str,
-        position: Optional[int] = None,
+        stream_position: Optional[int] = None,
         backwards: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
@@ -123,7 +123,7 @@ class ESDBClient:
         """
         return self._streams.read(
             stream_name=stream_name,
-            stream_position=position,
+            stream_position=stream_position,
             backwards=backwards,
             limit=limit,
             timeout=timeout,

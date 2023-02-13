@@ -343,11 +343,11 @@ assert events[2].data == event3.data
 ```
 
 The method `read_stream_events()` also supports four optional arguments,
-`position`, `backwards`, `limit`, and `timeout`.
+`stream_position`, `backwards`, `limit`, and `timeout`.
 
-The optional `position` argument is an optional integer that can be used to indicate
-the position in the stream from which to start reading. This argument is `None`
-by default, which means the stream will be read either from the start of the
+The optional `stream_position` argument is an optional integer that can be used to
+indicate the position in the stream from which to start reading. This argument is
+`None` by default, which means the stream will be read either from the start of the
 stream (the default behaviour), or from the end of the stream if `backwards` is
 `True` (see below). When reading a stream from a specific position in the stream, the
 recorded event at that position WILL be included, both when reading forwards
@@ -371,7 +371,7 @@ a specific stream position to the end of the stream.
 events = list(
     client.read_stream_events(
         stream_name=stream_name1,
-        position=1,
+        stream_position=1,
     )
 )
 
@@ -443,7 +443,7 @@ events in a stream backwards from a given stream position.
 events = list(
     client.read_stream_events(
         stream_name=stream_name1,
-        position=2,
+        stream_position=2,
         backwards=True,
         limit=1,
     )
@@ -467,8 +467,8 @@ yielded the last recorded event.
 This method supports six optional arguments, `commit_position`, `backwards`,
 `filter_exclude`, `filter_include`, `limit`, and `timeout`.
 
-The optional argument `position` is an optional integer that can be used to specify
-the commit position from which to start reading. This argument is `None` by
+The optional argument `commit_position` is an optional integer that can be used to
+specify the commit position from which to start reading. This argument is `None` by
 default, meaning that all the events will be read either from the start, or
 from the end if `backwards` is `True` (see below). Please note, if specified,
 the specified position must be an actually existing commit position, because
@@ -1037,7 +1037,7 @@ the subscription should receive events. Please note, the recorded event
 at the specified commit position MAY be included in the recorded events
 received by the group of consumers.
 
-If neither `from_end` or `position` are specified, the group of consumers
+If neither `from_end` or `commit_position` are specified, the group of consumers
 of the subscription will receive all recorded events.
 
 This method also takes option `filter_exclude`, `filter_include`
