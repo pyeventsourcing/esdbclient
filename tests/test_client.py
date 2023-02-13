@@ -55,12 +55,21 @@ class FakeUnknownRpcError(FakeRpcError):
 
 
 class TestEsdbClient(TestCase):
-    def test_constructor_args(self) -> None:
-        client = EsdbClient("localhost:2222")
-        self.assertEqual(client.grpc_target, "localhost:2222")
+    def test_close(self) -> None:
+        client = self.construct_esdb_client()
+        client.close()
+        client.close()
 
-        client = EsdbClient(host="localhost", port=2222)
-        self.assertEqual(client.grpc_target, "localhost:2222")
+        client = EsdbClient("localhost:2222")
+        client.close()
+        client.close()
+
+    def test_constructor_args(self) -> None:
+        client1 = EsdbClient("localhost:2222")
+        self.assertEqual(client1.grpc_target, "localhost:2222")
+
+        client2 = EsdbClient(host="localhost", port=2222)
+        self.assertEqual(client2.grpc_target, "localhost:2222")
 
         # ESDB URLs not yet supported...
         with self.assertRaises(ValueError):

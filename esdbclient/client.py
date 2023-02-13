@@ -244,6 +244,13 @@ class EsdbClient:
             credentials=self._call_credentials,
         )
 
+    def close(self) -> None:
+        self._channel.close()
+
+    def __del__(self):
+        if hasattr(self, "_channel"):
+            self.close()
+
 
 class CatchupSubscription(Iterator[RecordedEvent]):
     """
