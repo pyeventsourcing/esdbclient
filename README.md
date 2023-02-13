@@ -3,6 +3,8 @@
 This package provides a Python gRPC client for
 [EventStoreDB](https://www.eventstore.com/).
 
+This client is implemented as the Python class `ESDBClient`.
+
 This client has been developed and tested to work with EventStoreDB LTS
 versions 21.10 and 21.10, without and without SSL/TLS enabled on both
 these versions, and with Python versions 3.7, 3.8, 3.9, 3.10, and 3.11
@@ -25,9 +27,9 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 
 <!-- TOC -->
 * [Install package](#install-package)
-* [EventStoreDB server](#eventstoredb-server)
-  * [Run Docker container](#run-docker-container)
-  * [Stop Docker container](#stop-docker-container)
+* [Server container](#server-container)
+  * [Run container](#run-container)
+  * [Stop container](#stop-container)
 * [Client class](#client-class)
   * [Import class from package](#import-class-from-package)
   * [Contruct client class](#construct-client-class)
@@ -44,8 +46,8 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Persistent subscriptions](#persistent-subscriptions)
 * [Notes](#notes)
   * [Regular expression filters](#regular-expression-filters)
-  * [The NewEvent class](#the-newevent-class)
-  * [The RecordedEvent class](#the-recordedevent-class)
+  * [New event objects](#new-event-objects)
+  * [Recorded event objects](#recorded-event-objects)
 * [Contributors](#contributors)
   * [Install Poetry](#install-poetry)
   * [Setup for PyCharm users](#setup-for-pycharm-users)
@@ -70,7 +72,7 @@ You can use Poetry to add this package to your pyproject.toml and install it.
 
     $ poetry add esdbclient
 
-## EventStoreDB server
+## Server container
 
 The EventStoreDB server can be run locally using the official Docker container image.
 
@@ -105,7 +107,7 @@ To stop and remove the `my-eventstoredb` container created above, use the follow
 
 ## Client class
 
-This EventStoreDB client is implemented as a Python class.
+This client is implemented as the Python class `ESDBClient`.
 
 ### Import class from package
 
@@ -1234,7 +1236,7 @@ and snapshots, you might use the sequence `DEFAULT_EXCLUDE_FILTER + ['.*Snapshot
 the value of the `filter_exclude` argument when calling `read_all_events()`,
 `subscribe_all_events()`, `create_subscription()` or `get_commit_position()`.
 
-### The NewEvent class
+### New event objects
 
 The `NewEvent` class is used when appending events.
 
@@ -1282,7 +1284,7 @@ assert new_event2.content_type == 'application/octet-stream'
 assert new_event2.id == event_id
 ```
 
-### The RecordedEvent class
+### Recorded event objects
 
 The `RecordedEvent` class is used when reading events.
 
