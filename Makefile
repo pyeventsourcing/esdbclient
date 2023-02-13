@@ -139,8 +139,8 @@ stop-eventstoredb-secure:
 	docker rm my-eventstoredb-secure
 
 .PHONY: start-eventstoredb
-start-eventstoredb: start-eventstoredb-21-10-insecure start-eventstoredb-21-10-secure
-# start-eventstoredb: start-eventstoredb-22-10-insecure start-eventstoredb-22-10-secure
+# start-eventstoredb: start-eventstoredb-21-10-insecure start-eventstoredb-21-10-secure
+start-eventstoredb: start-eventstoredb-22-10-insecure start-eventstoredb-22-10-secure
 
 .PHONY: stop-eventstoredb
 stop-eventstoredb: stop-eventstoredb-insecure stop-eventstoredb-secure

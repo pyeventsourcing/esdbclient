@@ -81,6 +81,34 @@ class TestEsdbClient(TestCase):
             "failed to connect to all addresses", cm.exception.args[0].details()
         )
 
+        with self.assertRaises(ServiceUnavailable) as cm:
+            client.append_event(
+                str(uuid4()), expected_position=None, event=NewEvent(type="", data=b"")
+            )
+        self.assertIn(
+            "failed to connect to all addresses", cm.exception.args[0].details()
+        )
+
+        with self.assertRaises(ServiceUnavailable) as cm:
+            group_name = f"my-subscription-{uuid4().hex}"
+            client.create_subscription(
+                group_name=group_name,
+                filter_include=["OrderCreated"],
+            )
+        self.assertIn(
+            "failed to connect to all addresses", cm.exception.args[0].details()
+        )
+
+        with self.assertRaises(ServiceUnavailable) as cm:
+            group_name = f"my-subscription-{uuid4().hex}"
+            read_req, read_resp = client.read_subscription(
+                group_name=group_name,
+            )
+            list(read_resp)
+        self.assertIn(
+            "failed to connect to all addresses", cm.exception.args[0].details()
+        )
+
     def test_handle_deadline_exceeded_error(self) -> None:
         with self.assertRaises(GrpcError) as cm:
             raise handle_rpc_error(FakeDeadlineExceededRpcError()) from None
@@ -151,7 +179,7 @@ class TestEsdbClient(TestCase):
                 )
             )
 
-    def test_append_and_read_stream_with_occ(self) -> None:
+    def test_append_event_and_read_stream_with_occ(self) -> None:
         client = self.construct_esdb_client()
         stream_name = str(uuid4())
 
@@ -162,23 +190,24 @@ class TestEsdbClient(TestCase):
         # Check stream position is None.
         self.assertEqual(client.get_stream_position(stream_name), None)
 
-        # Check get error when attempting to append empty list to position 1.
-        with self.assertRaises(ExpectedPositionError) as cm:
-            client.append_events(stream_name, expected_position=1, events=[])
-        self.assertEqual(cm.exception.args[0], f"Stream {stream_name!r} does not exist")
+        # Todo: Reintroduce this when/if testing for streaming individual events.
+        # # Check get error when attempting to append empty list to position 1.
+        # with self.assertRaises(ExpectedPositionError) as cm:
+        #     client.append_events(stream_name, expected_position=1, events=[])
+        # self.assertEqual(cm.exception.args[0], f"Stream {stream_name!r} does not exist")
 
-        # Append empty list of events.
-        commit_position0 = client.append_events(
-            stream_name, expected_position=None, events=[]
-        )
-        self.assertIsInstance(commit_position0, int)
+        # # Append empty list of events.
+        # commit_position0 = client.append_events(
+        #     stream_name, expected_position=None, events=[]
+        # )
+        # self.assertIsInstance(commit_position0, int)
 
-        # Check stream still not found.
-        with self.assertRaises(StreamNotFound):
-            list(client.read_stream_events(stream_name))
+        # # Check stream still not found.
+        # with self.assertRaises(StreamNotFound):
+        #     list(client.read_stream_events(stream_name))
 
-        # Check stream position is None.
-        self.assertEqual(client.get_stream_position(stream_name), None)
+        # # Check stream position is None.
+        # self.assertEqual(client.get_stream_position(stream_name), None)
 
         # Construct three new events.
         data1 = random_data()
@@ -197,6 +226,7 @@ class TestEsdbClient(TestCase):
         )
 
         # Check the attributes of the new events.
+        # Todo: Extract TestNewEvent class.
         self.assertEqual(event1.type, "OrderCreated")
         self.assertEqual(event1.data, data1)
         self.assertEqual(event1.metadata, b"")
@@ -210,12 +240,13 @@ class TestEsdbClient(TestCase):
 
         # Check get error when attempting to append new event to position 1.
         with self.assertRaises(ExpectedPositionError) as cm:
-            client.append_events(stream_name, expected_position=1, events=[event1])
+            client.append_event(stream_name, expected_position=1, event=event1)
         self.assertEqual(cm.exception.args[0], f"Stream {stream_name!r} does not exist")
 
         # Append new event.
-        commit_position1 = client.append_events(
-            stream_name, expected_position=None, events=[event1]
+        commit_position0 = client.get_commit_position()
+        commit_position1 = client.append_event(
+            stream_name, expected_position=None, event=event1
         )
 
         # Check commit position is greater.
@@ -242,12 +273,12 @@ class TestEsdbClient(TestCase):
         # Check we can't append another new event at initial position.
 
         with self.assertRaises(ExpectedPositionError) as cm:
-            client.append_events(stream_name, expected_position=None, events=[event2])
+            client.append_event(stream_name, expected_position=None, event=event2)
         self.assertEqual(cm.exception.args[0], "Current position is 0")
 
         # Append another event.
-        commit_position2 = client.append_events(
-            stream_name, expected_position=0, events=[event2]
+        commit_position2 = client.append_event(
+            stream_name, expected_position=0, event=event2
         )
 
         # Check stream position is 1.
@@ -292,12 +323,12 @@ class TestEsdbClient(TestCase):
 
         # Check we can't append another new event at second position.
         with self.assertRaises(ExpectedPositionError) as cm:
-            client.append_events(stream_name, expected_position=0, events=[event3])
+            client.append_event(stream_name, expected_position=0, event=event3)
         self.assertEqual(cm.exception.args[0], "Current position is 1")
 
         # Append another new event.
-        commit_position3 = client.append_events(
-            stream_name, expected_position=1, events=[event3]
+        commit_position3 = client.append_event(
+            stream_name, expected_position=1, event=event3
         )
 
         # Check stream position is 2.
@@ -333,8 +364,8 @@ class TestEsdbClient(TestCase):
         self.assertEqual(events[0].id, event2.id)
 
         # Idempotent write of event2.
-        commit_position2_1 = client.append_events(
-            stream_name, expected_position=0, events=[event2]
+        commit_position2_1 = client.append_event(
+            stream_name, expected_position=0, event=event2
         )
         self.assertEqual(commit_position2_1, commit_position2)
 
@@ -344,15 +375,15 @@ class TestEsdbClient(TestCase):
         self.assertEqual(events[1].id, event2.id)
         self.assertEqual(events[2].id, event3.id)
 
-    def test_append_and_read_stream_without_occ(self) -> None:
+    def test_append_event_and_read_stream_without_occ(self) -> None:
         client = self.construct_esdb_client()
         stream_name = str(uuid4())
 
-        event1 = NewEvent(type="Snapshot", data=b"{}", metadata=b"{}")
+        event1 = NewEvent(type="Snapshot", data=random_data())
 
         # Append new event.
-        commit_position = client.append_events(
-            stream_name, expected_position=-1, events=[event1]
+        commit_position = client.append_event(
+            stream_name, expected_position=-1, event=event1
         )
         events = list(client.read_stream_events(stream_name, backwards=True, limit=1))
         self.assertEqual(len(events), 1)
@@ -362,6 +393,113 @@ class TestEsdbClient(TestCase):
         #  when reading stream events in v21.10.
         if events[0].commit_position is not None:
             self.assertEqual(events[0].commit_position, commit_position)
+
+    def test_append_events_with_occ(self) -> None:
+        client = self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        commit_position0 = client.get_commit_position()
+
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+
+        # Fail to append (stream does not exist).
+        # Todo: Why does the gRPC error say 'ALREADY_EXISTS'?
+        with self.assertRaises(ExpectedPositionError):
+            client.append_events(
+                stream_name, expected_position=1, events=[event1, event2]
+            )
+
+        # Append batch of new events.
+        commit_position2 = client.append_events(
+            stream_name, expected_position=None, events=[event1, event2]
+        )
+
+        # Read stream and check recorded events.
+        events = list(client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+
+        assert commit_position2 > commit_position0
+        assert commit_position2 == client.get_commit_position()
+        if events[1].commit_position is not None:
+            assert isinstance(events[0].commit_position, int)
+            assert events[0].commit_position > commit_position0
+            assert events[0].commit_position < commit_position2
+            assert events[1].commit_position == commit_position2
+
+        # Fail to append (stream already exists).
+        event3 = NewEvent(type="OrderUpdated", data=random_data())
+        event4 = NewEvent(type="OrderUpdated", data=random_data())
+        with self.assertRaises(ExpectedPositionError):
+            client.append_events(
+                stream_name, expected_position=None, events=[event3, event4]
+            )
+
+        # Fail to append (wrong expected position).
+        with self.assertRaises(ExpectedPositionError):
+            client.append_events(
+                stream_name, expected_position=10, events=[event3, event4]
+            )
+
+        # Read stream and check recorded events.
+        events = list(client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+
+    def test_append_events_without_occ(self) -> None:
+        client = self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        commit_position0 = client.get_commit_position()
+
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+
+        # Append batch of new events.
+        commit_position2 = client.append_events(
+            stream_name, expected_position=-1, events=[event1, event2]
+        )
+
+        # Read stream and check recorded events.
+        events = list(client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+
+        assert commit_position2 > commit_position0
+        assert commit_position2 == client.get_commit_position()
+        if events[1].commit_position is not None:
+            assert isinstance(events[0].commit_position, int)
+            assert events[0].commit_position > commit_position0
+            assert events[0].commit_position < commit_position2
+            assert events[1].commit_position == commit_position2
+
+        # Append another batch of new events.
+        event3 = NewEvent(type="OrderUpdated", data=random_data())
+        event4 = NewEvent(type="OrderUpdated", data=random_data())
+        commit_position4 = client.append_events(
+            stream_name, expected_position=-1, events=[event3, event4]
+        )
+
+        # Read stream and check recorded events.
+        events = list(client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 4)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+        self.assertEqual(events[3].id, event4.id)
+
+        assert commit_position4 > commit_position2
+        assert commit_position4 == client.get_commit_position()
+
+        if events[3].commit_position is not None:
+            assert isinstance(events[2].commit_position, int)
+            assert events[2].commit_position > commit_position2
+            assert events[2].commit_position < commit_position4
+            assert events[3].commit_position == commit_position4
 
     def test_commit_position(self) -> None:
         client = self.construct_esdb_client()

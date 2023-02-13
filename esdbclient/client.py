@@ -8,6 +8,7 @@ from grpc import RpcError
 
 from esdbclient.esdbapi import (
     BasicAuthCallCredentials,
+    BatchAppendRequest,
     Streams,
     SubscriptionReadRequest,
     SubscriptionReadResponse,
@@ -15,7 +16,7 @@ from esdbclient.esdbapi import (
     handle_rpc_error,
 )
 from esdbclient.events import NewEvent, RecordedEvent
-from esdbclient.exceptions import StreamNotFound
+from esdbclient.exceptions import EsdbClientException, StreamNotFound
 
 # Matches the 'type' of "system" events.
 ESDB_SYSTEM_EVENTS_REGEX = r"\$.+"
@@ -73,13 +74,39 @@ class EsdbClient:
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
     ) -> int:
+        for response in self._streams.batch_append(
+            batches=[
+                BatchAppendRequest(
+                    stream_name=stream_name,
+                    expected_position=expected_position,
+                    events=events,
+                )
+            ],
+            timeout=timeout,
+        ):
+            if response.error:
+                raise response.error
+            assert isinstance(response.commit_position, int)
+            return response.commit_position
+        else:
+            raise EsdbClientException(  # pragma: no cover
+                "No batch append responses were received"
+            )
+
+    def append_event(
+        self,
+        stream_name: str,
+        expected_position: Optional[int],
+        event: NewEvent,
+        timeout: Optional[float] = None,
+    ) -> int:
         """
         Appends new events to the named stream.
         """
         return self._streams.append(
             stream_name=stream_name,
             expected_position=expected_position,
-            events=events,
+            events=[event],
             timeout=timeout,
         )
 

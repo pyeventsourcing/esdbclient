@@ -133,7 +133,7 @@ from zero.
 ### Append events
 
 The client has an `append_events()` method, which can be used to append
-new events to a "stream".
+a batch of new events to a "stream".
 
 Three arguments are required, `stream_name`, `expected_position`
 and `events`.
@@ -230,7 +230,7 @@ between successive commits. The sequence of commit positions
 is NOT gapless.
 
 The "commit position" returned by `append_events()` is that of the last
-recorded event in the given sequence of new events.
+recorded event in the given batch of new events.
 
 The "commit position" returned in this way can therefore be used to wait
 for a downstream component to have processed all the events that were recorded.
@@ -283,6 +283,20 @@ stream_position = client.get_stream_position(
 
 assert stream_position == None
 ```
+
+This method takes an optional argument `timeout` which is a float that sets
+a deadline for the completion of the gRPC operation.
+
+### Append event
+
+The client has an `append_event()` method, which can be used to append
+a single new event to a "stream".
+
+Three arguments are required, `stream_name`, `expected_position`
+and `event`.
+
+This method works in the same way as `append_events()`,
+with the exception that `event` is expected to a single `NewEvent`.
 
 This method takes an optional argument `timeout` which is a float that sets
 a deadline for the completion of the gRPC operation.
