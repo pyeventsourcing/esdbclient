@@ -11,7 +11,7 @@ from grpc._channel import _MultiThreadedRendezvous, _RPCState
 from grpc._cython.cygrpc import IntegratedCall
 
 import esdbclient.protos.Grpc.persistent_pb2 as grpc_persistent
-from esdbclient.client import EsdbClient
+from esdbclient.client import ESDBClient
 from esdbclient.esdbapi import SubscriptionReadRequest, handle_rpc_error
 from esdbclient.events import NewEvent
 from esdbclient.exceptions import (
@@ -54,29 +54,29 @@ class FakeUnknownRpcError(FakeRpcError):
         super().__init__(status_code=StatusCode.UNKNOWN)
 
 
-class TestEsdbClient(TestCase):
+class TestESDBClient(TestCase):
     def test_close(self) -> None:
         client = self.construct_esdb_client()
         client.close()
         client.close()
 
-        client = EsdbClient("localhost:2222")
+        client = ESDBClient("localhost:2222")
         client.close()
         client.close()
 
     def test_constructor_args(self) -> None:
-        client1 = EsdbClient("localhost:2222")
+        client1 = ESDBClient("localhost:2222")
         self.assertEqual(client1.grpc_target, "localhost:2222")
 
-        client2 = EsdbClient(host="localhost", port=2222)
+        client2 = ESDBClient(host="localhost", port=2222)
         self.assertEqual(client2.grpc_target, "localhost:2222")
 
         # ESDB URLs not yet supported...
         with self.assertRaises(ValueError):
-            EsdbClient(uri="esdb:something")
+            ESDBClient(uri="esdb:something")
 
     def test_service_unavailable_exception(self) -> None:
-        client = EsdbClient("localhost:2222")  # wrong port
+        client = ESDBClient("localhost:2222")  # wrong port
 
         with self.assertRaises(ServiceUnavailable) as cm:
             list(client.read_stream_events(str(uuid4())))
@@ -144,11 +144,11 @@ class TestEsdbClient(TestCase):
         self.assertEqual(cm.exception.__class__, GrpcError)
         self.assertIsInstance(cm.exception.args[0], MyRpcError)
 
-    def construct_esdb_client(self) -> EsdbClient:
+    def construct_esdb_client(self) -> ESDBClient:
         server_cert = ssl.get_server_certificate(addr=("localhost", 2113))
         username = "admin"
         password = "changeit"
-        return EsdbClient(
+        return ESDBClient(
             host="localhost",
             port=2113,
             server_cert=server_cert,
@@ -1231,12 +1231,12 @@ class TestEsdbClient(TestCase):
     # Todo: subscribe from end? not interesting, because you can get commit position
 
 
-class TestEsdbClientInsecure(TestEsdbClient):
-    def construct_esdb_client(self) -> EsdbClient:
+class TestESDBClientInsecure(TestESDBClient):
+    def construct_esdb_client(self) -> ESDBClient:
         server_cert = None
         username = None
         password = None
-        return EsdbClient(
+        return ESDBClient(
             host="localhost",
             port=2114,
             server_cert=server_cert,

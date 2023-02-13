@@ -16,7 +16,7 @@ from esdbclient.esdbapi import (
     handle_rpc_error,
 )
 from esdbclient.events import NewEvent, RecordedEvent
-from esdbclient.exceptions import EsdbClientException, StreamNotFound
+from esdbclient.exceptions import ESDBClientException, StreamNotFound
 
 # Matches the 'type' of "system" events.
 ESDB_SYSTEM_EVENTS_REGEX = r"\$.+"
@@ -26,7 +26,7 @@ ESDB_PERSISTENT_CONFIG_EVENTS_REGEX = r"PersistentConfig\d+"
 DEFAULT_EXCLUDE_FILTER = (ESDB_SYSTEM_EVENTS_REGEX, ESDB_PERSISTENT_CONFIG_EVENTS_REGEX)
 
 
-class EsdbClient:
+class ESDBClient:
     """
     Encapsulates the EventStoreDB gRPC API.
     """
@@ -89,7 +89,7 @@ class EsdbClient:
             assert isinstance(response.commit_position, int)
             return response.commit_position
         else:
-            raise EsdbClientException(  # pragma: no cover
+            raise ESDBClientException(  # pragma: no cover
                 "No batch append responses were received"
             )
 

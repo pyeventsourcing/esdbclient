@@ -109,15 +109,15 @@ This EventStoreDB client is implemented as a Python class.
 
 ### Import class from package
 
-The `EsdbClient` class can be imported from the `esdbclient` package.
+The `ESDBClient` class can be imported from the `esdbclient` package.
 
 ```python
-from esdbclient import EsdbClient
+from esdbclient import ESDBClient
 ```
 
 ### Contruct client class
 
-The `EsdbClient` class can be constructed with `host` and `port` arguments.
+The `ESDBClient` class can be constructed with `host` and `port` arguments.
 The `host` and `port` arguments indicate the hostname and port number of the
 EventStoreDB server.
 
@@ -136,7 +136,7 @@ a "secure" and an "insecure" server.
 ```python
 import os
 
-client = EsdbClient(
+client = ESDBClient(
     host=os.getenv("ESDB_HOST"),
     port=int(os.getenv("ESDB_PORT")),
     server_cert=os.getenv("ESDB_SERVER_CERT"),

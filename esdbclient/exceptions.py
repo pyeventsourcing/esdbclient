@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-class EsdbClientException(Exception):
+class ESDBClientException(Exception):
     """
     Base class for exceptions raised by the client.
     """
 
 
-class GrpcError(EsdbClientException):
+class GrpcError(ESDBClientException):
     """
     Base class for exceptions raised by gRPC.
     """
@@ -23,13 +23,13 @@ class DeadlineExceeded(GrpcError):
     """
 
 
-class StreamNotFound(EsdbClientException):
+class StreamNotFound(ESDBClientException):
     """
     Raised when EventStoreDB stream is not found.
     """
 
 
-class ExpectedPositionError(EsdbClientException):
+class ExpectedPositionError(ESDBClientException):
     """
     Raised when expected position does not match the
     actual position of the last event in a stream.
