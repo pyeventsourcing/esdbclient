@@ -86,6 +86,20 @@ class Streams:
     def read(
         self,
         *,
+        stream_name: Optional[str] = None,
+        stream_position: Optional[int] = None,
+        subscribe: Literal[True],
+        timeout: Optional[float] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> Iterable[RecordedEvent]:
+        """
+        Signature for reading events from a stream with a catch-up subscription.
+        """
+
+    @overload
+    def read(
+        self,
+        *,
         commit_position: Optional[int] = None,
         backwards: bool = False,
         filter_exclude: Sequence[str] = (),

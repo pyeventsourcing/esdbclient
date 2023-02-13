@@ -195,6 +195,25 @@ class ESDBClient:
             commit_position = ev.commit_position
         return commit_position
 
+    def subscribe_stream_events(
+        self,
+        stream_name: str,
+        stream_position: Optional[int] = None,
+        timeout: Optional[float] = None,
+    ) -> Iterator[RecordedEvent]:
+        """
+        Returns a catch-up subscription, from which recorded
+        events in "all streams" in the database can be received.
+        """
+        read_resp = self._streams.read(
+            stream_name=stream_name,
+            stream_position=stream_position,
+            subscribe=True,
+            timeout=timeout,
+            credentials=self._call_credentials,
+        )
+        return CatchupSubscription(read_resp=read_resp)
+
     def subscribe_all_events(
         self,
         commit_position: Optional[int] = None,

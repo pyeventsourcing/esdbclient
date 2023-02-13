@@ -831,7 +831,7 @@ class TestESDBClient(TestCase):
             stream_name2, expected_position=None, events=[event4, event5, event6]
         )
 
-        # Check the stream name of the newly received events.
+        # Continue reading from the subscription.
         events = []
         for event in subscription:
             events.append(event)
@@ -842,6 +842,57 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[0].id, event4.id)
         self.assertEqual(events[1].id, event5.id)
         self.assertEqual(events[2].id, event6.id)
+
+    def test_catchup_subscribe_stream_events_default_filter(self) -> None:
+        client = self.construct_esdb_client()
+
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Subscribe to stream events, from the start.
+        subscription = client.subscribe_stream_events(stream_name=stream_name1)
+        events = []
+        for event in subscription:
+            events.append(event)
+            if event.id == event3.id:
+                break
+
+        # Append three events to stream2.
+        event4 = NewEvent(type="OrderCreated", data=random_data())
+        event5 = NewEvent(type="OrderUpdated", data=random_data())
+        event6 = NewEvent(type="OrderDeleted", data=random_data())
+        stream_name2 = str(uuid4())
+        client.append_events(
+            stream_name2, expected_position=None, events=[event4, event5, event6]
+        )
+
+        # Append three more events to stream1.
+        event7 = NewEvent(type="OrderCreated", data=random_data())
+        event8 = NewEvent(type="OrderUpdated", data=random_data())
+        event9 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name1, expected_position=2, events=[event7, event8, event9]
+        )
+
+        # Continue reading from the subscription.
+        events = []
+        for event in subscription:
+            events.append(event)
+            if event.id == event9.id:
+                break
+
+        # Check we got events only from stream1.
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event7.id)
+        self.assertEqual(events[1].id, event8.id)
+        self.assertEqual(events[2].id, event9.id)
 
     def test_catchup_subscribe_all_events_no_filter(self) -> None:
         client = self.construct_esdb_client()
