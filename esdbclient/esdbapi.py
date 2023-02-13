@@ -151,7 +151,7 @@ class Streams:
         options = streams_pb2.ReadReq.Options()
 
         # Decide 'stream_option'.
-        if stream_name is not None:
+        if isinstance(stream_name, str):
             assert isinstance(stream_name, str)
             assert commit_position is None
             stream_options = streams_pb2.ReadReq.Options.StreamOptions(
