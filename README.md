@@ -27,6 +27,7 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 * [Client](#client)
 * [Streams](#streams)
   * [Append events](#append-events)
+  * [Append event](#append-event)
   * [Get current stream position](#get-current-stream-position)
   * [Read stream events](#read-stream-events)
   * [Idempotent writes](#idempotent-writes)
@@ -242,6 +243,22 @@ events have not yet been processed, the view would be stale. The "commit positio
 can be used by the user interface to poll the downstream component until it has
 processed the new events, after which time the view will not be stale.
 
+
+### Append event
+
+The client has an `append_event()` method, which can be used to append
+a single new event to a "stream".
+
+Three arguments are required, `stream_name`, `expected_position`
+and `event`.
+
+This method works in the same way as `append_events()`,
+with the exception that `event` is expected to a single `NewEvent`.
+
+This method takes an optional argument `timeout` which is a float that sets
+a deadline for the completion of the gRPC operation.
+
+
 ### Get current stream position
 
 The client has a `get_stream_position()` method, which can be used to
@@ -283,20 +300,6 @@ stream_position = client.get_stream_position(
 
 assert stream_position == None
 ```
-
-This method takes an optional argument `timeout` which is a float that sets
-a deadline for the completion of the gRPC operation.
-
-### Append event
-
-The client has an `append_event()` method, which can be used to append
-a single new event to a "stream".
-
-Three arguments are required, `stream_name`, `expected_position`
-and `event`.
-
-This method works in the same way as `append_events()`,
-with the exception that `event` is expected to a single `NewEvent`.
 
 This method takes an optional argument `timeout` which is a float that sets
 a deadline for the completion of the gRPC operation.
