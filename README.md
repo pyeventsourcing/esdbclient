@@ -41,9 +41,14 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Idempotent writes](#idempotent-writes)
   * [Get current stream position](#get-current-stream-position)
   * [Get current commit position](#get-current-commit-position)
-* [Subscriptions](#subscriptions)
-  * [Catch-up subscriptions](#catch-up-subscriptions)
-  * [Persistent subscriptions](#persistent-subscriptions)
+* [Catch-up subscriptions](#catch-up-subscriptions)
+  * [Subscribe all events](#subscribe-all-events)
+  * [Subscribe stream events](#subscribe-stream-events)
+* [Persistent subscriptions](#persistent-subscriptions)
+  * [Create subscription](#create-subscription)
+  * [Read subscription](#read-subscription)
+  * [Create stream subscription](#create-stream-subscription)
+  * [Read stream subscription](#read-stream-subscription)
 * [Notes](#notes)
   * [Regular expression filters](#regular-expression-filters)
   * [New event objects](#new-event-objects)
@@ -751,37 +756,30 @@ be determined by the recorded commit position of the last successfully processed
 event in a downstream component.
 
 
-## Subscriptions
+## Catch-up subscriptions
 
-A "subscription" in EventStoreDB will return already recorded events, and
-also events that are recorded after the subscription was started.
+A "catch-up subscription" can be used to receive already recorded events, but
+it will also return events that are recorded after the subscription was started.
 
-EventStoreDB supports two kinds of subscriptions: "catch-up" subscriptions
-and "persistent" subscriptions.
-
-### Catch-up subscriptions
+The method `subscribe_stream_events()` starts a catch-up subscription to receive
+events from a specific stream. The method `subscribe_all_events()` starts a catch-up
+subscription to receive all events in the database.
 
 Catch-up subscriptions are simply a streaming gRPC call which is
 kept open by the server, with newly recorded events sent to the client
-as the client iterates over the subscription. The recorded events can
-then be processed.
-
-You can subscribe to receive events from all streams, or from a single stream.
-
-Catch-up subscriptions can be filtered to include, or to exclude, certain
-types of recorded event.
-
-Catch-up subscriptions can start from the beginning, from the end, or from
-a specific commit position.
+as the client iterates over the subscription.
 
 Many catch-up subscriptions can be created, concurrently or successively, and all
 will receive all the recorded events they have been requested to receive.
 
 Received recorded events are instances of the `RecordedEvent` class (see below).
-Recorded event objects have a commit position, amonst other attributes. The
-commit positions of recorded events that are received and processed by a downstream
-component are usefully recorded by the downstream component so that
-the greatest commit position of already processed recorded events can be determined.
+Recorded event objects have a commit position, amonst other attributes.
+
+### How to implement exactly-once event processing
+
+The commit positions of recorded events that are received and processed by a
+downstream component are usefully recorded by the downstream component so that
+the commit position of last processed event can be determined.
 
 The last recorded commit position can be used to specify the commit position from which
 to subscribe when processing is resumed. Since this commit position will represent the
@@ -792,19 +790,20 @@ from a specific commit position using a catch-up subscription in EventStoreDB, t
 recorded event at the specified commit position will NOT be included in the sequence
 of recorded events that are received.
 
-To accomplish "exactly once" processing of recorded events in a downstream
-component, the commit position of a recorded event should be recorded atomically
-and uniquely along with the result of processing recorded events, for example
-in the same database as materialised views when implementing eventually-consistent
-CQRS, or in the same database as a downstream analytics or reporting or archiving
-application. By recording the commit position of recorded events atomically with
-the new state that results from processing recorded events, "dual writing" in the
-consumption of recorded events can be avoided. By also recording the commit position
-uniquely, the new state cannot be recorded twice, and hence the recorded state of the
-downstream component will be updated only once for any recorded event. By using the
-greatest recorded commit position to resume a catch-up subscription, all recorded
-events will eventually be processed. The combination of the "at most once" condition
-and the "at least once" condition gives the "exactly once" condition.
+To accomplish "exactly-once" processing of recorded events in a downstream
+component when using a catch-up subscription, the commit position of a recorded
+event should be recorded atomically and uniquely along with the result of processing
+recorded events, for example in the same database as materialised views when
+implementing eventually-consistent CQRS, or in the same database as a downstream
+analytics or reporting or archiving application. By recording the commit position
+of recorded events atomically with the new state that results from processing
+recorded events, "dual writing" in the consumption of recorded events can be
+avoided. By also recording the commit position uniquely, the new state cannot be
+recorded twice, and hence the recorded state of the downstream component will be
+updated only once for any recorded event. By using the greatest recorded commit
+position to resume a catch-up subscription, all recorded events will eventually
+be processed. The combination of the "at-most-once" condition and the "at-least-once"
+condition gives the "exactly-once" condition.
 
 The danger with "dual writing" in the consumption of recorded events is that if a
 recorded event is successfully processed and new state recorded atomically in one
@@ -824,8 +823,9 @@ unique, so that transactions will be rolled back when there is a conflict, you w
 prevent the results of any duplicate processing of a recorded event being committed.
 
 Recorded events received from a catch-up subscription cannot be acknowledged back
-to the EventStoreDB server. Acknowledging events is an aspect of "persistent
-subscriptions".
+to the EventStoreDB server. Acknowledging events, however, is an aspect of "persistent
+subscriptions" (see below). Hoping to rely on acknowledging events to an upstream
+component is an example of dual writing.
 
 ### Subscribe all events
 
@@ -1090,7 +1090,9 @@ events[1].stream_position == 3
 events[1].stream_name == stream_name2
 ```
 
-### Persistent subscriptions
+## Persistent subscriptions
+
+### Create subscription
 
 The method `create_subscription()` can be used to create a
 "persistent subscription" to EventStoreDB.
@@ -1134,6 +1136,8 @@ In the example below, a persistent subscription is created.
 group_name = f"group-{uuid4()}"
 client.create_subscription(group_name=group_name)
 ```
+
+### Read subscription
 
 The method `read_subscription()` can be used by a group of consumers to receive
 recorded events from a persistent subscription created using `create_subscription`.
@@ -1281,7 +1285,7 @@ there is a danger of "dual writing" in the consumption of events. Reliability
 in processing of recorded events by a group of consumers will rely instead on
 idempotent handling of duplicate messages, and resilience to out-of-order delivery.
 
-### Persistent stream subscription
+### Create stream subscription
 
 The `create_stream_subscription()` method can be used to create a persistent
 subscription for a stream.
@@ -1343,6 +1347,8 @@ client.create_stream_subscription(
     from_end=True
 )
 ```
+
+### Read stream subscription
 
 The `read_stream_subscription()` method can be used to create a persistent
 subscription for a stream.

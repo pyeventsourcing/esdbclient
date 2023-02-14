@@ -1,34 +1,28 @@
 ## For version 1.0
 
-* Change append_events() to use batch, and add an append_event() method.
-
-* Cluster support & connectivity (different connections strings + node pref, TLS
-support);
-  * Use the esdb:// and esdb+discover:// URLs
-    *
-  * Three options for authentication:
-    * username/password (default: "admin/changeit")
-    * SSL certificates
-    * OAuth (requires commercial license)
-* Read / append / delete stream;
+* Cluster support & connectivity (different connections strings + node pref);
+  * Support the esdb:// and esdb+discover:// URLs
+    * which parameters are there to support?
+    * which parameters should we support?
+* Delete stream;
 * Read / modify stream metadata;
   * Put two dollars in front of it....
-* Catch-up subscription (stream + $all);
-* Persistent subscription (stream + $all);
 * Doc & sample.
 
-* JSON/bytes new event (https://github.com/pyeventsourcing/esdbclient/issues/5)
+* Check "subscription confirmed" of read response?
+* Support filtering on stream name (currently just event type)?
 
-* Idempotent writes...
-  * Make append request with the same UUID as the ProposedMessage.id
-
-* Connect to cloud service... TailScale VPN... a bit complicated
+* OAuth (requires commercial license)?
+* Connect to cloud service? TailScale VPN... a bit complicated
 
 * Tombstone stream?
 
 Questions:
 
-* Can't filter persistent subscription to a stream when using StreamOptions, because it doesn't have filter_option field (only AllOptions does)
+* What is the 'structured' alternative for UUIDOption?
+
+* Can't filter persistent subscription to a stream when using StreamOptions, because it doesn't have filter_option field (only AllOptions does)?
+  * TBF, where the option does exist, it's not a legal combination... just can't filter reading or subscribing to a stream?
 * Is there a difference between a persistent subscription that uses StreamOptions, and one that uses AllOptions with stream identifier expression that matches a single stream identifier?
   * can use filter options with AllOptions? why not also with StreamOptions, like with catchup subscription?
 * Which content-type variations are possible? which are common? which is most usual?
