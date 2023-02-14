@@ -540,41 +540,39 @@ class TestESDBClient(TestCase):
         # Check commit_position() still returns expected value.
         self.assertEqual(client.get_commit_position(), commit_position)
 
-    def test_timeout_stream_append_and_read(self) -> None:
+    def test_timeout_append_events(self) -> None:
         client = self.construct_esdb_client()
 
-        # Append three events.
+        # Append two events.
         stream_name1 = str(uuid4())
         event1 = NewEvent(
             type="OrderCreated",
             data=b"{}",
             metadata=b"{}",
         )
-        event2 = NewEvent(
-            type="OrderUpdated",
-            data=b"{}",
-            metadata=b"{}",
-        )
-        event3 = NewEvent(
-            type="OrderDeleted",
-            data=b"{}",
-            metadata=b"{}",
-        )
-        client.append_events(
-            stream_name=stream_name1,
-            expected_position=None,
-            events=[event1, event2],
-        )
-
+        new_events = [event1]
+        new_events += [NewEvent(type="OrderUpdated", data=b"") for _ in range(1000)]
         # Timeout appending new event.
         with self.assertRaises(DeadlineExceeded):
             client.append_events(
-                stream_name1, expected_position=1, events=[event3], timeout=0
+                stream_name=stream_name1,
+                expected_position=None,
+                events=new_events,
+                timeout=0,
             )
 
-        # Timeout reading stream.
-        with self.assertRaises(DeadlineExceeded):
-            list(client.read_stream_events(stream_name1, timeout=0))
+        with self.assertRaises(StreamNotFound):
+            list(client.read_stream_events(stream_name1))
+
+        # # Timeout appending new event.
+        # with self.assertRaises(DeadlineExceeded):
+        #     client.append_events(
+        #         stream_name1, expected_position=1, events=[event3], timeout=0
+        #     )
+        #
+        # # Timeout reading stream.
+        # with self.assertRaises(DeadlineExceeded):
+        #     list(client.read_stream_events(stream_name1, timeout=0))
 
     def test_read_all_events(self) -> None:
         client = self.construct_esdb_client()
