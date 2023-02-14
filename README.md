@@ -20,6 +20,18 @@ Not all the features of the EventStoreDB API are presented
 by this client in its current form, however many of the most
 useful aspects are presented in an easy-to-use interface (see below).
 
+Probably the three most useful methods are `append_events()`, `read_stream_events()`
+and `subscribe_all_events()`.
+
+* The `append_events()` method can be used to record atomically all the new
+events that are generated when executing a command in an application.
+
+* The `read_stream_events()` method can be used to retrieve all the recorded
+events for an aggregate before executing a command in an application.
+
+* The `subscribe_all_events()` method can be used by a downstream component
+to process recorded events with exactly-once semantics.
+
 For an example of usage, see the [eventsourcing-eventstoredb](
 https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 
@@ -171,6 +183,9 @@ be used to record and read events in the database.
 The `append_events()` method can be used to write a sequence of new events atomically
 to a "stream". Writing new events either creates a stream, or appends events to the end
 of a stream. This method is idempotent (see below).
+
+This method can be used to record atomically all the new
+events that are generated when executing a command in an application.
 
 Three arguments are required, `stream_name`, `expected_position`
 and `events`.
@@ -367,6 +382,9 @@ instantiated.
 ### Read stream events
 
 The `read_stream_events()` method can be used to read the recorded events of a stream.
+
+This method can be used to retrieve all the recorded events for an aggregate before
+executing a command in an application.
 
 This method has one required argument, `stream_name`, which is the name of
 the stream from which to read events. By default, the recorded events in the
@@ -845,6 +863,9 @@ component is an example of dual writing.
 
 The`subscribe_all_events()` method can be used to start a "catch-up" subscription
 that can return all events in the database.
+
+This method can be used by a downstream component
+to process recorded events with exactly-once semantics.
 
 This method takes an optional `commit_position` argument, which can be
 used to specify a commit position from which to subscribe for
