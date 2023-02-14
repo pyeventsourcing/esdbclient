@@ -42,6 +42,7 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Get current stream position](#get-current-stream-position)
   * [Get current commit position](#get-current-commit-position)
 * [Catch-up subscriptions](#catch-up-subscriptions)
+  * [How to implement exactly-once event processing](#how-to-implement-exactly-once-event-processing)
   * [Subscribe all events](#subscribe-all-events)
   * [Subscribe stream events](#subscribe-stream-events)
 * [Persistent subscriptions](#persistent-subscriptions)
