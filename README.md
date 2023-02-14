@@ -174,7 +174,7 @@ The `events` argument is required, and is expected to be a sequence of new
 event objects to be appended to the named stream. The `NewEvent` class should
 be used to construct new event objects (see below).
 
-This method takes an optional `timeout` argument, which is a float that sets
+This method takes an optional `timeout` argument, which is a Python `float` that sets
 a deadline for the completion of the gRPC operation.
 
 Streams are created by writing events. The correct value of the `expected_position`
@@ -213,10 +213,7 @@ from uuid import UUID, uuid4
 from esdbclient import NewEvent
 
 # Construct new event object.
-event1 = NewEvent(
-    type='OrderCreated',
-    data=b'data1',
-)
+event1 = NewEvent(type='OrderCreated', data=b'data1')
 
 # Define stream name.
 stream_name1 = str(uuid4())
@@ -233,14 +230,8 @@ In the example below, two subsequent events are appended to an existing
 stream.
 
 ```python
-event2 = NewEvent(
-    type='OrderUpdated',
-    data=b'data2',
-)
-event3 = NewEvent(
-    type='OrderDeleted',
-    data=b'data3',
-)
+event2 = NewEvent(type='OrderUpdated', data=b'data2')
+event3 = NewEvent(type='OrderDeleted', data=b'data3')
 
 commit_position2 = client.append_events(
     stream_name=stream_name1,
@@ -284,7 +275,7 @@ Three arguments are required, `stream_name`, `expected_position` and `event`.
 This method works in the same way as `append_events()`, however `event` is expected
 to be a single `NewEvent`.
 
-This method takes an optional `timeout` argument, which is a float that sets
+This method takes an optional `timeout` argument, which is a Python `float` that sets
 a deadline for the completion of the gRPC operation.
 
 Since the handling of a command in your application may result in one or many
@@ -321,7 +312,7 @@ backwards, so that events are returned in reverse order.
 The optional argument `limit` is an integer which limits the number of events that will
 be returned. The default value is `sys.maxint`.
 
-The optional argument `timeout` is a float which sets a deadline for the completion of
+The optional argument `timeout` is a Python `float` which sets a deadline for the completion of
 the gRPC operation.
 
 This method returns a Python iterable object that yields `RecordedEvent` objects.
@@ -492,7 +483,7 @@ non-empty sequence, the `filter_exclude` argument is ignored.
 The optional argument `limit` is an integer which limits the number of events that will
 be returned. The default value is `sys.maxint`.
 
-The optional argument `timeout` is a float which sets a deadline for the completion of
+The optional argument `timeout` is a Python `float` which sets a deadline for the completion of
 the gRPC operation.
 
 The filtering of events is done on the EventStoreDB server. The
@@ -733,7 +724,7 @@ stream_position = client.get_stream_position(
 assert stream_position == None
 ```
 
-This method takes an optional argument `timeout` which is a float that sets
+This method takes an optional argument `timeout` which is a Python `float` that sets
 a deadline for the completion of the gRPC operation.
 
 
@@ -746,7 +737,7 @@ commit position of the database.
 commit_position = client.get_commit_position()
 ```
 
-This method takes an optional argument `timeout` which is a float that sets
+This method takes an optional argument `timeout` which is a Python `float` that sets
 a deadline for the completion of the gRPC operation.
 
 This method can be useful to measure progress of a downstream component
@@ -768,16 +759,14 @@ also events that are recorded after the subscription was started.
 EventStoreDB supports two kinds of subscriptions: "catch-up" subscriptions
 and "persistent" subscriptions.
 
-You can subscribe to receive events from all streams, or from a single stream.
-
-Subscriptions can be filtered.
-
 ### Catch-up subscriptions
 
 Catch-up subscriptions are simply a streaming gRPC call which is
 kept open by the server, with newly recorded events sent to the client
 as the client iterates over the subscription. The recorded events can
 then be processed.
+
+You can subscribe to receive events from all streams, or from a single stream.
 
 Catch-up subscriptions can be filtered to include, or to exclude, certain
 types of recorded event.
@@ -838,9 +827,10 @@ Recorded events received from a catch-up subscription cannot be acknowledged bac
 to the EventStoreDB server. Acknowledging events is an aspect of "persistent
 subscriptions".
 
+### Subscribe all events
 
-
-The`subscribe_all_events()` method can be used to start a "catch-up" subscription.
+The`subscribe_all_events()` method can be used to start a "catch-up" subscription
+that can return all events in the database.
 
 This method takes an optional `commit_position` argument, which can be
 used to specify a commit position from which to subscribe for
@@ -868,7 +858,7 @@ Please note, the filtering happens on the EventStoreDB server, and the
 `limit` argument is applied on the server after filtering. See below for
 more information about filter regular expressions.
 
-The argument `timeout` is a float which sets a deadline for the completion of
+The argument `timeout` is a Python `float` which sets a deadline for the completion of
 the gRPC operation. This probably isn't very useful, but is included for
 completeness and consistency with the other methods.
 
@@ -895,10 +885,7 @@ recorded, which are then received via the subscription.
 
 # Append an event to a new stream.
 stream_name2 = str(uuid4())
-event4 = NewEvent(
-    type='OrderCreated',
-    data=b'data4',
-)
+event4 = NewEvent(type='OrderCreated', data=b'data4')
 client.append_events(
     stream_name=stream_name2,
     expected_position=None,
@@ -922,10 +909,7 @@ assert received_events[-2].id == event3.id
 assert received_events[-1].id == event4.id
 
 # Append subsequent events to the stream.
-event5 = NewEvent(
-    type='OrderUpdated',
-    data=b'data5',
-)
+event5 = NewEvent(type='OrderUpdated', data=b'data5')
 client.append_events(
     stream_name=stream_name2,
     expected_position=0,
@@ -948,10 +932,7 @@ assert received_events[-1].id == event5.id
 
 
 # Append more events to the stream.
-event6 = NewEvent(
-    type='OrderDeleted',
-    data=b'data6',
-)
+event6 = NewEvent(type='OrderDeleted', data=b'data6')
 client.append_events(
     stream_name=stream_name2,
     expected_position=1,
@@ -981,18 +962,9 @@ assert received_events[-1].id == event6.id
 
 # Append three more events to a new stream.
 stream_name3 = str(uuid4())
-event7 = NewEvent(
-    type='OrderCreated',
-    data=b'data7',
-)
-event8 = NewEvent(
-    type='OrderUpdated',
-    data=b'data8',
-)
-event9 = NewEvent(
-    type='OrderDeleted',
-    data=b'data9',
-)
+event7 = NewEvent(type='OrderCreated', data=b'data7')
+event8 = NewEvent(type='OrderUpdated', data=b'data8')
+event9 = NewEvent(type='OrderDeleted', data=b'data9')
 
 client.append_events(
     stream_name=stream_name3,
@@ -1023,6 +995,99 @@ goes out of scope or is explicitly deleted from memory.
 ```python
 # End the subscription.
 del subscription
+```
+
+### Subscribe stream events
+
+The`subscribe_stream_events()` method can be used to start a "catch-up" subscription
+that can return all events in a stream.
+
+This method takes a `stream_name` argument, which specifies the name of the stream
+from which recorded events will be received.
+
+This method takes an optional `stream_position` argument, which specifies a
+stream position in the stream from which recorded events will be received. The
+event at the specified stream position will not be included.
+
+This method takes an optional `timeout` argument, which is a Python `float` that sets
+a deadline for the completion of the gRPC operation.
+
+The example below shows how to start a catch-up subscription to a stream.
+
+```python
+
+# Subscribe to events from stream2, from the start.
+subscription = client.subscribe_stream_events(stream_name=stream_name2)
+
+# Read from the subscription.
+events = []
+for event in subscription:
+    events.append(event)
+    if event.id == event6.id:
+        break
+
+# Check we got events only from stream2.
+assert len(events) == 3
+events[0].stream_name == stream_name2
+events[1].stream_name == stream_name2
+events[2].stream_name == stream_name2
+
+# Append another event to stream1.
+event10 = NewEvent(type="OrderUndeleted", data=b'data10')
+client.append_events(
+    stream_name=stream_name1,
+    expected_position=2,
+    events=[event10],
+)
+
+# Append another event to stream2.
+event11 = NewEvent(type="OrderUndeleted", data=b'data11')
+client.append_events(
+    stream_name=stream_name2,
+    expected_position=2,
+    events=[event11]
+)
+
+# Continue reading from the subscription.
+for event in subscription:
+    events.append(event)
+    if event.id == event11.id:
+        break
+
+# Check we got events only from stream2.
+assert len(events) == 4
+events[0].stream_name == stream_name2
+events[1].stream_name == stream_name2
+events[2].stream_name == stream_name2
+events[3].stream_name == stream_name2
+```
+
+The example below shows how to start a catch-up subscription to a stream from a
+specific stream position.
+
+```python
+
+# Subscribe to events from stream2, from the start.
+subscription = client.subscribe_stream_events(
+    stream_name=stream_name2,
+    stream_position=1,
+)
+
+# Read event from the subscription.
+events = []
+for event in subscription:
+    events.append(event)
+    if event.id == event11.id:
+        break
+
+# Check we got events only after position 1.
+assert len(events) == 2
+events[0].id == event6.id
+events[0].stream_position == 2
+events[0].stream_name == stream_name2
+events[1].id == event11.id
+events[1].stream_position == 3
+events[1].stream_name == stream_name2
 ```
 
 ### Persistent subscriptions
@@ -1109,23 +1174,24 @@ for event in read_resp:
     read_req.ack(event_id=event.id)
 
     # Break when the last event has been received.
-    if event.stream_name == stream_name3:
-        if event.data == event9.data:
-            break
+    if event.id == event11.id:
+        break
 ```
 
 The received events are the events we appended above.
 
 ```python
-assert events[-9].data == event1.data
-assert events[-8].data == event2.data
-assert events[-7].data == event3.data
-assert events[-6].data == event4.data
-assert events[-5].data == event5.data
-assert events[-4].data == event6.data
-assert events[-3].data == event7.data
-assert events[-2].data == event8.data
-assert events[-1].data == event9.data
+assert events[-11].id == event1.id
+assert events[-10].id == event2.id
+assert events[-9].id == event3.id
+assert events[-8].id == event4.id
+assert events[-7].id == event5.id
+assert events[-6].id == event6.id
+assert events[-5].id == event7.id
+assert events[-4].id == event8.id
+assert events[-3].id == event9.id
+assert events[-2].id == event10.id
+assert events[-1].id == event11.id
 ```
 
 The "read request" object also has an `nack()` method that can be used by a consumer
@@ -1178,9 +1244,8 @@ events = []
 
 def handle_event(event):
     events.append(event)
-    if event.stream_name == stream_name3:
-        if event.data == event9.data:
-            raise Exception()
+    if event.id == event11.id:
+        raise Exception()
 
 
 reader = SubscriptionReader(
@@ -1192,7 +1257,7 @@ reader = SubscriptionReader(
 reader.start()
 reader.join()
 
-assert events[-1].data == event9.data
+assert events[-1].id == event11.id
 ```
 
 Please note, when processing events in a downstream component, the commit position of
@@ -1215,6 +1280,123 @@ upstream server the position in the commit sequence of events that have been pro
 there is a danger of "dual writing" in the consumption of events. Reliability
 in processing of recorded events by a group of consumers will rely instead on
 idempotent handling of duplicate messages, and resilience to out-of-order delivery.
+
+### Persistent stream subscription
+
+The `create_stream_subscription()` method can be used to create a persistent
+subscription for a stream.
+
+This method has two required arguments, `group_name` and `stream_name`. The
+`group_name` argument names the group of consumers that will receive events
+from this subscription. The `stream_name` argument specifies which stream
+the subscription will follow. The values of both these arguments are expected
+to be Python `str` objects.
+
+This method has an optional `stream_position` argument, which specifies a
+stream position from which to subscribe. The recorded event at this stream
+position will be received when reading the subscription.
+
+This method has an optional `from_end` argument, which is a Python `bool`.
+By default, the value of this argument is False. If this argument is set
+to a True value, reading from the subscription will receive only events
+recorded after the subscription was created. That is, it is not inclusive
+of the current stream position.
+
+This method also takes an optional `timeout` argument, that
+is expected to be a Python `float`, which sets a deadline
+for the completion of the gRPC operation.
+
+This method does not return a value. Events can be received by iterating
+over the value returned by calling `read_stream_subscription()` (see below).
+
+The example below creates a persistent stream subscription from the start of the stream.
+
+```python
+# Create a persistent stream subscription from start of the stream.
+group_name1 = f"group-{uuid4()}"
+client.create_stream_subscription(
+    group_name=group_name1,
+    stream_name=stream_name1,
+)
+```
+
+The example below creates a persistent stream subscription from a stream position.
+
+```python
+# Create a persistent stream subscription from a stream position.
+group_name2 = f"group-{uuid4()}"
+client.create_stream_subscription(
+    group_name=group_name2,
+    stream_name=stream_name2,
+    stream_position=2
+)
+```
+
+The example below creates a persistent stream subscription from the end of the stream.
+
+```python
+# Create a persistent stream subscription from end of the stream.
+group_name3 = f"group-{uuid4()}"
+client.create_stream_subscription(
+    group_name=group_name3,
+    stream_name=stream_name3,
+    from_end=True
+)
+```
+
+The `read_stream_subscription()` method can be used to create a persistent
+subscription for a stream.
+
+This method has two required arguments, `group_name` and `stream_name`, which
+should match the values of arguments used when calling `create_stream_subscription()`.
+
+This method also takes an optional `timeout` argument, that
+is expected to be a Python `float`, which sets a deadline
+for the completion of the gRPC operation.
+
+Just like `read_subscription`, this method returns a 2-tuple: a "read request" object
+and a "read response" object.
+
+```python
+read_req, read_resp = client.read_stream_subscription(
+    group_name=group_name1,
+    stream_name=stream_name1,
+)
+```
+
+The example below iterates over the "read response" object, and calls `ack()`
+on the "read response" object. The for loop breaks when we have received
+the last event in the stream, so that we can finish the examples in this
+documentation.
+
+```python
+events = []
+for event in read_resp:
+    events.append(event)
+
+    # Acknowledge the received event.
+    read_req.ack(event_id=event.id)
+
+    # Break when the last event has been received.
+    if event.id == event10.id:
+        break
+```
+
+We can check we received all the events that were appended to `stream_name1`
+in the examples above.
+
+```python
+assert len(events) == 4
+assert events[0].stream_name == stream_name1
+assert events[0].id == event1.id
+assert events[1].stream_name == stream_name1
+assert events[1].id == event2.id
+assert events[2].stream_name == stream_name1
+assert events[2].id == event3.id
+assert events[3].stream_name == stream_name1
+assert events[3].id == event10.id
+```
+
 
 ## Notes
 

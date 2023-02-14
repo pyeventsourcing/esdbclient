@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import re
 import sys
-from typing import Iterable, Iterator, Optional, Sequence, Tuple, Union
+from typing import Iterable, Iterator, Optional, Sequence, Tuple, Union, overload
 
 import grpc
 from grpc import RpcError
@@ -195,25 +195,6 @@ class ESDBClient:
             commit_position = ev.commit_position
         return commit_position
 
-    def subscribe_stream_events(
-        self,
-        stream_name: str,
-        stream_position: Optional[int] = None,
-        timeout: Optional[float] = None,
-    ) -> Iterator[RecordedEvent]:
-        """
-        Returns a catch-up subscription, from which recorded
-        events in "all streams" in the database can be received.
-        """
-        read_resp = self._streams.read(
-            stream_name=stream_name,
-            stream_position=stream_position,
-            subscribe=True,
-            timeout=timeout,
-            credentials=self._call_credentials,
-        )
-        return CatchupSubscription(read_resp=read_resp)
-
     def subscribe_all_events(
         self,
         commit_position: Optional[int] = None,
@@ -235,6 +216,66 @@ class ESDBClient:
         )
         return CatchupSubscription(read_resp=read_resp)
 
+    def subscribe_stream_events(
+        self,
+        stream_name: str,
+        stream_position: Optional[int] = None,
+        timeout: Optional[float] = None,
+    ) -> Iterator[RecordedEvent]:
+        """
+        Returns a catch-up subscription, from which recorded
+        events in a streams can be received.
+        """
+        read_resp = self._streams.read(
+            stream_name=stream_name,
+            stream_position=stream_position,
+            subscribe=True,
+            timeout=timeout,
+            credentials=self._call_credentials,
+        )
+        return CatchupSubscription(read_resp=read_resp)
+
+    @overload
+    def create_subscription(
+        self,
+        group_name: str,
+        *,
+        filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
+        filter_include: Sequence[str] = (),
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Signature for creating persistent subscription from start of database.
+        """
+
+    @overload
+    def create_subscription(
+        self,
+        group_name: str,
+        *,
+        commit_position: int,
+        filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
+        filter_include: Sequence[str] = (),
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Signature for creating persistent subscription from commit position.
+        """
+
+    @overload
+    def create_subscription(
+        self,
+        group_name: str,
+        *,
+        from_end: bool = True,
+        filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
+        filter_include: Sequence[str] = (),
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Signature for creating persistent subscription from end of database.
+        """
+
     def create_subscription(
         self,
         group_name: str,
@@ -254,11 +295,76 @@ class ESDBClient:
             credentials=self._call_credentials,
         )
 
+    @overload
+    def create_stream_subscription(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Signature for creating stream subscription from start of stream.
+        """
+
+    @overload
+    def create_stream_subscription(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        stream_position: int,
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Signature for creating stream subscription from stream position.
+        """
+
+    @overload
+    def create_stream_subscription(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        from_end: bool = True,
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Signature for creating stream subscription from end of stream.
+        """
+
+    def create_stream_subscription(
+        self,
+        group_name: str,
+        stream_name: str,
+        from_end: bool = False,
+        stream_position: Optional[int] = None,
+        timeout: Optional[float] = None,
+    ) -> None:
+        self._subscriptions.create(
+            group_name=group_name,
+            stream_name=stream_name,
+            from_end=from_end,
+            stream_position=stream_position,
+            timeout=timeout,
+            credentials=self._call_credentials,
+        )
+
     def read_subscription(
         self, group_name: str, timeout: Optional[float] = None
     ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
         return self._subscriptions.read(
             group_name=group_name,
+            timeout=timeout,
+            credentials=self._call_credentials,
+        )
+
+    def read_stream_subscription(
+        self, group_name: str, stream_name: str, timeout: Optional[float] = None
+    ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
+        return self._subscriptions.read(
+            group_name=group_name,
+            stream_name=stream_name,
             timeout=timeout,
             credentials=self._call_credentials,
         )

@@ -894,6 +894,62 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[1].id, event8.id)
         self.assertEqual(events[2].id, event9.id)
 
+    def test_catchup_subscribe_stream_events_from_stream_position(self) -> None:
+        client = self.construct_esdb_client()
+
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Subscribe to stream events, from the current stream position.
+        subscription = client.subscribe_stream_events(
+            stream_name=stream_name1, stream_position=1
+        )
+        events = []
+        for event in subscription:
+            events.append(event)
+            if event.id == event3.id:
+                break
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event3.id)
+
+        # Append three events to stream2.
+        event4 = NewEvent(type="OrderCreated", data=random_data())
+        event5 = NewEvent(type="OrderUpdated", data=random_data())
+        event6 = NewEvent(type="OrderDeleted", data=random_data())
+        stream_name2 = str(uuid4())
+        client.append_events(
+            stream_name2, expected_position=None, events=[event4, event5, event6]
+        )
+
+        # Append three more events to stream1.
+        event7 = NewEvent(type="OrderCreated", data=random_data())
+        event8 = NewEvent(type="OrderUpdated", data=random_data())
+        event9 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name1, expected_position=2, events=[event7, event8, event9]
+        )
+
+        # Continue reading from the subscription.
+        for event in subscription:
+            events.append(event)
+            if event.id == event9.id:
+                break
+
+        # Check we got events only from stream1.
+        self.assertEqual(len(events), 4)
+        self.assertEqual(events[0].id, event3.id)
+        self.assertEqual(events[1].id, event7.id)
+        self.assertEqual(events[2].id, event8.id)
+        self.assertEqual(events[3].id, event9.id)
+
     def test_catchup_subscribe_all_events_no_filter(self) -> None:
         client = self.construct_esdb_client()
 
@@ -1067,19 +1123,16 @@ class TestESDBClient(TestCase):
         # Construct client.
         client = self.construct_esdb_client()
 
-        # Append three events.
+        # Append one event.
         stream_name1 = str(uuid4())
-
-        def random_data() -> bytes:
-            return os.urandom(16)
-
         event1 = NewEvent(type="OrderCreated", data=random_data())
-        event2 = NewEvent(type="OrderUpdated", data=random_data())
-        event3 = NewEvent(type="OrderDeleted", data=random_data())
-
         commit_position = client.append_events(
             stream_name1, expected_position=None, events=[event1]
         )
+
+        # Append two more events.
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
         client.append_events(stream_name1, expected_position=0, events=[event2, event3])
 
         # Create persistent subscription.
@@ -1123,10 +1176,6 @@ class TestESDBClient(TestCase):
 
         # Append three events.
         stream_name1 = str(uuid4())
-
-        def random_data() -> bytes:
-            return os.urandom(16)
-
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
         event3 = NewEvent(type="OrderDeleted", data=random_data())
@@ -1170,10 +1219,6 @@ class TestESDBClient(TestCase):
 
         # Append three events.
         stream_name1 = str(uuid4())
-
-        def random_data() -> bytes:
-            return os.urandom(16)
-
         event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
         event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
@@ -1204,10 +1249,6 @@ class TestESDBClient(TestCase):
 
         # Append three events.
         stream_name1 = str(uuid4())
-
-        def random_data() -> bytes:
-            return os.urandom(16)
-
         event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
         event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
@@ -1251,9 +1292,6 @@ class TestESDBClient(TestCase):
         # Append three events.
         stream_name1 = str(uuid4())
 
-        def random_data() -> bytes:
-            return os.urandom(16)
-
         event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
         event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
@@ -1279,7 +1317,225 @@ class TestESDBClient(TestCase):
             elif event.data == event3.data:
                 self.fail("Expected a 'system' event and a 'PersistentConfig' event")
 
-    # Todo: subscribe to specific stream (not all)
+    def test_persistent_stream_subscription_from_start(self) -> None:
+        # Construct client.
+        client = self.construct_esdb_client()
+
+        # Append some events.
+        stream_name1 = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        stream_name2 = str(uuid4())
+        event4 = NewEvent(type="OrderCreated", data=random_data())
+        event5 = NewEvent(type="OrderUpdated", data=random_data())
+        event6 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name2, expected_position=None, events=[event4, event5, event6]
+        )
+
+        # Create persistent stream subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        client.create_stream_subscription(
+            group_name=group_name,
+            stream_name=stream_name2,
+        )
+
+        # Read events from subscription.
+        read_req, read_resp = client.read_stream_subscription(
+            group_name=group_name,
+            stream_name=stream_name2,
+        )
+
+        events = []
+        for event in read_resp:
+            read_req.ack(event.id)
+            events.append(event)
+            if event.id == event6.id:
+                break
+
+        # Check received events.
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event4.id)
+        self.assertEqual(events[1].id, event5.id)
+        self.assertEqual(events[2].id, event6.id)
+
+        # Append some more events.
+        event7 = NewEvent(type="OrderCreated", data=random_data())
+        event8 = NewEvent(type="OrderUpdated", data=random_data())
+        event9 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name1, expected_position=2, events=[event7, event8, event9]
+        )
+
+        event10 = NewEvent(type="OrderCreated", data=random_data())
+        event11 = NewEvent(type="OrderUpdated", data=random_data())
+        event12 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name2, expected_position=2, events=[event10, event11, event12]
+        )
+
+        # Continue receiving events.
+        for event in read_resp:
+            read_req.ack(event.id)
+            events.append(event)
+            if event.id == event12.id:
+                break
+
+        # Check received events.
+        self.assertEqual(len(events), 6)
+        self.assertEqual(events[0].id, event4.id)
+        self.assertEqual(events[1].id, event5.id)
+        self.assertEqual(events[2].id, event6.id)
+        self.assertEqual(events[3].id, event10.id)
+        self.assertEqual(events[4].id, event11.id)
+        self.assertEqual(events[5].id, event12.id)
+
+    def test_persistent_stream_subscription_from_stream_position(self) -> None:
+        # Construct client.
+        client = self.construct_esdb_client()
+
+        # Append some events.
+        stream_name1 = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        stream_name2 = str(uuid4())
+        event4 = NewEvent(type="OrderCreated", data=random_data())
+        event5 = NewEvent(type="OrderUpdated", data=random_data())
+        event6 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name2, expected_position=None, events=[event4, event5, event6]
+        )
+
+        # Create persistent stream subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        client.create_stream_subscription(
+            group_name=group_name,
+            stream_name=stream_name2,
+            stream_position=1,
+        )
+
+        # Read events from subscription.
+        read_req, read_resp = client.read_stream_subscription(
+            group_name=group_name,
+            stream_name=stream_name2,
+        )
+
+        events = []
+        for event in read_resp:
+            read_req.ack(event.id)
+            events.append(event)
+            if event.id == event6.id:
+                break
+
+        # Check received events.
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event5.id)
+        self.assertEqual(events[1].id, event6.id)
+
+        # Append some more events.
+        event7 = NewEvent(type="OrderCreated", data=random_data())
+        event8 = NewEvent(type="OrderUpdated", data=random_data())
+        event9 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name1, expected_position=2, events=[event7, event8, event9]
+        )
+
+        event10 = NewEvent(type="OrderCreated", data=random_data())
+        event11 = NewEvent(type="OrderUpdated", data=random_data())
+        event12 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name2, expected_position=2, events=[event10, event11, event12]
+        )
+
+        # Continue receiving events.
+        for event in read_resp:
+            read_req.ack(event.id)
+            events.append(event)
+            if event.id == event12.id:
+                break
+
+        # Check received events.
+        self.assertEqual(len(events), 5)
+        self.assertEqual(events[0].id, event5.id)
+        self.assertEqual(events[1].id, event6.id)
+        self.assertEqual(events[2].id, event10.id)
+        self.assertEqual(events[3].id, event11.id)
+        self.assertEqual(events[4].id, event12.id)
+
+    def test_persistent_stream_subscription_from_end(self) -> None:
+        # Construct client.
+        client = self.construct_esdb_client()
+
+        # Append some events.
+        stream_name1 = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        stream_name2 = str(uuid4())
+        event4 = NewEvent(type="OrderCreated", data=random_data())
+        event5 = NewEvent(type="OrderUpdated", data=random_data())
+        event6 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name2, expected_position=None, events=[event4, event5, event6]
+        )
+
+        # Create persistent stream subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        client.create_stream_subscription(
+            group_name=group_name,
+            stream_name=stream_name2,
+            from_end=True,
+        )
+
+        # Read events from subscription.
+        read_req, read_resp = client.read_stream_subscription(
+            group_name=group_name,
+            stream_name=stream_name2,
+        )
+
+        # Append some more events.
+        event7 = NewEvent(type="OrderCreated", data=random_data())
+        event8 = NewEvent(type="OrderUpdated", data=random_data())
+        event9 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name1, expected_position=2, events=[event7, event8, event9]
+        )
+
+        event10 = NewEvent(type="OrderCreated", data=random_data())
+        event11 = NewEvent(type="OrderUpdated", data=random_data())
+        event12 = NewEvent(type="OrderDeleted", data=random_data())
+        client.append_events(
+            stream_name2, expected_position=2, events=[event10, event11, event12]
+        )
+
+        # Receive events from subscription.
+        events = []
+        for event in read_resp:
+            read_req.ack(event.id)
+            events.append(event)
+            if event.id == event12.id:
+                break
+
+        # Check received events.
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event10.id)
+        self.assertEqual(events[1].id, event11.id)
+        self.assertEqual(events[2].id, event12.id)
+
     # Todo: "commit position" behaviour (not sure why it isn't working)
     # Todo: consumer_strategy, RoundRobin and Pinned, need to test with more than
     #  one consumer, also code this as enum rather than a string

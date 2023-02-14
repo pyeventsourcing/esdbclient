@@ -432,25 +432,33 @@ class BatchAppendRequestIterator(Iterator[streams_pb2.BatchAppendReq]):
 
 
 class SubscriptionReadRequest:
-    def __init__(self, group_name: str) -> None:
+    def __init__(self, group_name: str, stream_name: Optional[str] = None) -> None:
         self.group_name = group_name
+        self.stream_name = stream_name
         self.queue: queue.Queue[shared_pb2.UUID] = queue.Queue()
         self._has_requested_options = False
 
     def __next__(self) -> persistent_pb2.ReadReq:
         if not self._has_requested_options:
             self._has_requested_options = True
-            return persistent_pb2.ReadReq(
-                options=persistent_pb2.ReadReq.Options(
-                    all=shared_pb2.Empty(),
-                    group_name=self.group_name,
-                    buffer_size=100,
-                    uuid_option=persistent_pb2.ReadReq.Options.UUIDOption(
-                        structured=shared_pb2.Empty(),
-                        string=shared_pb2.Empty(),
-                    ),
-                )
+            options = persistent_pb2.ReadReq.Options(
+                group_name=self.group_name,
+                buffer_size=100,
+                uuid_option=persistent_pb2.ReadReq.Options.UUIDOption(
+                    # structured=shared_pb2.Empty(),
+                    string=shared_pb2.Empty(),
+                ),
             )
+            # Decide 'stream_option'.
+            if isinstance(self.stream_name, str):
+                options.stream_identifier.CopyFrom(
+                    shared_pb2.StreamIdentifier(
+                        stream_name=self.stream_name.encode("utf8")
+                    )
+                )
+            else:
+                options.all.CopyFrom(shared_pb2.Empty())
+            return persistent_pb2.ReadReq(options=options)
         else:
             ids = []
             while True:
@@ -512,11 +520,47 @@ class Subscriptions:
     def __init__(self, channel: Channel):
         self._stub = PersistentSubscriptionsStub(channel)
 
+    @overload
     def create(
         self,
         group_name: str,
+        *,
         from_end: bool = False,
         commit_position: Optional[int] = None,
+        # Todo: Expose alternative consumer strategies.
+        consumer_strategy: str = "DispatchToSingle",
+        filter_exclude: Sequence[str] = (),
+        filter_include: Sequence[str] = (),
+        timeout: Optional[float] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for creating a persistent "all streams" subscription.
+        """
+
+    @overload
+    def create(
+        self,
+        group_name: str,
+        *,
+        stream_name: Optional[str] = None,
+        from_end: bool = False,
+        stream_position: Optional[int] = None,
+        consumer_strategy: str = "DispatchToSingle",
+        timeout: Optional[float] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for creating a persistent stream subscription.
+        """
+
+    def create(
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        from_end: bool = False,
+        commit_position: Optional[int] = None,
+        stream_position: Optional[int] = None,
         # Todo: Expose alternative consumer strategies.
         consumer_strategy: str = "DispatchToSingle",
         filter_exclude: Sequence[str] = (),
@@ -547,10 +591,21 @@ class Subscriptions:
         )
 
         # Decide 'stream_option'.
-        if False:
+        if isinstance(stream_name, str):
             # Todo: Support persistent subscription to a stream.
-            # options.stream.CopyFrom(stream_options)
-            pass  # pragma: no cover
+            stream_options = persistent_pb2.CreateReq.StreamOptions(
+                stream_identifier=shared_pb2.StreamIdentifier(
+                    stream_name=stream_name.encode("utf8")
+                ),
+            )
+            # Decide 'revision_option'.
+            if isinstance(stream_position, int):
+                stream_options.revision = stream_position
+            elif from_end is False:
+                stream_options.start.CopyFrom(shared_pb2.Empty())
+            else:
+                stream_options.end.CopyFrom(shared_pb2.Empty())
+            options.stream.CopyFrom(stream_options)
         else:
             if commit_position is not None:
                 all_options = persistent_pb2.CreateReq.AllOptions(
@@ -609,10 +664,14 @@ class Subscriptions:
     def read(
         self,
         group_name: str,
+        stream_name: Optional[str] = None,
         timeout: Optional[float] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
-        read_req = SubscriptionReadRequest(group_name=group_name)
+        read_req = SubscriptionReadRequest(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
         read_resp = self._stub.Read(read_req, timeout=timeout, credentials=credentials)
         return (read_req, SubscriptionReadResponse(read_resp))
 
