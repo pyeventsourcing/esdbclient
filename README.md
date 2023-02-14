@@ -793,9 +793,9 @@ event in a downstream component.
 A "catch-up subscription" can be used to receive already recorded events, but
 it will also return events that are recorded after the subscription was started.
 
-The method `subscribe_stream_events()` starts a catch-up subscription to receive
-events from a specific stream. The method `subscribe_all_events()` starts a catch-up
-subscription to receive all events in the database.
+The method `subscribe_all_events()` starts a catch-up subscription to receive all
+events in the database. The method `subscribe_stream_events()` starts a catch-up
+subscription to receive events from a specific stream.
 
 Catch-up subscriptions are simply a streaming gRPC call which is
 kept open by the server, with newly recorded events sent to the client
