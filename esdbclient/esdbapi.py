@@ -239,14 +239,16 @@ class Streams:
                 read_req, timeout=timeout, credentials=credentials
             ):
                 assert isinstance(response, streams_pb2.ReadResp)
-                content_attribute_name = response.WhichOneof("content")
-                if content_attribute_name == "event":
+                content_oneof = response.WhichOneof("content")
+                if content_oneof == "event":
                     event = response.event.event
-                    if response.event.WhichOneof("position") == "commit_position":
+                    position_oneof = response.event.WhichOneof("position")
+                    if position_oneof == "commit_position":
                         commit_position = response.event.commit_position
-                    else:
-                        # We get here with EventStoreDB < 22.10.
-                        commit_position = None  # pragma: no cover
+                    else:  # pragma: no cover
+                        # We only get here with EventStoreDB < 22.10.
+                        assert position_oneof == "no_position", position_oneof
+                        commit_position = None
 
                     yield RecordedEvent(
                         id=UUID(event.id.string),
@@ -258,7 +260,7 @@ class Streams:
                         stream_position=event.stream_revision,
                         commit_position=commit_position,
                     )
-                elif content_attribute_name == "stream_not_found":
+                elif content_oneof == "stream_not_found":
                     raise StreamNotFound(f"Stream {stream_name!r} not found")
         except RpcError as e:
             raise handle_rpc_error(e) from e
@@ -288,19 +290,19 @@ class Streams:
         else:
             assert isinstance(response, streams_pb2.AppendResp)
             # Response 'result' is either 'success' or 'wrong_expected_version'.
-            result = response.WhichOneof("result")
-            if result == "success":
+            result_oneof = response.WhichOneof("result")
+            if result_oneof == "success":
                 return response.success.position.commit_position
             else:
-                assert result == "wrong_expected_version"
-                w_e_v = response.wrong_expected_version
-                c_r_o = w_e_v.WhichOneof("current_revision_option")
-                if c_r_o == "current_revision":
+                assert result_oneof == "wrong_expected_version", result_oneof
+                wev = response.wrong_expected_version
+                cro_oneof = wev.WhichOneof("current_revision_option")
+                if cro_oneof == "current_revision":
                     raise ExpectedPositionError(
-                        f"Current position is {w_e_v.current_revision}"
+                        f"Current position is {wev.current_revision}"
                     )
                 else:
-                    assert c_r_o == "current_no_stream"
+                    assert cro_oneof == "current_no_stream", cro_oneof
                     raise ExpectedPositionError(
                         f"Stream {stream_name!r} does not exist"
                     )
@@ -357,14 +359,14 @@ class Streams:
                 correlation_id = UUID(response.correlation_id.string)
                 stream_name = requests.pop_stream_name(correlation_id)
                 # Response 'result' is either 'success' or 'wrong_expected_version'.
-                result = response.WhichOneof("result")
-                if result == "success":
+                result_oneof = response.WhichOneof("result")
+                if result_oneof == "success":
                     yield BatchAppendResponse(
                         commit_position=response.success.position.commit_position,
                         error=None,
                     )
                 else:
-                    assert result == "error"
+                    assert result_oneof == "error"
                     assert isinstance(response.error, status_pb2.Status)
                     error = response.error
 
@@ -495,10 +497,16 @@ class SubscriptionReadResponse:
             except RpcError as e:
                 raise handle_rpc_error(e) from e
             assert isinstance(response, persistent_pb2.ReadResp)
-            if response.WhichOneof("content") == "event":
+            content_oneof = response.WhichOneof("content")
+            if content_oneof == "event":
                 event = response.event.event
-                assert response.event.WhichOneof("position") == "commit_position"
-                commit_position = response.event.commit_position
+                position_oneof = response.event.WhichOneof("position")
+                if position_oneof == "commit_position":
+                    commit_position = response.event.commit_position
+                else:  # pragma: no cover
+                    # We only get here with EventStoreDB < 22.10.
+                    assert position_oneof == "no_position", position_oneof
+                    commit_position = None
 
                 return RecordedEvent(
                     id=UUID(event.id.string),
