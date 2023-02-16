@@ -83,6 +83,7 @@ class ESDBClient:
                 )
             ],
             timeout=timeout,
+            credentials=self._call_credentials,
         ):
             if response.error:
                 raise response.error
@@ -101,13 +102,14 @@ class ESDBClient:
         timeout: Optional[float] = None,
     ) -> int:
         """
-        Appends new events to the named stream.
+        Appends a new event to the named stream.
         """
         return self._streams.append(
             stream_name=stream_name,
             expected_position=expected_position,
             events=[event],
             timeout=timeout,
+            credentials=self._call_credentials,
         )
 
     def read_stream_events(
@@ -203,8 +205,8 @@ class ESDBClient:
         timeout: Optional[float] = None,
     ) -> Iterator[RecordedEvent]:
         """
-        Returns a catch-up subscription, from which recorded
-        events in "all streams" in the database can be received.
+        Starts a catch-up subscription, from which all
+        recorded events in the database can be received.
         """
         read_resp = self._streams.read(
             commit_position=commit_position,
@@ -223,8 +225,8 @@ class ESDBClient:
         timeout: Optional[float] = None,
     ) -> Iterator[RecordedEvent]:
         """
-        Returns a catch-up subscription, from which recorded
-        events in a streams can be received.
+        Starts a catch-up subscription from which
+        recorded events in a stream can be received.
         """
         read_resp = self._streams.read(
             stream_name=stream_name,
@@ -259,7 +261,7 @@ class ESDBClient:
         timeout: Optional[float] = None,
     ) -> None:
         """
-        Signature for creating persistent subscription from commit position.
+        Signature for creating persistent subscription from a commit position.
         """
 
     @overload
@@ -285,6 +287,9 @@ class ESDBClient:
         filter_include: Sequence[str] = (),
         timeout: Optional[float] = None,
     ) -> None:
+        """
+        Creates a persistent subscription on all streams.
+        """
         self._subscriptions.create(
             group_name=group_name,
             from_end=from_end,
@@ -341,6 +346,9 @@ class ESDBClient:
         stream_position: Optional[int] = None,
         timeout: Optional[float] = None,
     ) -> None:
+        """
+        Creates a persistent subscription on one stream.
+        """
         self._subscriptions.create(
             group_name=group_name,
             stream_name=stream_name,
@@ -353,6 +361,9 @@ class ESDBClient:
     def read_subscription(
         self, group_name: str, timeout: Optional[float] = None
     ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
+        """
+        Reads a persistent subscription on all streams.
+        """
         return self._subscriptions.read(
             group_name=group_name,
             timeout=timeout,
@@ -362,6 +373,9 @@ class ESDBClient:
     def read_stream_subscription(
         self, group_name: str, stream_name: str, timeout: Optional[float] = None
     ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
+        """
+        Reads a persistent subscription on one stream.
+        """
         return self._subscriptions.read(
             group_name=group_name,
             stream_name=stream_name,

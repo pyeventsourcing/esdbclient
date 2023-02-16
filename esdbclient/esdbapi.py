@@ -271,20 +271,23 @@ class Streams:
         expected_position: Optional[int],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
+        credentials: Optional[CallCredentials] = None,
     ) -> int:
         """
         Constructs and sends a stream of gRPC 'AppendReq' to the 'Append' rpc.
 
         Returns the commit position of the last appended event.
         """
-        # Generate append requests.
-        requests = self._generate_append_requests(
-            stream_name=stream_name, expected_position=expected_position, events=events
-        )
-
-        # Call the gRPC method.
         try:
-            response = self._stub.Append(requests, timeout=timeout)
+            response = self._stub.Append(
+                self._generate_append_requests(
+                    stream_name=stream_name,
+                    expected_position=expected_position,
+                    events=events,
+                ),
+                timeout=timeout,
+                credentials=credentials,
+            )
         except RpcError as e:
             raise handle_rpc_error(e) from e
         else:
@@ -347,18 +350,22 @@ class Streams:
         self,
         batches: Iterable[BatchAppendRequest],
         timeout: Optional[float] = None,
+        credentials: Optional[CallCredentials] = None,
     ) -> Iterable[BatchAppendResponse]:
-        # Generate batch append requests.
+        # Construct batch append requests iterator.
         requests = BatchAppendRequestIterator(batches)
 
         # Call the gRPC method.
         try:
-            responses = self._stub.BatchAppend(requests, timeout=timeout)
-            for response in responses:
+            for response in self._stub.BatchAppend(
+                requests,
+                timeout=timeout,
+                credentials=credentials,
+            ):
                 assert isinstance(response, streams_pb2.BatchAppendResp)
                 correlation_id = UUID(response.correlation_id.string)
                 stream_name = requests.pop_stream_name(correlation_id)
-                # Response 'result' is either 'success' or 'wrong_expected_version'.
+                # Response 'result' is either 'success' or 'error'.
                 result_oneof = response.WhichOneof("result")
                 if result_oneof == "success":
                     yield BatchAppendResponse(
@@ -370,7 +377,8 @@ class Streams:
                     assert isinstance(response.error, status_pb2.Status)
                     error = response.error
 
-                    # Todo: Maybe somehow distinguish between
+                    # Todo: Maybe somehow distinguish stream does/does not exist,
+                    #  and maybe get current stream position, to make errors nicer.
                     yield BatchAppendResponse(
                         commit_position=None,
                         error=ExpectedPositionError(
