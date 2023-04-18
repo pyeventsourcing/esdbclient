@@ -24,8 +24,9 @@ include = ["esdbclient/py.typed"]
 
 [tool.poetry.dependencies]
 python = ">=3.7,<4.0"
-grpcio = ">=1.51.0,<1.52.0"  # 1.52.0 hangs on fork
+grpcio = ">=1.51.0,!=1.52.*"  # 1.52.0 hangs on fork
 protobuf = "^4.21.0"
+#protobuf = ">=3.11.0,<3.21.0"
 typing_extensions = "*"
 
 [tool.poetry.dev-dependencies]
