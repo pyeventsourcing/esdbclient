@@ -3,24 +3,34 @@
 isort:skip_file
 """
 import builtins
+import collections.abc
 import esdbclient.protos.Grpc.shared_pb2
 import google.protobuf.descriptor
 import google.protobuf.internal.containers
 import google.protobuf.internal.enum_type_wrapper
 import google.protobuf.message
+import sys
 import typing
-import typing_extensions
+
+if sys.version_info >= (3, 10):
+    import typing as typing_extensions
+else:
+    import typing_extensions
 
 DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
 
+@typing_extensions.final
 class ReadReq(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    @typing_extensions.final
     class Options(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+        @typing_extensions.final
         class UUIDOption(google.protobuf.message.Message):
             DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
             STRUCTURED_FIELD_NUMBER: builtins.int
             STRING_FIELD_NUMBER: builtins.int
             @property
@@ -30,10 +40,8 @@ class ReadReq(google.protobuf.message.Message):
             def __init__(
                 self,
                 *,
-                structured: typing.Optional[
-                    esdbclient.protos.Grpc.shared_pb2.Empty
-                ] = ...,
-                string: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
+                structured: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
+                string: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
             ) -> None: ...
             def HasField(
                 self,
@@ -59,7 +67,7 @@ class ReadReq(google.protobuf.message.Message):
             ) -> None: ...
             def WhichOneof(
                 self, oneof_group: typing_extensions.Literal["content", b"content"]
-            ) -> typing.Optional[typing_extensions.Literal["structured", "string"]]: ...
+            ) -> typing_extensions.Literal["structured", "string"] | None: ...
 
         STREAM_IDENTIFIER_FIELD_NUMBER: builtins.int
         ALL_FIELD_NUMBER: builtins.int
@@ -72,20 +80,19 @@ class ReadReq(google.protobuf.message.Message):
         ) -> esdbclient.protos.Grpc.shared_pb2.StreamIdentifier: ...
         @property
         def all(self) -> esdbclient.protos.Grpc.shared_pb2.Empty: ...
-        group_name: typing.Text
+        group_name: builtins.str
         buffer_size: builtins.int
         @property
         def uuid_option(self) -> global___ReadReq.Options.UUIDOption: ...
         def __init__(
             self,
             *,
-            stream_identifier: typing.Optional[
-                esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
-            ] = ...,
-            all: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
-            group_name: typing.Text = ...,
+            stream_identifier: esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
+            | None = ...,
+            all: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
+            group_name: builtins.str = ...,
             buffer_size: builtins.int = ...,
-            uuid_option: typing.Optional[global___ReadReq.Options.UUIDOption] = ...,
+            uuid_option: global___ReadReq.Options.UUIDOption | None = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -120,10 +127,12 @@ class ReadReq(google.protobuf.message.Message):
         def WhichOneof(
             self,
             oneof_group: typing_extensions.Literal["stream_option", b"stream_option"],
-        ) -> typing.Optional[typing_extensions.Literal["stream_identifier", "all"]]: ...
+        ) -> typing_extensions.Literal["stream_identifier", "all"] | None: ...
 
+    @typing_extensions.final
     class Ack(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         ID_FIELD_NUMBER: builtins.int
         IDS_FIELD_NUMBER: builtins.int
         id: builtins.bytes
@@ -137,14 +146,14 @@ class ReadReq(google.protobuf.message.Message):
             self,
             *,
             id: builtins.bytes = ...,
-            ids: typing.Optional[
-                typing.Iterable[esdbclient.protos.Grpc.shared_pb2.UUID]
-            ] = ...,
+            ids: collections.abc.Iterable[esdbclient.protos.Grpc.shared_pb2.UUID]
+            | None = ...,
         ) -> None: ...
         def ClearField(
             self, field_name: typing_extensions.Literal["id", b"id", "ids", b"ids"]
         ) -> None: ...
 
+    @typing_extensions.final
     class Nack(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
@@ -157,7 +166,7 @@ class ReadReq(google.protobuf.message.Message):
                 ReadReq.Nack._Action.ValueType
             ],
             builtins.type,
-        ):
+        ):  # noqa: F821
             DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
             Unknown: ReadReq.Nack._Action.ValueType  # 0
             Park: ReadReq.Nack._Action.ValueType  # 1
@@ -165,8 +174,7 @@ class ReadReq(google.protobuf.message.Message):
             Skip: ReadReq.Nack._Action.ValueType  # 3
             Stop: ReadReq.Nack._Action.ValueType  # 4
 
-        class Action(_Action, metaclass=_ActionEnumTypeWrapper):
-            pass
+        class Action(_Action, metaclass=_ActionEnumTypeWrapper): ...
         Unknown: ReadReq.Nack.Action.ValueType  # 0
         Park: ReadReq.Nack.Action.ValueType  # 1
         Retry: ReadReq.Nack.Action.ValueType  # 2
@@ -185,16 +193,15 @@ class ReadReq(google.protobuf.message.Message):
             esdbclient.protos.Grpc.shared_pb2.UUID
         ]: ...
         action: global___ReadReq.Nack.Action.ValueType
-        reason: typing.Text
+        reason: builtins.str
         def __init__(
             self,
             *,
             id: builtins.bytes = ...,
-            ids: typing.Optional[
-                typing.Iterable[esdbclient.protos.Grpc.shared_pb2.UUID]
-            ] = ...,
+            ids: collections.abc.Iterable[esdbclient.protos.Grpc.shared_pb2.UUID]
+            | None = ...,
             action: global___ReadReq.Nack.Action.ValueType = ...,
-            reason: typing.Text = ...,
+            reason: builtins.str = ...,
         ) -> None: ...
         def ClearField(
             self,
@@ -215,9 +222,9 @@ class ReadReq(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        options: typing.Optional[global___ReadReq.Options] = ...,
-        ack: typing.Optional[global___ReadReq.Ack] = ...,
-        nack: typing.Optional[global___ReadReq.Nack] = ...,
+        options: global___ReadReq.Options | None = ...,
+        ack: global___ReadReq.Ack | None = ...,
+        nack: global___ReadReq.Nack | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -233,30 +240,35 @@ class ReadReq(google.protobuf.message.Message):
     ) -> None: ...
     def WhichOneof(
         self, oneof_group: typing_extensions.Literal["content", b"content"]
-    ) -> typing.Optional[typing_extensions.Literal["options", "ack", "nack"]]: ...
+    ) -> typing_extensions.Literal["options", "ack", "nack"] | None: ...
 
 global___ReadReq = ReadReq
 
+@typing_extensions.final
 class ReadResp(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    @typing_extensions.final
     class ReadEvent(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+        @typing_extensions.final
         class RecordedEvent(google.protobuf.message.Message):
             DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+            @typing_extensions.final
             class MetadataEntry(google.protobuf.message.Message):
                 DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
                 KEY_FIELD_NUMBER: builtins.int
                 VALUE_FIELD_NUMBER: builtins.int
-                key: typing.Text
-                value: typing.Text
+                key: builtins.str
+                value: builtins.str
                 def __init__(
                     self,
                     *,
-                    key: typing.Text = ...,
-                    value: typing.Text = ...,
+                    key: builtins.str = ...,
+                    value: builtins.str = ...,
                 ) -> None: ...
                 def ClearField(
                     self,
@@ -286,23 +298,21 @@ class ReadResp(google.protobuf.message.Message):
             def metadata(
                 self,
             ) -> google.protobuf.internal.containers.ScalarMap[
-                typing.Text, typing.Text
+                builtins.str, builtins.str
             ]: ...
             custom_metadata: builtins.bytes
             data: builtins.bytes
             def __init__(
                 self,
                 *,
-                id: typing.Optional[esdbclient.protos.Grpc.shared_pb2.UUID] = ...,
-                stream_identifier: typing.Optional[
-                    esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
-                ] = ...,
+                id: esdbclient.protos.Grpc.shared_pb2.UUID | None = ...,
+                stream_identifier: esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
+                | None = ...,
                 stream_revision: builtins.int = ...,
                 prepare_position: builtins.int = ...,
                 commit_position: builtins.int = ...,
-                metadata: typing.Optional[
-                    typing.Mapping[typing.Text, typing.Text]
-                ] = ...,
+                metadata: collections.abc.Mapping[builtins.str, builtins.str]
+                | None = ...,
                 custom_metadata: builtins.bytes = ...,
                 data: builtins.bytes = ...,
             ) -> None: ...
@@ -353,14 +363,12 @@ class ReadResp(google.protobuf.message.Message):
         def __init__(
             self,
             *,
-            event: typing.Optional[global___ReadResp.ReadEvent.RecordedEvent] = ...,
-            link: typing.Optional[global___ReadResp.ReadEvent.RecordedEvent] = ...,
+            event: global___ReadResp.ReadEvent.RecordedEvent | None = ...,
+            link: global___ReadResp.ReadEvent.RecordedEvent | None = ...,
             commit_position: builtins.int = ...,
-            no_position: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
+            no_position: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
             retry_count: builtins.int = ...,
-            no_retry_count: typing.Optional[
-                esdbclient.protos.Grpc.shared_pb2.Empty
-            ] = ...,
+            no_retry_count: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -407,24 +415,22 @@ class ReadResp(google.protobuf.message.Message):
         @typing.overload
         def WhichOneof(
             self, oneof_group: typing_extensions.Literal["count", b"count"]
-        ) -> typing.Optional[
-            typing_extensions.Literal["retry_count", "no_retry_count"]
-        ]: ...
+        ) -> typing_extensions.Literal["retry_count", "no_retry_count"] | None: ...
         @typing.overload
         def WhichOneof(
             self, oneof_group: typing_extensions.Literal["position", b"position"]
-        ) -> typing.Optional[
-            typing_extensions.Literal["commit_position", "no_position"]
-        ]: ...
+        ) -> typing_extensions.Literal["commit_position", "no_position"] | None: ...
 
+    @typing_extensions.final
     class SubscriptionConfirmation(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         SUBSCRIPTION_ID_FIELD_NUMBER: builtins.int
-        subscription_id: typing.Text
+        subscription_id: builtins.str
         def __init__(
             self,
             *,
-            subscription_id: typing.Text = ...,
+            subscription_id: builtins.str = ...,
         ) -> None: ...
         def ClearField(
             self,
@@ -444,10 +450,9 @@ class ReadResp(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        event: typing.Optional[global___ReadResp.ReadEvent] = ...,
-        subscription_confirmation: typing.Optional[
-            global___ReadResp.SubscriptionConfirmation
-        ] = ...,
+        event: global___ReadResp.ReadEvent | None = ...,
+        subscription_confirmation: global___ReadResp.SubscriptionConfirmation
+        | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -473,12 +478,11 @@ class ReadResp(google.protobuf.message.Message):
     ) -> None: ...
     def WhichOneof(
         self, oneof_group: typing_extensions.Literal["content", b"content"]
-    ) -> typing.Optional[
-        typing_extensions.Literal["event", "subscription_confirmation"]
-    ]: ...
+    ) -> typing_extensions.Literal["event", "subscription_confirmation"] | None: ...
 
 global___ReadResp = ReadResp
 
+@typing_extensions.final
 class CreateReq(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
@@ -491,7 +495,7 @@ class CreateReq(google.protobuf.message.Message):
             CreateReq._ConsumerStrategy.ValueType
         ],
         builtins.type,
-    ):
+    ):  # noqa: F821
         DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
         DispatchToSingle: CreateReq._ConsumerStrategy.ValueType  # 0
         RoundRobin: CreateReq._ConsumerStrategy.ValueType  # 1
@@ -499,14 +503,15 @@ class CreateReq(google.protobuf.message.Message):
 
     class ConsumerStrategy(
         _ConsumerStrategy, metaclass=_ConsumerStrategyEnumTypeWrapper
-    ):
-        pass
+    ): ...
     DispatchToSingle: CreateReq.ConsumerStrategy.ValueType  # 0
     RoundRobin: CreateReq.ConsumerStrategy.ValueType  # 1
     Pinned: CreateReq.ConsumerStrategy.ValueType  # 2
 
+    @typing_extensions.final
     class Options(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         STREAM_FIELD_NUMBER: builtins.int
         ALL_FIELD_NUMBER: builtins.int
         STREAM_IDENTIFIER_FIELD_NUMBER: builtins.int
@@ -520,19 +525,18 @@ class CreateReq(google.protobuf.message.Message):
         def stream_identifier(
             self,
         ) -> esdbclient.protos.Grpc.shared_pb2.StreamIdentifier: ...
-        group_name: typing.Text
+        group_name: builtins.str
         @property
         def settings(self) -> global___CreateReq.Settings: ...
         def __init__(
             self,
             *,
-            stream: typing.Optional[global___CreateReq.StreamOptions] = ...,
-            all: typing.Optional[global___CreateReq.AllOptions] = ...,
-            stream_identifier: typing.Optional[
-                esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
-            ] = ...,
-            group_name: typing.Text = ...,
-            settings: typing.Optional[global___CreateReq.Settings] = ...,
+            stream: global___CreateReq.StreamOptions | None = ...,
+            all: global___CreateReq.AllOptions | None = ...,
+            stream_identifier: esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
+            | None = ...,
+            group_name: builtins.str = ...,
+            settings: global___CreateReq.Settings | None = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -569,10 +573,12 @@ class CreateReq(google.protobuf.message.Message):
         def WhichOneof(
             self,
             oneof_group: typing_extensions.Literal["stream_option", b"stream_option"],
-        ) -> typing.Optional[typing_extensions.Literal["stream", "all"]]: ...
+        ) -> typing_extensions.Literal["stream", "all"] | None: ...
 
+    @typing_extensions.final
     class StreamOptions(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         STREAM_IDENTIFIER_FIELD_NUMBER: builtins.int
         REVISION_FIELD_NUMBER: builtins.int
         START_FIELD_NUMBER: builtins.int
@@ -589,12 +595,11 @@ class CreateReq(google.protobuf.message.Message):
         def __init__(
             self,
             *,
-            stream_identifier: typing.Optional[
-                esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
-            ] = ...,
+            stream_identifier: esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
+            | None = ...,
             revision: builtins.int = ...,
-            start: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
-            end: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
+            start: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
+            end: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -631,30 +636,34 @@ class CreateReq(google.protobuf.message.Message):
             oneof_group: typing_extensions.Literal[
                 "revision_option", b"revision_option"
             ],
-        ) -> typing.Optional[typing_extensions.Literal["revision", "start", "end"]]: ...
+        ) -> typing_extensions.Literal["revision", "start", "end"] | None: ...
 
+    @typing_extensions.final
     class AllOptions(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+        @typing_extensions.final
         class FilterOptions(google.protobuf.message.Message):
             DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+            @typing_extensions.final
             class Expression(google.protobuf.message.Message):
                 DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
                 REGEX_FIELD_NUMBER: builtins.int
                 PREFIX_FIELD_NUMBER: builtins.int
-                regex: typing.Text
+                regex: builtins.str
                 @property
                 def prefix(
                     self,
                 ) -> google.protobuf.internal.containers.RepeatedScalarFieldContainer[
-                    typing.Text
+                    builtins.str
                 ]: ...
                 def __init__(
                     self,
                     *,
-                    regex: typing.Text = ...,
-                    prefix: typing.Optional[typing.Iterable[typing.Text]] = ...,
+                    regex: builtins.str = ...,
+                    prefix: collections.abc.Iterable[builtins.str] | None = ...,
                 ) -> None: ...
                 def ClearField(
                     self,
@@ -683,14 +692,12 @@ class CreateReq(google.protobuf.message.Message):
             def __init__(
                 self,
                 *,
-                stream_identifier: typing.Optional[
-                    global___CreateReq.AllOptions.FilterOptions.Expression
-                ] = ...,
-                event_type: typing.Optional[
-                    global___CreateReq.AllOptions.FilterOptions.Expression
-                ] = ...,
+                stream_identifier: global___CreateReq.AllOptions.FilterOptions.Expression
+                | None = ...,
+                event_type: global___CreateReq.AllOptions.FilterOptions.Expression
+                | None = ...,
                 max: builtins.int = ...,
-                count: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
+                count: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
                 checkpointIntervalMultiplier: builtins.int = ...,
             ) -> None: ...
             def HasField(
@@ -732,13 +739,13 @@ class CreateReq(google.protobuf.message.Message):
             @typing.overload
             def WhichOneof(
                 self, oneof_group: typing_extensions.Literal["filter", b"filter"]
-            ) -> typing.Optional[
-                typing_extensions.Literal["stream_identifier", "event_type"]
-            ]: ...
+            ) -> (
+                typing_extensions.Literal["stream_identifier", "event_type"] | None
+            ): ...
             @typing.overload
             def WhichOneof(
                 self, oneof_group: typing_extensions.Literal["window", b"window"]
-            ) -> typing.Optional[typing_extensions.Literal["max", "count"]]: ...
+            ) -> typing_extensions.Literal["max", "count"] | None: ...
 
         POSITION_FIELD_NUMBER: builtins.int
         START_FIELD_NUMBER: builtins.int
@@ -758,11 +765,11 @@ class CreateReq(google.protobuf.message.Message):
         def __init__(
             self,
             *,
-            position: typing.Optional[global___CreateReq.Position] = ...,
-            start: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
-            end: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
-            filter: typing.Optional[global___CreateReq.AllOptions.FilterOptions] = ...,
-            no_filter: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
+            position: global___CreateReq.Position | None = ...,
+            start: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
+            end: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
+            filter: global___CreateReq.AllOptions.FilterOptions | None = ...,
+            no_filter: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -805,15 +812,17 @@ class CreateReq(google.protobuf.message.Message):
         @typing.overload
         def WhichOneof(
             self, oneof_group: typing_extensions.Literal["all_option", b"all_option"]
-        ) -> typing.Optional[typing_extensions.Literal["position", "start", "end"]]: ...
+        ) -> typing_extensions.Literal["position", "start", "end"] | None: ...
         @typing.overload
         def WhichOneof(
             self,
             oneof_group: typing_extensions.Literal["filter_option", b"filter_option"],
-        ) -> typing.Optional[typing_extensions.Literal["filter", "no_filter"]]: ...
+        ) -> typing_extensions.Literal["filter", "no_filter"] | None: ...
 
+    @typing_extensions.final
     class Position(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         COMMIT_POSITION_FIELD_NUMBER: builtins.int
         PREPARE_POSITION_FIELD_NUMBER: builtins.int
         commit_position: builtins.int
@@ -834,8 +843,10 @@ class CreateReq(google.protobuf.message.Message):
             ],
         ) -> None: ...
 
+    @typing_extensions.final
     class Settings(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         RESOLVE_LINKS_FIELD_NUMBER: builtins.int
         REVISION_FIELD_NUMBER: builtins.int
         EXTRA_STATISTICS_FIELD_NUMBER: builtins.int
@@ -867,7 +878,7 @@ class CreateReq(google.protobuf.message.Message):
         message_timeout_ms: builtins.int
         checkpoint_after_ticks: builtins.int
         checkpoint_after_ms: builtins.int
-        consumer_strategy: typing.Text
+        consumer_strategy: builtins.str
         def __init__(
             self,
             *,
@@ -886,7 +897,7 @@ class CreateReq(google.protobuf.message.Message):
             message_timeout_ms: builtins.int = ...,
             checkpoint_after_ticks: builtins.int = ...,
             checkpoint_after_ms: builtins.int = ...,
-            consumer_strategy: typing.Text = ...,
+            consumer_strategy: builtins.str = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -952,18 +963,20 @@ class CreateReq(google.protobuf.message.Message):
             oneof_group: typing_extensions.Literal[
                 "checkpoint_after", b"checkpoint_after"
             ],
-        ) -> typing.Optional[
+        ) -> (
             typing_extensions.Literal["checkpoint_after_ticks", "checkpoint_after_ms"]
-        ]: ...
+            | None
+        ): ...
         @typing.overload
         def WhichOneof(
             self,
             oneof_group: typing_extensions.Literal[
                 "message_timeout", b"message_timeout"
             ],
-        ) -> typing.Optional[
+        ) -> (
             typing_extensions.Literal["message_timeout_ticks", "message_timeout_ms"]
-        ]: ...
+            | None
+        ): ...
 
     OPTIONS_FIELD_NUMBER: builtins.int
     @property
@@ -971,7 +984,7 @@ class CreateReq(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        options: typing.Optional[global___CreateReq.Options] = ...,
+        options: global___CreateReq.Options | None = ...,
     ) -> None: ...
     def HasField(
         self, field_name: typing_extensions.Literal["options", b"options"]
@@ -982,14 +995,17 @@ class CreateReq(google.protobuf.message.Message):
 
 global___CreateReq = CreateReq
 
+@typing_extensions.final
 class CreateResp(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     def __init__(
         self,
     ) -> None: ...
 
 global___CreateResp = CreateResp
 
+@typing_extensions.final
 class UpdateReq(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
@@ -1002,7 +1018,7 @@ class UpdateReq(google.protobuf.message.Message):
             UpdateReq._ConsumerStrategy.ValueType
         ],
         builtins.type,
-    ):
+    ):  # noqa: F821
         DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
         DispatchToSingle: UpdateReq._ConsumerStrategy.ValueType  # 0
         RoundRobin: UpdateReq._ConsumerStrategy.ValueType  # 1
@@ -1010,14 +1026,15 @@ class UpdateReq(google.protobuf.message.Message):
 
     class ConsumerStrategy(
         _ConsumerStrategy, metaclass=_ConsumerStrategyEnumTypeWrapper
-    ):
-        pass
+    ): ...
     DispatchToSingle: UpdateReq.ConsumerStrategy.ValueType  # 0
     RoundRobin: UpdateReq.ConsumerStrategy.ValueType  # 1
     Pinned: UpdateReq.ConsumerStrategy.ValueType  # 2
 
+    @typing_extensions.final
     class Options(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         STREAM_FIELD_NUMBER: builtins.int
         ALL_FIELD_NUMBER: builtins.int
         STREAM_IDENTIFIER_FIELD_NUMBER: builtins.int
@@ -1031,19 +1048,18 @@ class UpdateReq(google.protobuf.message.Message):
         def stream_identifier(
             self,
         ) -> esdbclient.protos.Grpc.shared_pb2.StreamIdentifier: ...
-        group_name: typing.Text
+        group_name: builtins.str
         @property
         def settings(self) -> global___UpdateReq.Settings: ...
         def __init__(
             self,
             *,
-            stream: typing.Optional[global___UpdateReq.StreamOptions] = ...,
-            all: typing.Optional[global___UpdateReq.AllOptions] = ...,
-            stream_identifier: typing.Optional[
-                esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
-            ] = ...,
-            group_name: typing.Text = ...,
-            settings: typing.Optional[global___UpdateReq.Settings] = ...,
+            stream: global___UpdateReq.StreamOptions | None = ...,
+            all: global___UpdateReq.AllOptions | None = ...,
+            stream_identifier: esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
+            | None = ...,
+            group_name: builtins.str = ...,
+            settings: global___UpdateReq.Settings | None = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -1080,10 +1096,12 @@ class UpdateReq(google.protobuf.message.Message):
         def WhichOneof(
             self,
             oneof_group: typing_extensions.Literal["stream_option", b"stream_option"],
-        ) -> typing.Optional[typing_extensions.Literal["stream", "all"]]: ...
+        ) -> typing_extensions.Literal["stream", "all"] | None: ...
 
+    @typing_extensions.final
     class StreamOptions(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         STREAM_IDENTIFIER_FIELD_NUMBER: builtins.int
         REVISION_FIELD_NUMBER: builtins.int
         START_FIELD_NUMBER: builtins.int
@@ -1100,12 +1118,11 @@ class UpdateReq(google.protobuf.message.Message):
         def __init__(
             self,
             *,
-            stream_identifier: typing.Optional[
-                esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
-            ] = ...,
+            stream_identifier: esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
+            | None = ...,
             revision: builtins.int = ...,
-            start: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
-            end: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
+            start: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
+            end: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -1142,10 +1159,12 @@ class UpdateReq(google.protobuf.message.Message):
             oneof_group: typing_extensions.Literal[
                 "revision_option", b"revision_option"
             ],
-        ) -> typing.Optional[typing_extensions.Literal["revision", "start", "end"]]: ...
+        ) -> typing_extensions.Literal["revision", "start", "end"] | None: ...
 
+    @typing_extensions.final
     class AllOptions(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         POSITION_FIELD_NUMBER: builtins.int
         START_FIELD_NUMBER: builtins.int
         END_FIELD_NUMBER: builtins.int
@@ -1158,9 +1177,9 @@ class UpdateReq(google.protobuf.message.Message):
         def __init__(
             self,
             *,
-            position: typing.Optional[global___UpdateReq.Position] = ...,
-            start: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
-            end: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
+            position: global___UpdateReq.Position | None = ...,
+            start: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
+            end: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -1190,10 +1209,12 @@ class UpdateReq(google.protobuf.message.Message):
         ) -> None: ...
         def WhichOneof(
             self, oneof_group: typing_extensions.Literal["all_option", b"all_option"]
-        ) -> typing.Optional[typing_extensions.Literal["position", "start", "end"]]: ...
+        ) -> typing_extensions.Literal["position", "start", "end"] | None: ...
 
+    @typing_extensions.final
     class Position(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         COMMIT_POSITION_FIELD_NUMBER: builtins.int
         PREPARE_POSITION_FIELD_NUMBER: builtins.int
         commit_position: builtins.int
@@ -1214,8 +1235,10 @@ class UpdateReq(google.protobuf.message.Message):
             ],
         ) -> None: ...
 
+    @typing_extensions.final
     class Settings(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         RESOLVE_LINKS_FIELD_NUMBER: builtins.int
         REVISION_FIELD_NUMBER: builtins.int
         EXTRA_STATISTICS_FIELD_NUMBER: builtins.int
@@ -1327,18 +1350,20 @@ class UpdateReq(google.protobuf.message.Message):
             oneof_group: typing_extensions.Literal[
                 "checkpoint_after", b"checkpoint_after"
             ],
-        ) -> typing.Optional[
+        ) -> (
             typing_extensions.Literal["checkpoint_after_ticks", "checkpoint_after_ms"]
-        ]: ...
+            | None
+        ): ...
         @typing.overload
         def WhichOneof(
             self,
             oneof_group: typing_extensions.Literal[
                 "message_timeout", b"message_timeout"
             ],
-        ) -> typing.Optional[
+        ) -> (
             typing_extensions.Literal["message_timeout_ticks", "message_timeout_ms"]
-        ]: ...
+            | None
+        ): ...
 
     OPTIONS_FIELD_NUMBER: builtins.int
     @property
@@ -1346,7 +1371,7 @@ class UpdateReq(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        options: typing.Optional[global___UpdateReq.Options] = ...,
+        options: global___UpdateReq.Options | None = ...,
     ) -> None: ...
     def HasField(
         self, field_name: typing_extensions.Literal["options", b"options"]
@@ -1357,19 +1382,24 @@ class UpdateReq(google.protobuf.message.Message):
 
 global___UpdateReq = UpdateReq
 
+@typing_extensions.final
 class UpdateResp(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     def __init__(
         self,
     ) -> None: ...
 
 global___UpdateResp = UpdateResp
 
+@typing_extensions.final
 class DeleteReq(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    @typing_extensions.final
     class Options(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         STREAM_IDENTIFIER_FIELD_NUMBER: builtins.int
         ALL_FIELD_NUMBER: builtins.int
         GROUP_NAME_FIELD_NUMBER: builtins.int
@@ -1379,15 +1409,14 @@ class DeleteReq(google.protobuf.message.Message):
         ) -> esdbclient.protos.Grpc.shared_pb2.StreamIdentifier: ...
         @property
         def all(self) -> esdbclient.protos.Grpc.shared_pb2.Empty: ...
-        group_name: typing.Text
+        group_name: builtins.str
         def __init__(
             self,
             *,
-            stream_identifier: typing.Optional[
-                esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
-            ] = ...,
-            all: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
-            group_name: typing.Text = ...,
+            stream_identifier: esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
+            | None = ...,
+            all: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
+            group_name: builtins.str = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -1416,7 +1445,7 @@ class DeleteReq(google.protobuf.message.Message):
         def WhichOneof(
             self,
             oneof_group: typing_extensions.Literal["stream_option", b"stream_option"],
-        ) -> typing.Optional[typing_extensions.Literal["stream_identifier", "all"]]: ...
+        ) -> typing_extensions.Literal["stream_identifier", "all"] | None: ...
 
     OPTIONS_FIELD_NUMBER: builtins.int
     @property
@@ -1424,7 +1453,7 @@ class DeleteReq(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        options: typing.Optional[global___DeleteReq.Options] = ...,
+        options: global___DeleteReq.Options | None = ...,
     ) -> None: ...
     def HasField(
         self, field_name: typing_extensions.Literal["options", b"options"]
@@ -1435,19 +1464,24 @@ class DeleteReq(google.protobuf.message.Message):
 
 global___DeleteReq = DeleteReq
 
+@typing_extensions.final
 class DeleteResp(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     def __init__(
         self,
     ) -> None: ...
 
 global___DeleteResp = DeleteResp
 
+@typing_extensions.final
 class GetInfoReq(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    @typing_extensions.final
     class Options(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         STREAM_IDENTIFIER_FIELD_NUMBER: builtins.int
         ALL_FIELD_NUMBER: builtins.int
         GROUP_NAME_FIELD_NUMBER: builtins.int
@@ -1457,15 +1491,14 @@ class GetInfoReq(google.protobuf.message.Message):
         ) -> esdbclient.protos.Grpc.shared_pb2.StreamIdentifier: ...
         @property
         def all(self) -> esdbclient.protos.Grpc.shared_pb2.Empty: ...
-        group_name: typing.Text
+        group_name: builtins.str
         def __init__(
             self,
             *,
-            stream_identifier: typing.Optional[
-                esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
-            ] = ...,
-            all: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
-            group_name: typing.Text = ...,
+            stream_identifier: esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
+            | None = ...,
+            all: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
+            group_name: builtins.str = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -1494,7 +1527,7 @@ class GetInfoReq(google.protobuf.message.Message):
         def WhichOneof(
             self,
             oneof_group: typing_extensions.Literal["stream_option", b"stream_option"],
-        ) -> typing.Optional[typing_extensions.Literal["stream_identifier", "all"]]: ...
+        ) -> typing_extensions.Literal["stream_identifier", "all"] | None: ...
 
     OPTIONS_FIELD_NUMBER: builtins.int
     @property
@@ -1502,7 +1535,7 @@ class GetInfoReq(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        options: typing.Optional[global___GetInfoReq.Options] = ...,
+        options: global___GetInfoReq.Options | None = ...,
     ) -> None: ...
     def HasField(
         self, field_name: typing_extensions.Literal["options", b"options"]
@@ -1513,15 +1546,17 @@ class GetInfoReq(google.protobuf.message.Message):
 
 global___GetInfoReq = GetInfoReq
 
+@typing_extensions.final
 class GetInfoResp(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     SUBSCRIPTION_INFO_FIELD_NUMBER: builtins.int
     @property
     def subscription_info(self) -> global___SubscriptionInfo: ...
     def __init__(
         self,
         *,
-        subscription_info: typing.Optional[global___SubscriptionInfo] = ...,
+        subscription_info: global___SubscriptionInfo | None = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -1538,11 +1573,14 @@ class GetInfoResp(google.protobuf.message.Message):
 
 global___GetInfoResp = GetInfoResp
 
+@typing_extensions.final
 class SubscriptionInfo(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    @typing_extensions.final
     class ConnectionInfo(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         FROM_FIELD_NUMBER: builtins.int
         USERNAME_FIELD_NUMBER: builtins.int
         AVERAGE_ITEMS_PER_SECOND_FIELD_NUMBER: builtins.int
@@ -1552,7 +1590,7 @@ class SubscriptionInfo(google.protobuf.message.Message):
         AVAILABLE_SLOTS_FIELD_NUMBER: builtins.int
         IN_FLIGHT_MESSAGES_FIELD_NUMBER: builtins.int
         CONNECTION_NAME_FIELD_NUMBER: builtins.int
-        username: typing.Text
+        username: builtins.str
         average_items_per_second: builtins.int
         total_items: builtins.int
         count_since_last_measurement: builtins.int
@@ -1564,20 +1602,21 @@ class SubscriptionInfo(google.protobuf.message.Message):
         ]: ...
         available_slots: builtins.int
         in_flight_messages: builtins.int
-        connection_name: typing.Text
+        connection_name: builtins.str
         def __init__(
             self,
             *,
-            username: typing.Text = ...,
+            username: builtins.str = ...,
             average_items_per_second: builtins.int = ...,
             total_items: builtins.int = ...,
             count_since_last_measurement: builtins.int = ...,
-            observed_measurements: typing.Optional[
-                typing.Iterable[global___SubscriptionInfo.Measurement]
-            ] = ...,
+            observed_measurements: collections.abc.Iterable[
+                global___SubscriptionInfo.Measurement
+            ]
+            | None = ...,
             available_slots: builtins.int = ...,
             in_flight_messages: builtins.int = ...,
-            connection_name: typing.Text = ...,
+            connection_name: builtins.str = ...,
         ) -> None: ...
         def ClearField(
             self,
@@ -1603,16 +1642,18 @@ class SubscriptionInfo(google.protobuf.message.Message):
             ],
         ) -> None: ...
 
+    @typing_extensions.final
     class Measurement(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         KEY_FIELD_NUMBER: builtins.int
         VALUE_FIELD_NUMBER: builtins.int
-        key: typing.Text
+        key: builtins.str
         value: builtins.int
         def __init__(
             self,
             *,
-            key: typing.Text = ...,
+            key: builtins.str = ...,
             value: builtins.int = ...,
         ) -> None: ...
         def ClearField(
@@ -1648,9 +1689,9 @@ class SubscriptionInfo(google.protobuf.message.Message):
     NAMED_CONSUMER_STRATEGY_FIELD_NUMBER: builtins.int
     MAX_SUBSCRIBER_COUNT_FIELD_NUMBER: builtins.int
     PARKED_MESSAGE_COUNT_FIELD_NUMBER: builtins.int
-    event_source: typing.Text
-    group_name: typing.Text
-    status: typing.Text
+    event_source: builtins.str
+    group_name: builtins.str
+    status: builtins.str
     @property
     def connections(
         self,
@@ -1660,10 +1701,10 @@ class SubscriptionInfo(google.protobuf.message.Message):
     average_per_second: builtins.int
     total_items: builtins.int
     count_since_last_measurement: builtins.int
-    last_checkpointed_event_position: typing.Text
-    last_known_event_position: typing.Text
+    last_checkpointed_event_position: builtins.str
+    last_known_event_position: builtins.str
     resolve_link_tos: builtins.bool
-    start_from: typing.Text
+    start_from: builtins.str
     message_timeout_milliseconds: builtins.int
     extra_statistics: builtins.bool
     max_retry_count: builtins.int
@@ -1678,25 +1719,24 @@ class SubscriptionInfo(google.protobuf.message.Message):
     retry_buffer_count: builtins.int
     total_in_flight_messages: builtins.int
     outstanding_messages_count: builtins.int
-    named_consumer_strategy: typing.Text
+    named_consumer_strategy: builtins.str
     max_subscriber_count: builtins.int
     parked_message_count: builtins.int
     def __init__(
         self,
         *,
-        event_source: typing.Text = ...,
-        group_name: typing.Text = ...,
-        status: typing.Text = ...,
-        connections: typing.Optional[
-            typing.Iterable[global___SubscriptionInfo.ConnectionInfo]
-        ] = ...,
+        event_source: builtins.str = ...,
+        group_name: builtins.str = ...,
+        status: builtins.str = ...,
+        connections: collections.abc.Iterable[global___SubscriptionInfo.ConnectionInfo]
+        | None = ...,
         average_per_second: builtins.int = ...,
         total_items: builtins.int = ...,
         count_since_last_measurement: builtins.int = ...,
-        last_checkpointed_event_position: typing.Text = ...,
-        last_known_event_position: typing.Text = ...,
+        last_checkpointed_event_position: builtins.str = ...,
+        last_known_event_position: builtins.str = ...,
         resolve_link_tos: builtins.bool = ...,
-        start_from: typing.Text = ...,
+        start_from: builtins.str = ...,
         message_timeout_milliseconds: builtins.int = ...,
         extra_statistics: builtins.bool = ...,
         max_retry_count: builtins.int = ...,
@@ -1711,7 +1751,7 @@ class SubscriptionInfo(google.protobuf.message.Message):
         retry_buffer_count: builtins.int = ...,
         total_in_flight_messages: builtins.int = ...,
         outstanding_messages_count: builtins.int = ...,
-        named_consumer_strategy: typing.Text = ...,
+        named_consumer_strategy: builtins.str = ...,
         max_subscriber_count: builtins.int = ...,
         parked_message_count: builtins.int = ...,
     ) -> None: ...
@@ -1779,17 +1819,20 @@ class SubscriptionInfo(google.protobuf.message.Message):
 
 global___SubscriptionInfo = SubscriptionInfo
 
+@typing_extensions.final
 class ReplayParkedReq(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    @typing_extensions.final
     class Options(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         GROUP_NAME_FIELD_NUMBER: builtins.int
         STREAM_IDENTIFIER_FIELD_NUMBER: builtins.int
         ALL_FIELD_NUMBER: builtins.int
         STOP_AT_FIELD_NUMBER: builtins.int
         NO_LIMIT_FIELD_NUMBER: builtins.int
-        group_name: typing.Text
+        group_name: builtins.str
         @property
         def stream_identifier(
             self,
@@ -1802,13 +1845,12 @@ class ReplayParkedReq(google.protobuf.message.Message):
         def __init__(
             self,
             *,
-            group_name: typing.Text = ...,
-            stream_identifier: typing.Optional[
-                esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
-            ] = ...,
-            all: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
+            group_name: builtins.str = ...,
+            stream_identifier: esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
+            | None = ...,
+            all: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
             stop_at: builtins.int = ...,
-            no_limit: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
+            no_limit: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -1850,12 +1892,12 @@ class ReplayParkedReq(google.protobuf.message.Message):
         def WhichOneof(
             self,
             oneof_group: typing_extensions.Literal["stop_at_option", b"stop_at_option"],
-        ) -> typing.Optional[typing_extensions.Literal["stop_at", "no_limit"]]: ...
+        ) -> typing_extensions.Literal["stop_at", "no_limit"] | None: ...
         @typing.overload
         def WhichOneof(
             self,
             oneof_group: typing_extensions.Literal["stream_option", b"stream_option"],
-        ) -> typing.Optional[typing_extensions.Literal["stream_identifier", "all"]]: ...
+        ) -> typing_extensions.Literal["stream_identifier", "all"] | None: ...
 
     OPTIONS_FIELD_NUMBER: builtins.int
     @property
@@ -1863,7 +1905,7 @@ class ReplayParkedReq(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        options: typing.Optional[global___ReplayParkedReq.Options] = ...,
+        options: global___ReplayParkedReq.Options | None = ...,
     ) -> None: ...
     def HasField(
         self, field_name: typing_extensions.Literal["options", b"options"]
@@ -1874,19 +1916,24 @@ class ReplayParkedReq(google.protobuf.message.Message):
 
 global___ReplayParkedReq = ReplayParkedReq
 
+@typing_extensions.final
 class ReplayParkedResp(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     def __init__(
         self,
     ) -> None: ...
 
 global___ReplayParkedResp = ReplayParkedResp
 
+@typing_extensions.final
 class ListReq(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
+    @typing_extensions.final
     class Options(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         LIST_ALL_SUBSCRIPTIONS_FIELD_NUMBER: builtins.int
         LIST_FOR_STREAM_FIELD_NUMBER: builtins.int
         @property
@@ -1896,10 +1943,9 @@ class ListReq(google.protobuf.message.Message):
         def __init__(
             self,
             *,
-            list_all_subscriptions: typing.Optional[
-                esdbclient.protos.Grpc.shared_pb2.Empty
-            ] = ...,
-            list_for_stream: typing.Optional[global___ListReq.StreamOption] = ...,
+            list_all_subscriptions: esdbclient.protos.Grpc.shared_pb2.Empty
+            | None = ...,
+            list_for_stream: global___ListReq.StreamOption | None = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -1925,12 +1971,15 @@ class ListReq(google.protobuf.message.Message):
         ) -> None: ...
         def WhichOneof(
             self, oneof_group: typing_extensions.Literal["list_option", b"list_option"]
-        ) -> typing.Optional[
+        ) -> (
             typing_extensions.Literal["list_all_subscriptions", "list_for_stream"]
-        ]: ...
+            | None
+        ): ...
 
+    @typing_extensions.final
     class StreamOption(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
         STREAM_FIELD_NUMBER: builtins.int
         ALL_FIELD_NUMBER: builtins.int
         @property
@@ -1940,10 +1989,8 @@ class ListReq(google.protobuf.message.Message):
         def __init__(
             self,
             *,
-            stream: typing.Optional[
-                esdbclient.protos.Grpc.shared_pb2.StreamIdentifier
-            ] = ...,
-            all: typing.Optional[esdbclient.protos.Grpc.shared_pb2.Empty] = ...,
+            stream: esdbclient.protos.Grpc.shared_pb2.StreamIdentifier | None = ...,
+            all: esdbclient.protos.Grpc.shared_pb2.Empty | None = ...,
         ) -> None: ...
         def HasField(
             self,
@@ -1960,7 +2007,7 @@ class ListReq(google.protobuf.message.Message):
         def WhichOneof(
             self,
             oneof_group: typing_extensions.Literal["stream_option", b"stream_option"],
-        ) -> typing.Optional[typing_extensions.Literal["stream", "all"]]: ...
+        ) -> typing_extensions.Literal["stream", "all"] | None: ...
 
     OPTIONS_FIELD_NUMBER: builtins.int
     @property
@@ -1968,7 +2015,7 @@ class ListReq(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        options: typing.Optional[global___ListReq.Options] = ...,
+        options: global___ListReq.Options | None = ...,
     ) -> None: ...
     def HasField(
         self, field_name: typing_extensions.Literal["options", b"options"]
@@ -1979,8 +2026,10 @@ class ListReq(google.protobuf.message.Message):
 
 global___ListReq = ListReq
 
+@typing_extensions.final
 class ListResp(google.protobuf.message.Message):
     DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
     SUBSCRIPTIONS_FIELD_NUMBER: builtins.int
     @property
     def subscriptions(
@@ -1991,9 +2040,7 @@ class ListResp(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        subscriptions: typing.Optional[
-            typing.Iterable[global___SubscriptionInfo]
-        ] = ...,
+        subscriptions: collections.abc.Iterable[global___SubscriptionInfo] | None = ...,
     ) -> None: ...
     def ClearField(
         self, field_name: typing_extensions.Literal["subscriptions", b"subscriptions"]
