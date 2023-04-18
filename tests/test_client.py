@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import os
 import ssl
-from datetime import datetime
 from typing import List
 from unittest import TestCase
 from uuid import UUID, uuid4
@@ -27,9 +26,9 @@ class FakeRpcError(_MultiThreadedRendezvous):
     def __init__(self, status_code: StatusCode) -> None:
         super().__init__(
             state=_RPCState(
-                due=set(),
-                initial_metadata="",
-                trailing_metadata="",
+                due=[],
+                initial_metadata=None,
+                trailing_metadata=None,
                 code=status_code,
                 details="",
             ),
@@ -55,14 +54,20 @@ class FakeUnknownRpcError(FakeRpcError):
 
 
 class TestESDBClient(TestCase):
-    def test_close(self) -> None:
-        client = self.construct_esdb_client()
-        client.close()
-        client.close()
+    client: ESDBClient
 
-        client = ESDBClient("localhost:2222")
-        client.close()
-        client.close()
+    def tearDown(self) -> None:
+        if hasattr(self, "client"):
+            self.client.close()
+
+    def test_close(self) -> None:
+        self.construct_esdb_client()
+        self.client.close()
+        self.client.close()
+
+        self.client = ESDBClient("localhost:2222")
+        self.client.close()
+        self.client.close()
 
     def test_constructor_args(self) -> None:
         client1 = ESDBClient("localhost:2222")
@@ -76,22 +81,22 @@ class TestESDBClient(TestCase):
             ESDBClient(uri="esdb:something")
 
     def test_service_unavailable_exception(self) -> None:
-        client = ESDBClient("localhost:2222")  # wrong port
+        self.client = ESDBClient("localhost:2222")  # wrong port
 
         with self.assertRaises(ServiceUnavailable) as cm:
-            list(client.read_stream_events(str(uuid4())))
+            list(self.client.read_stream_events(str(uuid4())))
         self.assertIn(
             "failed to connect to all addresses", cm.exception.args[0].details()
         )
 
         with self.assertRaises(ServiceUnavailable) as cm:
-            client.append_events(str(uuid4()), expected_position=None, events=[])
+            self.client.append_events(str(uuid4()), expected_position=None, events=[])
         self.assertIn(
             "failed to connect to all addresses", cm.exception.args[0].details()
         )
 
         with self.assertRaises(ServiceUnavailable) as cm:
-            client.append_event(
+            self.client.append_event(
                 str(uuid4()), expected_position=None, event=NewEvent(type="", data=b"")
             )
         self.assertIn(
@@ -100,7 +105,7 @@ class TestESDBClient(TestCase):
 
         with self.assertRaises(ServiceUnavailable) as cm:
             group_name = f"my-subscription-{uuid4().hex}"
-            client.create_subscription(
+            self.client.create_subscription(
                 group_name=group_name,
                 filter_include=["OrderCreated"],
             )
@@ -110,7 +115,7 @@ class TestESDBClient(TestCase):
 
         with self.assertRaises(ServiceUnavailable) as cm:
             group_name = f"my-subscription-{uuid4().hex}"
-            read_req, read_resp = client.read_subscription(
+            read_req, read_resp = self.client.read_subscription(
                 group_name=group_name,
             )
             list(read_resp)
@@ -144,11 +149,11 @@ class TestESDBClient(TestCase):
         self.assertEqual(cm.exception.__class__, GrpcError)
         self.assertIsInstance(cm.exception.args[0], MyRpcError)
 
-    def construct_esdb_client(self) -> ESDBClient:
+    def construct_esdb_client(self) -> None:
         server_cert = ssl.get_server_certificate(addr=("localhost", 2113))
         username = "admin"
         password = "changeit"
-        return ESDBClient(
+        self.client = ESDBClient(
             host="localhost",
             port=2113,
             server_cert=server_cert,
@@ -157,70 +162,72 @@ class TestESDBClient(TestCase):
         )
 
     def test_stream_not_found_exception(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
         stream_name = str(uuid4())
 
         with self.assertRaises(StreamNotFound):
-            list(client.read_stream_events(stream_name))
+            list(self.client.read_stream_events(stream_name))
 
         with self.assertRaises(StreamNotFound):
-            list(client.read_stream_events(stream_name, backwards=True))
+            list(self.client.read_stream_events(stream_name, backwards=True))
 
         with self.assertRaises(StreamNotFound):
-            list(client.read_stream_events(stream_name, stream_position=1))
+            list(self.client.read_stream_events(stream_name, stream_position=1))
 
         with self.assertRaises(StreamNotFound):
             list(
-                client.read_stream_events(
+                self.client.read_stream_events(
                     stream_name, stream_position=1, backwards=True
                 )
             )
 
         with self.assertRaises(StreamNotFound):
-            list(client.read_stream_events(stream_name, limit=10))
+            list(self.client.read_stream_events(stream_name, limit=10))
 
         with self.assertRaises(StreamNotFound):
-            list(client.read_stream_events(stream_name, backwards=True, limit=10))
-
-        with self.assertRaises(StreamNotFound):
-            list(client.read_stream_events(stream_name, stream_position=1, limit=10))
+            list(self.client.read_stream_events(stream_name, backwards=True, limit=10))
 
         with self.assertRaises(StreamNotFound):
             list(
-                client.read_stream_events(
+                self.client.read_stream_events(stream_name, stream_position=1, limit=10)
+            )
+
+        with self.assertRaises(StreamNotFound):
+            list(
+                self.client.read_stream_events(
                     stream_name, stream_position=1, backwards=True, limit=10
                 )
             )
 
     def test_append_event_and_read_stream_with_occ(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
         stream_name = str(uuid4())
 
         # Check stream not found.
         with self.assertRaises(StreamNotFound):
-            list(client.read_stream_events(stream_name))
+            list(self.client.read_stream_events(stream_name))
 
         # Check stream position is None.
-        self.assertEqual(client.get_stream_position(stream_name), None)
+        self.assertEqual(self.client.get_stream_position(stream_name), None)
 
         # Todo: Reintroduce this when/if testing for streaming individual events.
         # # Check get error when attempting to append empty list to position 1.
         # with self.assertRaises(ExpectedPositionError) as cm:
-        #     client.append_events(stream_name, expected_position=1, events=[])
+        #     self.client.append_events(stream_name, expected_position=1, events=[])
         # self.assertEqual(cm.exception.args[0], f"Stream {stream_name!r} does not exist")
 
         # # Append empty list of events.
-        # commit_position0 = client.append_events(
+        # commit_position0 = self.client.append_events(
         #     stream_name, expected_position=None, events=[]
         # )
         # self.assertIsInstance(commit_position0, int)
 
         # # Check stream still not found.
         # with self.assertRaises(StreamNotFound):
-        #     list(client.read_stream_events(stream_name))
+        #     list(self.client.read_stream_events(stream_name))
 
         # # Check stream position is None.
-        # self.assertEqual(client.get_stream_position(stream_name), None)
+        # self.assertEqual(self.client.get_stream_position(stream_name), None)
 
         # Construct three new events.
         data1 = random_data()
@@ -253,12 +260,12 @@ class TestESDBClient(TestCase):
 
         # Check get error when attempting to append new event to position 1.
         with self.assertRaises(ExpectedPositionError) as cm:
-            client.append_event(stream_name, expected_position=1, event=event1)
+            self.client.append_event(stream_name, expected_position=1, event=event1)
         self.assertEqual(cm.exception.args[0], f"Stream {stream_name!r} does not exist")
 
         # Append new event.
-        commit_position0 = client.get_commit_position()
-        commit_position1 = client.append_event(
+        commit_position0 = self.client.get_commit_position()
+        commit_position1 = self.client.append_event(
             stream_name, expected_position=None, event=event1
         )
 
@@ -266,10 +273,10 @@ class TestESDBClient(TestCase):
         self.assertGreater(commit_position1, commit_position0)
 
         # Check stream position is 0.
-        self.assertEqual(client.get_stream_position(stream_name), 0)
+        self.assertEqual(self.client.get_stream_position(stream_name), 0)
 
         # Read the stream forwards from the start (expect one event).
-        events = list(client.read_stream_events(stream_name))
+        events = list(self.client.read_stream_events(stream_name))
         self.assertEqual(len(events), 1)
 
         # Check the attributes of the recorded event.
@@ -286,79 +293,83 @@ class TestESDBClient(TestCase):
         # Check we can't append another new event at initial position.
 
         with self.assertRaises(ExpectedPositionError) as cm:
-            client.append_event(stream_name, expected_position=None, event=event2)
+            self.client.append_event(stream_name, expected_position=None, event=event2)
         self.assertEqual(cm.exception.args[0], "Current position is 0")
 
         # Append another event.
-        commit_position2 = client.append_event(
+        commit_position2 = self.client.append_event(
             stream_name, expected_position=0, event=event2
         )
 
         # Check stream position is 1.
-        self.assertEqual(client.get_stream_position(stream_name), 1)
+        self.assertEqual(self.client.get_stream_position(stream_name), 1)
 
         # Check stream position.
         self.assertGreater(commit_position2, commit_position1)
 
         # Read the stream (expect two events in 'forwards' order).
-        events = list(client.read_stream_events(stream_name))
+        events = list(self.client.read_stream_events(stream_name))
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
 
         # Read the stream backwards from the end.
-        events = list(client.read_stream_events(stream_name, backwards=True))
+        events = list(self.client.read_stream_events(stream_name, backwards=True))
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event2.id)
         self.assertEqual(events[1].id, event1.id)
 
         # Read the stream forwards from position 1.
-        events = list(client.read_stream_events(stream_name, stream_position=1))
+        events = list(self.client.read_stream_events(stream_name, stream_position=1))
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)
 
         # Read the stream backwards from position 0.
         events = list(
-            client.read_stream_events(stream_name, stream_position=0, backwards=True)
+            self.client.read_stream_events(
+                stream_name, stream_position=0, backwards=True
+            )
         )
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event1.id)
 
         # Read the stream forwards from start with limit.
-        events = list(client.read_stream_events(stream_name, limit=1))
+        events = list(self.client.read_stream_events(stream_name, limit=1))
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event1.id)
 
         # Read the stream backwards from end with limit.
-        events = list(client.read_stream_events(stream_name, backwards=True, limit=1))
+        events = list(
+            self.client.read_stream_events(stream_name, backwards=True, limit=1)
+        )
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)
 
         # Check we can't append another new event at second position.
         with self.assertRaises(ExpectedPositionError) as cm:
-            client.append_event(stream_name, expected_position=0, event=event3)
+            self.client.append_event(stream_name, expected_position=0, event=event3)
         self.assertEqual(cm.exception.args[0], "Current position is 1")
 
         # Append another new event.
-        commit_position3 = client.append_event(
+        commit_position3 = self.client.append_event(
             stream_name, expected_position=1, event=event3
         )
 
         # Check stream position is 2.
-        self.assertEqual(client.get_stream_position(stream_name), 2)
+        self.assertEqual(self.client.get_stream_position(stream_name), 2)
 
         # Check the commit position.
         self.assertGreater(commit_position3, commit_position2)
 
         # Read the stream forwards from start (expect three events).
-        events = list(client.read_stream_events(stream_name))
+        events = list(self.client.read_stream_events(stream_name))
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
         self.assertEqual(events[2].id, event3.id)
 
         # Read the stream backwards from end (expect three events).
-        events = list(client.read_stream_events(stream_name, backwards=True))
+        events = list(self.client.read_stream_events(stream_name, backwards=True))
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].id, event3.id)
         self.assertEqual(events[1].id, event2.id)
@@ -366,14 +377,14 @@ class TestESDBClient(TestCase):
 
         # Read the stream forwards from position 1 with limit 1.
         events = list(
-            client.read_stream_events(stream_name, stream_position=1, limit=1)
+            self.client.read_stream_events(stream_name, stream_position=1, limit=1)
         )
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)
 
         # Read the stream backwards from position 1 with limit 1.
         events = list(
-            client.read_stream_events(
+            self.client.read_stream_events(
                 stream_name, stream_position=1, backwards=True, limit=1
             )
         )
@@ -381,28 +392,30 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[0].id, event2.id)
 
         # Idempotent write of event2.
-        commit_position2_1 = client.append_event(
+        commit_position2_1 = self.client.append_event(
             stream_name, expected_position=0, event=event2
         )
         self.assertEqual(commit_position2_1, commit_position2)
 
-        events = list(client.read_stream_events(stream_name))
+        events = list(self.client.read_stream_events(stream_name))
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
         self.assertEqual(events[2].id, event3.id)
 
     def test_append_event_and_read_stream_without_occ(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
         stream_name = str(uuid4())
 
         event1 = NewEvent(type="Snapshot", data=random_data())
 
         # Append new event.
-        commit_position = client.append_event(
+        commit_position = self.client.append_event(
             stream_name, expected_position=-1, event=event1
         )
-        events = list(client.read_stream_events(stream_name, backwards=True, limit=1))
+        events = list(
+            self.client.read_stream_events(stream_name, backwards=True, limit=1)
+        )
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event1.id)
 
@@ -411,35 +424,86 @@ class TestESDBClient(TestCase):
         if events[0].commit_position is not None:
             self.assertEqual(events[0].commit_position, commit_position)
 
-    def test_append_events_with_occ(self) -> None:
-        client = self.construct_esdb_client()
+    def test_append_events_multiplexed_without_occ(self) -> None:
+        self.construct_esdb_client()
         stream_name = str(uuid4())
 
-        commit_position0 = client.get_commit_position()
+        commit_position0 = self.client.get_commit_position()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
 
-        # Fail to append (stream does not exist).
-        # Todo: Why does the gRPC error say 'ALREADY_EXISTS'?
-        with self.assertRaises(ExpectedPositionError):
-            client.append_events(
-                stream_name, expected_position=1, events=[event1, event2]
-            )
-
         # Append batch of new events.
-        commit_position2 = client.append_events(
-            stream_name, expected_position=None, events=[event1, event2]
+        commit_position2 = self.client.append_events_multiplexed(
+            stream_name, expected_position=-1, events=[event1, event2]
         )
 
         # Read stream and check recorded events.
-        events = list(client.read_stream_events(stream_name))
+        events = list(self.client.read_stream_events(stream_name))
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
 
         assert commit_position2 > commit_position0
-        assert commit_position2 == client.get_commit_position()
+        assert commit_position2 == self.client.get_commit_position()
+        if events[1].commit_position is not None:
+            assert isinstance(events[0].commit_position, int)
+            assert events[0].commit_position > commit_position0
+            assert events[0].commit_position < commit_position2
+            assert events[1].commit_position == commit_position2
+
+        # Append another batch of new events.
+        event3 = NewEvent(type="OrderUpdated", data=random_data())
+        event4 = NewEvent(type="OrderUpdated", data=random_data())
+        commit_position4 = self.client.append_events_multiplexed(
+            stream_name, expected_position=-1, events=[event3, event4]
+        )
+
+        # Read stream and check recorded events.
+        events = list(self.client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 4)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+        self.assertEqual(events[3].id, event4.id)
+
+        assert commit_position4 > commit_position2
+        assert commit_position4 == self.client.get_commit_position()
+
+        if events[3].commit_position is not None:
+            assert isinstance(events[2].commit_position, int)
+            assert events[2].commit_position > commit_position2
+            assert events[2].commit_position < commit_position4
+            assert events[3].commit_position == commit_position4
+
+    def test_append_events_multiplexed_with_occ(self) -> None:
+        self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        commit_position0 = self.client.get_commit_position()
+
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+
+        # Fail to append (stream does not exist).
+        with self.assertRaises(StreamNotFound):
+            self.client.append_events_multiplexed(
+                stream_name, expected_position=1, events=[event1, event2]
+            )
+
+        # Append batch of new events.
+        commit_position2 = self.client.append_events_multiplexed(
+            stream_name, expected_position=None, events=[event1, event2]
+        )
+
+        # Read stream and check recorded events.
+        events = list(self.client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+
+        assert commit_position2 > commit_position0
+        assert commit_position2 == self.client.get_commit_position()
         if events[1].commit_position is not None:
             assert isinstance(events[0].commit_position, int)
             assert events[0].commit_position > commit_position0
@@ -450,44 +514,98 @@ class TestESDBClient(TestCase):
         event3 = NewEvent(type="OrderUpdated", data=random_data())
         event4 = NewEvent(type="OrderUpdated", data=random_data())
         with self.assertRaises(ExpectedPositionError):
-            client.append_events(
+            self.client.append_events_multiplexed(
                 stream_name, expected_position=None, events=[event3, event4]
             )
 
         # Fail to append (wrong expected position).
         with self.assertRaises(ExpectedPositionError):
-            client.append_events(
+            self.client.append_events_multiplexed(
                 stream_name, expected_position=10, events=[event3, event4]
             )
 
         # Read stream and check recorded events.
-        events = list(client.read_stream_events(stream_name))
+        events = list(self.client.read_stream_events(stream_name))
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
 
-    def test_append_events_without_occ(self) -> None:
-        client = self.construct_esdb_client()
+    def test_append_events_with_occ(self) -> None:
+        self.construct_esdb_client()
         stream_name = str(uuid4())
 
-        commit_position0 = client.get_commit_position()
+        commit_position0 = self.client.get_commit_position()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
 
+        # Fail to append (stream does not exist).
+        with self.assertRaises(StreamNotFound):
+            self.client.append_events(
+                stream_name, expected_position=1, events=[event1, event2]
+            )
+
         # Append batch of new events.
-        commit_position2 = client.append_events(
-            stream_name, expected_position=-1, events=[event1, event2]
+        commit_position2 = self.client.append_events(
+            stream_name, expected_position=None, events=[event1, event2]
         )
 
         # Read stream and check recorded events.
-        events = list(client.read_stream_events(stream_name))
+        events = list(self.client.read_stream_events(stream_name))
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
 
         assert commit_position2 > commit_position0
-        assert commit_position2 == client.get_commit_position()
+        assert commit_position2 == self.client.get_commit_position()
+        if events[1].commit_position is not None:
+            assert isinstance(events[0].commit_position, int)
+            assert events[0].commit_position > commit_position0
+            assert events[0].commit_position < commit_position2
+            assert events[1].commit_position == commit_position2
+
+        # Fail to append (stream already exists).
+        event3 = NewEvent(type="OrderUpdated", data=random_data())
+        event4 = NewEvent(type="OrderUpdated", data=random_data())
+        with self.assertRaises(ExpectedPositionError):
+            self.client.append_events(
+                stream_name, expected_position=None, events=[event3, event4]
+            )
+
+        # Fail to append (wrong expected position).
+        with self.assertRaises(ExpectedPositionError):
+            self.client.append_events(
+                stream_name, expected_position=10, events=[event3, event4]
+            )
+
+        # Read stream and check recorded events.
+        events = list(self.client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+
+    def test_append_events_without_occ(self) -> None:
+        self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        commit_position0 = self.client.get_commit_position()
+
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+
+        # Append batch of new events.
+        commit_position2 = self.client.append_events(
+            stream_name, expected_position=-1, events=[event1, event2]
+        )
+
+        # Read stream and check recorded events.
+        events = list(self.client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+
+        assert commit_position2 > commit_position0
+        assert commit_position2 == self.client.get_commit_position()
         if events[1].commit_position is not None:
             assert isinstance(events[0].commit_position, int)
             assert events[0].commit_position > commit_position0
@@ -497,12 +615,12 @@ class TestESDBClient(TestCase):
         # Append another batch of new events.
         event3 = NewEvent(type="OrderUpdated", data=random_data())
         event4 = NewEvent(type="OrderUpdated", data=random_data())
-        commit_position4 = client.append_events(
+        commit_position4 = self.client.append_events(
             stream_name, expected_position=-1, events=[event3, event4]
         )
 
         # Read stream and check recorded events.
-        events = list(client.read_stream_events(stream_name))
+        events = list(self.client.read_stream_events(stream_name))
         self.assertEqual(len(events), 4)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -510,7 +628,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[3].id, event4.id)
 
         assert commit_position4 > commit_position2
-        assert commit_position4 == client.get_commit_position()
+        assert commit_position4 == self.client.get_commit_position()
 
         if events[3].commit_position is not None:
             assert isinstance(events[2].commit_position, int)
@@ -519,29 +637,29 @@ class TestESDBClient(TestCase):
             assert events[3].commit_position == commit_position4
 
     def test_commit_position(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
         stream_name = str(uuid4())
 
         event1 = NewEvent(type="Snapshot", data=b"{}", metadata=b"{}")
 
         # Append new event.
-        commit_position = client.append_events(
+        commit_position = self.client.append_events(
             stream_name, expected_position=-1, events=[event1]
         )
         # Check we actually have an int.
         self.assertIsInstance(commit_position, int)
 
         # Check commit_position() returns expected value.
-        self.assertEqual(client.get_commit_position(), commit_position)
+        self.assertEqual(self.client.get_commit_position(), commit_position)
 
         # Create persistent subscription.
-        client.create_subscription(f"group-{uuid4()}")
+        self.client.create_subscription(f"group-{uuid4()}")
 
         # Check commit_position() still returns expected value.
-        self.assertEqual(client.get_commit_position(), commit_position)
+        self.assertEqual(self.client.get_commit_position(), commit_position)
 
     def test_timeout_append_events(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Append two events.
         stream_name1 = str(uuid4())
@@ -554,7 +672,7 @@ class TestESDBClient(TestCase):
         new_events += [NewEvent(type="OrderUpdated", data=b"") for _ in range(1000)]
         # Timeout appending new event.
         with self.assertRaises(DeadlineExceeded):
-            client.append_events(
+            self.client.append_events(
                 stream_name=stream_name1,
                 expected_position=None,
                 events=new_events,
@@ -562,22 +680,22 @@ class TestESDBClient(TestCase):
             )
 
         with self.assertRaises(StreamNotFound):
-            list(client.read_stream_events(stream_name1))
+            list(self.client.read_stream_events(stream_name1))
 
         # # Timeout appending new event.
         # with self.assertRaises(DeadlineExceeded):
-        #     client.append_events(
+        #     self.client.append_events(
         #         stream_name1, expected_position=1, events=[event3], timeout=0
         #     )
         #
         # # Timeout reading stream.
         # with self.assertRaises(DeadlineExceeded):
-        #     list(client.read_stream_events(stream_name1, timeout=0))
+        #     list(self.client.read_stream_events(stream_name1, timeout=0))
 
     def test_read_all_events(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
-        num_old_events = len(list(client.read_all_events()))
+        num_old_events = len(list(self.client.read_all_events()))
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
@@ -585,17 +703,17 @@ class TestESDBClient(TestCase):
 
         # Append new events.
         stream_name1 = str(uuid4())
-        commit_position1 = client.append_events(
+        commit_position1 = self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         stream_name2 = str(uuid4())
-        commit_position2 = client.append_events(
+        commit_position2 = self.client.append_events(
             stream_name2, expected_position=None, events=[event1, event2, event3]
         )
 
         # Check we can read forwards from the start.
-        events = list(client.read_all_events())
+        events = list(self.client.read_all_events())
         self.assertEqual(len(events) - num_old_events, 6)
         self.assertEqual(events[-1].stream_name, stream_name2)
         self.assertEqual(events[-1].type, "OrderDeleted")
@@ -607,7 +725,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[-4].type, "OrderDeleted")
 
         # Check we can read backwards from the end.
-        events = list(client.read_all_events(backwards=True))
+        events = list(self.client.read_all_events(backwards=True))
         self.assertEqual(len(events) - num_old_events, 6)
         self.assertEqual(events[0].stream_name, stream_name2)
         self.assertEqual(events[0].type, "OrderDeleted")
@@ -619,7 +737,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[3].type, "OrderDeleted")
 
         # Check we can read forwards from commit position 1.
-        events = list(client.read_all_events(commit_position=commit_position1))
+        events = list(self.client.read_all_events(commit_position=commit_position1))
         self.assertEqual(len(events), 4)
         self.assertEqual(events[0].stream_name, stream_name1)
         self.assertEqual(events[0].type, "OrderDeleted")
@@ -631,7 +749,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[3].type, "OrderDeleted")
 
         # Check we can read forwards from commit position 2.
-        events = list(client.read_all_events(commit_position=commit_position2))
+        events = list(self.client.read_all_events(commit_position=commit_position2))
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].stream_name, stream_name2)
         self.assertEqual(events[0].type, "OrderDeleted")
@@ -640,7 +758,9 @@ class TestESDBClient(TestCase):
         # NB backwards here doesn't include event at commit position, otherwise
         # first event would an OrderDeleted event, and we get an OrderUpdated.
         events = list(
-            client.read_all_events(commit_position=commit_position1, backwards=True)
+            self.client.read_all_events(
+                commit_position=commit_position1, backwards=True
+            )
         )
         self.assertEqual(len(events) - num_old_events, 2)
         self.assertEqual(events[0].stream_name, stream_name1)
@@ -651,7 +771,9 @@ class TestESDBClient(TestCase):
         # Check we can read backwards from commit position 2.
         # NB backwards here doesn't include event at commit position.
         events = list(
-            client.read_all_events(commit_position=commit_position2, backwards=True)
+            self.client.read_all_events(
+                commit_position=commit_position2, backwards=True
+            )
         )
         self.assertEqual(len(events) - num_old_events, 5)
         self.assertEqual(events[0].stream_name, stream_name2)
@@ -662,11 +784,11 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[2].type, "OrderDeleted")
 
         # Check we can read forwards from the start with limit.
-        events = list(client.read_all_events(limit=3))
+        events = list(self.client.read_all_events(limit=3))
         self.assertEqual(len(events), 3)
 
         # Check we can read backwards from the end with limit.
-        events = list(client.read_all_events(backwards=True, limit=3))
+        events = list(self.client.read_all_events(backwards=True, limit=3))
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].stream_name, stream_name2)
         self.assertEqual(events[0].type, "OrderDeleted")
@@ -676,7 +798,9 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[2].type, "OrderCreated")
 
         # Check we can read forwards from commit position 1 with limit.
-        events = list(client.read_all_events(commit_position=commit_position1, limit=3))
+        events = list(
+            self.client.read_all_events(commit_position=commit_position1, limit=3)
+        )
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].stream_name, stream_name1)
         self.assertEqual(events[0].type, "OrderDeleted")
@@ -687,7 +811,7 @@ class TestESDBClient(TestCase):
 
         # Check we can read backwards from commit position 2 with limit.
         events = list(
-            client.read_all_events(
+            self.client.read_all_events(
                 commit_position=commit_position2, backwards=True, limit=3
             )
         )
@@ -700,7 +824,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[2].type, "OrderDeleted")
 
     def test_timeout_read_all_events(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
@@ -708,21 +832,21 @@ class TestESDBClient(TestCase):
 
         # Append new events.
         stream_name1 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         stream_name2 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name2, expected_position=None, events=[event1, event2, event3]
         )
 
         # Timeout reading all events.
         with self.assertRaises(DeadlineExceeded):
-            list(client.read_all_events(timeout=0.001))
+            list(self.client.read_all_events(timeout=0.001))
 
     def test_read_all_filter_include(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
@@ -730,24 +854,24 @@ class TestESDBClient(TestCase):
 
         # Append new events.
         stream_name1 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Read only OrderCreated.
-        events = list(client.read_all_events(filter_include=("OrderCreated",)))
+        events = list(self.client.read_all_events(filter_include=("OrderCreated",)))
         types = set([e.type for e in events])
         self.assertEqual(types, {"OrderCreated"})
 
         # Read only OrderCreated and OrderDeleted.
         events = list(
-            client.read_all_events(filter_include=("OrderCreated", "OrderDeleted"))
+            self.client.read_all_events(filter_include=("OrderCreated", "OrderDeleted"))
         )
         types = set([e.type for e in events])
         self.assertEqual(types, {"OrderCreated", "OrderDeleted"})
 
     def test_read_all_filter_exclude(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
@@ -755,12 +879,12 @@ class TestESDBClient(TestCase):
 
         # Append new events.
         stream_name1 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Exclude OrderCreated.
-        events = list(client.read_all_events(filter_exclude=("OrderCreated",)))
+        events = list(self.client.read_all_events(filter_exclude=("OrderCreated",)))
         types = set([e.type for e in events])
         self.assertNotIn("OrderCreated", types)
         self.assertIn("OrderUpdated", types)
@@ -768,7 +892,7 @@ class TestESDBClient(TestCase):
 
         # Exclude OrderCreated and OrderDeleted.
         events = list(
-            client.read_all_events(filter_exclude=("OrderCreated", "OrderDeleted"))
+            self.client.read_all_events(filter_exclude=("OrderCreated", "OrderDeleted"))
         )
         types = set([e.type for e in events])
         self.assertNotIn("OrderCreated", types)
@@ -776,7 +900,7 @@ class TestESDBClient(TestCase):
         self.assertNotIn("OrderDeleted", types)
 
     def test_read_all_filter_exclude_ignored_when_filter_include_is_set(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
@@ -784,13 +908,13 @@ class TestESDBClient(TestCase):
 
         # Append new events.
         stream_name1 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Both include and exclude.
         events = list(
-            client.read_all_events(
+            self.client.read_all_events(
                 filter_include=("OrderCreated",), filter_exclude=("OrderCreated",)
             )
         )
@@ -800,7 +924,7 @@ class TestESDBClient(TestCase):
         self.assertNotIn("OrderDeleted", types)
 
     def test_catchup_subscribe_all_events_default_filter(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
@@ -808,12 +932,12 @@ class TestESDBClient(TestCase):
 
         # Append new events.
         stream_name1 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Subscribe to all events, from the start.
-        subscription = client.subscribe_all_events()
+        subscription = self.client.subscribe_all_events()
         events = []
         for event in subscription:
             events.append(event)
@@ -825,7 +949,7 @@ class TestESDBClient(TestCase):
         event5 = NewEvent(type="OrderUpdated", data=random_data())
         event6 = NewEvent(type="OrderDeleted", data=random_data())
         stream_name2 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name2, expected_position=None, events=[event4, event5, event6]
         )
 
@@ -842,7 +966,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[2].id, event6.id)
 
     def test_catchup_subscribe_stream_events_default_filter(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
@@ -850,12 +974,12 @@ class TestESDBClient(TestCase):
 
         # Append new events.
         stream_name1 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Subscribe to stream events, from the start.
-        subscription = client.subscribe_stream_events(stream_name=stream_name1)
+        subscription = self.client.subscribe_stream_events(stream_name=stream_name1)
         events = []
         for event in subscription:
             events.append(event)
@@ -867,7 +991,7 @@ class TestESDBClient(TestCase):
         event5 = NewEvent(type="OrderUpdated", data=random_data())
         event6 = NewEvent(type="OrderDeleted", data=random_data())
         stream_name2 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name2, expected_position=None, events=[event4, event5, event6]
         )
 
@@ -875,7 +999,7 @@ class TestESDBClient(TestCase):
         event7 = NewEvent(type="OrderCreated", data=random_data())
         event8 = NewEvent(type="OrderUpdated", data=random_data())
         event9 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=2, events=[event7, event8, event9]
         )
 
@@ -893,7 +1017,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[2].id, event9.id)
 
     def test_catchup_subscribe_stream_events_from_stream_position(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
@@ -901,12 +1025,12 @@ class TestESDBClient(TestCase):
 
         # Append new events.
         stream_name1 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Subscribe to stream events, from the current stream position.
-        subscription = client.subscribe_stream_events(
+        subscription = self.client.subscribe_stream_events(
             stream_name=stream_name1, stream_position=1
         )
         events = []
@@ -923,7 +1047,7 @@ class TestESDBClient(TestCase):
         event5 = NewEvent(type="OrderUpdated", data=random_data())
         event6 = NewEvent(type="OrderDeleted", data=random_data())
         stream_name2 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name2, expected_position=None, events=[event4, event5, event6]
         )
 
@@ -931,7 +1055,7 @@ class TestESDBClient(TestCase):
         event7 = NewEvent(type="OrderCreated", data=random_data())
         event8 = NewEvent(type="OrderUpdated", data=random_data())
         event9 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=2, events=[event7, event8, event9]
         )
 
@@ -949,19 +1073,19 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[3].id, event9.id)
 
     def test_catchup_subscribe_all_events_no_filter(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
         event3 = NewEvent(type="OrderDeleted", data=random_data())
         stream_name1 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Subscribe from the current commit position.
-        subscription = client.subscribe_all_events(
+        subscription = self.client.subscribe_all_events(
             filter_exclude=[],
             filter_include=[],
         )
@@ -974,19 +1098,19 @@ class TestESDBClient(TestCase):
             self.fail("Didn't get a system event")
 
     def test_catchup_subscribe_all_events_include_filter(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
         event3 = NewEvent(type="OrderDeleted", data=random_data())
         stream_name1 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Subscribe from the beginning.
-        subscription = client.subscribe_all_events(
+        subscription = self.client.subscribe_all_events(
             filter_exclude=[],
             filter_include=["OrderCreated"],
         )
@@ -1007,19 +1131,19 @@ class TestESDBClient(TestCase):
         self.assertGreater(len(events), 0)
 
     def test_catchup_subscribe_all_events_from_commit_position_zero(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
         event3 = NewEvent(type="OrderDeleted", data=random_data())
         stream_name1 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Subscribe from the beginning.
-        subscription = client.subscribe_all_events()
+        subscription = self.client.subscribe_all_events()
 
         # Expect to only get "OrderCreated" events.
         count = 0
@@ -1029,20 +1153,22 @@ class TestESDBClient(TestCase):
         self.assertEqual(count, 1)
 
     def test_catchup_subscribe_all_events_from_commit_position_current(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
         event3 = NewEvent(type="OrderDeleted", data=random_data())
         stream_name1 = str(uuid4())
-        commit_position = client.append_events(
+        commit_position = self.client.append_events(
             stream_name1, expected_position=None, events=[event1]
         )
-        client.append_events(stream_name1, expected_position=0, events=[event2, event3])
+        self.client.append_events(
+            stream_name1, expected_position=0, events=[event2, event3]
+        )
 
         # Subscribe from the commit position.
-        subscription = client.subscribe_all_events(commit_position=commit_position)
+        subscription = self.client.subscribe_all_events(commit_position=commit_position)
 
         events = []
         for event in subscription:
@@ -1063,19 +1189,19 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[1].id, event3.id)
 
     def test_timeout_subscribe_all_events(self) -> None:
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
         event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
         stream_name1 = str(uuid4())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Subscribe from the beginning.
-        subscription = client.subscribe_all_events(timeout=0.5)
+        subscription = self.client.subscribe_all_events(timeout=0.5)
 
         # Expect to timeout instead of waiting indefinitely for next event.
         count = 0
@@ -1085,12 +1211,11 @@ class TestESDBClient(TestCase):
         self.assertGreater(count, 0)
 
     def test_persistent_subscription_from_start(self) -> None:
-        # Construct client.
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        client.create_subscription(group_name=group_name)
+        self.client.create_subscription(group_name=group_name)
 
         # Append three events.
         stream_name1 = str(uuid4())
@@ -1099,12 +1224,12 @@ class TestESDBClient(TestCase):
         event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
         event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
 
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Read all events.
-        read_req, read_resp = client.read_subscription(group_name=group_name)
+        read_req, read_resp = self.client.read_subscription(group_name=group_name)
 
         events = []
         for event in read_resp:
@@ -1118,31 +1243,32 @@ class TestESDBClient(TestCase):
         assert events[-1].data == event3.data
 
     def test_persistent_subscription_from_commit_position(self) -> None:
-        # Construct client.
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Append one event.
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=random_data())
-        commit_position = client.append_events(
+        commit_position = self.client.append_events(
             stream_name1, expected_position=None, events=[event1]
         )
 
         # Append two more events.
         event2 = NewEvent(type="OrderUpdated", data=random_data())
         event3 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(stream_name1, expected_position=0, events=[event2, event3])
+        self.client.append_events(
+            stream_name1, expected_position=0, events=[event2, event3]
+        )
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
 
-        client.create_subscription(
+        self.client.create_subscription(
             group_name=group_name,
             commit_position=commit_position,
         )
 
         # Read events from subscription.
-        read_req, read_resp = client.read_subscription(group_name=group_name)
+        read_req, read_resp = self.client.read_subscription(group_name=group_name)
 
         events = []
         for event in read_resp:
@@ -1161,12 +1287,11 @@ class TestESDBClient(TestCase):
         assert events[2].id == event3.id
 
     def test_persistent_subscription_from_end(self) -> None:
-        # Construct client.
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        client.create_subscription(
+        self.client.create_subscription(
             group_name=group_name,
             from_end=True,
             # filter_exclude=[],
@@ -1178,17 +1303,17 @@ class TestESDBClient(TestCase):
         event2 = NewEvent(type="OrderUpdated", data=random_data())
         event3 = NewEvent(type="OrderDeleted", data=random_data())
 
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Read three events.
-        read_req, read_resp = client.read_subscription(group_name=group_name)
+        read_req, read_resp = self.client.read_subscription(group_name=group_name)
 
         events = []
         for event in read_resp:
             read_req.ack(event.id)
-            print(event.type)
+            # print(event.type)
             events.append(event)
             if event.id == event3.id:
                 break
@@ -1205,12 +1330,11 @@ class TestESDBClient(TestCase):
         assert events[2].data == event3.data
 
     def test_persistent_subscription_include_filter(self) -> None:
-        # Construct client.
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        client.create_subscription(
+        self.client.create_subscription(
             group_name=group_name,
             filter_include=["OrderCreated"],
         )
@@ -1221,12 +1345,12 @@ class TestESDBClient(TestCase):
         event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
         event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
 
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Read events from subscription.
-        read_req, read_resp = client.read_subscription(group_name=group_name)
+        read_req, read_resp = self.client.read_subscription(group_name=group_name)
 
         for event in read_resp:
             read_req.ack(event.id)
@@ -1235,12 +1359,11 @@ class TestESDBClient(TestCase):
                 break
 
     def test_persistent_subscription_exclude_filter(self) -> None:
-        # Construct client.
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        client.create_subscription(
+        self.client.create_subscription(
             group_name=group_name,
             filter_exclude=["OrderCreated"],
         )
@@ -1251,37 +1374,36 @@ class TestESDBClient(TestCase):
         event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
         event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
 
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Read events from subscription.
-        read_req, read_resp = client.read_subscription(group_name=group_name)
+        read_req, read_resp = self.client.read_subscription(group_name=group_name)
 
-        start = datetime.now()
-        absstart = start
-        for i, event in enumerate(read_resp):
-            received = datetime.now()
-            duration = (received - start).total_seconds()
-            total_duration = (received - absstart).total_seconds()
-            rate = i / total_duration
-            start = received
+        # start = datetime.now()
+        # absstart = start
+        for _, event in enumerate(read_resp):
+            # received = datetime.now()
+            # duration = (received - start).total_seconds()
+            # total_duration = (received - absstart).total_seconds()
+            # rate = i / total_duration
+            # start = received
             read_req.ack(event.id)
-            print(i, f"duration: {duration:.4f}s", f"rate: {rate:.1f}/s --", event)
-            if duration > 0.5:
-                print("^^^^^^^^^^^^^^^^^^^^^^^^ seemed to take a long time")
-                print()
+            # print(i, f"duration: {duration:.4f}s", f"rate: {rate:.1f}/s --", event)
+            # if duration > 0.5:
+            #     print("^^^^^^^^^^^^^^^^^^^^^^^^ seemed to take a long time")
+            #     print()
             self.assertNotEqual(event.type, "OrderCreated")
             if event.data == event3.data:
                 break
 
     def test_persistent_subscription_no_filter(self) -> None:
-        # Construct client.
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        client.create_subscription(
+        self.client.create_subscription(
             group_name=group_name,
             filter_exclude=[],
             filter_include=[],
@@ -1294,12 +1416,12 @@ class TestESDBClient(TestCase):
         event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
         event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
 
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
         # Read events from subscription.
-        read_req, read_resp = client.read_subscription(group_name=group_name)
+        read_req, read_resp = self.client.read_subscription(group_name=group_name)
 
         has_seen_system_event = False
         has_seen_persistent_config_event = False
@@ -1316,15 +1438,14 @@ class TestESDBClient(TestCase):
                 self.fail("Expected a 'system' event and a 'PersistentConfig' event")
 
     def test_persistent_stream_subscription_from_start(self) -> None:
-        # Construct client.
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Append some events.
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
         event3 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
@@ -1332,19 +1453,19 @@ class TestESDBClient(TestCase):
         event4 = NewEvent(type="OrderCreated", data=random_data())
         event5 = NewEvent(type="OrderUpdated", data=random_data())
         event6 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name2, expected_position=None, events=[event4, event5, event6]
         )
 
         # Create persistent stream subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        client.create_stream_subscription(
+        self.client.create_stream_subscription(
             group_name=group_name,
             stream_name=stream_name2,
         )
 
         # Read events from subscription.
-        read_req, read_resp = client.read_stream_subscription(
+        read_req, read_resp = self.client.read_stream_subscription(
             group_name=group_name,
             stream_name=stream_name2,
         )
@@ -1366,14 +1487,14 @@ class TestESDBClient(TestCase):
         event7 = NewEvent(type="OrderCreated", data=random_data())
         event8 = NewEvent(type="OrderUpdated", data=random_data())
         event9 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=2, events=[event7, event8, event9]
         )
 
         event10 = NewEvent(type="OrderCreated", data=random_data())
         event11 = NewEvent(type="OrderUpdated", data=random_data())
         event12 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name2, expected_position=2, events=[event10, event11, event12]
         )
 
@@ -1394,15 +1515,14 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[5].id, event12.id)
 
     def test_persistent_stream_subscription_from_stream_position(self) -> None:
-        # Construct client.
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Append some events.
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
         event3 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
@@ -1410,20 +1530,20 @@ class TestESDBClient(TestCase):
         event4 = NewEvent(type="OrderCreated", data=random_data())
         event5 = NewEvent(type="OrderUpdated", data=random_data())
         event6 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name2, expected_position=None, events=[event4, event5, event6]
         )
 
         # Create persistent stream subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        client.create_stream_subscription(
+        self.client.create_stream_subscription(
             group_name=group_name,
             stream_name=stream_name2,
             stream_position=1,
         )
 
         # Read events from subscription.
-        read_req, read_resp = client.read_stream_subscription(
+        read_req, read_resp = self.client.read_stream_subscription(
             group_name=group_name,
             stream_name=stream_name2,
         )
@@ -1444,14 +1564,14 @@ class TestESDBClient(TestCase):
         event7 = NewEvent(type="OrderCreated", data=random_data())
         event8 = NewEvent(type="OrderUpdated", data=random_data())
         event9 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=2, events=[event7, event8, event9]
         )
 
         event10 = NewEvent(type="OrderCreated", data=random_data())
         event11 = NewEvent(type="OrderUpdated", data=random_data())
         event12 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name2, expected_position=2, events=[event10, event11, event12]
         )
 
@@ -1471,15 +1591,14 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[4].id, event12.id)
 
     def test_persistent_stream_subscription_from_end(self) -> None:
-        # Construct client.
-        client = self.construct_esdb_client()
+        self.construct_esdb_client()
 
         # Append some events.
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
         event3 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=None, events=[event1, event2, event3]
         )
 
@@ -1487,20 +1606,20 @@ class TestESDBClient(TestCase):
         event4 = NewEvent(type="OrderCreated", data=random_data())
         event5 = NewEvent(type="OrderUpdated", data=random_data())
         event6 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name2, expected_position=None, events=[event4, event5, event6]
         )
 
         # Create persistent stream subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        client.create_stream_subscription(
+        self.client.create_stream_subscription(
             group_name=group_name,
             stream_name=stream_name2,
             from_end=True,
         )
 
         # Read events from subscription.
-        read_req, read_resp = client.read_stream_subscription(
+        read_req, read_resp = self.client.read_stream_subscription(
             group_name=group_name,
             stream_name=stream_name2,
         )
@@ -1509,14 +1628,14 @@ class TestESDBClient(TestCase):
         event7 = NewEvent(type="OrderCreated", data=random_data())
         event8 = NewEvent(type="OrderUpdated", data=random_data())
         event9 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name1, expected_position=2, events=[event7, event8, event9]
         )
 
         event10 = NewEvent(type="OrderCreated", data=random_data())
         event11 = NewEvent(type="OrderUpdated", data=random_data())
         event12 = NewEvent(type="OrderDeleted", data=random_data())
-        client.append_events(
+        self.client.append_events(
             stream_name2, expected_position=2, events=[event10, event11, event12]
         )
 
@@ -1545,11 +1664,11 @@ class TestESDBClient(TestCase):
 
 
 class TestESDBClientInsecure(TestESDBClient):
-    def construct_esdb_client(self) -> ESDBClient:
+    def construct_esdb_client(self) -> None:
         server_cert = None
         username = None
         password = None
-        return ESDBClient(
+        self.client = ESDBClient(
             host="localhost",
             port=2114,
             server_cert=server_cert,

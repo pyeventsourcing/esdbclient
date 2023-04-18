@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
 import re
 import sys
+from queue import Empty
+from threading import Lock, Thread
 from typing import Iterable, Iterator, Optional, Sequence, Tuple, Union, overload
 
 import grpc
-from grpc import RpcError
+from grpc import ChannelConnectivity, RpcError
 
 from esdbclient.esdbapi import (
     BasicAuthCallCredentials,
+    BatchAppendFuture,
+    BatchAppendFutureQueue,
     BatchAppendRequest,
     Streams,
     SubscriptionReadRequest,
@@ -64,8 +68,65 @@ class ESDBClient:
             self._call_credentials = grpc.metadata_call_credentials(
                 BasicAuthCallCredentials(username, password)
             )
+        self._channel.subscribe(self._receive_channel_connectivity_state)
+        self._channel_connectivity_state: Optional[ChannelConnectivity] = None
         self._streams = Streams(self._channel)
         self._subscriptions = Subscriptions(self._channel)
+
+        self._batch_append_futures_lock = Lock()
+        self._batch_append_futures_queue = BatchAppendFutureQueue()
+        self._batch_append_thread = Thread(
+            target=self._batch_append_future_result_loop, daemon=True
+        )
+        self._batch_append_thread.start()
+
+    def _receive_channel_connectivity_state(
+        self, connectivity: ChannelConnectivity
+    ) -> None:
+        self._channel_connectivity_state = connectivity
+        # print("Channel connectivity state:", connectivity)
+
+    def _batch_append_future_result_loop(self) -> None:
+        # while self._channel_connectivity_state is not ChannelConnectivity.SHUTDOWN:
+        try:
+            self._streams.batch_append_multiplexed(
+                futures_queue=self._batch_append_futures_queue,
+                timeout=None,
+                credentials=self._call_credentials,
+            )
+        except ESDBClientException as e:
+            self._clear_batch_append_futures_queue(e)
+        else:
+            self._clear_batch_append_futures_queue(  # pragma: no cover
+                ESDBClientException("Request not sent")
+            )
+        # print("Looping on call to batch_append_multiplexed()....")
+
+    def _clear_batch_append_futures_queue(self, error: ESDBClientException) -> None:
+        with self._batch_append_futures_lock:
+            try:
+                while True:
+                    future = self._batch_append_futures_queue.get(block=False)
+                    future.set_exception(error)  # pragma: no cover
+            except Empty:
+                pass
+
+    def append_events_multiplexed(
+        self,
+        stream_name: str,
+        expected_position: Optional[int],
+        events: Iterable[NewEvent],
+        timeout: Optional[float] = None,
+    ) -> int:
+        batch_append_request = BatchAppendRequest(
+            stream_name=stream_name, expected_position=expected_position, events=events
+        )
+        future = BatchAppendFuture(batch_append_request=batch_append_request)
+        with self._batch_append_futures_lock:
+            self._batch_append_futures_queue.put(future)
+        response = future.result(timeout=timeout)
+        assert isinstance(response.commit_position, int)
+        return response.commit_position
 
     def append_events(
         self,
@@ -74,25 +135,15 @@ class ESDBClient:
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
     ) -> int:
-        for response in self._streams.batch_append(
-            batches=[
-                BatchAppendRequest(
-                    stream_name=stream_name,
-                    expected_position=expected_position,
-                    events=events,
-                )
-            ],
+        return self._streams.batch_append(
+            BatchAppendRequest(
+                stream_name=stream_name,
+                expected_position=expected_position,
+                events=events,
+            ),
             timeout=timeout,
             credentials=self._call_credentials,
-        ):
-            if response.error:
-                raise response.error
-            assert isinstance(response.commit_position, int)
-            return response.commit_position
-        else:
-            raise ESDBClientException(  # pragma: no cover
-                "No batch append responses were received"
-            )
+        ).commit_position
 
     def append_event(
         self,
@@ -386,9 +437,10 @@ class ESDBClient:
     def close(self) -> None:
         self._channel.close()
 
-    # def __del__(self) -> None:
-    #     if hasattr(self, "_channel"):
-    #         self.close()
+    def __del__(self) -> None:
+        # print("Client deleted")
+        if hasattr(self, "_channel"):
+            self.close()
 
 
 class CatchupSubscription(Iterator[RecordedEvent]):
