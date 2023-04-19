@@ -55,6 +55,8 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Read all events](#read-all-events)
   * [Get current stream position](#get-current-stream-position)
   * [Get current commit position](#get-current-commit-position)
+  * [Delete stream](#delete-stream)
+  * [Tombstone stream](#tombstone-stream)
 * [Catch-up subscriptions](#catch-up-subscriptions)
   * [How to implement exactly-once event processing](#how-to-implement-exactly-once-event-processing)
   * [Subscribe all events](#subscribe-all-events)
@@ -788,6 +790,29 @@ be determined by the recorded commit position of the last successfully processed
 event in a downstream component.
 
 
+### Delete stream
+
+The method `delete_stream()` can be used to "delete" a stream.
+
+```python
+commit_position = client.delete_stream(stream_name=stream_name1, expected_position=2)
+```
+
+After deleting a stream, it's still possible to append new events. Reading from a
+deleted stream will return only events that have been appended after it was
+deleted.
+
+### Tombstone stream
+
+The method `tombstone_stream()` can be used to "tombstone" a stream.
+
+```python
+commit_position = client.tombstone_stream(stream_name=stream_name1, expected_position=2)
+```
+
+After tombstoning a stream, it's not possible to append new events.
+
+
 ## Catch-up subscriptions
 
 A "catch-up subscription" can be used to receive already recorded events, but
@@ -1067,10 +1092,10 @@ events[0].stream_name == stream_name2
 events[1].stream_name == stream_name2
 events[2].stream_name == stream_name2
 
-# Append another event to stream1.
+# Append another event to stream3.
 event10 = NewEvent(type="OrderUndeleted", data=b'data10')
 client.append_events(
-    stream_name=stream_name1,
+    stream_name=stream_name3,
     expected_position=2,
     events=[event10],
 )
@@ -1355,7 +1380,7 @@ The example below creates a persistent stream subscription from the start of the
 group_name1 = f"group-{uuid4()}"
 client.create_stream_subscription(
     group_name=group_name1,
-    stream_name=stream_name1,
+    stream_name=stream_name2,
 )
 ```
 
@@ -1378,7 +1403,7 @@ The example below creates a persistent stream subscription from the end of the s
 group_name3 = f"group-{uuid4()}"
 client.create_stream_subscription(
     group_name=group_name3,
-    stream_name=stream_name3,
+    stream_name=stream_name2,
     from_end=True
 )
 ```
@@ -1401,7 +1426,7 @@ and a "read response" object.
 ```python
 read_req, read_resp = client.read_stream_subscription(
     group_name=group_name1,
-    stream_name=stream_name1,
+    stream_name=stream_name2,
 )
 ```
 
@@ -1419,23 +1444,23 @@ for event in read_resp:
     read_req.ack(event_id=event.id)
 
     # Break when the last event has been received.
-    if event.id == event10.id:
+    if event.id == event11.id:
         break
 ```
 
-We can check we received all the events that were appended to `stream_name1`
+We can check we received all the events that were appended to `stream_name2`
 in the examples above.
 
 ```python
 assert len(events) == 4
-assert events[0].stream_name == stream_name1
-assert events[0].id == event1.id
-assert events[1].stream_name == stream_name1
-assert events[1].id == event2.id
-assert events[2].stream_name == stream_name1
-assert events[2].id == event3.id
-assert events[3].stream_name == stream_name1
-assert events[3].id == event10.id
+assert events[0].stream_name == stream_name2
+assert events[0].id == event4.id
+assert events[1].stream_name == stream_name2
+assert events[1].id == event5.id
+assert events[2].stream_name == stream_name2
+assert events[2].id == event6.id
+assert events[3].stream_name == stream_name2
+assert events[3].id == event11.id
 ```
 
 

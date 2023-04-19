@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import ssl
+from time import sleep
 from typing import List
 from unittest import TestCase
 from uuid import UUID, uuid4
@@ -1713,6 +1714,8 @@ class TestESDBClient(TestCase):
         self.client.append_events(stream_name, expected_position=1, events=[event3])
 
         # Can read from deleted stream if new events have been appended.
+        # Todo: Why is this a little bit flakey? Sometimes we get StreamNotFound.
+        sleep(0.1)
         events = list(self.client.read_stream_events(stream_name))
         # Expect only to get events appended after stream was deleted.
         self.assertEqual(len(events), 1)
