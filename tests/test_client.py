@@ -18,6 +18,7 @@ from esdbclient.exceptions import (
     ExpectedPositionError,
     GrpcError,
     ServiceUnavailable,
+    StreamDeletedError,
     StreamNotFound,
 )
 
@@ -1661,6 +1662,365 @@ class TestESDBClient(TestCase):
     # Todo: delete subscription
     # Todo: filter options
     # Todo: subscribe from end? not interesting, because you can get commit position
+
+    def test_delete_stream_with_expected_position(self) -> None:
+        self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        # Check stream not found.
+        with self.assertRaises(StreamNotFound):
+            list(self.client.read_stream_events(stream_name))
+
+        # Construct three events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderUpdated", data=random_data())
+
+        # Append two events.
+        self.client.append_events(stream_name, expected_position=None, events=[event1])
+        self.client.append_events(stream_name, expected_position=0, events=[event2])
+
+        # Read stream, expect two events.
+        events = list(self.client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 2)
+
+        # Expect stream position is an int.
+        self.assertEqual(1, self.client.get_stream_position(stream_name))
+
+        with self.assertRaises(GrpcError) as cm:
+            self.client.delete_stream(stream_name, expected_position=0)
+        # Todo: Maybe can extract this better?
+        self.assertIn("WrongExpectedVersion", str(cm.exception))
+
+        # Delete the stream, specifying expected position.
+        self.client.delete_stream(stream_name, expected_position=1)
+
+        # Can call delete again, without error.
+        self.client.delete_stream(stream_name, expected_position=1)
+
+        # Expect "stream not found" when reading deleted stream.
+        with self.assertRaises(StreamNotFound):
+            list(self.client.read_stream_events(stream_name))
+
+        # Expect stream position is None.
+        # Todo: Then how to you know which expected_position to use
+        #  when subsequently appending?
+        self.assertEqual(None, self.client.get_stream_position(stream_name))
+
+        # Can append to a deleted stream.
+        with self.assertRaises(ExpectedPositionError):
+            self.client.append_events(stream_name, expected_position=0, events=[event3])
+        self.client.append_events(stream_name, expected_position=1, events=[event3])
+
+        # Can read from deleted stream if new events have been appended.
+        events = list(self.client.read_stream_events(stream_name))
+        # Expect only to get events appended after stream was deleted.
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event3.id)
+
+        # Delete the stream again, specifying expected position.
+        with self.assertRaises(GrpcError) as cm:
+            self.client.delete_stream(stream_name, expected_position=0)
+        # Todo: Maybe can extract this better?
+        self.assertIn("WrongExpectedVersion", str(cm.exception))
+
+        self.client.delete_stream(stream_name, expected_position=2)
+        with self.assertRaises(StreamNotFound):
+            list(self.client.read_stream_events(stream_name))
+        self.assertEqual(None, self.client.get_stream_position(stream_name))
+
+        # Can delete again without error.
+        self.client.delete_stream(stream_name, expected_position=2)
+
+    def test_delete_stream_with_any_expected_position(self) -> None:
+        self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        # Check stream not found.
+        with self.assertRaises(StreamNotFound):
+            list(self.client.read_stream_events(stream_name))
+
+        # Can't delete stream that doesn't exist, while expecting "any" version.
+        # Todo: I don't really understand why this should cause an error.
+        with self.assertRaises(GrpcError) as cm:
+            self.client.delete_stream(stream_name, expected_position=-1)
+        self.assertIn("Actual version: -1", str(cm.exception))
+
+        # Construct three events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderUpdated", data=random_data())
+
+        # Append two events.
+        self.client.append_events(stream_name, expected_position=None, events=[event1])
+        self.client.append_events(stream_name, expected_position=0, events=[event2])
+
+        # Read stream, expect two events.
+        events = list(self.client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 2)
+
+        # Expect stream position is an int.
+        self.assertEqual(1, self.client.get_stream_position(stream_name))
+
+        # Delete the stream, specifying "any" expected position.
+        self.client.delete_stream(stream_name, expected_position=-1)
+
+        # Can call delete again, without error.
+        self.client.delete_stream(stream_name, expected_position=-1)
+
+        # Expect "stream not found" when reading deleted stream.
+        with self.assertRaises(StreamNotFound):
+            list(self.client.read_stream_events(stream_name))
+
+        # Expect stream position is None.
+        self.assertEqual(None, self.client.get_stream_position(stream_name))
+
+        # Can append to a deleted stream.
+        with self.assertRaises(ExpectedPositionError):
+            self.client.append_events(stream_name, expected_position=0, events=[event3])
+        self.client.append_events(stream_name, expected_position=1, events=[event3])
+
+        # Can read from deleted stream if new events have been appended.
+        events = list(self.client.read_stream_events(stream_name))
+        # Expect only to get events appended after stream was deleted.
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event3.id)
+
+        # Delete the stream again, specifying "any" expected position.
+        self.client.delete_stream(stream_name, expected_position=-1)
+        with self.assertRaises(StreamNotFound):
+            list(self.client.read_stream_events(stream_name))
+        self.assertEqual(None, self.client.get_stream_position(stream_name))
+
+        # Can delete again without error.
+        self.client.delete_stream(stream_name, expected_position=-1)
+
+    def test_delete_stream_expecting_stream_exists(self) -> None:
+        self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        # Check stream not found.
+        with self.assertRaises(StreamNotFound):
+            list(self.client.read_stream_events(stream_name))
+
+        # Can't delete stream that doesn't exist, while expecting that it does exist.
+        with self.assertRaises(GrpcError) as cm:
+            self.client.delete_stream(stream_name, expected_position=None)
+        self.assertIn("Actual version: -1", str(cm.exception))
+
+        # Construct three events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderUpdated", data=random_data())
+
+        # Append two events.
+        self.client.append_events(stream_name, expected_position=None, events=[event1])
+        self.client.append_events(stream_name, expected_position=0, events=[event2])
+
+        # Read stream, expect two events.
+        events = list(self.client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 2)
+
+        # Expect stream position is an int.
+        self.assertEqual(1, self.client.get_stream_position(stream_name))
+
+        # Delete the stream, specifying "any" expected position.
+        self.client.delete_stream(stream_name, expected_position=None)
+
+        # Can't call delete again, because stream doesn't exist.
+        with self.assertRaises(GrpcError) as cm:
+            self.client.delete_stream(stream_name, expected_position=None)
+        self.assertIn("is deleted", str(cm.exception))
+
+        # Expect "stream not found" when reading deleted stream.
+        with self.assertRaises(StreamNotFound):
+            list(self.client.read_stream_events(stream_name))
+
+        # Expect stream position is None.
+        self.assertEqual(None, self.client.get_stream_position(stream_name))
+
+        # Can append to a deleted stream.
+        with self.assertRaises(ExpectedPositionError):
+            self.client.append_events(stream_name, expected_position=0, events=[event3])
+        self.client.append_events(stream_name, expected_position=1, events=[event3])
+
+        # Can read from deleted stream if new events have been appended.
+        events = list(self.client.read_stream_events(stream_name))
+        # Expect only to get events appended after stream was deleted.
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event3.id)
+
+        # Delete the stream again, specifying "any" expected position.
+        self.client.delete_stream(stream_name, expected_position=None)
+        with self.assertRaises(StreamNotFound):
+            list(self.client.read_stream_events(stream_name))
+        self.assertEqual(None, self.client.get_stream_position(stream_name))
+
+        # Can't call delete again, because stream doesn't exist.
+        with self.assertRaises(GrpcError) as cm:
+            self.client.delete_stream(stream_name, expected_position=None)
+        self.assertIn("is deleted", str(cm.exception))
+
+    def test_tombstone_stream_with_expected_position(self) -> None:
+        self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        # Check stream not found.
+        with self.assertRaises(StreamNotFound):
+            list(self.client.read_stream_events(stream_name))
+
+        # Construct three events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderUpdated", data=random_data())
+
+        # Append two events.
+        self.client.append_events(stream_name, expected_position=None, events=[event1])
+        self.client.append_events(stream_name, expected_position=0, events=[event2])
+
+        # Read stream, expect two events.
+        events = list(self.client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 2)
+
+        # Expect stream position is an int.
+        self.assertEqual(1, self.client.get_stream_position(stream_name))
+
+        with self.assertRaises(GrpcError) as cm:
+            self.client.tombstone_stream(stream_name, expected_position=0)
+        # Todo: Maybe can extract this better?
+        self.assertIn("WrongExpectedVersion", str(cm.exception))
+
+        # Tombstone the stream, specifying expected position.
+        self.client.tombstone_stream(stream_name, expected_position=1)
+
+        # Can't call tombstone again.
+        with self.assertRaises(GrpcError) as cm:
+            self.client.tombstone_stream(stream_name, expected_position=1)
+        self.assertIn("is deleted", str(cm.exception))
+
+        # Expect "stream not found" when reading tombstoned stream.
+        # with self.assertRaises(StreamNotFound):
+        #     list(self.client.read_stream_events(stream_name))
+        # Actually we get a message saying the stream is deleted.
+        with self.assertRaises(GrpcError) as cm:
+            list(self.client.read_stream_events(stream_name))
+        self.assertIn("is deleted", str(cm.exception))
+
+        # Expect stream position is None.
+        # Todo: Then how to you know which expected_position to use
+        #  when subsequently appending?
+        # self.assertEqual(None, self.client.get_stream_position(stream_name))
+        # Actually we get a message saying the stream is deleted.
+        with self.assertRaises(GrpcError) as cm:
+            self.client.get_stream_position(stream_name)
+        self.assertIn("is deleted", str(cm.exception))
+
+        # Can't append to a tombstoned stream.
+        with self.assertRaises(StreamDeletedError):
+            self.client.append_events(stream_name, expected_position=1, events=[event3])
+
+    def test_tombstone_stream_with_any_expected_position(self) -> None:
+        self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        # Check stream not found.
+        with self.assertRaises(StreamNotFound):
+            list(self.client.read_stream_events(stream_name))
+
+        # Can tombstone stream that doesn't exist, while expecting "any" version.
+        # Todo: I don't really understand why this shouldn't cause an error,
+        #  if we can't do the same with the delete operation.
+        self.client.tombstone_stream(stream_name, expected_position=-1)
+
+        # Construct two events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+
+        # Append two events to a different stream.
+        stream_name = str(uuid4())
+        self.client.append_events(stream_name, expected_position=None, events=[event1])
+        self.client.append_events(stream_name, expected_position=0, events=[event2])
+
+        # Read stream, expect two events.
+        events = list(self.client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 2)
+
+        # Expect stream position is an int.
+        self.assertEqual(1, self.client.get_stream_position(stream_name))
+
+        # Tombstone the stream, specifying "any" expected position.
+        self.client.tombstone_stream(stream_name, expected_position=-1)
+
+        # Can't call tombstone again.
+        with self.assertRaises(GrpcError) as cm:
+            self.client.tombstone_stream(stream_name, expected_position=-1)
+        self.assertIn("is deleted", str(cm.exception))
+
+        # Expect "stream not found" when reading tombstoned stream.
+        # with self.assertRaises(StreamNotFound):
+        #     list(self.client.read_stream_events(stream_name))
+        # Actually get a GrpcError.
+        with self.assertRaises(GrpcError) as cm:
+            list(self.client.read_stream_events(stream_name))
+        self.assertIn("is deleted", str(cm.exception))
+
+        # Expect stream position is None.
+        # self.assertEqual(None, self.client.get_stream_position(stream_name))
+        # Actually get a GrpcError.
+        with self.assertRaises(GrpcError) as cm:
+            self.client.get_stream_position(stream_name)
+        self.assertIn("is deleted", str(cm.exception))
+
+    def test_tombstone_stream_expecting_stream_exists(self) -> None:
+        self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        # Check stream not found.
+        with self.assertRaises(StreamNotFound):
+            list(self.client.read_stream_events(stream_name))
+
+        # Can't tombstone stream that doesn't exist, while expecting "stream exists".
+        with self.assertRaises(GrpcError) as cm:
+            self.client.tombstone_stream(stream_name, expected_position=None)
+        self.assertIn("Actual version: -1", str(cm.exception))
+
+        # Construct two events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+
+        # Append two events.
+        self.client.append_events(stream_name, expected_position=None, events=[event1])
+        self.client.append_events(stream_name, expected_position=0, events=[event2])
+
+        # Read stream, expect two events.
+        events = list(self.client.read_stream_events(stream_name))
+        self.assertEqual(len(events), 2)
+
+        # Expect stream position is an int.
+        self.assertEqual(1, self.client.get_stream_position(stream_name))
+
+        # Tombstone the stream, expecting "stream exists".
+        self.client.tombstone_stream(stream_name, expected_position=None)
+
+        # Can't call tombstone again.
+        with self.assertRaises(GrpcError) as cm:
+            self.client.tombstone_stream(stream_name, expected_position=None)
+        self.assertIn("is deleted", str(cm.exception))
+
+        # Expect "stream not found" when reading tombstoned stream.
+        # with self.assertRaises(StreamNotFound):
+        #     list(self.client.read_stream_events(stream_name))
+        # Actually get a GrpcError.
+        with self.assertRaises(GrpcError) as cm:
+            list(self.client.read_stream_events(stream_name))
+        self.assertIn("is deleted", str(cm.exception))
+
+        # Expect stream position is None.
+        # self.assertEqual(None, self.client.get_stream_position(stream_name))
+        # Actually get a GrpcError.
+        with self.assertRaises(GrpcError) as cm:
+            self.client.get_stream_position(stream_name)
+        self.assertIn("is deleted", str(cm.exception))
 
 
 class TestESDBClientInsecure(TestESDBClient):

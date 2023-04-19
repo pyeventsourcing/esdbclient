@@ -65,7 +65,9 @@
       will increment from the last (deleted) one
     * If you tombstone a stream, then it's gone forever, and you can never get it back
       * Qn: is there a way of getting a deleted stream back?
+        * Ans:
       * Qn: what happens when try to append to a tombstoned stream? not sure... try it :-)
+        * Ans: response is a "StreamDeleted" error
 
 -----
 

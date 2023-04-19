@@ -163,6 +163,18 @@ class ESDBClient:
             credentials=self._call_credentials,
         )
 
+    def delete_stream(self, stream_name: str, expected_position: Optional[int]) -> None:
+        self._streams.delete(
+            stream_name=stream_name, expected_position=expected_position
+        )
+
+    def tombstone_stream(
+        self, stream_name: str, expected_position: Optional[int]
+    ) -> None:
+        self._streams.tombstone(
+            stream_name=stream_name, expected_position=expected_position
+        )
+
     def read_stream_events(
         self,
         stream_name: str,
@@ -435,6 +447,7 @@ class ESDBClient:
         )
 
     def close(self) -> None:
+        self._channel.unsubscribe(self._receive_channel_connectivity_state)
         self._channel.close()
 
     def __del__(self) -> None:

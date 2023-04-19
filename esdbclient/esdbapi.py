@@ -514,9 +514,7 @@ class Streams:
                 shared_pb2.AccessDenied.DESCRIPTOR
             ):  # pragma: no cover
                 result = AccessDeniedError()
-            elif error_details.Is(
-                shared_pb2.StreamDeleted.DESCRIPTOR
-            ):  # pragma: no cover
+            elif error_details.Is(shared_pb2.StreamDeleted.DESCRIPTOR):
                 stream_deleted = shared_pb2.StreamDeleted()
                 error_details.Unpack(stream_deleted)
                 # Todo: Ask ESDB team if this is ever different from request value.
@@ -572,6 +570,88 @@ class Streams:
 
         except RpcError as e:
             raise handle_rpc_error(e) from e
+
+    def delete(
+        self,
+        stream_name: str,
+        expected_position: Optional[int],
+        timeout: Optional[float] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> None:
+        options = streams_pb2.DeleteReq.Options(
+            stream_identifier=shared_pb2.StreamIdentifier(
+                stream_name=stream_name.encode("utf8")
+            )
+        )
+        # Decide 'expected_stream_revision'.
+        if isinstance(expected_position, int):
+            if expected_position >= 0:
+                # Stream position is expected to be a certain value.
+                options.revision = expected_position
+            else:
+                # Disable optimistic concurrency control.
+                options.any.CopyFrom(shared_pb2.Empty())
+        else:
+            # Stream is expected to exist.
+            options.stream_exists.CopyFrom(shared_pb2.Empty())
+
+        delete_req = streams_pb2.DeleteReq(options=options)
+
+        try:
+            delete_resp = self._stub.Delete(
+                delete_req, timeout=timeout, credentials=credentials
+            )
+        except RpcError as e:
+            raise handle_rpc_error(e) from e
+
+        else:
+            assert isinstance(delete_resp, streams_pb2.DeleteResp)
+            # position_option_oneof = delete_resp.WhichOneof("position_option")
+            # if position_option_oneof == "position":
+            #     return delete_resp.position
+            # else:
+            #     return delete_resp.no_position
+
+    def tombstone(
+        self,
+        stream_name: str,
+        expected_position: Optional[int],
+        timeout: Optional[float] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> None:
+        options = streams_pb2.TombstoneReq.Options(
+            stream_identifier=shared_pb2.StreamIdentifier(
+                stream_name=stream_name.encode("utf8")
+            )
+        )
+        # Decide 'expected_stream_revision'.
+        if isinstance(expected_position, int):
+            if expected_position >= 0:
+                # Stream position is expected to be a certain value.
+                options.revision = expected_position
+            else:
+                # Disable optimistic concurrency control.
+                options.any.CopyFrom(shared_pb2.Empty())
+        else:
+            # Stream is expected to exist.
+            options.stream_exists.CopyFrom(shared_pb2.Empty())
+
+        tombstone_req = streams_pb2.TombstoneReq(options=options)
+
+        try:
+            tombstone_resp = self._stub.Tombstone(
+                tombstone_req, timeout=timeout, credentials=credentials
+            )
+        except RpcError as e:
+            raise handle_rpc_error(e) from e
+
+        else:
+            assert isinstance(tombstone_resp, streams_pb2.TombstoneResp)
+            # position_option_oneof = tombstone_resp.WhichOneof("position_option")
+            # if position_option_oneof == "position":
+            #     return tombstone_resp.position
+            # else:
+            #     return tombstone_resp.no_position
 
 
 class BatchAppendFutureIterator(Iterator[streams_pb2.BatchAppendReq]):
