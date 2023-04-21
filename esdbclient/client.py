@@ -1,9 +1,20 @@
 # -*- coding: utf-8 -*-
+import json
 import re
 import sys
 from queue import Empty
 from threading import Lock, Thread
-from typing import Iterable, Iterator, Optional, Sequence, Tuple, Union, overload
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    Iterator,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    overload,
+)
 
 import grpc
 from grpc import ChannelConnectivity, RpcError
@@ -260,6 +271,50 @@ class ESDBClient:
             commit_position = ev.commit_position
         return commit_position
 
+    def get_stream_metadata(
+        self, stream_name: str, timeout: Optional[float] = None
+    ) -> Tuple[Dict[str, Any], Optional[int]]:
+        """
+        Gets the stream metadata.
+        """
+        metadata_stream_name = f"$${stream_name}"
+        try:
+            metadata_events = list(
+                self.read_stream_events(
+                    stream_name=metadata_stream_name,
+                    backwards=True,
+                    limit=1,
+                    timeout=timeout,
+                )
+            )
+        except StreamNotFound:
+            return {}, None
+        else:
+            metadata_event = metadata_events[0]
+            return json.loads(metadata_event.data), metadata_event.stream_position
+
+    def set_stream_metadata(
+        self,
+        stream_name: str,
+        metadata: Dict[str, Any],
+        expected_position: Optional[int] = -1,
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Sets the stream metadata.
+        """
+        metadata_stream_name = f"$${stream_name}"
+        metadata_event = NewEvent(
+            type="$metadata",
+            data=json.dumps(metadata).encode("utf8"),
+        )
+        self.append_event(
+            stream_name=metadata_stream_name,
+            expected_position=expected_position,
+            event=metadata_event,
+            timeout=timeout,
+        )
+
     def subscribe_all_events(
         self,
         commit_position: Optional[int] = None,
@@ -447,6 +502,9 @@ class ESDBClient:
         )
 
     def close(self) -> None:
+        """
+        Closes the gRPC channel.
+        """
         self._channel.unsubscribe(self._receive_channel_connectivity_state)
         self._channel.close()
 

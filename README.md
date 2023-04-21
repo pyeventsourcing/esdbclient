@@ -55,6 +55,8 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Read all events](#read-all-events)
   * [Get current stream position](#get-current-stream-position)
   * [Get current commit position](#get-current-commit-position)
+  * [Get stream metadata](#get-stream-metadata)
+  * [Set stream metadata](#set-stream-metadata)
   * [Delete stream](#delete-stream)
   * [Tombstone stream](#tombstone-stream)
 * [Catch-up subscriptions](#catch-up-subscriptions)
@@ -789,6 +791,38 @@ the `read_all_events()` method or by using a catch-up subscription would usually
 be determined by the recorded commit position of the last successfully processed
 event in a downstream component.
 
+
+
+### Get stream metadata
+
+The method `get_stream_metadata()` gets the metadata for a stream, along
+with the version of the stream metadata.
+
+```python
+metadata, metadata_version = client.get_stream_metadata(stream_name=stream_name1)
+```
+
+The returned `metadata` value is a Python `dict`. The returned `metadata_version`
+value is either an `int`, or `None` if the stream does not exist. These values can
+be passed into `set_stream_metadata()`.
+
+
+### Set stream metadata
+
+The method `set_stream_metadata()` set the metadata for a stream, along
+with the version of the stream metadata.
+
+```python
+metadata["foo"] = "bar"
+
+client.set_stream_metadata(
+    stream_name=stream_name1,
+    metadata=metadata,
+    expected_position=metadata_version,
+)
+```
+
+The `expected_position` argument should be the current version of the stream metadata.
 
 ### Delete stream
 

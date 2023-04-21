@@ -2029,6 +2029,81 @@ class TestESDBClient(TestCase):
             self.client.get_stream_position(stream_name)
         self.assertIn("is deleted", str(cm.exception))
 
+    def test_get_and_set_stream_metadata(self) -> None:
+        self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        # Append batch of new events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        self.client.append_events(
+            stream_name, expected_position=None, events=[event1, event2]
+        )
+        self.assertEqual(2, len(list(self.client.read_stream_events(stream_name))))
+
+        # Get stream metadata (should be empty).
+        stream_metadata, position = self.client.get_stream_metadata(stream_name)
+        self.assertEqual(stream_metadata, {})
+
+        # Delete stream.
+        self.client.delete_stream(stream_name, expected_position=None)
+        with self.assertRaises(StreamNotFound):
+            list(self.client.read_stream_events(stream_name))
+
+        # Get stream metadata (should have "$tb").
+        stream_metadata, position = self.client.get_stream_metadata(stream_name)
+        self.assertIsInstance(stream_metadata, dict)
+        self.assertIn("$tb", stream_metadata)
+        max_long = 9223372036854775807
+        self.assertEqual(stream_metadata["$tb"], max_long)
+
+        # Set stream metadata.
+        stream_metadata["foo"] = "bar"
+        self.client.set_stream_metadata(
+            stream_name=stream_name,
+            metadata=stream_metadata,
+            expected_position=position,
+        )
+
+        # Check the metadata has "foo".
+        stream_metadata, position = self.client.get_stream_metadata(stream_name)
+        self.assertEqual(stream_metadata["foo"], "bar")
+
+        # For some reason "$tb" is now 2 rather than max_long.
+        # Todo: Why is this?
+        self.assertEqual(stream_metadata["$tb"], 2)
+
+        # Get and set metadata for a stream that does not exist.
+        stream_name = str(uuid4())
+        stream_metadata, position = self.client.get_stream_metadata(stream_name)
+        self.assertEqual(stream_metadata, {})
+
+        stream_metadata["foo"] = "baz"
+        self.client.set_stream_metadata(stream_name, stream_metadata, position)
+        stream_metadata, position = self.client.get_stream_metadata(stream_name)
+        self.assertEqual(stream_metadata["foo"], "baz")
+
+        # Set ACL.
+        self.assertNotIn("$acl", stream_metadata)
+        acl = {
+            "$w": "$admins",
+            "$r": "$all",
+            "$d": "$admins",
+            "$mw": "$admins",
+            "$mr": "$admins",
+        }
+        stream_metadata["$acl"] = acl
+        self.client.set_stream_metadata(stream_name, stream_metadata, position)
+        stream_metadata, position = self.client.get_stream_metadata(stream_name)
+        self.assertEqual(stream_metadata["$acl"], acl)
+
+        with self.assertRaises(ExpectedPositionError):
+            self.client.set_stream_metadata(
+                stream_name=stream_name,
+                metadata=stream_metadata,
+                expected_position=10,
+            )
+
 
 class TestESDBClientInsecure(TestESDBClient):
     def construct_esdb_client(self) -> None:
