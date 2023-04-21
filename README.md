@@ -809,7 +809,7 @@ be passed into `set_stream_metadata()`.
 
 ### Set stream metadata
 
-The method `set_stream_metadata()` set the metadata for a stream, along
+The method `set_stream_metadata()` sets the metadata for a stream, along
 with the version of the stream metadata.
 
 ```python
@@ -823,6 +823,9 @@ client.set_stream_metadata(
 ```
 
 The `expected_position` argument should be the current version of the stream metadata.
+
+Please refer to the EventStoreDB documentation for more information about stream
+metadata.
 
 ### Delete stream
 
