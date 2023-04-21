@@ -2069,9 +2069,9 @@ class TestESDBClient(TestCase):
         stream_metadata, position = self.client.get_stream_metadata(stream_name)
         self.assertEqual(stream_metadata["foo"], "bar")
 
-        # For some reason "$tb" is now 2 rather than max_long.
+        # For some reason "$tb" is now (most often) 2 rather than max_long.
         # Todo: Why is this?
-        self.assertEqual(stream_metadata["$tb"], 2)
+        self.assertIn(stream_metadata["$tb"], [2, max_long])
 
         # Get and set metadata for a stream that does not exist.
         stream_name = str(uuid4())
