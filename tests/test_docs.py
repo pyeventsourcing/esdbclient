@@ -20,8 +20,9 @@ class TestDocs(TestCase):
         self.setup_environ()
 
     def setup_environ(self) -> None:
-        server_cert = ssl.get_server_certificate(addr=(self.ESDB_HOST, self.ESDB_PORT))
-        os.environ["ESDB_SERVER_CERT"] = server_cert
+        os.environ["ESDB_ROOT_CERTIFICATES"] = ssl.get_server_certificate(
+            addr=(self.ESDB_HOST, self.ESDB_PORT)
+        )
         os.environ["ESDB_USERNAME"] = "admin"
         os.environ["ESDB_PASSWORD"] = "changeit"
 
@@ -29,7 +30,7 @@ class TestDocs(TestCase):
         del os.environ["ESDB_HOST"]
         del os.environ["ESDB_PORT"]
         try:
-            del os.environ["ESDB_SERVER_CERT"]
+            del os.environ["ESDB_ROOT_CERTIFICATES"]
             del os.environ["ESDB_USERNAME"]
             del os.environ["ESDB_PASSWORD"]
         except KeyError:

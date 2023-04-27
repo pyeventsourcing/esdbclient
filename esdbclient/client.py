@@ -51,7 +51,7 @@ class ESDBClient:
         uri: Optional[str] = None,
         host: Optional[str] = None,
         port: Optional[Union[int, str]] = None,
-        server_cert: Optional[str] = None,
+        root_certificates: Optional[str] = None,
         username: Optional[str] = None,
         password: Optional[str] = None,
     ) -> None:
@@ -64,14 +64,14 @@ class ESDBClient:
             self.grpc_target = f"{host}:{port}"
         else:
             raise ValueError("Invalid constructor args")
-        if server_cert is None:
+        if root_certificates is None:
             self._channel = grpc.insecure_channel(target=self.grpc_target)
             self._call_credentials = None
         else:
             assert username is not None
             assert password is not None
             channel_credentials = grpc.ssl_channel_credentials(
-                root_certificates=server_cert.encode()
+                root_certificates=root_certificates.encode()
             )
             self._channel = grpc.secure_channel(
                 target=self.grpc_target, credentials=channel_credentials

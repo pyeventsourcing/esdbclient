@@ -147,17 +147,20 @@ The `ESDBClient` class can be constructed with `host` and `port` arguments.
 The `host` and `port` arguments indicate the hostname and port number of the
 EventStoreDB server.
 
-If the EventStoreDB server is "secure", then also use the `server_cert`,
+The `host` argument is expected to be a Python `str`. The `port` argument is
+expected to be a Python `int`. These arguments are required.
+
+If the EventStoreDB server is "secure", then also use the `root_certificates`,
 `username` and `password` arguments.
 
-The `host` argument is expected to be a Python `str`. The `port` argument is expected
-to be a Python `int`. The `server_cert` is expected to be a Python `str` containing
-the PEM encoded SSL/TLS server certificate. Both `username` and `password` are expected
-to be a Python `str`.
+The optional `root_certificates` argument is expected to be a Python `str` containing
+PEM encoded SSL/TLS root certificates used for server authentication. This value is
+passed directly to `grpc.ssl_channel_credentials()`. The optional `username` and
+`password` arguments are each expected to be a Python `str`.
 
 In the example below, the constructor argument values are taken from the operating
-system environment, because the examples in this document are tested with both
-a "secure" and an "insecure" server.
+system environment (the examples in this document are tested with both
+a "secure" and an "insecure" server).
 
 ```python
 import os
@@ -165,7 +168,7 @@ import os
 client = ESDBClient(
     host=os.getenv("ESDB_HOST"),
     port=int(os.getenv("ESDB_PORT")),
-    server_cert=os.getenv("ESDB_SERVER_CERT"),
+    root_certificates=os.getenv("ESDB_ROOT_CERTIFICATES"),
     username=os.getenv("ESDB_USERNAME"),
     password=os.getenv("ESDB_PASSWORD"),
 )

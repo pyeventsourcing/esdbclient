@@ -152,13 +152,13 @@ class TestESDBClient(TestCase):
         self.assertIsInstance(cm.exception.args[0], MyRpcError)
 
     def construct_esdb_client(self) -> None:
-        server_cert = ssl.get_server_certificate(addr=("localhost", 2113))
+        root_certificates = ssl.get_server_certificate(addr=("localhost", 2113))
         username = "admin"
         password = "changeit"
         self.client = ESDBClient(
             host="localhost",
             port=2113,
-            server_cert=server_cert,
+            root_certificates=root_certificates,
             username=username,
             password=password,
         )
@@ -2107,13 +2107,13 @@ class TestESDBClient(TestCase):
 
 class TestESDBClientInsecure(TestESDBClient):
     def construct_esdb_client(self) -> None:
-        server_cert = None
+        root_certificates = None
         username = None
         password = None
         self.client = ESDBClient(
             host="localhost",
             port=2114,
-            server_cert=server_cert,
+            root_certificates=root_certificates,
             username=username,
             password=password,
         )
