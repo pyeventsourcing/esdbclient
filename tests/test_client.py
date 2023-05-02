@@ -2,7 +2,7 @@
 import os
 import ssl
 from time import sleep
-from typing import List
+from typing import List, Tuple, cast
 from unittest import TestCase
 from uuid import UUID, uuid4
 
@@ -11,52 +11,234 @@ from grpc._channel import _MultiThreadedRendezvous, _RPCState
 from grpc._cython.cygrpc import IntegratedCall
 
 import esdbclient.protos.Grpc.persistent_pb2 as grpc_persistent
-from esdbclient.client import ESDBClient
-from esdbclient.esdbapi import SubscriptionReadRequest, handle_rpc_error
+from esdbclient.client import ConnectionSpec, ESDBClient
+from esdbclient.esdbapi import (
+    NODE_STATE_FOLLOWER,
+    NODE_STATE_LEADER,
+    SubscriptionReadRequest,
+    handle_rpc_error,
+)
 from esdbclient.events import NewEvent
 from esdbclient.exceptions import (
     DeadlineExceeded,
+    DiscoveryFailed,
     ExpectedPositionError,
+    FollowerNotFound,
+    GossipSeedError,
     GrpcError,
+    NodeIsNotLeader,
+    ReadOnlyReplicaNotFound,
     ServiceUnavailable,
     StreamDeletedError,
     StreamNotFound,
 )
 
 
-class FakeRpcError(_MultiThreadedRendezvous):
-    def __init__(self, status_code: StatusCode) -> None:
-        super().__init__(
-            state=_RPCState(
-                due=[],
-                initial_metadata=None,
-                trailing_metadata=None,
-                code=status_code,
-                details="",
-            ),
-            call=IntegratedCall(None, None),
-            response_deserializer=lambda x: x,
-            deadline=None,
-        )
+class TestConnectionSpec(TestCase):
+    def test_scheme_and_netloc(self) -> None:
+        spec = ConnectionSpec("esdb://host1:2111")
+        self.assertEqual(spec.scheme, "esdb")
+        self.assertEqual(spec.netloc, "host1:2111")
+        self.assertEqual(spec.targets, ["host1:2111"])
+        self.assertEqual(spec.username, None)
+        self.assertEqual(spec.password, None)
+
+        spec = ConnectionSpec("esdb://admin:changeit@host1:2111")
+        self.assertEqual(spec.scheme, "esdb")
+        self.assertEqual(spec.netloc, "admin:changeit@host1:2111")
+        self.assertEqual(spec.targets, ["host1:2111"])
+        self.assertEqual(spec.username, "admin")
+        self.assertEqual(spec.password, "changeit")
+
+        spec = ConnectionSpec("esdb://host1:2111,host2:2112,host3:2113")
+        self.assertEqual(spec.scheme, "esdb")
+        self.assertEqual(spec.netloc, "host1:2111,host2:2112,host3:2113")
+        self.assertEqual(spec.targets, ["host1:2111", "host2:2112", "host3:2113"])
+        self.assertEqual(spec.username, None)
+        self.assertEqual(spec.password, None)
+
+        spec = ConnectionSpec("esdb://admin:changeit@host1:2111,host2:2112,host3:2113")
+        self.assertEqual(spec.scheme, "esdb")
+        self.assertEqual(spec.netloc, "admin:changeit@host1:2111,host2:2112,host3:2113")
+        self.assertEqual(spec.targets, ["host1:2111", "host2:2112", "host3:2113"])
+        self.assertEqual(spec.username, "admin")
+        self.assertEqual(spec.password, "changeit")
+
+        spec = ConnectionSpec("esdb+discover://host1:2111")
+        self.assertEqual(spec.scheme, "esdb+discover")
+        self.assertEqual(spec.netloc, "host1:2111")
+        self.assertEqual(spec.targets, ["host1:2111"])
+        self.assertEqual(spec.username, None)
+        self.assertEqual(spec.password, None)
+
+        spec = ConnectionSpec("esdb+discover://admin:changeit@host1:2111")
+        self.assertEqual(spec.scheme, "esdb+discover")
+        self.assertEqual(spec.netloc, "admin:changeit@host1:2111")
+        self.assertEqual(spec.targets, ["host1:2111"])
+        self.assertEqual(spec.username, "admin")
+        self.assertEqual(spec.password, "changeit")
+
+    def test_tls(self) -> None:
+        # Tls not mentioned.
+        spec = ConnectionSpec("esdb:")
+        self.assertIs(spec.options.Tls, True)
+
+        # Set Tls "true".
+        spec = ConnectionSpec("esdb:?Tls=true")
+        self.assertIs(spec.options.Tls, True)
+
+        # Set Tls "false".
+        spec = ConnectionSpec("esdb:?Tls=false")
+        self.assertIs(spec.options.Tls, False)
+
+        # Check case insensitivity.
+        spec = ConnectionSpec("esdb:?TLS=false")
+        self.assertIs(spec.options.Tls, False)
+        spec = ConnectionSpec("esdb:?tls=false")
+        self.assertIs(spec.options.Tls, False)
+
+        # Invalid value.
+        with self.assertRaises(ValueError):
+            ConnectionSpec("esdb:?Tls=blah")
+
+    def test_connection_name(self) -> None:
+        # ConnectionName not mentioned.
+        spec = ConnectionSpec("esdb:")
+        self.assertIsInstance(spec.options.ConnectionName, str)
+
+        # Set ConnectionName.
+        connection_name = str(uuid4())
+        spec = ConnectionSpec(f"esdb:?ConnectionName={connection_name}")
+        self.assertEqual(spec.options.ConnectionName, connection_name)
+
+        # Check case insensitivity.
+        spec = ConnectionSpec(f"esdb:?connectionName={connection_name}")
+        self.assertEqual(spec.options.ConnectionName, connection_name)
+
+        # Check case insensitivity.
+        spec = ConnectionSpec(f"esdb:?connectionName={connection_name}")
+        self.assertEqual(spec.options.ConnectionName, connection_name)
+
+    def test_max_discover_attempts(self) -> None:
+        # MaxDiscoverAttempts not mentioned.
+        spec = ConnectionSpec("esdb:")
+        self.assertEqual(spec.options.MaxDiscoverAttempts, 10)
+
+        # Set MaxDiscoverAttempts.
+        spec = ConnectionSpec("esdb:?MaxDiscoverAttempts=5")
+        self.assertEqual(spec.options.MaxDiscoverAttempts, 5)
+
+    def test_discovery_interval(self) -> None:
+        # DiscoveryInterval not mentioned.
+        spec = ConnectionSpec("esdb:")
+        self.assertEqual(spec.options.DiscoveryInterval, 100)
+
+        # Set DiscoveryInterval.
+        spec = ConnectionSpec("esdb:?DiscoveryInterval=200")
+        self.assertEqual(spec.options.DiscoveryInterval, 200)
+
+    def test_gossip_timeout(self) -> None:
+        # GossipTimeout not mentioned.
+        spec = ConnectionSpec("esdb:")
+        self.assertEqual(spec.options.GossipTimeout, 5)
+
+        # Set GossipTimeout.
+        spec = ConnectionSpec("esdb:?GossipTimeout=10")
+        self.assertEqual(spec.options.GossipTimeout, 10)
+
+    def test_node_preference(self) -> None:
+        # NodePreference not mentioned.
+        spec = ConnectionSpec("esdb:")
+        self.assertEqual(spec.options.NodePreference, "leader")
+
+        # Set NodePreference.
+        spec = ConnectionSpec("esdb:?NodePreference=leader")
+        self.assertEqual(spec.options.NodePreference, "leader")
+        spec = ConnectionSpec("esdb:?NodePreference=follower")
+        self.assertEqual(spec.options.NodePreference, "follower")
+
+        # Invalid value.
+        with self.assertRaises(ValueError):
+            ConnectionSpec("esdb:?NodePreference=blah")
+
+    def test_tls_verify_cert(self) -> None:
+        # TlsVerifyCert not mentioned.
+        spec = ConnectionSpec("esdb:")
+        self.assertEqual(spec.options.TlsVerifyCert, True)
+
+        # Set TlsVerifyCert.
+        spec = ConnectionSpec("esdb:?TlsVerifyCert=true")
+        self.assertEqual(spec.options.TlsVerifyCert, True)
+        spec = ConnectionSpec("esdb:?TlsVerifyCert=false")
+        self.assertEqual(spec.options.TlsVerifyCert, False)
+
+        # Invalid value.
+        with self.assertRaises(ValueError):
+            ConnectionSpec("esdb:?TlsVerifyCert=blah")
+
+    def test_default_deadline(self) -> None:
+        # DefaultDeadline not mentioned.
+        spec = ConnectionSpec("esdb:")
+        self.assertEqual(spec.options.DefaultDeadline, None)
+
+        # Set DefaultDeadline.
+        spec = ConnectionSpec("esdb:?DefaultDeadline=10")
+        self.assertEqual(spec.options.DefaultDeadline, 10)
+
+    def test_keep_alive_interval(self) -> None:
+        # KeepAliveInterval not mentioned.
+        spec = ConnectionSpec("esdb:")
+        self.assertEqual(spec.options.KeepAliveInterval, None)
+
+        # Set KeepAliveInterval.
+        spec = ConnectionSpec("esdb:?KeepAliveInterval=10")
+        self.assertEqual(spec.options.KeepAliveInterval, 10)
+
+    def test_keep_alive_timeout(self) -> None:
+        # KeepAliveTimeout not mentioned.
+        spec = ConnectionSpec("esdb:")
+        self.assertEqual(spec.options.KeepAliveTimeout, None)
+
+        # Set KeepAliveTimeout.
+        spec = ConnectionSpec("esdb:?KeepAliveTimeout=10")
+        self.assertEqual(spec.options.KeepAliveTimeout, 10)
 
 
-class FakeDeadlineExceededRpcError(FakeRpcError):
-    def __init__(self) -> None:
-        super().__init__(status_code=StatusCode.DEADLINE_EXCEEDED)
-
-
-class FakeUnavailableRpcError(FakeRpcError):
-    def __init__(self) -> None:
-        super().__init__(status_code=StatusCode.UNAVAILABLE)
-
-
-class FakeUnknownRpcError(FakeRpcError):
-    def __init__(self) -> None:
-        super().__init__(status_code=StatusCode.UNKNOWN)
+def read_ca_cert() -> str:
+    ca_cert_path = os.path.join(
+        os.path.dirname(os.path.dirname(__file__)), "certs/ca/ca.crt"
+    )
+    with open(ca_cert_path, "r") as f:
+        return f.read()
 
 
 class TestESDBClient(TestCase):
     client: ESDBClient
+
+    ESDB_TARGET = "localhost:2115"
+    ESDB_TLS = True
+    ESDB_CLUSTER_SIZE = 1
+
+    def construct_esdb_client(self) -> None:
+        if self.ESDB_TLS:
+            uri = f"esdb://admin:changeit@{self.ESDB_TARGET}"
+            root_certificates = self.get_root_certificates()
+        else:
+            uri = f"esdb://{self.ESDB_TARGET}?Tls=false"
+            root_certificates = None
+        self.client = ESDBClient(uri, root_certificates=root_certificates)
+
+    def get_root_certificates(self) -> str:
+        if self.ESDB_CLUSTER_SIZE == 1:
+            return ssl.get_server_certificate(
+                addr=cast(Tuple[str, int], self.ESDB_TARGET.split(":")),
+            )
+        elif self.ESDB_CLUSTER_SIZE == 3:
+            return read_ca_cert()
+        else:
+            raise ValueError(
+                f"Test doesn't work with cluster size {self.ESDB_CLUSTER_SIZE}"
+            )
 
     def tearDown(self) -> None:
         if hasattr(self, "client"):
@@ -67,23 +249,67 @@ class TestESDBClient(TestCase):
         self.client.close()
         self.client.close()
 
-        self.client = ESDBClient("localhost:2222")
+        self.construct_esdb_client()
         self.client.close()
         self.client.close()
 
-    def test_constructor_args(self) -> None:
-        client1 = ESDBClient("localhost:2222")
-        self.assertEqual(client1.grpc_target, "localhost:2222")
+    def test_constructor_raises_value_errors(self) -> None:
+        # Secure URI without root_certificates.
+        with self.assertRaises(ValueError) as cm0:
+            ESDBClient("esdb://localhost:2222")
+        self.assertIn(
+            "root_certificates is required for secure connection",
+            cm0.exception.args[0],
+        )
 
-        client2 = ESDBClient(host="localhost", port=2222)
-        self.assertEqual(client2.grpc_target, "localhost:2222")
+        # Scheme must be 'esdb'.
+        with self.assertRaises(ValueError) as cm1:
+            ESDBClient(uri="http://localhost:2222")
+        self.assertIn("Invalid URI scheme:", cm1.exception.args[0])
 
-        # ESDB URLs not yet supported...
-        with self.assertRaises(ValueError):
-            ESDBClient(uri="esdb:something")
+    def test_constructor_raises_gossip_seed_error(self) -> None:
+        # Needs at least one target.
+        with self.assertRaises(GossipSeedError):
+            ESDBClient(uri="esdb://")
 
-    def test_service_unavailable_exception(self) -> None:
-        self.client = ESDBClient("localhost:2222")  # wrong port
+    def test_raises_discovery_failed_exception(self) -> None:
+        # Reconstruct connection with wrong port.
+        esdb_target = "localhost:2222"
+
+        if self.ESDB_TLS:
+            uri = f"esdb://admin:changeit@{esdb_target}"
+            root_certificates = self.get_root_certificates()
+        else:
+            uri = f"esdb://{esdb_target}?Tls=false"
+            root_certificates = None
+
+        with self.assertRaises(DiscoveryFailed):
+            ESDBClient(uri, root_certificates=root_certificates)
+
+    def test_connects_despite_bad_target_in_gossip_seed(self) -> None:
+        # Reconstruct connection with wrong port.
+        esdb_target = f"localhost:2222,{self.ESDB_TARGET}"
+
+        if self.ESDB_TLS:
+            uri = f"esdb://admin:changeit@{esdb_target}"
+            root_certificates = self.get_root_certificates()
+        else:
+            uri = f"esdb://{esdb_target}?Tls=false"
+            root_certificates = None
+
+        try:
+            client = ESDBClient(uri, root_certificates=root_certificates)
+        except Exception:
+            self.fail("Failed to connect")
+        else:
+            client.close()
+
+    def test_raises_service_unavailable_exception(self) -> None:
+        self.construct_esdb_client()
+
+        # Reconstruct connection with wrong port.
+        self.client._connection.close()
+        self.client._connection = self.client._construct_connection("localhost:2222")
 
         with self.assertRaises(ServiceUnavailable) as cm:
             list(self.client.read_stream_events(str(uuid4())))
@@ -125,43 +351,11 @@ class TestESDBClient(TestCase):
             "failed to connect to all addresses", cm.exception.args[0].details()
         )
 
-    def test_handle_deadline_exceeded_error(self) -> None:
-        with self.assertRaises(GrpcError) as cm:
-            raise handle_rpc_error(FakeDeadlineExceededRpcError()) from None
-        self.assertEqual(cm.exception.__class__, DeadlineExceeded)
+        with self.assertRaises(ServiceUnavailable):
+            self.client.read_gossip()
 
-    def test_handle_unavailable_error(self) -> None:
-        with self.assertRaises(GrpcError) as cm:
-            raise handle_rpc_error(FakeUnavailableRpcError()) from None
-        self.assertEqual(cm.exception.__class__, ServiceUnavailable)
-
-    def test_handle_other_call_error(self) -> None:
-        with self.assertRaises(GrpcError) as cm:
-            raise handle_rpc_error(FakeUnknownRpcError()) from None
-        self.assertEqual(cm.exception.__class__, GrpcError)
-
-    def test_handle_non_call_rpc_error(self) -> None:
-        # Check non-Call errors are handled.
-        class MyRpcError(RpcError):
-            pass
-
-        msg = "some non-Call error"
-        with self.assertRaises(GrpcError) as cm:
-            raise handle_rpc_error(MyRpcError(msg)) from None
-        self.assertEqual(cm.exception.__class__, GrpcError)
-        self.assertIsInstance(cm.exception.args[0], MyRpcError)
-
-    def construct_esdb_client(self) -> None:
-        root_certificates = ssl.get_server_certificate(addr=("localhost", 2113))
-        username = "admin"
-        password = "changeit"
-        self.client = ESDBClient(
-            host="localhost",
-            port=2113,
-            root_certificates=root_certificates,
-            username=username,
-            password=password,
-        )
+        with self.assertRaises(ServiceUnavailable):
+            self.client.read_cluster_gossip()
 
     def test_stream_not_found_exception(self) -> None:
         self.construct_esdb_client()
@@ -1690,7 +1884,7 @@ class TestESDBClient(TestCase):
 
         with self.assertRaises(GrpcError) as cm:
             self.client.delete_stream(stream_name, expected_position=0)
-        # Todo: Maybe can extract this better?
+        # Todo: Convert exception to WrongExpectedVersion?
         self.assertIn("WrongExpectedVersion", str(cm.exception))
 
         # Delete the stream, specifying expected position.
@@ -2104,19 +2298,269 @@ class TestESDBClient(TestCase):
                 expected_position=10,
             )
 
+    def test_read_gossip(self) -> None:
+        self.construct_esdb_client()
+        cluster_info = self.client.read_gossip()
+        if self.ESDB_CLUSTER_SIZE == 1:
+            self.assertEqual(len(cluster_info), 1)
+            self.assertEqual(cluster_info[0].state, NODE_STATE_LEADER)
+            self.assertEqual(cluster_info[0].address, "localhost")
+            self.assertIn(str(cluster_info[0].port), self.ESDB_TARGET)
+        elif self.ESDB_CLUSTER_SIZE == 3:
+            self.assertEqual(len(cluster_info), 3)
+            num_leaders = 0
+            num_followers = 0
+            for member_info in cluster_info:
+                if member_info.state == NODE_STATE_LEADER:
+                    num_leaders += 1
+                elif member_info.state == NODE_STATE_FOLLOWER:
+                    num_followers += 1
+            self.assertEqual(num_leaders, 1)
+            self.assertEqual(num_followers, 2)
+        else:
+            self.fail(f"Test doesn't work with cluster size {self.ESDB_CLUSTER_SIZE}")
 
-class TestESDBClientInsecure(TestESDBClient):
-    def construct_esdb_client(self) -> None:
-        root_certificates = None
-        username = None
-        password = None
-        self.client = ESDBClient(
-            host="localhost",
-            port=2114,
-            root_certificates=root_certificates,
-            username=username,
-            password=password,
+    def test_read_cluster_gossip(self) -> None:
+        self.construct_esdb_client()
+        cluster_info = self.client.read_cluster_gossip()
+        if self.ESDB_CLUSTER_SIZE == 1:
+            self.assertEqual(len(cluster_info), 1)
+            self.assertEqual(cluster_info[0].state, NODE_STATE_LEADER)
+            self.assertEqual(cluster_info[0].address, "127.0.0.1")
+            self.assertEqual(cluster_info[0].port, 2113)
+        elif self.ESDB_CLUSTER_SIZE == 3:
+            self.assertEqual(len(cluster_info), 3)
+            num_leaders = 0
+            num_followers = 0
+            for member_info in cluster_info:
+                if member_info.state == NODE_STATE_LEADER:
+                    num_leaders += 1
+                elif member_info.state == NODE_STATE_FOLLOWER:
+                    num_followers += 1
+            self.assertEqual(num_leaders, 1)
+            self.assertEqual(num_followers, 2)
+        else:
+            self.fail(f"Test doesn't work with cluster size {self.ESDB_CLUSTER_SIZE}")
+
+
+class TestESDBClientWithInsecureConnection(TestESDBClient):
+    ESDB_TARGET = "localhost:2114"
+    ESDB_TLS = False
+
+
+class TestESDBClusterNode1(TestESDBClient):
+    ESDB_TARGET = "127.0.0.1:2111"
+    ESDB_CLUSTER_SIZE = 3
+
+
+class TestESDBClusterNode2(TestESDBClient):
+    ESDB_TARGET = "127.0.0.1:2112"
+    ESDB_CLUSTER_SIZE = 3
+
+
+class TestESDBClusterNode3(TestESDBClient):
+    ESDB_TARGET = "127.0.0.1:2113"
+    ESDB_CLUSTER_SIZE = 3
+
+
+class TestESDBDiscoverScheme(TestCase):
+    def test(self) -> None:
+        uri = (
+            "esdb+discover://example.com"
+            "?Tls=false&GossipTimeout=0&DiscoveryInterval=0&MaxDiscoverAttempts=2"
         )
+        with self.assertRaises(DiscoveryFailed):
+            ESDBClient(uri)
+
+
+class TestGrpcOptions(TestCase):
+    def setUp(self) -> None:
+        uri = (
+            "esdb://localhost:2114"
+            "?Tls=false&KeepAliveInterval=1000&KeepAliveTimeout=1000"
+        )
+        self.client = ESDBClient(uri)
+
+    def tearDown(self) -> None:
+        self.client.close()
+
+    def test(self) -> None:
+        self.assertEqual(
+            self.client.grpc_options["grpc.max_receive_message_length"],
+            17 * 1024 * 1024,
+        )
+        self.assertEqual(self.client.grpc_options["grpc.keepalive_ms"], 1000)
+        self.assertEqual(self.client.grpc_options["grpc.keepalive_timeout_ms"], 1000)
+
+
+# def test_grpc_options(self) -> None:
+#     # Without "keep alive" options in URI.
+#     client0 = ESDBClient("esdb://localhost:2222?Tls=false")
+#     self.assertEqual(
+#         client0.grpc_options["grpc.max_receive_message_length"], 17 * 1024 * 1024
+#     )
+#
+#     # With "keep alive" options in URI.
+#     client1 = ESDBClient(
+#         "esdb://localhost:2222?Tls=false&KeepAliveInterval=1000&KeepAliveTimeout=1000"
+#     )
+
+
+class TestSeparateReadAndWriteClients(TestCase):
+    def setUp(self) -> None:
+        uri = "esdb://admin:changeit@127.0.0.1:2111"
+        ca_cert = read_ca_cert()
+        self.writer = ESDBClient(
+            uri + "?NodePreference=leader", root_certificates=ca_cert
+        )
+        self.reader = ESDBClient(
+            uri + "?NodePreference=follower", root_certificates=ca_cert
+        )
+
+    def tearDown(self) -> None:
+        self.writer.close()
+        self.reader.close()
+
+    def test_can_write_to_leader_and_read_from_follower(self) -> None:
+        # Write to leader.
+        stream_name = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        self.writer.append_events(
+            stream_name=stream_name,
+            expected_position=None,
+            events=[event1, event2],
+        )
+        # Read from follower.
+        recorded_events = []
+        for recorded_event in self.reader.subscribe_stream_events(
+            stream_name, timeout=5
+        ):
+            recorded_events.append(recorded_event)
+            if len(recorded_events) == 2:
+                break
+
+    def test_cannot_write_to_follower(self) -> None:
+        # Try writing to follower...
+        stream_name = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.append_event(stream_name, expected_position=None, event=event1)
+
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.append_events(
+                stream_name, expected_position=None, events=[event1, event2]
+            )
+
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.set_stream_metadata(stream_name, metadata={})
+
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.delete_stream(stream_name, expected_position=None)
+
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.tombstone_stream(stream_name, expected_position=None)
+
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.create_subscription(group_name="group1")
+
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.create_stream_subscription(
+                group_name="group1", stream_name=stream_name
+            )
+
+
+class TestReconnectsToNewLeader(TestCase):
+    def setUp(self) -> None:
+        self.uri = "esdb://admin:changeit@127.0.0.1:2111"
+        self.ca_cert = read_ca_cert()
+        self.writer = ESDBClient(
+            self.uri + "?NodePreference=leader", root_certificates=self.ca_cert
+        )
+        self.reader = ESDBClient(
+            self.uri + "?NodePreference=follower", root_certificates=self.ca_cert
+        )
+
+        # Give the writer a connection to a follower.
+        self.writer._connection = self.reader._connection
+
+    def tearDown(self) -> None:
+        self.writer.close()
+        self.reader.close()
+
+    def test_append_event(self) -> None:
+        # Append event.
+        stream_name = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+
+        self.writer.append_event(stream_name, expected_position=None, event=event1)
+
+    def test_append_events(self) -> None:
+        # Append events.
+        stream_name = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+
+        self.writer.append_events(
+            stream_name, expected_position=None, events=[event1, event2]
+        )
+
+    def test_set_stream_metadata(self) -> None:
+        self.writer.set_stream_metadata(str(uuid4()), metadata={})
+
+    def test_delete_stream(self) -> None:
+        # Setup again (need different setup)...
+        self.writer.close()
+        self.reader.close()
+
+        self.writer = ESDBClient(
+            self.uri + "?NodePreference=leader", root_certificates=self.ca_cert
+        )
+        self.reader = ESDBClient(
+            self.uri + "?NodePreference=follower", root_certificates=self.ca_cert
+        )
+
+        # Need to append some events before deleting stream...
+        stream_name = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        self.writer.append_events(
+            stream_name, expected_position=None, events=[event1, event2]
+        )
+
+        # Give the writer a connection to the follower.
+        self.writer._connection = self.reader._connection
+
+        self.writer.delete_stream(stream_name, expected_position=1)
+
+    def test_tombstone_stream(self) -> None:
+        self.writer.tombstone_stream(str(uuid4()), expected_position=-1)
+
+    def test_create_subscription(self) -> None:
+        self.writer.create_subscription(group_name=f"group{str(uuid4())}")
+
+    def test_create_stream_subscription(self) -> None:
+        self.writer.create_stream_subscription(
+            group_name="group1", stream_name=str(uuid4())
+        )
+
+
+class TestConnectToPreferredNode(TestCase):
+    def test_no_followers(self) -> None:
+        uri = "esdb://admin:changeit@127.0.0.1:2114?Tls=false&NodePreference=follower"
+        with self.assertRaises(FollowerNotFound):
+            ESDBClient(uri)
+
+    def test_no_read_only_replicas(self) -> None:
+        uri = "esdb://admin:changeit@127.0.0.1:2114?Tls=false&NodePreference=readonlyreplica"
+        with self.assertRaises(ReadOnlyReplicaNotFound):
+            ESDBClient(uri)
+
+    def test_random(self) -> None:
+        uri = "esdb://admin:changeit@127.0.0.1:2114?Tls=false&NodePreference=random"
+        ESDBClient(uri)
 
 
 class TestSubscriptionReadRequest(TestCase):
@@ -2143,6 +2587,77 @@ class TestSubscriptionReadRequest(TestCase):
             read_request.ack(event_id)
         grpc_read_req = next(read_request_iter)
         self.assertEqual(len(grpc_read_req.ack.ids), 100)
+
+
+class TestHandleRpcError(TestCase):
+    def test_handle_deadline_exceeded_error(self) -> None:
+        with self.assertRaises(GrpcError) as cm:
+            raise handle_rpc_error(FakeDeadlineExceededRpcError()) from None
+        self.assertEqual(cm.exception.__class__, DeadlineExceeded)
+
+    def test_handle_unavailable_error(self) -> None:
+        with self.assertRaises(GrpcError) as cm:
+            raise handle_rpc_error(FakeUnavailableRpcError()) from None
+        self.assertEqual(cm.exception.__class__, ServiceUnavailable)
+
+    def test_handle_writing_to_follower_error(self) -> None:
+        with self.assertRaises(GrpcError) as cm:
+            raise handle_rpc_error(FakeWritingToFollowerError()) from None
+        self.assertEqual(cm.exception.__class__, NodeIsNotLeader)
+
+    def test_handle_other_call_error(self) -> None:
+        with self.assertRaises(GrpcError) as cm:
+            raise handle_rpc_error(FakeUnknownRpcError()) from None
+        self.assertEqual(cm.exception.__class__, GrpcError)
+
+    def test_handle_non_call_rpc_error(self) -> None:
+        # Check non-Call errors are handled.
+        class MyRpcError(RpcError):
+            pass
+
+        msg = "some non-Call error"
+        with self.assertRaises(GrpcError) as cm:
+            raise handle_rpc_error(MyRpcError(msg)) from None
+        self.assertEqual(cm.exception.__class__, GrpcError)
+        self.assertIsInstance(cm.exception.args[0], MyRpcError)
+
+
+class FakeRpcError(_MultiThreadedRendezvous):
+    def __init__(self, status_code: StatusCode, details: str = "") -> None:
+        super().__init__(
+            state=_RPCState(
+                due=[],
+                initial_metadata=None,
+                trailing_metadata=None,
+                code=status_code,
+                details=details,
+            ),
+            call=IntegratedCall(None, None),
+            response_deserializer=lambda x: x,
+            deadline=None,
+        )
+
+
+class FakeDeadlineExceededRpcError(FakeRpcError):
+    def __init__(self) -> None:
+        super().__init__(status_code=StatusCode.DEADLINE_EXCEEDED)
+
+
+class FakeUnavailableRpcError(FakeRpcError):
+    def __init__(self) -> None:
+        super().__init__(status_code=StatusCode.UNAVAILABLE)
+
+
+class FakeWritingToFollowerError(FakeRpcError):
+    def __init__(self) -> None:
+        super().__init__(
+            status_code=StatusCode.NOT_FOUND, details="Leader info available"
+        )
+
+
+class FakeUnknownRpcError(FakeRpcError):
+    def __init__(self) -> None:
+        super().__init__(status_code=StatusCode.UNKNOWN)
 
 
 def random_data() -> bytes:

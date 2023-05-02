@@ -31,6 +31,11 @@ from grpc import (
 )
 from typing_extensions import Literal
 
+if TYPE_CHECKING:  # pragma: no cover
+    from grpc import Metadata
+else:
+    Metadata = Tuple[Tuple[str, str], ...]
+
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import (
     AccessDeniedError,
@@ -41,15 +46,36 @@ from esdbclient.exceptions import (
     GrpcError,
     InvalidTransactionError,
     MaximumAppendSizeExceededError,
+    NodeIsNotLeader,
     ServiceUnavailable,
     StreamDeletedError,
     StreamNotFound,
     TimeoutError,
     UnknownError,
 )
-from esdbclient.protos.Grpc import persistent_pb2, shared_pb2, status_pb2, streams_pb2
-from esdbclient.protos.Grpc.persistent_pb2_grpc import PersistentSubscriptionsStub
-from esdbclient.protos.Grpc.streams_pb2_grpc import StreamsStub
+from esdbclient.protos.Grpc import (
+    cluster_pb2,
+    cluster_pb2_grpc,
+    gossip_pb2,
+    gossip_pb2_grpc,
+    persistent_pb2,
+    persistent_pb2_grpc,
+    shared_pb2,
+    status_pb2,
+    streams_pb2,
+    streams_pb2_grpc,
+)
+
+
+class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
+    def __init__(self, username: str, password: str):
+        credentials = b64encode(f"{username}:{password}".encode())
+        self._metadata = (("authorization", (b"Basic " + credentials)),)
+
+    def __call__(
+        self, context: AuthMetadataContext, callback: AuthMetadataPluginCallback
+    ) -> None:
+        callback(self._metadata, None)
 
 
 def handle_rpc_error(e: RpcError) -> GrpcError:
@@ -61,6 +87,8 @@ def handle_rpc_error(e: RpcError) -> GrpcError:
             return ServiceUnavailable(e)
         elif e.code() == StatusCode.DEADLINE_EXCEEDED:
             return DeadlineExceeded(e)
+        if e.code() == StatusCode.NOT_FOUND and e.details() == "Leader info available":
+            return NodeIsNotLeader(e)
     return GrpcError(e)
 
 
@@ -78,9 +106,9 @@ class BatchAppendResponse:
     commit_position: int
 
 
-if TYPE_CHECKING:
+if TYPE_CHECKING:  # pragma: no cover
 
-    class _BatchAppendFuture(Future[BatchAppendResponse]):  # pragma: no cover
+    class _BatchAppendFuture(Future[BatchAppendResponse]):
         pass
 
 else:
@@ -95,19 +123,30 @@ class BatchAppendFuture(_BatchAppendFuture):
         self.batch_append_request = batch_append_request
 
 
-if TYPE_CHECKING:
-    BatchAppendFutureQueue = Queue[BatchAppendFuture]  # pragma: no cover
+if TYPE_CHECKING:  # pragma: no cover
+    BatchAppendFutureQueue = Queue[BatchAppendFuture]
 else:
     BatchAppendFutureQueue = Queue
 
 
-class Streams:
+class ESDBService:
+    def _metadata(
+        self, metadata: Optional[Metadata], requires_leader: bool = False
+    ) -> Metadata:
+        requires_leader_metadata: Metadata = (
+            ("requires-leader", "true" if requires_leader else "false"),
+        )
+        metadata = tuple() if metadata is None else metadata
+        return metadata + requires_leader_metadata
+
+
+class StreamsService(ESDBService):
     """
-    Encapsulates the 'Streams' gRPC service.
+    Encapsulates the 'streams.Streams' gRPC service.
     """
 
     def __init__(self, channel: Channel):
-        self._stub = StreamsStub(channel)
+        self._stub = streams_pb2_grpc.StreamsStub(channel)
 
     @overload
     def read(
@@ -118,6 +157,7 @@ class Streams:
         backwards: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> Iterable[RecordedEvent]:
         """
@@ -132,6 +172,7 @@ class Streams:
         stream_position: Optional[int] = None,
         subscribe: Literal[True],
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> Iterable[RecordedEvent]:
         """
@@ -148,6 +189,7 @@ class Streams:
         filter_include: Sequence[str] = (),
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> Iterable[RecordedEvent]:
         """
@@ -163,6 +205,7 @@ class Streams:
         filter_include: Sequence[str] = (),
         subscribe: Literal[True],
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> Iterable[RecordedEvent]:
         """
@@ -181,6 +224,7 @@ class Streams:
         limit: int = sys.maxsize,
         subscribe: bool = False,
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> Iterable[RecordedEvent]:
         """
@@ -204,7 +248,10 @@ class Streams:
         # Send the read request, and iterate over the response.
         try:
             for response in self._stub.Read(
-                read_req, timeout=timeout, credentials=credentials
+                read_req,
+                timeout=timeout,
+                metadata=self._metadata(metadata),
+                credentials=credentials,
             ):
                 assert isinstance(response, streams_pb2.ReadResp)
                 content_oneof = response.WhichOneof("content")
@@ -351,6 +398,7 @@ class Streams:
         expected_position: Optional[int],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> int:
         """
@@ -366,6 +414,7 @@ class Streams:
                     events=events,
                 ),
                 timeout=timeout,
+                metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
         except RpcError as e:
@@ -430,6 +479,7 @@ class Streams:
         self,
         futures_queue: BatchAppendFutureQueue,
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> None:
         # Construct batch append requests iterator.
@@ -440,6 +490,7 @@ class Streams:
             for response in self._stub.BatchAppend(
                 requests,
                 timeout=timeout,
+                metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             ):
                 # Use the correlation ID to get the future.
@@ -548,6 +599,7 @@ class Streams:
         self,
         batch_append_request: BatchAppendRequest,
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> BatchAppendResponse:
         # Call the gRPC method.
@@ -555,6 +607,7 @@ class Streams:
             for response in self._stub.BatchAppend(
                 iter([_construct_batch_append_req(batch_append_request)]),
                 timeout=timeout,
+                metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             ):
                 assert isinstance(response, streams_pb2.BatchAppendResp)
@@ -576,6 +629,7 @@ class Streams:
         stream_name: str,
         expected_position: Optional[int],
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> None:
         options = streams_pb2.DeleteReq.Options(
@@ -599,9 +653,13 @@ class Streams:
 
         try:
             delete_resp = self._stub.Delete(
-                delete_req, timeout=timeout, credentials=credentials
+                delete_req,
+                timeout=timeout,
+                metadata=self._metadata(metadata, requires_leader=True),
+                credentials=credentials,
             )
         except RpcError as e:
+            # Todo: Raise WrongExceptedVersion if expected_position is wrong...
             raise handle_rpc_error(e) from e
 
         else:
@@ -617,6 +675,7 @@ class Streams:
         stream_name: str,
         expected_position: Optional[int],
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> None:
         options = streams_pb2.TombstoneReq.Options(
@@ -640,9 +699,13 @@ class Streams:
 
         try:
             tombstone_resp = self._stub.Tombstone(
-                tombstone_req, timeout=timeout, credentials=credentials
+                tombstone_req,
+                timeout=timeout,
+                metadata=self._metadata(metadata, requires_leader=True),
+                credentials=credentials,
             )
         except RpcError as e:
+            # Todo: Raise WrongExceptedVersion if expected_position is wrong...
             raise handle_rpc_error(e) from e
 
         else:
@@ -797,13 +860,13 @@ class SubscriptionReadResponse:
                 )
 
 
-class Subscriptions:
+class PersistentSubscriptionsService(ESDBService):
     """
-    Encapsulates the 'Subscriptions' gRPC service.
+    Encapsulates the 'persistent.PersistentSubscriptions' gRPC service.
     """
 
     def __init__(self, channel: Channel):
-        self._stub = PersistentSubscriptionsStub(channel)
+        self._stub = persistent_pb2_grpc.PersistentSubscriptionsStub(channel)
 
     @overload
     def create(
@@ -817,6 +880,7 @@ class Subscriptions:
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> None:
         """
@@ -833,6 +897,7 @@ class Subscriptions:
         stream_position: Optional[int] = None,
         consumer_strategy: str = "DispatchToSingle",
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> None:
         """
@@ -851,6 +916,7 @@ class Subscriptions:
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> None:
         # Construct 'settings'.
@@ -940,6 +1006,7 @@ class Subscriptions:
             response = self._stub.Create(
                 request,
                 timeout=timeout,
+                metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
         except RpcError as e:
@@ -951,22 +1018,128 @@ class Subscriptions:
         group_name: str,
         stream_name: Optional[str] = None,
         timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
     ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
         read_req = SubscriptionReadRequest(
             group_name=group_name,
             stream_name=stream_name,
         )
-        read_resp = self._stub.Read(read_req, timeout=timeout, credentials=credentials)
+        read_resp = self._stub.Read(
+            read_req,
+            timeout=timeout,
+            metadata=self._metadata(metadata),
+            credentials=credentials,
+        )
         return (read_req, SubscriptionReadResponse(read_resp))
 
 
-class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
-    def __init__(self, username: str, password: str):
-        credentials = b64encode(f"{username}:{password}".encode())
-        self._metadata = (("authorization", (b"Basic " + credentials)),)
+@dataclass
+class ClusterMember:
+    state: str
+    address: str
+    port: int
 
-    def __call__(
-        self, context: AuthMetadataContext, callback: AuthMetadataPluginCallback
-    ) -> None:
-        callback(self._metadata, None)
+
+NODE_STATE_LEADER = "NODE_STATE_LEADER"
+NODE_STATE_FOLLOWER = "NODE_STATE_FOLLOWER"
+NODE_STATE_REPLICA = "NODE_STATE_REPLICA"
+NODE_STATE_OTHER = "NODE_STATE_OTHER"
+
+GOSSIP_API_NODE_STATES_MAPPING = {
+    gossip_pb2.MemberInfo.VNodeState.Follower: NODE_STATE_FOLLOWER,
+    gossip_pb2.MemberInfo.VNodeState.Leader: NODE_STATE_LEADER,
+    gossip_pb2.MemberInfo.VNodeState.ReadOnlyReplica: NODE_STATE_REPLICA,
+}
+
+
+class GossipService(ESDBService):
+    """
+    Encapsulates the 'gossip.Gossip' gRPC service.
+    """
+
+    def __init__(self, channel: Channel):
+        self._stub = gossip_pb2_grpc.GossipStub(channel)
+
+    def read(
+        self,
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> Sequence[ClusterMember]:
+        try:
+            read_resp = self._stub.Read(
+                shared_pb2.Empty(),
+                timeout=timeout,
+                metadata=self._metadata(metadata),
+                credentials=credentials,
+            )
+        except RpcError as e:
+            raise handle_rpc_error(e) from e
+
+        assert isinstance(read_resp, gossip_pb2.ClusterInfo)
+
+        members = []
+        for member_info in read_resp.members:
+            member = ClusterMember(
+                GOSSIP_API_NODE_STATES_MAPPING.get(member_info.state, NODE_STATE_OTHER),
+                member_info.http_end_point.address,
+                member_info.http_end_point.port,
+            )
+            members.append(member)
+        return tuple(members)
+
+
+CLUSTER_GOSSIP_NODE_STATES_MAPPING = {
+    cluster_pb2.MemberInfo.VNodeState.Follower: NODE_STATE_FOLLOWER,
+    cluster_pb2.MemberInfo.VNodeState.Leader: NODE_STATE_LEADER,
+    cluster_pb2.MemberInfo.VNodeState.ReadOnlyReplica: NODE_STATE_REPLICA,
+}
+
+
+class ClusterGossipService(ESDBService):
+    """
+    Encapsulates the 'cluster.Gossip' gRPC service.
+    """
+
+    def __init__(self, channel: Channel):
+        self._stub = cluster_pb2_grpc.GossipStub(channel)
+
+    def read(
+        self,
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> Sequence[ClusterMember]:
+        """
+        Returns a sequence of ClusterMember
+        """
+
+        try:
+            read_resp = self._stub.Read(
+                shared_pb2.Empty(),
+                timeout=timeout,
+                metadata=self._metadata(metadata),
+                credentials=credentials,
+            )
+        except RpcError as e:
+            raise handle_rpc_error(e) from e
+
+        assert isinstance(read_resp, cluster_pb2.ClusterInfo)
+
+        members = []
+        for member_info in read_resp.members:
+            assert isinstance(member_info, cluster_pb2.MemberInfo)
+            # Todo: Here we might want to use member_info.advertise_host_to_client_as
+            #   and member_info.advertise_http_port_to_client_as, but I don't know
+            #   what the difference is. Are these different from
+            #   member_info.http_end_point.address and member_info.http_end_point.port?
+            member = ClusterMember(
+                state=CLUSTER_GOSSIP_NODE_STATES_MAPPING.get(
+                    member_info.state, NODE_STATE_OTHER
+                ),
+                address=member_info.http_end_point.address,
+                port=member_info.http_end_point.port,
+            )
+            members.append(member)
+        return tuple(members)

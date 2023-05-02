@@ -1,6 +1,6 @@
 ## For version 1.0
 
-* Rename Client's "server_cert" constructor arg to "root_certificates".
+* DONE: Rename Client's "server_cert" constructor arg to "root_certificates".
 
 * Cluster support & connectivity (different connections strings + node pref);
   * Support the esdb:// and esdb+discover:// URLs
@@ -27,11 +27,11 @@
           * NodePreference: leader, follower, random, readonlyreplica
           * need to make a call to the gossip API, either timeout or give response, hence
             discover cluster topology, then based on node preference need to connect to
-            appropriate node - also need to send HTTP header, depending all call ("requires-leader: [true|false]")
+            appropriate node - also need to send HTTP header, depending on call ("requires-leader: [true|false]")
             * Use this for testing with a cluster: https://github.com/EventStore/EventStore/blob/master/docker-compose.yml
               * modify "build: ./" to use the latest Docker image
               * ask Joao about how to detect which node is the leader (an HTTP GET request?)
-            * close and reopon channel if we need to switch to a different server if topology changes so that leader is now a follower
+            * close and reopen channel if we need to switch to a different server if topology changes so that leader is now a follower
               * similarly, if node preference is follower or readonlyreplica, in future switch (but don't for now - it's "best effort")
           * https://github.com/EventStore/EventStore-Client-Dotnet/blob/master/src/EventStore.Client.Common/EventStoreCallOptions.cs#L26
         * Rule 4: user info, separated by '@'

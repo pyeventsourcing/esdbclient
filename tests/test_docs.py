@@ -11,28 +11,19 @@ BASE_DIR = Path(__file__).parents[1]
 
 
 class TestDocs(TestCase):
-    ESDB_HOST = "localhost"
-    ESDB_PORT = 2113
-
     def setUp(self) -> None:
-        os.environ["ESDB_HOST"] = self.ESDB_HOST
-        os.environ["ESDB_PORT"] = str(self.ESDB_PORT)
         self.setup_environ()
 
     def setup_environ(self) -> None:
         os.environ["ESDB_ROOT_CERTIFICATES"] = ssl.get_server_certificate(
-            addr=(self.ESDB_HOST, self.ESDB_PORT)
+            addr=("localhost", 2115)
         )
-        os.environ["ESDB_USERNAME"] = "admin"
-        os.environ["ESDB_PASSWORD"] = "changeit"
+        os.environ["ESDB_URI"] = "esdb://admin:changeit@localhost:2115"
 
     def tearDown(self) -> None:
-        del os.environ["ESDB_HOST"]
-        del os.environ["ESDB_PORT"]
+        del os.environ["ESDB_URI"]
         try:
             del os.environ["ESDB_ROOT_CERTIFICATES"]
-            del os.environ["ESDB_USERNAME"]
-            del os.environ["ESDB_PASSWORD"]
         except KeyError:
             pass
 
@@ -180,7 +171,5 @@ class TestDocs(TestCase):
 
 
 class TestDocsInsecure(TestDocs):
-    ESDB_PORT = 2114
-
     def setup_environ(self) -> None:
-        pass
+        os.environ["ESDB_URI"] = "esdb://localhost:2114?Tls=false"

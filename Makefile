@@ -98,27 +98,47 @@ grpc-stubs:
 	  protos/esdbclient/protos/Grpc/shared.proto   \
 	  protos/esdbclient/protos/Grpc/status.proto   \
 	  protos/esdbclient/protos/Grpc/streams.proto  \
-	  protos/esdbclient/protos/Grpc/persistent.proto
-# 	  protos/esdbclient/protos/command.proto \
-# 	  protos/esdbclient/protos/control.proto \
-# 	  protos/esdbclient/protos/event.proto \
-# 	  protos/esdbclient/protos/query.proto
+	  protos/esdbclient/protos/Grpc/persistent.proto \
+	  protos/esdbclient/protos/Grpc/gossip.proto \
+	  protos/esdbclient/protos/Grpc/cluster.proto
 
 .PHONY: start-eventstoredb-21-10-insecure
 start-eventstoredb-21-10-insecure:
-	docker run -d --name my-eventstoredb-insecure -it -p 2114:2113 eventstore/eventstore:21.10.9-buster-slim --insecure
+	docker run -d -i -t -p 2114:2113 \
+    --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
+    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
+    --name my-eventstoredb-insecure \
+    eventstore/eventstore:21.10.9-buster-slim \
+    --insecure
 
 .PHONY: start-eventstoredb-21-10-secure
 start-eventstoredb-21-10-secure:
-	docker run -d --name my-eventstoredb-secure -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:21.10.9-buster-slim --dev
+	docker run -d -i -t -p 2115:2113 \
+    --env "HOME=/tmp" \
+    --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
+    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2115" \
+    --name my-eventstoredb-secure \
+    eventstore/eventstore:21.10.9-buster-slim \
+    --dev
 
 .PHONY: start-eventstoredb-22-10-insecure
 start-eventstoredb-22-10-insecure:
-	docker run -d --name my-eventstoredb-insecure -it -p 2114:2113 eventstore/eventstore:22.10.0-buster-slim --insecure
+	docker run -d -i -t -p 2114:2113 \
+    --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
+    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
+    --name my-eventstoredb-insecure \
+    eventstore/eventstore:22.10.0-buster-slim \
+    --insecure
 
 .PHONY: start-eventstoredb-22-10-secure
 start-eventstoredb-22-10-secure:
-	docker run -d --name my-eventstoredb-secure -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:22.10.0-buster-slim --dev
+	docker run -d -i -t -p 2115:2113 \
+    --env "HOME=/tmp" \
+    --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
+    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2115" \
+    --name my-eventstoredb-secure \
+    eventstore/eventstore:22.10.0-buster-slim \
+    --dev
 
 .PHONY: attach-eventstoredb-insecure
 attach-eventstoredb-insecure:
@@ -140,8 +160,34 @@ stop-eventstoredb-secure:
 
 .PHONY: start-eventstoredb
 # start-eventstoredb: start-eventstoredb-21-10-insecure start-eventstoredb-21-10-secure
-start-eventstoredb: start-eventstoredb-22-10-insecure start-eventstoredb-22-10-secure
+start-eventstoredb: start-eventstoredb-22-10-insecure start-eventstoredb-22-10-secure docker-up
 
 .PHONY: stop-eventstoredb
-stop-eventstoredb: stop-eventstoredb-insecure stop-eventstoredb-secure
+stop-eventstoredb: stop-eventstoredb-insecure stop-eventstoredb-secure docker-down
+
+.PHONY: docker-pull
+docker-pull:
+	@docker-compose pull
+
+.PHONY: docker-build
+docker-build:
+	@docker-compose build
+
+.PHONY: docker-up
+docker-up:
+	@docker-compose up -d
+	@docker-compose ps
+
+.PHONY: docker-stop
+docker-stop:
+	@docker-compose stop
+
+.PHONY: docker-down
+docker-down:
+	@docker-compose down -v --remove-orphans
+
+
+.PHONY: docker-logs
+docker-logs:
+	@docker-compose logs --follow --tail=1000
 

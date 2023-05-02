@@ -46,7 +46,7 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Stop container](#stop-container)
 * [Client class](#client-class)
   * [Import class from package](#import-class-from-package)
-  * [Contruct client class](#contruct-client-class)
+  * [Construct client class](#construct-client-class)
 * [Streams](#streams)
   * [Append events](#append-events)
   * [Append event](#append-event)
@@ -69,6 +69,7 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Create stream subscription](#create-stream-subscription)
   * [Read stream subscription](#read-stream-subscription)
 * [Notes](#notes)
+  * [Connection strings](#connection-strings)
   * [Regular expression filters](#regular-expression-filters)
   * [New event objects](#new-event-objects)
   * [Recorded event objects](#recorded-event-objects)
@@ -141,22 +142,33 @@ The `ESDBClient` class can be imported from the `esdbclient` package.
 from esdbclient import ESDBClient
 ```
 
-### Contruct client class
+### Construct client class
 
-The `ESDBClient` class can be constructed with `host` and `port` arguments.
-The `host` and `port` arguments indicate the hostname and port number of the
-EventStoreDB server.
+The `ESDBClient` class can be constructed with a `uri` connection string argument.
+The `uri` argument is required, and is expected to conform with the standard
+EventStoreDB "esdb" scheme. For example, the URI below specifies that the client
+should attempt to connect to "localhost" on port 2113, using call credentials
+"username" and "password".
 
-The `host` argument is expected to be a Python `str`. The `port` argument is
-expected to be a Python `int`. These arguments are required.
+```
+esdb://username:password@localhost:2113
+```
 
-If the EventStoreDB server is "secure", then also use the `root_certificates`,
-`username` and `password` arguments.
+The connection string can specify connection options using the query string syntax
+of URIs. For example, the URI below uses the "Tls" options to specify that the client
+should create an "insecure" gRPC connection. By default, the client will attempt to
+create a "secure" connection.
 
-The optional `root_certificates` argument is expected to be a Python `str` containing
+```
+esdb://username:password@localhost:2113?Tls=false
+```
+
+Unless the `uri` argument specifies `Tls=false`, the `root_certificates` client
+constructor argument is also required. It is expected to be a Python `str` containing
 PEM encoded SSL/TLS root certificates used for server authentication. This value is
-passed directly to `grpc.ssl_channel_credentials()`. The optional `username` and
-`password` arguments are each expected to be a Python `str`.
+passed directly to `grpc.ssl_channel_credentials()`. It is commonly the certificate
+of the certificate authority that was responsible for generating the SSL/TLS certificate
+used by the EventStoreDB server.
 
 In the example below, the constructor argument values are taken from the operating
 system environment (the examples in this document are tested with both
@@ -166,11 +178,8 @@ a "secure" and an "insecure" server).
 import os
 
 client = ESDBClient(
-    host=os.getenv("ESDB_HOST"),
-    port=int(os.getenv("ESDB_PORT")),
+    uri=os.getenv("ESDB_URI"),
     root_certificates=os.getenv("ESDB_ROOT_CERTIFICATES"),
-    username=os.getenv("ESDB_USERNAME"),
-    password=os.getenv("ESDB_PASSWORD"),
 )
 ```
 
@@ -1505,6 +1514,63 @@ assert events[3].id == event11.id
 
 
 ## Notes
+
+### Connection strings
+
+The EventStoreDB connection string is a URI comprising a scheme, followed by a
+network location, optionally followed by a query string.
+
+The scheme will be separated from the network location with the characters "://".
+If it exists, the query string will be separated from the network location with
+the "?" character.
+
+There are two URI schemes used by EventStoreDB clients: the "esdb" scheme, and the
+"esdb+discover" scheme.
+
+In both the "esdb" and "esdb+discover" schemes, the network location string may
+start with a user info string. If it exists in the URI, the user info string
+must be formed from a username and a password. The username and password strings
+will be separated in the user info string with a ":" character. The user info string
+will be separated from the rest of the network location string with the "@" character.
+
+In the "esdb" scheme, after the user info string, the rest of the network location will
+be a list of gRPC targets. The gRPC targets will be separated from each other in the
+network location string by the "," character. Each gRPC target should indicate an
+EventStoreDB gRPC server socket, by specifying a network address and a port number,
+separated with the ":" character. The network address may be an IP address or a
+hostname that can be resolved to an IP address.
+
+In the "esdb+discover" scheme, after the user info string, the rest of the network
+location will be a fully-qualified domain name, which identifies a cluster of
+EventStoreDB servers. The client will use a DNS server to resolve the full-qualified
+domain name to a list of addresses of EventStoreDB servers. In this case, the port
+number "2113" will be used to construct gRPC targets from the addresses obtained from
+the DNS server.
+
+In both the "esdb" and "esdb+discover" schemes, the query string will be a list of
+key-value arguments, separated from each other with the "&" character. Each key-value
+argument must include a key and a value separated by the "=" character.
+
+The table below describes the query arguments supported by this client.
+
+| Key                 | Value                                                                 | Description                                                                                                   |
+|---------------------|-----------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
+| Tls                 | "true", "false" (default: "true")                                     | Use a secure gRPC channel.                                                                                    |
+| TlsVerifyCert       | "true", "false" (default: "true")                                     | NOT IMPLEMENTED                                                                                               |
+| ConnectionName      | any string (default: auto-generated version-4 UUID)                   | Identifies the client to the cluster.                                                                         |
+| NodePreference      | "leader", "follower", "readonlyreplica", "random" (default: "leader") | The node state preferred by the client.                                                                       |
+| DefaultDeadline     | integer (default: `None`)                                             | The default value (in seconds) of the `timeout` argument of client "write" methods such as `append_events()`. |
+| GossipTimeout       | integer (default: 5)                                                  | The default value (in seconds) of the `timeout` argument of gossip read methods, such as `read_gossip()`.     |
+| MaxDiscoverAttempts | integer (default: 10)                                                 | The number of attempts to read gossip when connecting or reconnecting to a cluster member.                    |
+| DiscoveryInterval   | integer (default: 100)                                                | How long to wait (in milliseconds) between gossip retries.                                                    |
+| KeepAliveInterval   | integer (default: `None`)                                             | gRPC channel option: "grpc.keepalive_ms"                                                                      |
+| KeepAliveTimeout    | integer (default: `None`)                                             | gRPC channel option: "grpc.keepalive_timeout_ms"                                                              |
+
+Please note, if NodePreference is "leader" and the node becomes a follower, the client will attempt to reconnect to the current leader. If
+NodePreference is "follower" and there are no follower nodes, the client will fail to connect (similarly for "readonlyreplica").
+
+Please note, the gRPC channel option "grpc.max_receive_message_length" is also configured to the value `17 * 1024 * 1024`.
+
 
 ### Regular expression filters
 

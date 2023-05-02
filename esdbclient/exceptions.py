@@ -23,6 +23,24 @@ class DeadlineExceeded(GrpcError):
     """
 
 
+class NodeIsNotLeader(GrpcError):
+    """
+    Raised when client attempts to write to a node that is not a leader.
+    """
+
+
+class FollowerNotFound(ESDBClientException):
+    """
+    Raised when NodePreference is 'follower' but the cluster has no such nodes.
+    """
+
+
+class ReadOnlyReplicaNotFound(ESDBClientException):
+    """
+    Raised when NodePreference is 'readonlyreplica' but the cluster has no such nodes.
+    """
+
+
 class StreamNotFound(ESDBClientException):
     """
     Raised when EventStoreDB stream is not found.
@@ -75,4 +93,16 @@ class MaximumAppendSizeExceededError(ESDBClientException):
 class BadRequestError(ESDBClientException):
     """
     Raised when append operation fails with a "bad request" error.
+    """
+
+
+class GossipSeedError(ESDBClientException):
+    """
+    Raised when client has no gossip seeds.
+    """
+
+
+class DiscoveryFailed(ESDBClientException):
+    """
+    Raised when client fails to satisfy node preference using gossip cluster info.
     """
