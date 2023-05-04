@@ -108,9 +108,9 @@ class ConnectionOptions:
             self._Tls = True
         else:
             validTlsValues = ["true", "false"]
-            if _Tls not in validTlsValues:
+            if _Tls.lower() not in validTlsValues:
                 raise ValueError(f"'{_Tls}' not one of: {', '.join(validTlsValues)}")
-            elif _Tls == "true":
+            elif _Tls.lower() == "true":
                 self._Tls = True
             else:
                 self._Tls = False
@@ -143,24 +143,24 @@ class ConnectionOptions:
         if _NodePreference is None:
             self._NodePreference = NODE_PREFERENCE_LEADER
         else:
-            if _NodePreference not in VALID_NODE_PREFERENCES:
+            if _NodePreference.lower() not in VALID_NODE_PREFERENCES:
                 raise ValueError(
                     f"'{_NodePreference}' not one of:"
                     f" {', '.join(VALID_NODE_PREFERENCES)}"
                 )
-            self._NodePreference = _NodePreference
+            self._NodePreference = _NodePreference.lower()
 
         _TlsVerifyCert = options.get("TlsVerifyCert".upper())
         if _TlsVerifyCert is None:
             self._TlsVerifyCert = True
         else:
             validTlsVerifyCertValues = ["true", "false"]
-            if _TlsVerifyCert not in validTlsVerifyCertValues:
+            if _TlsVerifyCert.lower() not in validTlsVerifyCertValues:
                 raise ValueError(
                     f"'{_TlsVerifyCert}' not one of:"
                     f" {', '.join(validTlsVerifyCertValues)}"
                 )
-            elif _TlsVerifyCert == "true":
+            elif _TlsVerifyCert.lower() == "true":
                 self._TlsVerifyCert = True
             else:
                 self._TlsVerifyCert = False

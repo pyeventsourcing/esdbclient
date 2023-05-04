@@ -11,7 +11,8 @@ from grpc._channel import _MultiThreadedRendezvous, _RPCState
 from grpc._cython.cygrpc import IntegratedCall
 
 import esdbclient.protos.Grpc.persistent_pb2 as grpc_persistent
-from esdbclient.client import ConnectionSpec, ESDBClient
+from esdbclient.client import ConnectionSpec, ESDBClient, NODE_PREFERENCE_LEADER, \
+    NODE_PREFERENCE_FOLLOWER
 from esdbclient.esdbapi import (
     NODE_STATE_FOLLOWER,
     NODE_STATE_LEADER,
@@ -96,6 +97,15 @@ class TestConnectionSpec(TestCase):
         self.assertIs(spec.options.Tls, False)
         spec = ConnectionSpec("esdb:?tls=false")
         self.assertIs(spec.options.Tls, False)
+        spec = ConnectionSpec("esdb:?TLS=true")
+        self.assertIs(spec.options.Tls, True)
+        spec = ConnectionSpec("esdb:?tls=true")
+        self.assertIs(spec.options.Tls, True)
+
+        spec = ConnectionSpec("esdb:?TLS=False")
+        self.assertIs(spec.options.Tls, False)
+        spec = ConnectionSpec("esdb:?tls=FALSE")
+        self.assertIs(spec.options.Tls, False)
 
         # Invalid value.
         with self.assertRaises(ValueError):
@@ -153,17 +163,27 @@ class TestConnectionSpec(TestCase):
     def test_node_preference(self) -> None:
         # NodePreference not mentioned.
         spec = ConnectionSpec("esdb:")
-        self.assertEqual(spec.options.NodePreference, "leader")
+        self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_LEADER)
 
         # Set NodePreference.
         spec = ConnectionSpec("esdb:?NodePreference=leader")
-        self.assertEqual(spec.options.NodePreference, "leader")
+        self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_LEADER)
         spec = ConnectionSpec("esdb:?NodePreference=follower")
-        self.assertEqual(spec.options.NodePreference, "follower")
+        self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_FOLLOWER)
 
         # Invalid value.
         with self.assertRaises(ValueError):
             ConnectionSpec("esdb:?NodePreference=blah")
+
+        # Case insensitivity.
+        spec = ConnectionSpec("esdb:?nodePreference=leader")
+        self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_LEADER)
+        spec = ConnectionSpec("esdb:?NODEPREFERENCE=follower")
+        self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_FOLLOWER)
+        spec = ConnectionSpec("esdb:?NodePreference=Leader")
+        self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_LEADER)
+        spec = ConnectionSpec("esdb:?NodePreference=FOLLOWER")
+        self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_FOLLOWER)
 
     def test_tls_verify_cert(self) -> None:
         # TlsVerifyCert not mentioned.
@@ -179,6 +199,16 @@ class TestConnectionSpec(TestCase):
         # Invalid value.
         with self.assertRaises(ValueError):
             ConnectionSpec("esdb:?TlsVerifyCert=blah")
+
+        # Case insensitivity.
+        spec = ConnectionSpec("esdb:?TLSVERIFYCERT=true")
+        self.assertEqual(spec.options.TlsVerifyCert, True)
+        spec = ConnectionSpec("esdb:?tlsverifycert=false")
+        self.assertEqual(spec.options.TlsVerifyCert, False)
+        spec = ConnectionSpec("esdb:?TlsVerifyCert=True")
+        self.assertEqual(spec.options.TlsVerifyCert, True)
+        spec = ConnectionSpec("esdb:?TlsVerifyCert=False")
+        self.assertEqual(spec.options.TlsVerifyCert, False)
 
     def test_default_deadline(self) -> None:
         # DefaultDeadline not mentioned.
