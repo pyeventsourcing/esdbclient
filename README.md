@@ -144,23 +144,31 @@ from esdbclient import ESDBClient
 
 ### Construct client class
 
-The `ESDBClient` class can be constructed with a `uri` connection string argument.
+The `ESDBClient` class can be constructed with a required `uri` argument, and an
+optional `root_certificates` (by default the client will attempt to create a "secure"
+connection to the server, and in this case the `root_certificates` value is required).
+
 The `uri` argument is required, and is expected to conform with the standard
-EventStoreDB "esdb" scheme. For example, the URI below specifies that the client
-should attempt to connect to "localhost" on port 2113, using call credentials
-"username" and "password".
+EventStoreDB "esdb" or "esdb+discover" URI schemes. You can generate EventStoreDB
+connection strings using the online tool.
+
+For example, the URI below specifies that the client should attempt to connect to
+"localhost" on port 2113, using call credentials "username" and "password".
 
 ```
 esdb://username:password@localhost:2113
 ```
 
-The connection string can specify connection options using the query string syntax
-of URIs. For example, the URI below uses the "Tls" options to specify that the client
-should create an "insecure" gRPC connection. By default, the client will attempt to
-create a "secure" connection.
+By using the [query string syntax](https://en.wikipedia.org/wiki/Query_string), the
+`uri` connection string can specify connection options. See the Notes section below
+for details of these options.
+
+For example, the URI below uses the "Tls" options to specify that the client should
+create an "insecure" gRPC connection to a "follower" node. By default, the client will
+attempt to create a "secure" connection to a "leader".
 
 ```
-esdb://username:password@localhost:2113?Tls=false
+esdb://username:password@localhost:2113?Tls=false&NodePreference=follower
 ```
 
 Unless the `uri` argument specifies `Tls=false`, the `root_certificates` client
@@ -1548,12 +1556,12 @@ number "2113" will be used to construct gRPC targets from the addresses obtained
 the DNS server.
 
 In both the "esdb" and "esdb+discover" schemes, the query string will be a list of
-key-value arguments, separated from each other with the "&" character. Each key-value
-argument must include a key and a value separated by the "=" character.
+field-value arguments, separated from each other with the "&" character. Each
+field-value argument must include a key and a value separated by the "=" character.
 
 The table below describes the query arguments supported by this client.
 
-| Key                 | Value                                                                 | Description                                                                                                   |
+| Field               | Value                                                                 | Description                                                                                                   |
 |---------------------|-----------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
 | Tls                 | "true", "false" (default: "true")                                     | Use a secure gRPC channel.                                                                                    |
 | TlsVerifyCert       | "true", "false" (default: "true")                                     | NOT IMPLEMENTED                                                                                               |
@@ -1566,10 +1574,26 @@ The table below describes the query arguments supported by this client.
 | KeepAliveInterval   | integer (default: `None`)                                             | gRPC channel option: "grpc.keepalive_ms"                                                                      |
 | KeepAliveTimeout    | integer (default: `None`)                                             | gRPC channel option: "grpc.keepalive_timeout_ms"                                                              |
 
-Please note, if NodePreference is "leader" and the node becomes a follower, the client will attempt to reconnect to the current leader. If
-NodePreference is "follower" and there are no follower nodes, the client will fail to connect (similarly for "readonlyreplica").
+Please note, the field names are case-insensitive. If fields are repeated in the
+query string, the query string will be parsed without error. However, the connection
+options used by the client will use the value of the first field. All the
+other field-values in the query string with the same field name will be ignored.
 
-Please note, the gRPC channel option "grpc.max_receive_message_length" is also configured to the value `17 * 1024 * 1024`.
+Please note, if NodePreference is "leader" and the node becomes a follower, the client
+will attempt to reconnect to the current leader. The HTTP header "require-leader" is
+set to "true" for "write" requests, and a node which is not a leader that receives
+such a request will return an error. This error is detected by the client, which will
+then close the current gRPC connection and create a new connection to the leader. The
+request will then be sent to the leader, and will be expected to succeed.
+
+Please note, if NodePreference is "follower" and there are no follower nodes in the
+cluster, the client will fail to connect.
+
+Please note, if NodePreference is "readonlyreplica" and there are no read-only replica
+nodes in the cluster, the client will fail to connect.
+
+Please note, the gRPC channel option "grpc.max_receive_message_length" is automatically
+configured to the value `17 * 1024 * 1024`. This value cannot be changed.
 
 
 ### Regular expression filters

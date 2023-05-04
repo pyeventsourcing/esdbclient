@@ -22,6 +22,7 @@ from typing import (
 from urllib.parse import ParseResult, parse_qs, urlparse
 from uuid import uuid4
 
+import dns.resolver
 import grpc
 from grpc import CallCredentials, Channel, ChannelConnectivity, RpcError
 
@@ -69,8 +70,6 @@ VALID_URI_SCHEMES = [
     URI_SCHEME_ESDB_DISCOVER,
 ]
 
-# Todo: What's the difference between a follower and readonlyreplica? Perhaps a
-#  readonlyreplica can't participate in elections, and so can't become a leader?
 NODE_PREFERENCE_LEADER = "leader"
 NODE_PREFERENCE_FOLLOWER = "follower"
 NODE_PREFERENCE_RANDOM = "random"
@@ -102,7 +101,7 @@ class ConnectionOptions:
 
     def __init__(self, query: str):
         # Parse query string (case insensitivity, assume single values).
-        options = {k.upper(): v[-1] for k, v in parse_qs(query).items()}
+        options = {k.upper(): v[0] for k, v in parse_qs(query).items()}
 
         _Tls = options.get("Tls".upper())
         if _Tls is None:
@@ -424,13 +423,6 @@ class ESDBClient:
     def _connect_to_preferred_node(self) -> ESDBConnection:
         # Obtain the gossip seed (a list of gRPC targets).
         if self.connection_spec.scheme == URI_SCHEME_ESDB_DISCOVER:
-            # raise NotImplementedError(
-            #     f"DNS discovery not yet implemented: {self.connection_spec.uri}"
-            # )
-            # Todo: Something like this, using dnspython package:
-            #
-            import dns.resolver
-
             assert len(self.connection_spec.targets) == 1
             cluster_fqdn = self.connection_spec.targets[0]
             answers = dns.resolver.resolve(cluster_fqdn, "A")

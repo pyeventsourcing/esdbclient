@@ -101,6 +101,10 @@ class TestConnectionSpec(TestCase):
         with self.assertRaises(ValueError):
             ConnectionSpec("esdb:?Tls=blah")
 
+        # Repeated field (use first value).
+        spec = ConnectionSpec("esdb:?Tls=true&Tls=false")
+        self.assertTrue(spec.options.Tls)
+
     def test_connection_name(self) -> None:
         # ConnectionName not mentioned.
         spec = ConnectionSpec("esdb:")
