@@ -4,7 +4,7 @@ import random
 import sys
 from functools import wraps
 from queue import Empty
-from threading import Lock, Thread
+from threading import Event, Lock, Thread
 from time import sleep
 from typing import (
     Any,
@@ -348,13 +348,20 @@ class ESDBConnection:
 def reconnect_to_leader(f: _TCallable) -> _TCallable:
     @wraps(f)
     def wrapper(self, *args, **kwargs):  # type: ignore
+        assert isinstance(self, ESDBClient)
         try:
             return f(self, *args, **kwargs)
 
         except NodeIsNotLeader:
             if self.connection_spec.options.NodePreference == NODE_PREFERENCE_LEADER:
-                self._connection.close()
-                self._connection = self._connect_to_preferred_node()
+                self.node_is_not_leader_detected.set()
+                with self.node_is_not_leader_detected_lock:
+                    if self.node_is_not_leader_detected.is_set():
+                        self._reconnect_to_preferred_node()
+                        self.node_is_not_leader_detected.clear()
+                    else:  # pragma: no cover
+                        # Todo: Test with concurrent writes to wrong node state.
+                        pass
                 return f(self, *args, **kwargs)
             else:
                 raise
@@ -373,6 +380,8 @@ class ESDBClient:
         *,
         root_certificates: Optional[str] = None,
     ) -> None:
+        self.node_is_not_leader_detected = Event()
+        self.node_is_not_leader_detected_lock = Lock()
         self.root_certificates = root_certificates
         self.connection_spec = ConnectionSpec(uri)
 
@@ -497,6 +506,11 @@ class ESDBClient:
                 connection = self._construct_connection(grpc_target)
 
         return connection
+
+    def _reconnect_to_preferred_node(self) -> None:
+        new_c = self._connect_to_preferred_node()
+        old_c, self._connection = self._connection, new_c
+        old_c.close()
 
     def _construct_connection(self, grpc_target: str) -> ESDBConnection:
         grpc_options: Tuple[Tuple[str, str], ...] = tuple(self.grpc_options.items())
