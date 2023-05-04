@@ -5,10 +5,10 @@ This package provides a Python gRPC client for
 
 This client is implemented as the Python class `ESDBClient`.
 
-This client has been developed and tested to work with EventStoreDB LTS
-versions 21.10 and 21.10, without and without SSL/TLS enabled on both
-these versions, and with Python versions 3.7, 3.8, 3.9, 3.10, and 3.11
-across all of the above. The test coverage is 100% including branch coverage.
+This client has been developed in collaboration with the EventStoreDB
+team. It has been tested to work with EventStoreDB LTS versions 21.10,
+without and without SSL/TLS, and with Python versions 3.7 to 3.11. There
+is 100% test coverage including branches.
 
 All the Python code in this package has typing annotations. The static typing
 annotations are checked relatively strictly with mypy. The code is formatted
@@ -1580,11 +1580,12 @@ options used by the client will use the value of the first field. All the
 other field-values in the query string with the same field name will be ignored.
 
 Please note, if NodePreference is "leader" and the node becomes a follower, the client
-will attempt to reconnect to the current leader. The HTTP header "require-leader" is
-set to "true" for "write" requests, and a node which is not a leader that receives
-such a request will return an error. This error is detected by the client, which will
-then close the current gRPC connection and create a new connection to the leader. The
-request will then be sent to the leader, and will be expected to succeed.
+will attempt to reconnect to the current leader. The HTTP header "requires-leader" is
+set to "true" for "write" requests, this header is observed by the server, and a node
+which is not a leader that receives such a request will return an error. This error
+is detected by the client, which will then close the current gRPC connection and create
+a new connection to the leader. The request will then be sent to the leader, and will
+be expected to succeed.
 
 Please note, if NodePreference is "follower" and there are no follower nodes in the
 cluster, the client will fail to connect.
