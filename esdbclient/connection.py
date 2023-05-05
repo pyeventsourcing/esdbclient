@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from time import sleep
 from typing import Any, Dict, Optional, Sequence
 from urllib.parse import ParseResult, parse_qs, urlparse
 from uuid import uuid4
@@ -323,4 +324,5 @@ class ESDBConnection:
 
     def close(self) -> None:
         self.grpc_channel.unsubscribe(self._receive_channel_connectivity_state)
+        sleep(0.1)  # Allow connectivity polling to stop.
         self.grpc_channel.close()
