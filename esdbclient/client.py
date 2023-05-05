@@ -439,6 +439,7 @@ class ESDBClient:
             gossip_seed: Sequence[str] = [f"{s.address}:2113" for s in answers]
 
         else:
+            assert self.connection_spec.scheme == URI_SCHEME_ESDB
             gossip_seed = self.connection_spec.targets
 
         # Check the gossip seed isn't empty.

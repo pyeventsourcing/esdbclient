@@ -1548,7 +1548,7 @@ class TestESDBClient(TestCase):
             self.client.get_stream_position(stream_name)
         self.assertIn("is deleted", str(cm.exception))
 
-    def test_catchup_subscribe_all_events_default_filter(self) -> None:
+    def test_subscribe_all_events_default_filter(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -1590,7 +1590,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[1].id, event5.id)
         self.assertEqual(events[2].id, event6.id)
 
-    def test_catchup_subscribe_stream_events_default_filter(self) -> None:
+    def test_subscribe_stream_events_default_filter(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -1641,7 +1641,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[1].id, event8.id)
         self.assertEqual(events[2].id, event9.id)
 
-    def test_catchup_subscribe_stream_events_from_stream_position(self) -> None:
+    def test_subscribe_stream_events_from_stream_position(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -1697,7 +1697,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[2].id, event8.id)
         self.assertEqual(events[3].id, event9.id)
 
-    def test_catchup_subscribe_all_events_no_filter(self) -> None:
+    def test_subscribe_all_events_no_filter(self) -> None:
         self.construct_esdb_client()
 
         # Append new events.
@@ -1722,7 +1722,7 @@ class TestESDBClient(TestCase):
         else:
             self.fail("Didn't get a system event")
 
-    def test_catchup_subscribe_all_events_include_filter(self) -> None:
+    def test_subscribe_all_events_include_filter(self) -> None:
         self.construct_esdb_client()
 
         # Append new events.
@@ -1755,7 +1755,7 @@ class TestESDBClient(TestCase):
         # Check we actually got some 'OrderCreated' events.
         self.assertGreater(len(events), 0)
 
-    def test_catchup_subscribe_all_events_from_commit_position_zero(self) -> None:
+    def test_subscribe_all_events_from_commit_position_zero(self) -> None:
         self.construct_esdb_client()
 
         # Append new events.
@@ -1777,7 +1777,7 @@ class TestESDBClient(TestCase):
             break
         self.assertEqual(count, 1)
 
-    def test_catchup_subscribe_all_events_from_commit_position_current(self) -> None:
+    def test_subscribe_all_events_from_commit_position_current(self) -> None:
         self.construct_esdb_client()
 
         # Append new events.
@@ -1835,7 +1835,7 @@ class TestESDBClient(TestCase):
                 count += 1
         self.assertGreater(count, 0)
 
-    def test_persistent_subscription_from_start(self) -> None:
+    def test_create_and_read_subscription_from_start(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
@@ -1867,7 +1867,7 @@ class TestESDBClient(TestCase):
         assert events[-2].data == event2.data
         assert events[-1].data == event3.data
 
-    def test_persistent_subscription_from_commit_position(self) -> None:
+    def test_create_and_read_subscription_from_commit_position(self) -> None:
         self.construct_esdb_client()
 
         # Append one event.
@@ -1911,7 +1911,7 @@ class TestESDBClient(TestCase):
         assert events[1].id == event2.id
         assert events[2].id == event3.id
 
-    def test_persistent_subscription_from_end(self) -> None:
+    def test_create_and_read_subscription_from_end(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
@@ -1954,7 +1954,7 @@ class TestESDBClient(TestCase):
         assert events[1].data == event2.data
         assert events[2].data == event3.data
 
-    def test_persistent_subscription_include_filter(self) -> None:
+    def test_create_and_read_subscription_include_filter(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
@@ -1983,7 +1983,7 @@ class TestESDBClient(TestCase):
             if event.data == event1.data:
                 break
 
-    def test_persistent_subscription_exclude_filter(self) -> None:
+    def test_create_and_read_subscription_exclude_filter(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
@@ -2023,7 +2023,7 @@ class TestESDBClient(TestCase):
             if event.data == event3.data:
                 break
 
-    def test_persistent_subscription_no_filter(self) -> None:
+    def test_create_and_read_subscription_no_filter(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
@@ -2076,7 +2076,7 @@ class TestESDBClient(TestCase):
         info = self.client.get_subscription_info(group_name)
         self.assertEqual(info.group_name, group_name)
 
-    def test_list_persistent_subscriptions(self) -> None:
+    def test_list_subscriptions(self) -> None:
         self.construct_esdb_client()
 
         subscriptions_before = self.client.list_subscriptions()
@@ -2094,7 +2094,7 @@ class TestESDBClient(TestCase):
         group_names = [s.group_name for s in subscriptions_after]
         self.assertIn(group_name, group_names)
 
-    def test_delete_persistent_subscription(self) -> None:
+    def test_delete_subscription(self) -> None:
         self.construct_esdb_client()
 
         group_name = f"my-subscription-{uuid4().hex}"
@@ -2123,7 +2123,7 @@ class TestESDBClient(TestCase):
         with self.assertRaises(SubscriptionNotFound):
             self.client.delete_subscription(group_name=group_name)
 
-    def test_persistent_stream_subscription_from_start(self) -> None:
+    def test_create_and_read_stream_subscription_from_start(self) -> None:
         self.construct_esdb_client()
 
         # Append some events.
@@ -2200,7 +2200,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[4].id, event11.id)
         self.assertEqual(events[5].id, event12.id)
 
-    def test_persistent_stream_subscription_from_stream_position(self) -> None:
+    def test_create_and_read_stream_subscription_from_stream_position(self) -> None:
         self.construct_esdb_client()
 
         # Append some events.
@@ -2276,7 +2276,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[3].id, event11.id)
         self.assertEqual(events[4].id, event12.id)
 
-    def test_persistent_stream_subscription_from_end(self) -> None:
+    def test_create_and_read_stream_subscription_from_end(self) -> None:
         self.construct_esdb_client()
 
         # Append some events.
@@ -2387,7 +2387,7 @@ class TestESDBClient(TestCase):
         group_names = [s.group_name for s in all_subscriptions]
         self.assertIn(group_name, group_names)
 
-    def test_delete_persistent_stream_subscription(self) -> None:
+    def test_delete_stream_subscription(self) -> None:
         self.construct_esdb_client()
 
         stream_name = str(uuid4())
