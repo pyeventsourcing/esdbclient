@@ -30,7 +30,7 @@ class DeadlineExceeded(GrpcError):
     """
 
 
-class NodeIsNotLeader(GrpcError):
+class NodeIsNotLeader(ESDBClientException):
     """
     Raised when client attempts to write to a node that is not a leader.
     """

@@ -81,7 +81,7 @@ class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
         callback(self._metadata, None)
 
 
-def handle_rpc_error(e: RpcError) -> GrpcError:
+def handle_rpc_error(e: RpcError) -> ESDBClientException:
     """
     Converts gRPC errors to client exceptions.
     """
@@ -285,6 +285,8 @@ class StreamsService(ESDBService):
                     )
                 elif content_oneof == "stream_not_found":
                     raise StreamNotFound(f"Stream {stream_name!r} not found")
+                # elif content_oneof == "confirmation":
+                #     raise StreamNotFound(f"Stream {stream_name!r} not found")
                 else:
                     pass  # pragma: no cover
                     # Todo: Maybe support other content_oneof values:

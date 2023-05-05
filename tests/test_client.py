@@ -11,11 +11,11 @@ from grpc._channel import _MultiThreadedRendezvous, _RPCState
 from grpc._cython.cygrpc import IntegratedCall
 
 import esdbclient.protos.Grpc.persistent_pb2 as grpc_persistent
-from esdbclient.client import (
+from esdbclient.client import ESDBClient
+from esdbclient.connection import (
     NODE_PREFERENCE_FOLLOWER,
     NODE_PREFERENCE_LEADER,
     ConnectionSpec,
-    ESDBClient,
 )
 from esdbclient.esdbapi import (
     NODE_STATE_FOLLOWER,
@@ -243,6 +243,15 @@ class TestConnectionSpec(TestCase):
         spec = ConnectionSpec("esdb:?KeepAliveTimeout=10")
         self.assertEqual(spec.options.KeepAliveTimeout, 10)
 
+    def test_raises_when_query_string_has_unsupported_field(self) -> None:
+        with self.assertRaises(ValueError) as cm1:
+            ConnectionSpec("esdb:?NotSupported=10")
+        self.assertIn("Unknown field in", cm1.exception.args[0])
+
+        with self.assertRaises(ValueError) as cm2:
+            ConnectionSpec("esdb:?NotSupported=10&AlsoNotSupported=20")
+        self.assertIn("Unknown fields in", cm2.exception.args[0])
+
 
 def read_ca_cert() -> str:
     ca_cert_path = os.path.join(
@@ -317,10 +326,10 @@ class TestESDBClient(TestCase):
         esdb_target = "localhost:2222"
 
         if self.ESDB_TLS:
-            uri = f"esdb://admin:changeit@{esdb_target}"
+            uri = f"esdb://admin:changeit@{esdb_target}?MaxDiscoverAttempts=2"
             root_certificates = self.get_root_certificates()
         else:
-            uri = f"esdb://{esdb_target}?Tls=false"
+            uri = f"esdb://{esdb_target}?Tls=false&MaxDiscoverAttempts=2"
             root_certificates = None
 
         with self.assertRaises(DiscoveryFailed):
@@ -2738,6 +2747,29 @@ class TestReconnectsToNewLeader(TestCase):
         )
 
 
+class TestReconnectsToPreferredNode(TestCase):
+    def setUp(self) -> None:
+        self.uri = "esdb://admin:changeit@127.0.0.1:2111"
+        self.ca_cert = read_ca_cert()
+        self.writer = ESDBClient(
+            self.uri + "?NodePreference=leader", root_certificates=self.ca_cert
+        )
+        self.writer.close()
+
+    def tearDown(self) -> None:
+        self.writer.close()
+
+    def test_append_events(self) -> None:
+        # Append events - should reconnect.
+        stream_name = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        self.writer.append_events(stream_name, expected_position=None, events=[event1])
+
+    # def test_read_all_events(self) -> None:
+    #     # Read all events - should reconnect.
+    #     list(self.writer.read_all_events())
+
+
 class TestConnectToPreferredNode(TestCase):
     def test_no_followers(self) -> None:
         uri = "esdb://admin:changeit@127.0.0.1:2114?Tls=false&NodePreference=follower"
@@ -2782,24 +2814,20 @@ class TestSubscriptionReadRequest(TestCase):
 
 class TestHandleRpcError(TestCase):
     def test_handle_exception_thrown_by_handler(self) -> None:
-        with self.assertRaises(GrpcError) as cm:
+        with self.assertRaises(ExceptionThrownByHandler):
             raise handle_rpc_error(FakeExceptionThrownByHandlerError()) from None
-        self.assertEqual(ExceptionThrownByHandler, cm.exception.__class__)
 
     def test_handle_deadline_exceeded_error(self) -> None:
-        with self.assertRaises(GrpcError) as cm:
+        with self.assertRaises(DeadlineExceeded):
             raise handle_rpc_error(FakeDeadlineExceededRpcError()) from None
-        self.assertEqual(DeadlineExceeded, cm.exception.__class__)
 
     def test_handle_unavailable_error(self) -> None:
-        with self.assertRaises(GrpcError) as cm:
+        with self.assertRaises(ServiceUnavailable):
             raise handle_rpc_error(FakeUnavailableRpcError()) from None
-        self.assertEqual(ServiceUnavailable, cm.exception.__class__)
 
     def test_handle_writing_to_follower_error(self) -> None:
-        with self.assertRaises(GrpcError) as cm:
+        with self.assertRaises(NodeIsNotLeader):
             raise handle_rpc_error(FakeWritingToFollowerError()) from None
-        self.assertEqual(NodeIsNotLeader, cm.exception.__class__)
 
     def test_handle_other_call_error(self) -> None:
         with self.assertRaises(GrpcError) as cm:
