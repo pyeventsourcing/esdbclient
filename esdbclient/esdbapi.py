@@ -254,56 +254,16 @@ class StreamsService(ESDBService):
         )
 
         # Send the read request, and iterate over the response.
-        try:
-            for response in self._stub.Read(
-                read_req,
-                timeout=timeout,
-                metadata=self._metadata(metadata),
-                credentials=credentials,
-            ):
-                assert isinstance(response, streams_pb2.ReadResp)
-                content_oneof = response.WhichOneof("content")
-                if content_oneof == "event":
-                    event = response.event.event
-                    position_oneof = response.event.WhichOneof("position")
-                    if position_oneof == "commit_position":
-                        commit_position = response.event.commit_position
-                    else:  # pragma: no cover
-                        # We only get here with EventStoreDB < 22.10.
-                        assert position_oneof == "no_position", position_oneof
-                        commit_position = None
+        read_resp = self._stub.Read(
+            read_req,
+            timeout=timeout,
+            metadata=self._metadata(metadata),
+            credentials=credentials,
+        )
 
-                    yield RecordedEvent(
-                        id=UUID(event.id.string),
-                        type=event.metadata["type"],
-                        data=event.data,
-                        content_type=event.metadata["content-type"],
-                        metadata=event.custom_metadata,
-                        stream_name=event.stream_identifier.stream_name.decode("utf8"),
-                        stream_position=event.stream_revision,
-                        commit_position=commit_position,
-                    )
-                elif content_oneof == "stream_not_found":
-                    raise StreamNotFound(f"Stream {stream_name!r} not found")
-                # elif content_oneof == "confirmation":
-                #     raise StreamNotFound(f"Stream {stream_name!r} not found")
-                else:
-                    pass  # pragma: no cover
-                    # Todo: Maybe support other content_oneof values:
-                    #   oneof content {
-                    # 		ReadEvent event = 1;
-                    # 		SubscriptionConfirmation confirmation = 2;
-                    # 		Checkpoint checkpoint = 3;
-                    # 		StreamNotFound stream_not_found = 4;
-                    # 		uint64 first_stream_position = 5;
-                    # 		uint64 last_stream_position = 6;
-                    # 		AllStreamPosition last_all_stream_position = 7;
-                    # 	}
-                    #
-                    # Todo: Not sure how to request to get first_stream_position,
-                    #   last_stream_position, first_all_stream_position.
-        except RpcError as e:
-            raise handle_rpc_error(e) from e
+        return ReadResponse(
+            read_resp, stream_name=stream_name, is_subscription=subscribe
+        )
 
     def _construct_read_request(
         self,
@@ -783,6 +743,81 @@ def _construct_batch_append_req(
     return batch_append_req
 
 
+class ReadResponse(Iterable[RecordedEvent]):
+    def __init__(
+        self,
+        read_resp_iter: Iterable[streams_pb2.ReadResp],
+        stream_name: Optional[str],
+        is_subscription: bool,
+    ):
+        self.read_resp_iter = iter(read_resp_iter)
+        self.stream_name = stream_name
+        self.subscription_id: Optional[UUID] = None
+        if is_subscription:
+            read_resp = self._get_next_read_resp()
+            content_oneof = read_resp.WhichOneof("content")
+            if content_oneof == "confirmation":
+                # Todo: What is this actually for?
+                self.subscription_id = UUID(read_resp.confirmation.subscription_id)
+            else:  # pragma: no cover
+                raise ESDBClientException(
+                    f"Expected subscription confirmation, got: {read_resp}"
+                )
+
+    def __iter__(self) -> "ReadResponse":
+        return self
+
+    def __next__(self) -> RecordedEvent:
+        while True:
+            read_resp = self._get_next_read_resp()
+            content_oneof = read_resp.WhichOneof("content")
+            if content_oneof == "event":
+                event = read_resp.event.event
+                position_oneof = read_resp.event.WhichOneof("position")
+                if position_oneof == "commit_position":
+                    commit_position = read_resp.event.commit_position
+                else:  # pragma: no cover
+                    # We only get here with EventStoreDB < 22.10.
+                    assert position_oneof == "no_position", position_oneof
+                    commit_position = None
+
+                return RecordedEvent(
+                    id=UUID(event.id.string),
+                    type=event.metadata["type"],
+                    data=event.data,
+                    content_type=event.metadata["content-type"],
+                    metadata=event.custom_metadata,
+                    stream_name=event.stream_identifier.stream_name.decode("utf8"),
+                    stream_position=event.stream_revision,
+                    commit_position=commit_position,
+                )
+            elif content_oneof == "stream_not_found":
+                raise StreamNotFound(f"Stream {self.stream_name!r} not found")
+            else:
+                pass  # pragma: no cover
+                # Todo: Maybe support other content_oneof values:
+                #   oneof content {
+                # 		ReadEvent event = 1;
+                # 		SubscriptionConfirmation confirmation = 2;
+                # 		Checkpoint checkpoint = 3;
+                # 		StreamNotFound stream_not_found = 4;
+                # 		uint64 first_stream_position = 5;
+                # 		uint64 last_stream_position = 6;
+                # 		AllStreamPosition last_all_stream_position = 7;
+                # 	}
+                #
+                # Todo: Not sure how to request to get first_stream_position,
+                #   last_stream_position, first_all_stream_position.
+
+    def _get_next_read_resp(self) -> streams_pb2.ReadResp:
+        try:
+            read_resp = next(self.read_resp_iter)
+        except RpcError as e:
+            raise handle_rpc_error(e) from e
+        assert isinstance(read_resp, streams_pb2.ReadResp)
+        return read_resp
+
+
 class SubscriptionReadRequest:
     def __init__(self, group_name: str, stream_name: Optional[str] = None) -> None:
         self.group_name = group_name
@@ -849,7 +884,10 @@ class SubscriptionReadResponse:
             try:
                 response = next(self.resp)
             except RpcError as e:
-                raise handle_rpc_error(e) from e
+                if e.code() == StatusCode.NOT_FOUND:
+                    raise SubscriptionNotFound() from e
+                else:
+                    raise handle_rpc_error(e) from e
             assert isinstance(response, persistent_pb2.ReadResp)
             content_oneof = response.WhichOneof("content")
             if content_oneof == "event":

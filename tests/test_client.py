@@ -367,6 +367,12 @@ class TestESDBClient(TestCase):
         )
 
         with self.assertRaises(ServiceUnavailable) as cm:
+            self.client.subscribe_stream_events(str(uuid4()))
+        self.assertIn(
+            "failed to connect to all addresses", cm.exception.args[0].details()
+        )
+
+        with self.assertRaises(ServiceUnavailable) as cm:
             self.client.append_events(str(uuid4()), expected_position=None, events=[])
         self.assertIn(
             "failed to connect to all addresses", cm.exception.args[0].details()
@@ -430,7 +436,11 @@ class TestESDBClient(TestCase):
         with self.assertRaises(ServiceUnavailable):
             self.client.read_cluster_gossip()
 
-    def test_stream_not_found_exception(self) -> None:
+    def test_stream_not_found_exception_from_read_stream_events(self) -> None:
+        # Note, we never get a StreamNotFound from subscribe_stream_events(), which is
+        # logical because the stream might be written after the subscription. So here
+        # we just test read_stream_events().
+
         self.construct_esdb_client()
         stream_name = str(uuid4())
 
@@ -2765,9 +2775,16 @@ class TestReconnectsToPreferredNode(TestCase):
         event1 = NewEvent(type="OrderCreated", data=random_data())
         self.writer.append_events(stream_name, expected_position=None, events=[event1])
 
-    # def test_read_all_events(self) -> None:
-    #     # Read all events - should reconnect.
-    #     list(self.writer.read_all_events())
+    def test_read_all_events(self) -> None:
+        # Read all events - should reconnect.
+        self.writer.read_all_events()
+
+    def test_read_subscription(self) -> None:
+        # Read subscription - should reconnect.
+        group_name = str(uuid4())
+        req, resp = self.writer.read_subscription(group_name)
+        with self.assertRaises(SubscriptionNotFound):
+            list(resp)
 
 
 class TestConnectToPreferredNode(TestCase):

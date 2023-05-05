@@ -71,7 +71,7 @@ DEFAULT_EXCLUDE_FILTER = (ESDB_SYSTEM_EVENTS_REGEX, ESDB_PERSISTENT_CONFIG_EVENT
 _TCallable = TypeVar("_TCallable", bound=Callable[..., Any])
 
 
-def reconnect(f: _TCallable) -> _TCallable:
+def autoreconnect(f: _TCallable) -> _TCallable:
     @wraps(f)
     def wrapper(self, *args, **kwargs):  # type: ignore
         assert isinstance(self, ESDBClient)
@@ -80,14 +80,14 @@ def reconnect(f: _TCallable) -> _TCallable:
 
         except NodeIsNotLeader:
             if self.connection_spec.options.NodePreference == NODE_PREFERENCE_LEADER:
-                self._reconnect_to_preferred_node()
+                self.reconnect()
                 return f(self, *args, **kwargs)
             else:
                 raise
 
         except ValueError as e:
             if "Channel closed!" in str(e):
-                self._reconnect_to_preferred_node()
+                self.reconnect()
                 return f(self, *args, **kwargs)
             else:  # pragma: no cover
                 raise
@@ -119,7 +119,7 @@ class ESDBClient:
         *,
         root_certificates: Optional[str] = None,
     ) -> None:
-        self.is_reconnection_required = Event()
+        self._is_reconnection_required = Event()
         self._reconnection_lock = Lock()
         self.root_certificates = root_certificates
         self.connection_spec = ConnectionSpec(uri)
@@ -260,13 +260,13 @@ class ESDBClient:
             cluster_member = random.choice(cluster_members)
         return cluster_member, cluster_members, connection
 
-    def _reconnect_to_preferred_node(self) -> None:
-        self.is_reconnection_required.set()
+    def reconnect(self) -> None:
+        self._is_reconnection_required.set()
         with self._reconnection_lock:
-            if self.is_reconnection_required.is_set():
-                new_c = self._connect_to_preferred_node()
-                old_c, self._connection = self._connection, new_c
-                old_c.close()
+            if self._is_reconnection_required.is_set():
+                new = self._connect_to_preferred_node()
+                old, self._connection = self._connection, new
+                old.close()
             else:  # pragma: no cover
                 # Todo: Test with concurrent writes to wrong node state.
                 pass
@@ -339,7 +339,7 @@ class ESDBClient:
         return response.commit_position
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def append_events(
         self,
         stream_name: str,
@@ -360,7 +360,7 @@ class ESDBClient:
         ).commit_position
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def append_event(
         self,
         stream_name: str,
@@ -382,7 +382,7 @@ class ESDBClient:
         )
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def delete_stream(
         self,
         stream_name: str,
@@ -399,7 +399,7 @@ class ESDBClient:
         )
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def tombstone_stream(
         self,
         stream_name: str,
@@ -415,6 +415,8 @@ class ESDBClient:
             credentials=self._call_credentials,
         )
 
+    @retrygrpc
+    @autoreconnect
     def read_stream_events(
         self,
         stream_name: str,
@@ -436,6 +438,8 @@ class ESDBClient:
             credentials=self._call_credentials,
         )
 
+    @retrygrpc
+    @autoreconnect
     def read_all_events(
         self,
         commit_position: Optional[int] = None,
@@ -460,7 +464,7 @@ class ESDBClient:
         )
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def get_stream_position(
         self,
         stream_name: str,
@@ -486,7 +490,7 @@ class ESDBClient:
             return last_event.stream_position
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def get_commit_position(
         self,
         timeout: Optional[float] = None,
@@ -508,7 +512,7 @@ class ESDBClient:
         return commit_position
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def get_stream_metadata(
         self, stream_name: str, timeout: Optional[float] = None
     ) -> Tuple[Dict[str, Any], Optional[int]]:
@@ -556,7 +560,7 @@ class ESDBClient:
         )
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def subscribe_all_events(
         self,
         commit_position: Optional[int] = None,
@@ -580,7 +584,7 @@ class ESDBClient:
         return CatchupSubscription(read_resp=read_resp)
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def subscribe_stream_events(
         self,
         stream_name: str,
@@ -643,7 +647,7 @@ class ESDBClient:
         """
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def create_subscription(
         self,
         group_name: str,
@@ -708,7 +712,7 @@ class ESDBClient:
         """
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def create_stream_subscription(
         self,
         group_name: str,
@@ -732,6 +736,8 @@ class ESDBClient:
             credentials=self._call_credentials,
         )
 
+    @retrygrpc
+    @autoreconnect
     def read_subscription(
         self, group_name: str, timeout: Optional[float] = None
     ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
@@ -745,6 +751,8 @@ class ESDBClient:
             credentials=self._call_credentials,
         )
 
+    @retrygrpc
+    @autoreconnect
     def read_stream_subscription(
         self, group_name: str, stream_name: str, timeout: Optional[float] = None
     ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
@@ -760,7 +768,7 @@ class ESDBClient:
         )
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def get_subscription_info(
         self, group_name: str, timeout: Optional[float] = None
     ) -> SubscriptionInfo:
@@ -775,7 +783,7 @@ class ESDBClient:
         )
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def get_stream_subscription_info(
         self, group_name: str, stream_name: str, timeout: Optional[float] = None
     ) -> SubscriptionInfo:
@@ -791,7 +799,7 @@ class ESDBClient:
         )
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def list_subscriptions(
         self, timeout: Optional[float] = None
     ) -> Sequence[SubscriptionInfo]:
@@ -807,7 +815,7 @@ class ESDBClient:
         )
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def list_stream_subscriptions(
         self, stream_name: str, timeout: Optional[float] = None
     ) -> Sequence[SubscriptionInfo]:
@@ -824,7 +832,7 @@ class ESDBClient:
         )
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def delete_subscription(
         self, group_name: str, timeout: Optional[float] = None
     ) -> None:
@@ -841,7 +849,7 @@ class ESDBClient:
         )
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def delete_stream_subscription(
         self, group_name: str, stream_name: str, timeout: Optional[float] = None
     ) -> None:
@@ -859,7 +867,7 @@ class ESDBClient:
         )
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def read_gossip(self, timeout: Optional[float] = None) -> Sequence[ClusterMember]:
         timeout = (
             timeout
@@ -873,7 +881,7 @@ class ESDBClient:
         )
 
     @retrygrpc
-    @reconnect
+    @autoreconnect
     def read_cluster_gossip(
         self, timeout: Optional[float] = None
     ) -> Sequence[ClusterMember]:
