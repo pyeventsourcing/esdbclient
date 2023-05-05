@@ -51,6 +51,7 @@ from esdbclient.exceptions import (
     FollowerNotFound,
     GossipSeedError,
     GrpcError,
+    LeaderNotFound,
     NodeIsNotLeader,
     ReadOnlyReplicaNotFound,
     StreamNotFound,
@@ -437,7 +438,6 @@ class ESDBClient:
             cluster_fqdn = self.connection_spec.targets[0]
             answers = dns.resolver.resolve(cluster_fqdn, "A")
             gossip_seed: Sequence[str] = [f"{s.address}:2113" for s in answers]
-
         else:
             assert self.connection_spec.scheme == URI_SCHEME_ESDB
             gossip_seed = self.connection_spec.targets
@@ -446,42 +446,65 @@ class ESDBClient:
         if len(gossip_seed) == 0:
             raise GossipSeedError(self.connection_spec.uri)
 
-        # Iterate through the gossip seed...
-        attempts = 0
-        connection: Optional[ESDBConnection] = None
-        cluster_members: Sequence[ClusterMember] = []
-        while (
-            len(cluster_members) == 0
-            and attempts < self.connection_spec.options.MaxDiscoverAttempts
-        ):
-            for grpc_target in gossip_seed:
-                attempts += 1
-                # Construct a connection.
+        # Discover preferred node.
+        attempts = self.connection_spec.options.MaxDiscoverAttempts
+        assert attempts > 0
+        while True:
+            try:
+                preferred, cluster_members, connection = self._discover_preferred_node(
+                    gossip_seed=gossip_seed
+                )
+            except DiscoveryFailed as e:
+                attempts -= 1
+                if attempts == 0:
+                    raise e
+                else:
+                    sleep(self.connection_spec.options.DiscoveryInterval / 1000)
+            else:
+                break
+
+        # Maybe reconnect to preferred node.
+        if len(cluster_members) > 1:  # forgive not "advertising" single node
+            # Check gossip seed target matches advertised member address and port.
+            grpc_target = f"{preferred.address}:{preferred.port}"
+            if connection.grpc_target != grpc_target:
+                # Need to connect to a different node.
+                connection.close()
                 connection = self._construct_connection(grpc_target)
 
-                # Read the gossip (get cluster members).
-                try:
-                    cluster_members = connection.gossip.read(
-                        timeout=self.connection_spec.options.GossipTimeout,
-                        metadata=self._call_metadata,
-                        credentials=self._call_credentials,
-                    )
-                except GrpcError:
-                    sleep(self.connection_spec.options.DiscoveryInterval / 1000)
-                else:
-                    break
+        return connection
+
+    def _discover_preferred_node(
+        self, gossip_seed: Sequence[str]
+    ) -> Tuple[ClusterMember, Sequence[ClusterMember], ESDBConnection]:
+        # Iterate through the gossip seed...
+        for grpc_target in gossip_seed:
+            # Construct a connection.
+            connection = self._construct_connection(grpc_target)
+
+            # Read the gossip (get cluster members).
+            try:
+                cluster_members = connection.gossip.read(
+                    timeout=self.connection_spec.options.GossipTimeout,
+                    metadata=self._call_metadata,
+                    credentials=self._call_credentials,
+                )
+            except GrpcError:
                 connection.close()
+            else:
+                break
+        else:
+            raise DiscoveryFailed(
+                f"Failed to read gossip from all nodes: {gossip_seed}"
+            )
 
-        if len(cluster_members) == 0 or connection is None:
-            raise DiscoveryFailed(gossip_seed)
-
-        # Select a member according to node preference.
-        # Todo: What about if leader election is happening, and states aren't settled?
+        # Select a node according to node preference.
         node_preference = self.connection_spec.options.NodePreference
-        cluster_member: ClusterMember
         if node_preference == NODE_PREFERENCE_LEADER:
             leaders = [c for c in cluster_members if c.state == NODE_STATE_LEADER]
-            assert len(leaders) == 1, f"Expected one leader, discovered {len(leaders)}"
+            if len(leaders) != 1:  # pragma: no cover
+                # Todo: Somehow cover this with a test.
+                raise LeaderNotFound(f"Expected one leader, discovered {len(leaders)}")
             cluster_member = leaders[0]
         elif node_preference == NODE_PREFERENCE_FOLLOWER:
             followers = [c for c in cluster_members if c.state == NODE_STATE_FOLLOWER]
@@ -496,18 +519,9 @@ class ESDBClient:
             cluster_member = random.choice(replicas)  # pragma: no cover
         else:
             assert node_preference == NODE_PREFERENCE_RANDOM
+            assert len(cluster_members) > 0
             cluster_member = random.choice(cluster_members)
-
-        # Maybe reconnect to selected cluster member.
-        if len(cluster_members) > 1:  # forgive not "advertising" single node
-            # Check gossip seed target matches advertised member address and port.
-            grpc_target = f"{cluster_member.address}:{cluster_member.port}"
-            if connection.grpc_target != grpc_target:
-                # Need to connect to a different node.
-                connection.close()
-                connection = self._construct_connection(grpc_target)
-
-        return connection
+        return cluster_member, cluster_members, connection
 
     def _reconnect_to_preferred_node(self) -> None:
         new_c = self._connect_to_preferred_node()

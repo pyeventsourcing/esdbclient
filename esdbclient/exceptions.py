@@ -36,18 +36,6 @@ class NodeIsNotLeader(GrpcError):
     """
 
 
-class FollowerNotFound(ESDBClientException):
-    """
-    Raised when NodePreference is 'follower' but the cluster has no such nodes.
-    """
-
-
-class ReadOnlyReplicaNotFound(ESDBClientException):
-    """
-    Raised when NodePreference is 'readonlyreplica' but the cluster has no such nodes.
-    """
-
-
 class StreamNotFound(ESDBClientException):
     """
     Raised when stream is not found.
@@ -118,4 +106,22 @@ class GossipSeedError(ESDBClientException):
 class DiscoveryFailed(ESDBClientException):
     """
     Raised when client fails to satisfy node preference using gossip cluster info.
+    """
+
+
+class LeaderNotFound(DiscoveryFailed):
+    """
+    Raised when NodePreference is 'follower' but the cluster has no such nodes.
+    """
+
+
+class FollowerNotFound(DiscoveryFailed):
+    """
+    Raised when NodePreference is 'follower' but the cluster has no such nodes.
+    """
+
+
+class ReadOnlyReplicaNotFound(DiscoveryFailed):
+    """
+    Raised when NodePreference is 'readonlyreplica' but the cluster has no such nodes.
     """
