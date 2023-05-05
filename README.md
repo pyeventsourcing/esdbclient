@@ -221,7 +221,7 @@ development server, you will also need to know that the username is "admin" and
 the password is "changeit". You will also need to get the SSL/TLS certificate from
 the server. You can get the server certificate with the following command.
 
-    $ python -c "import ssl; print(get_server_certificate(addr=('localhost', 2113)))"
+    $ python -c "import ssl; print(ssl.get_server_certificate(addr=('localhost', 2113)))"
 
 
 ### Stop container
