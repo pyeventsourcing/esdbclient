@@ -215,6 +215,7 @@ class ESDBClient:
         self, gossip_seed: Sequence[str]
     ) -> Tuple[ClusterMember, Sequence[ClusterMember], ESDBConnection]:
         # Iterate through the gossip seed...
+        last_exception: Optional[Exception] = None
         for grpc_target in gossip_seed:
             # Construct a connection.
             connection = self._construct_connection(grpc_target)
@@ -226,14 +227,14 @@ class ESDBClient:
                     metadata=self._call_metadata,
                     credentials=self._call_credentials,
                 )
-            except GrpcError:
+            except GrpcError as e:
+                last_exception = e
                 connection.close()
             else:
                 break
         else:
-            raise DiscoveryFailed(
-                f"Failed to read gossip from all nodes: {gossip_seed}"
-            )
+            msg = f"Failed to read from gossip seed: {gossip_seed}"
+            raise DiscoveryFailed(msg) from last_exception
 
         # Select a node according to node preference.
         node_preference = self.connection_spec.options.NodePreference
