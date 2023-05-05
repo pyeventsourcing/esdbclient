@@ -360,8 +360,9 @@ class TestESDBClient(TestCase):
         self.client._connection.close()
         self.client._connection = self.client._construct_connection("localhost:2222")
 
+        resp = self.client.read_stream_events(str(uuid4()))
         with self.assertRaises(ServiceUnavailable) as cm:
-            list(self.client.read_stream_events(str(uuid4())))
+            list(resp)
         self.assertIn(
             "failed to connect to all addresses", cm.exception.args[0].details()
         )
@@ -396,18 +397,18 @@ class TestESDBClient(TestCase):
             "failed to connect to all addresses", cm.exception.args[0].details()
         )
 
+        group_name = f"my-subscription-{uuid4().hex}"
+        read_req, read_resp = self.client.read_subscription(
+            group_name=group_name,
+        )
         with self.assertRaises(ServiceUnavailable) as cm:
-            group_name = f"my-subscription-{uuid4().hex}"
-            read_req, read_resp = self.client.read_subscription(
-                group_name=group_name,
-            )
             list(read_resp)
         self.assertIn(
             "failed to connect to all addresses", cm.exception.args[0].details()
         )
 
+        group_name = f"my-subscription-{uuid4().hex}"
         with self.assertRaises(ServiceUnavailable) as cm:
-            group_name = f"my-subscription-{uuid4().hex}"
             self.client.get_subscription_info(
                 group_name=group_name,
             )
@@ -421,8 +422,8 @@ class TestESDBClient(TestCase):
             "failed to connect to all addresses", cm.exception.args[0].details()
         )
 
+        group_name = f"my-subscription-{uuid4().hex}"
         with self.assertRaises(ServiceUnavailable) as cm:
-            group_name = f"my-subscription-{uuid4().hex}"
             self.client.delete_subscription(
                 group_name=group_name,
             )
@@ -2682,7 +2683,7 @@ class TestSeparateReadAndWriteClients(TestCase):
             )
 
 
-class TestReconnectsToNewLeader(TestCase):
+class TestAutoReconnectToNewLeader(TestCase):
     def setUp(self) -> None:
         self.uri = "esdb://admin:changeit@127.0.0.1:2111"
         self.ca_cert = read_ca_cert()
@@ -2757,7 +2758,7 @@ class TestReconnectsToNewLeader(TestCase):
         )
 
 
-class TestReconnectsToPreferredNode(TestCase):
+class TestAutoReconnectToPreferredNode(TestCase):
     def setUp(self) -> None:
         self.uri = "esdb://admin:changeit@127.0.0.1:2111"
         self.ca_cert = read_ca_cert()
@@ -2779,10 +2780,15 @@ class TestReconnectsToPreferredNode(TestCase):
         # Read all events - should reconnect.
         self.writer.read_all_events()
 
+    def test_read_stream_events(self) -> None:
+        # Read all events - should reconnect.
+        resp = self.writer.read_stream_events(str(uuid4()))
+        with self.assertRaises(StreamNotFound):
+            list(resp)
+
     def test_read_subscription(self) -> None:
         # Read subscription - should reconnect.
-        group_name = str(uuid4())
-        req, resp = self.writer.read_subscription(group_name)
+        req, resp = self.writer.read_subscription(str(uuid4()))
         with self.assertRaises(SubscriptionNotFound):
             list(resp)
 
