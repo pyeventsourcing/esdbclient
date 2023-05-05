@@ -39,6 +39,7 @@ from esdbclient.esdbapi import (
     GossipService,
     PersistentSubscriptionsService,
     StreamsService,
+    SubscriptionInfo,
     SubscriptionReadRequest,
     SubscriptionReadResponse,
     handle_rpc_error,
@@ -978,6 +979,93 @@ class ESDBClient:
         Reads a persistent subscription on one stream.
         """
         return self._connection.persistent_subscriptions.read(
+            group_name=group_name,
+            stream_name=stream_name,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=self._call_credentials,
+        )
+
+    def get_subscription_info(
+        self, group_name: str, timeout: Optional[float] = None
+    ) -> SubscriptionInfo:
+        """
+        Gets info for a persistent subscription.
+        """
+        return self._connection.persistent_subscriptions.get_info(
+            group_name=group_name,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=self._call_credentials,
+        )
+
+    def get_stream_subscription_info(
+        self, group_name: str, stream_name: str, timeout: Optional[float] = None
+    ) -> SubscriptionInfo:
+        """
+        Gets info for a persistent subscription.
+        """
+        return self._connection.persistent_subscriptions.get_info(
+            group_name=group_name,
+            stream_name=stream_name,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=self._call_credentials,
+        )
+
+    def list_subscriptions(
+        self, timeout: Optional[float] = None
+    ) -> Sequence[SubscriptionInfo]:
+        """
+        Lists all persistent subscriptions.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        return self._connection.persistent_subscriptions.list(
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=self._call_credentials,
+        )
+
+    def list_stream_subscriptions(
+        self, stream_name: str, timeout: Optional[float] = None
+    ) -> Sequence[SubscriptionInfo]:
+        """
+        Lists persistent stream subscriptions.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        return self._connection.persistent_subscriptions.list(
+            stream_name=stream_name,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=self._call_credentials,
+        )
+
+    def delete_subscription(
+        self, group_name: str, timeout: Optional[float] = None
+    ) -> None:
+        """
+        Creates a persistent subscription on all streams.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        self._connection.persistent_subscriptions.delete(
+            group_name=group_name,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=self._call_credentials,
+        )
+
+    def delete_stream_subscription(
+        self, group_name: str, stream_name: str, timeout: Optional[float] = None
+    ) -> None:
+        """
+        Creates a persistent subscription on all streams.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        self._connection.persistent_subscriptions.delete(
             group_name=group_name,
             stream_name=stream_name,
             timeout=timeout,

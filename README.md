@@ -66,8 +66,14 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 * [Persistent subscriptions](#persistent-subscriptions)
   * [Create subscription](#create-subscription)
   * [Read subscription](#read-subscription)
+  * [Get subscription info](#get-subscription-info)
+  * [List subscriptions](#list-subscriptions)
+  * [Delete subscription](#delete-subscription)
   * [Create stream subscription](#create-stream-subscription)
   * [Read stream subscription](#read-stream-subscription)
+  * [Get stream subscription info](#get-stream-subscription-info)
+  * [List stream subscriptions](#list-stream-subscriptions)
+  * [Delete stream subscription](#delete-stream-subscription)
 * [Notes](#notes)
   * [Connection strings](#connection-strings)
   * [Regular expression filters](#regular-expression-filters)
@@ -1402,6 +1408,59 @@ there is a danger of "dual writing" in the consumption of events. Reliability
 in processing of recorded events by a group of consumers will rely instead on
 idempotent handling of duplicate messages, and resilience to out-of-order delivery.
 
+### Get subscription info
+
+The `get_subscription_info()` method can be used to get information for a
+persistent subscription.
+
+This method has one required argument, `group_name`, which
+should match the value of the argument used when calling `create_subscription()`.
+
+This method also takes an optional `timeout` argument, that
+is expected to be a Python `float`, which sets a deadline
+for the completion of the gRPC operation.
+
+```python
+subscription_info = client.get_subscription_info(
+    group_name=group_name,
+)
+```
+
+The returned value is a `SubscriptionInfo` object.
+
+### List subscriptions
+
+The `list_subscriptions()` method can be used to get information for all
+existing persistent subscriptions.
+
+This method takes an optional `timeout` argument, that
+is expected to be a Python `float`, which sets a deadline
+for the completion of the gRPC operation.
+
+```python
+subscriptions = client.list_subscriptions()
+```
+
+The returned value is a list of `SubscriptionInfo` objects.
+
+### Delete subscription
+
+The `delete_subscription()` method can be used to delete a persistent
+subscription.
+
+This method has one required argument, `group_name`, which
+should match the value of argument used when calling `create_subscription()`.
+
+This method also takes an optional `timeout` argument, that
+is expected to be a Python `float`, which sets a deadline
+for the completion of the gRPC operation.
+
+```python
+client.delete_subscription(
+    group_name=group_name,
+)
+```
+
 ### Create stream subscription
 
 The `create_stream_subscription()` method can be used to create a persistent
@@ -1520,6 +1579,64 @@ assert events[3].stream_name == stream_name2
 assert events[3].id == event11.id
 ```
 
+### Get stream subscription info
+
+The `get_stream_subscription_info()` method can be used to get information for a
+persistent subscription for a stream.
+
+This method has two required arguments, `group_name` and `stream_name`, which
+should match the values of arguments used when calling `create_stream_subscription()`.
+
+This method also takes an optional `timeout` argument, that
+is expected to be a Python `float`, which sets a deadline
+for the completion of the gRPC operation.
+
+```python
+subscription_info = client.get_stream_subscription_info(
+    group_name=group_name1,
+    stream_name=stream_name2,
+)
+```
+
+The returned value is a `SubscriptionInfo` object.
+
+### List stream subscriptions
+
+The `list_stream_subscriptions()` method can be used to get information for all
+the persistent subscriptions for a stream.
+
+This method has one required argument, `stream_name`.
+
+This method also takes an optional `timeout` argument, that
+is expected to be a Python `float`, which sets a deadline
+for the completion of the gRPC operation.
+
+```python
+subscriptions = client.list_stream_subscriptions(
+    stream_name=stream_name2,
+)
+```
+
+The returned value is a list of `SubscriptionInfo` objects.
+
+### Delete stream subscription
+
+The `delete_stream_subscription()` method can be used to delete a persistent
+subscription for a stream.
+
+This method has two required arguments, `group_name` and `stream_name`, which
+should match the values of arguments used when calling `create_stream_subscription()`.
+
+This method also takes an optional `timeout` argument, that
+is expected to be a Python `float`, which sets a deadline
+for the completion of the gRPC operation.
+
+```python
+client.delete_stream_subscription(
+    group_name=group_name1,
+    stream_name=stream_name2,
+)
+```
 
 ## Notes
 

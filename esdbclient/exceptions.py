@@ -11,6 +11,13 @@ class GrpcError(ESDBClientException):
     """
 
 
+class ExceptionThrownByHandler(GrpcError):
+    """
+    Raised when gRPC service returns RpcError with status
+    code "UNKNOWN" and details "Exception was thrown by handler.".
+    """
+
+
 class ServiceUnavailable(GrpcError):
     """
     Raised when gRPC service is unavailable.
@@ -43,7 +50,13 @@ class ReadOnlyReplicaNotFound(ESDBClientException):
 
 class StreamNotFound(ESDBClientException):
     """
-    Raised when EventStoreDB stream is not found.
+    Raised when stream is not found.
+    """
+
+
+class SubscriptionNotFound(ESDBClientException):
+    """
+    Raised when persistent subscription is not found.
     """
 
 

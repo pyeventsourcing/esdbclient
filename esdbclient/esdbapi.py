@@ -10,6 +10,7 @@ from typing import (
     Dict,
     Iterable,
     Iterator,
+    List,
     Optional,
     Sequence,
     Tuple,
@@ -42,6 +43,7 @@ from esdbclient.exceptions import (
     BadRequestError,
     DeadlineExceeded,
     ESDBClientException,
+    ExceptionThrownByHandler,
     ExpectedPositionError,
     GrpcError,
     InvalidTransactionError,
@@ -50,6 +52,7 @@ from esdbclient.exceptions import (
     ServiceUnavailable,
     StreamDeletedError,
     StreamNotFound,
+    SubscriptionNotFound,
     TimeoutError,
     UnknownError,
 )
@@ -83,7 +86,12 @@ def handle_rpc_error(e: RpcError) -> GrpcError:
     Converts gRPC errors to client exceptions.
     """
     if isinstance(e, Call):
-        if e.code() == StatusCode.UNAVAILABLE:
+        if (
+            e.code() == StatusCode.UNKNOWN
+            and "Exception was thrown by handler" in e.details()
+        ):
+            return ExceptionThrownByHandler(e)
+        elif e.code() == StatusCode.UNAVAILABLE:
             return ServiceUnavailable(e)
         elif e.code() == StatusCode.DEADLINE_EXCEEDED:
             return DeadlineExceeded(e)
@@ -803,6 +811,8 @@ class SubscriptionReadRequest:
             return persistent_pb2.ReadReq(options=options)
         else:
             ids = []
+            # Send an Ack whenever there are 100 acks, or at least
+            # every 100ms when there are some acks, otherwise don't.
             while True:
                 try:
                     event_id = self.queue.get(timeout=0.1)
@@ -816,6 +826,8 @@ class SubscriptionReadRequest:
                         return persistent_pb2.ReadReq(
                             ack=persistent_pb2.ReadReq.Ack(ids=ids)
                         )
+                    else:  # pragma: no cover
+                        pass
 
     def ack(self, event_id: UUID) -> None:
         self.queue.put(shared_pb2.UUID(string=str(event_id)))
@@ -858,6 +870,37 @@ class SubscriptionReadResponse:
                     stream_position=event.stream_revision,
                     commit_position=commit_position,
                 )
+
+
+@dataclass
+class SubscriptionInfo:
+    event_source: str
+    group_name: str
+    status: str
+    average_per_second: int
+    total_items: int
+    count_since_last_measurement: int
+    last_checkpointed_event_position: str
+    last_known_event_position: str
+    resolve_link_tos: bool
+    start_from: str
+    message_timeout_milliseconds: int
+    extra_statistics: bool
+    max_retry_count: int
+    live_buffer_size: int
+    buffer_size: int
+    read_batch_size: int
+    check_point_after_milliseconds: int
+    min_check_point_count: int
+    max_check_point_count: int
+    read_buffer_count: int
+    live_buffer_count: int
+    retry_buffer_count: int
+    total_in_flight_messages: int
+    outstanding_messages_count: int
+    named_consumer_strategy: str
+    max_subscriber_count: int
+    parked_message_count: int
 
 
 class PersistentSubscriptionsService(ESDBService):
@@ -1032,6 +1075,178 @@ class PersistentSubscriptionsService(ESDBService):
             credentials=credentials,
         )
         return (read_req, SubscriptionReadResponse(read_resp))
+
+    def get_info(
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> SubscriptionInfo:
+        if stream_name is None:
+            options = persistent_pb2.GetInfoReq.Options(
+                all=shared_pb2.Empty(),
+                group_name=group_name,
+            )
+        else:
+            options = persistent_pb2.GetInfoReq.Options(
+                stream_identifier=shared_pb2.StreamIdentifier(
+                    stream_name=stream_name.encode("utf8")
+                ),
+                group_name=group_name,
+            )
+
+        req = persistent_pb2.GetInfoReq(options=options)
+        try:
+            resp = self._stub.GetInfo(
+                req,
+                timeout=timeout,
+                metadata=self._metadata(metadata),
+                credentials=credentials,
+            )
+        except RpcError as e:
+            if e.code() == StatusCode.NOT_FOUND:
+                raise SubscriptionNotFound() from e
+            else:
+                raise handle_rpc_error(e) from e
+
+        else:
+            assert isinstance(resp, persistent_pb2.GetInfoResp)
+            s = resp.subscription_info
+            return SubscriptionInfo(
+                event_source=s.event_source,
+                group_name=s.group_name,
+                status=s.status,
+                average_per_second=s.average_per_second,
+                total_items=s.total_items,
+                count_since_last_measurement=s.count_since_last_measurement,
+                last_checkpointed_event_position=s.last_checkpointed_event_position,
+                last_known_event_position=s.last_known_event_position,
+                resolve_link_tos=s.resolve_link_tos,
+                start_from=s.start_from,
+                message_timeout_milliseconds=s.message_timeout_milliseconds,
+                extra_statistics=s.extra_statistics,
+                max_retry_count=s.max_retry_count,
+                live_buffer_size=s.live_buffer_size,
+                buffer_size=s.buffer_size,
+                read_batch_size=s.read_batch_size,
+                check_point_after_milliseconds=s.check_point_after_milliseconds,
+                min_check_point_count=s.min_check_point_count,
+                max_check_point_count=s.max_check_point_count,
+                read_buffer_count=s.read_buffer_count,
+                live_buffer_count=s.live_buffer_count,
+                retry_buffer_count=s.retry_buffer_count,
+                total_in_flight_messages=s.total_in_flight_messages,
+                outstanding_messages_count=s.outstanding_messages_count,
+                named_consumer_strategy=s.named_consumer_strategy,
+                max_subscriber_count=s.max_subscriber_count,
+                parked_message_count=s.parked_message_count,
+            )
+
+    def list(
+        self,
+        stream_name: Optional[str] = None,
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> List[SubscriptionInfo]:
+        if stream_name is None:
+            options = persistent_pb2.ListReq.Options(
+                list_all_subscriptions=shared_pb2.Empty()
+            )
+        else:
+            options = persistent_pb2.ListReq.Options(
+                list_for_stream=persistent_pb2.ListReq.StreamOption(
+                    stream=shared_pb2.StreamIdentifier(
+                        stream_name=stream_name.encode("utf8")
+                    )
+                )
+            )
+
+        req = persistent_pb2.ListReq(options=options)
+        try:
+            resp = self._stub.List(
+                req,
+                timeout=timeout,
+                metadata=self._metadata(metadata),
+                credentials=credentials,
+            )
+        except RpcError as e:
+            if e.code() == StatusCode.NOT_FOUND:
+                return []
+            else:
+                raise handle_rpc_error(e) from e
+
+        assert isinstance(resp, persistent_pb2.ListResp)
+        return [
+            SubscriptionInfo(
+                event_source=s.event_source,
+                group_name=s.group_name,
+                status=s.status,
+                average_per_second=s.average_per_second,
+                total_items=s.total_items,
+                count_since_last_measurement=s.count_since_last_measurement,
+                last_checkpointed_event_position=s.last_checkpointed_event_position,
+                last_known_event_position=s.last_known_event_position,
+                resolve_link_tos=s.resolve_link_tos,
+                start_from=s.start_from,
+                message_timeout_milliseconds=s.message_timeout_milliseconds,
+                extra_statistics=s.extra_statistics,
+                max_retry_count=s.max_retry_count,
+                live_buffer_size=s.live_buffer_size,
+                buffer_size=s.buffer_size,
+                read_batch_size=s.read_batch_size,
+                check_point_after_milliseconds=s.check_point_after_milliseconds,
+                min_check_point_count=s.min_check_point_count,
+                max_check_point_count=s.max_check_point_count,
+                read_buffer_count=s.read_buffer_count,
+                live_buffer_count=s.live_buffer_count,
+                retry_buffer_count=s.retry_buffer_count,
+                total_in_flight_messages=s.total_in_flight_messages,
+                outstanding_messages_count=s.outstanding_messages_count,
+                named_consumer_strategy=s.named_consumer_strategy,
+                max_subscriber_count=s.max_subscriber_count,
+                parked_message_count=s.parked_message_count,
+            )
+            for s in resp.subscriptions
+        ]
+
+    def delete(
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> None:
+        if stream_name is None:
+            options = persistent_pb2.DeleteReq.Options(
+                all=shared_pb2.Empty(),
+                group_name=group_name,
+            )
+        else:
+            options = persistent_pb2.DeleteReq.Options(
+                stream_identifier=shared_pb2.StreamIdentifier(
+                    stream_name=stream_name.encode("utf8")
+                ),
+                group_name=group_name,
+            )
+
+        req = persistent_pb2.DeleteReq(options=options)
+        try:
+            resp = self._stub.Delete(
+                req,
+                timeout=timeout,
+                metadata=self._metadata(metadata),
+                credentials=credentials,
+            )
+        except RpcError as e:
+            if e.code() == StatusCode.NOT_FOUND:
+                raise SubscriptionNotFound() from e
+            else:
+                raise handle_rpc_error(e) from e
+        assert isinstance(resp, persistent_pb2.DeleteResp)
 
 
 @dataclass
