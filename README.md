@@ -1,26 +1,31 @@
 # Python gRPC Client for EventStoreDB
 
-This package provides a Python gRPC client for
-[EventStoreDB](https://www.eventstore.com/).
-
-This client has been developed in collaboration with the EventStoreDB
-team. It has been tested to work with EventStoreDB LTS versions 21.10,
-without and without SSL/TLS, and with Python versions 3.7 to 3.11. There
-is 100% test coverage including branches.
-
-All the Python code in this package has typing annotations. The static typing
-annotations are checked relatively strictly with mypy. The code is formatted
-with black and isort, and also checked with flake8. Poetry is used for package
-management during development, and for building and publishing distributions to
-[PyPI](https://pypi.org/project/esdbclient/).
+This [Python package](https://pypi.org/project/esdbclient/) provides a Python
+gRPC client for [EventStoreDB](https://www.eventstore.com/).
 
 Not all the features of the EventStoreDB API are presented
 by this client in its current form, however many of the most
 useful aspects are presented in an easy-to-use interface (see below).
 
+This client has been developed in collaboration with the EventStoreDB
+team. It has been tested to work with EventStoreDB LTS versions 21.10,
+without and without SSL/TLS, and with Python versions 3.7 to 3.11. The
+test suite gives 100% test coverage, including code branches and the
+examples in this documentation.
+
+The Python code in this package has typing annotations. The static typing
+annotations are checked relatively strictly with mypy. The code is formatted
+with black and isort, and also checked with flake8. Poetry is used for package
+management during development, and for building and publishing distributions to
+[PyPI](https://pypi.org/project/esdbclient/).
+
 ## Synopsis
 
 The `ESDBClient` class can be imported from the `esdbclient` package.
+
+To run the client, you will need a connection string URI. And, to
+connect to a "secure" EventStoreDB server, you will also need an
+SSL/TLS certificate.
 
 Probably the three most useful methods of `ESDBClient` are:
 
@@ -44,7 +49,7 @@ import esdbclient, uuid
 
 # Construct ESDBClient with an EventStoreDB URI.
 
-client = esdbclient.ESDBClient("esdb://localhost:2114?Tls=false")
+client = esdbclient.ESDBClient(uri="esdb://localhost:2114?Tls=false")
 
 
 # Append events to a new stream.
@@ -142,10 +147,10 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 * [Install package](#install-package)
   * [From PyPI](#from-pypi)
   * [With Poetry](#with-poetry)
-* [Server container](#server-container)
+* [EventStoreDB server](#eventstoredb-server)
   * [Run container](#run-container)
   * [Stop container](#stop-container)
-* [Client class](#client-class)
+* [EventStoreDB client](#eventstoredb-client)
   * [Import class from package](#import-class-from-package)
   * [Construct client class](#construct-client-class)
 * [Streams](#streams)
@@ -207,32 +212,35 @@ You can use Poetry to add this package to your pyproject.toml and install it.
 
     $ poetry add esdbclient
 
-## Server container
+## EventStoreDB server
 
 The EventStoreDB server can be run locally using the official Docker container image.
 
 ### Run container
 
-Use Docker to run EventStoreDB using the official Docker container image on DockerHub.
+For development, you can run a "secure" EventStoreDB server using the following command.
 
-For development, you can start a "secure" server locally, on port 2113.
-
-    $ docker run -d --name my-eventstoredb -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:22.10.0-buster-slim --dev
+    $ docker run -d --name eventstoredb-secure -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:22.10.0-buster-slim --dev
 
 The connection string URI for this "secure" server would be:
 
     esdb://admin:changeit@localhost:2113
 
-You will also need to get the SSL/TLS certificate from the server and use this as the
-`root_certificates` argument. You can get the server certificate with the following
-command:
+To connect to a "secure" server, you will also need to an SSL/TLS certificate. For
+development, you can use the SSL/TLS certificate from the server. You can get the
+server certificate with the following Python code.
 
-    $ python -c "import ssl; print(ssl.get_server_certificate(addr=('localhost', 2113)))"
+```python
+import ssl
 
 
-You can also start an "insecure" server locally, on port 2114.
+root_certificates = ssl.get_server_certificate(addr=('localhost', 2113))
+```
 
-    $ docker run -d --name my-eventstoredb -it -p 2114:2113 eventstore/eventstore:22.10.0-buster-slim --insecure
+
+You can also start an "insecure" server using the following command.
+
+    $ docker run -d --name eventstoredb-insecure -it -p 2114:2113 eventstore/eventstore:22.10.0-buster-slim --insecure
 
 The connection string URI for this "insecure" server would be:
 
@@ -240,15 +248,21 @@ The connection string URI for this "insecure" server would be:
 
 ### Stop container
 
-To stop and remove the `my-eventstoredb` container created above, use the following Docker commands.
+To stop and remove the "secure" container, use the following Docker commands.
 
-    $ docker stop my-eventstoredb
-	$ docker rm my-eventstoredb
+    $ docker stop eventstoredb-secure
+	$ docker rm eventstoredb-secure
+
+To stop and remove the "insecure" container, use the following Docker commands.
+
+    $ docker stop eventstoredb-insecure
+	$ docker rm eventstoredb-insecure
 
 
-## Client class
+## EventStoreDB client
 
-This client is implemented as the Python class `ESDBClient`.
+This EventStoreDB client is implemented in the `esdbclient` package with
+the `ESDBClient` class.
 
 ### Import class from package
 
@@ -260,16 +274,16 @@ from esdbclient import ESDBClient
 
 ### Construct client class
 
-The `ESDBClient` class can be constructed with a required `uri` argument, and an
-optional `root_certificates` (by default the client will attempt to create a "secure"
-connection to the server, and in this case the `root_certificates` value is required).
+The `ESDBClient` class can be constructed with a `uri` argument, which is required.
+And, to connect to a "secure" EventStoreDB server, the optional `root_certificates`
+argument is also required.
 
-The `uri` argument is required, and is expected to be an EventStoreDB connection string
-URI that conforms with the standard EventStoreDB "esdb" or "esdb+discover" URI schemes.
-You can generate EventStoreDB connection string URIs using the online tool. The syntax
-and semantics are explained in the Notes section below.
+The `uri` argument is expected to be an EventStoreDB connection string URI that conforms
+with the standard EventStoreDB "esdb" or "esdb+discover" URI schemes. The syntax
+and semantics of EventStoreDB connection strings are explained in the Notes section
+below.
 
-For example, the following connection string URI specifies that the client should
+For example, the following connection string specifies that the client should
 attempt to creae a "secure" connection to port 2113 on "localhost", and use the
 credentials "username" and "password" when making calls to the server.
 
@@ -277,29 +291,34 @@ credentials "username" and "password" when making calls to the server.
 esdb://username:password@localhost:2113
 ```
 
-You can specify connection options by using the
+You can specify connection options by using
 [query string syntax](https://en.wikipedia.org/wiki/Query_string). See the Notes
 section below for details of the connection options supported by this client.
 
-The following connection string URI uses the "Tls" option to specify that the
-client should create an "insecure" connection.
+The following connection string uses the "Tls" option to specify that the
+client should create an "insecure" connection to port 2114. In this case,
+call credentials are not required.
 
 ```
-esdb://username:password@localhost:2113?Tls=false
+esdb://localhost:2114?Tls=false
 ```
 
-By default, the client will attempt to create a "secure" connection to a "leader".
+By default, the client will attempt to create a "secure" connection.
 
-Unless the connection string URI specifies `Tls=false`, the `root_certificates` client
-constructor argument is also required. It is expected to be a Python `str` containing
-PEM encoded SSL/TLS root certificates used for server authentication. This value is
+Unless the connection string URI includes the query string field-value
+`Tls=false`, the `root_certificates` argument is also required when
+constructing the client class. The `root_certificates` argument is expected
+to be a Python `str` containing PEM encoded SSL/TLS root certificates, and
+it is used for authenticating the server to the client. This value is
 passed directly to `grpc.ssl_channel_credentials()`. It is commonly the certificate
-of the certificate authority that was responsible for generating the SSL/TLS certificate
-used by the EventStoreDB server.
+of the certificate authority that was responsible for generating the SSL/TLS
+certificate used by the EventStoreDB server. But, alternatively for development,
+you can use the server's certificate itself.
 
 In the example below, the constructor argument values are taken from the operating
 system environment (the examples in this document are tested with both
-a "secure" and an "insecure" server).
+a "secure" and an "insecure" server). This would be a typical arrangement in
+a production environment.
 
 ```python
 import os
