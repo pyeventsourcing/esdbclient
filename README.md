@@ -143,6 +143,7 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 * [Client class](#client-class)
   * [Import class from package](#import-class-from-package)
   * [Construct client class](#construct-client-class)
+  * [Reconnecting](#reconecting)
 * [Streams](#streams)
   * [Append events](#append-events)
   * [Append event](#append-event)
@@ -293,6 +294,45 @@ client = ESDBClient(
     root_certificates=os.getenv("ESDB_ROOT_CERTIFICATES"),
 )
 ```
+
+### Reconnecting
+
+The `reconnect()` method can be used to manually reconnect the client to a
+suitable EventStoreDB node. This method uses the same routine, for discovering the
+cluster nodes and connecting to a suitable node according to the node preference
+specified in the connection string, that is used when the client is
+instantiated. This method is thread-safe, and it is "conservative"
+in that only one reconnection will occur. Concurrent attempts to reconnect
+will block until the client has reconnected successfully, and then they will
+all return normally.
+
+```python
+client.reconnect()
+```
+
+An example of when it might be desirable to reconnect manually is when (for performance
+reasons) the node preference is for the client to be connected to a follower node in the
+cluster, and, after a cluster leader election, the follower node becomes a leader node.
+Reconnecting to a follower node in this case is currently beyond the capabilities of
+this client, but this behavior might be implemented in a future release.
+
+Please note, all the client methods use an `@autoreconnect` decorator (which calls the
+`reconnect()` method) and a `@retry` decorator that will retry am operation that fails
+due to connectivity issues. This means, for example, that in case the node preference
+is for the client to be connected to a leader (which is the default) and, after a
+clusterleader election, the node to which the client is connected becomes a follow, so
+that write operations will fail, then the client will automatically reconnect to the
+new leader and also retry the failed write operations. The client also will reconnect
+according to the node preference when there are connectivity issues causing read
+operations to fail with the current connection.
+
+Please also note, an event-processing component that uses a catch-up subscription will
+need to be monitored for errors, and if it fails after receiving some events will need
+to be restarted from the last saved commit position. In this case, the client will
+automatically reconnect to a node in the cluster when the subsequent call to
+start a catch-up subscription is made. You just need to catch the error, read
+the last saved commit position, and restart the event processing, using the same
+`ESDBClient` instance, but with a new call to `subscribe_all_events()`.
 
 ## Streams
 
