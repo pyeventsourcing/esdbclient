@@ -1770,27 +1770,28 @@ Reconnecting to a follower node in this case is currently beyond the capabilitie
 this client, but this behavior might be implemented in a future release.
 
 Please note, all the client methods use an `@autoreconnect` decorator (which calls the
-`reconnect()` method) and a `@retry` decorator that will retry am operation that fails
-due to connectivity issues. This means, for example, that in case the node preference
-is for the client to be connected to a leader (which is the default) and, after a
-clusterleader election, the node to which the client is connected becomes a follow, so
-that write operations will fail, then the client will automatically reconnect to the
-new leader and also retry the failed write operations. The client also will reconnect
+`reconnect()` method) and a `@retry` decorator that will retry operations that fail
+due to connectivity issues. This means, for example, that when the node preference
+is for the client to be connected to a leader (which is the default) and when, after a
+cluster leader election, the node to which the client is connected becomes a follower,
+so that write operations will begin to fail because the client is no longer connected
+to a leader, then the client will automatically reconnect to the new leader and also
+the client will retry the failed write operations. The client also will reconnect
 according to the node preference when there are connectivity issues causing read
 operations to fail with the current connection.
 
 Please also note, an event-processing component that uses a catch-up subscription will
-need to be monitored for errors, and if it fails after receiving some events will need
-to be restarted from the last saved commit position. In this case, the client will
-automatically reconnect to a node in the cluster when the subsequent call to
-start a catch-up subscription is made. You just need to catch the error, read
+need to be monitored for errors, and, if it fails after the subscription started, it
+will need to be restarted from the last saved commit position. In this case, the
+client will automatically reconnect to a node in the cluster when the subsequent call
+to start a catch-up subscription is made. You just need to catch the error, read
 the last saved commit position, and restart the event processing, using the same
 `ESDBClient` instance, but with a new call to `subscribe_all_events()`.
 
 
 ### Close
 
-The method `close()` can be used to cleanly close the gRPC connection.
+The `close()` method can be used to cleanly close the gRPC connection.
 
 ```python
 client.close()
