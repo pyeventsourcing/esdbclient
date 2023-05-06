@@ -3,21 +3,17 @@
 This [Python package](https://pypi.org/project/esdbclient/) provides a Python
 gRPC client for [EventStoreDB](https://www.eventstore.com/).
 
-Not all the features of the EventStoreDB API are presented
-by this client in its current form, however many of the most
-useful aspects are presented in an easy-to-use interface (see below).
-
 This client has been developed in collaboration with the EventStoreDB
-team. It has been tested to work with EventStoreDB LTS versions 21.10,
-without and without SSL/TLS, and with Python versions 3.7 to 3.11. The
-test suite gives 100% test coverage, including code branches and the
-examples in this documentation.
+team. Although not all the features of EventStoreDB are supported
+by this client, many of the most useful ones are presented
+in an easy-to-use interface.
 
-The Python code in this package has typing annotations. The static typing
-annotations are checked relatively strictly with mypy. The code is formatted
-with black and isort, and also checked with flake8. Poetry is used for package
-management during development, and for building and publishing distributions to
-[PyPI](https://pypi.org/project/esdbclient/).
+This client has been tested to work with EventStoreDB LTS versions 21.10,
+without and without SSL/TLS, and with Python versions 3.7 to 3.11. There
+is 100% test coverage. The code has typing annotations, checked with mypy.
+The code is formatted with black and isort, and checked with flake8. Poetry
+is used for package management during development, and for building and
+publishing distributions to [PyPI](https://pypi.org/project/esdbclient/).
 
 ## Synopsis
 
@@ -151,8 +147,8 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Run container](#run-container)
   * [Stop container](#stop-container)
 * [EventStoreDB client](#eventstoredb-client)
-  * [Import class from package](#import-class-from-package)
-  * [Construct client class](#construct-client-class)
+  * [Import class](#import-class)
+  * [Construct client](#construct-client)
 * [Streams](#streams)
   * [Append events](#append-events)
   * [Append event](#append-event)
@@ -222,21 +218,35 @@ For development, you can run a "secure" EventStoreDB server using the following 
 
     $ docker run -d --name eventstoredb-secure -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:22.10.0-buster-slim --dev
 
-The connection string URI for this "secure" server would be:
+The connection string for this "secure" EventStoreDB server would be:
 
     esdb://admin:changeit@localhost:2113
 
-To connect to a "secure" server, you will also need to an SSL/TLS certificate. For
-development, you can use the SSL/TLS certificate from the server. You can get the
-server certificate with the following Python code.
+As we will see, the client needs an EventStoreDB connection string as the value of
+its `uri` constructor argument.
+
+To connect to a "secure" server, you will ususally need to include a "username"
+and a "password" in the connection string, so that the server can authenticate the
+client. The default username is "admin" and the default password is "changeit".
+
+See the Notes section below for more information about EventStoreDB connection strings.
+
+To connect to a "secure" server, you will also need an SSL/TLS certificate, so that the
+client can authenticate the server. For development, you can either use the SSL/TLS
+certificate of the certificate authority used to create the server's certificate, or
+when using a single-node cluster, you can get the certificate from the server. You can
+get the server certificate with the following Python code.
+
+As we will see, when connecting to a "secure" server, the client needs an SSL/TLS
+certificate as the value of its `root_certificates` constructor argument.
+
 
 ```python
 import ssl
 
 
-root_certificates = ssl.get_server_certificate(addr=('localhost', 2113))
+server_certificate = ssl.get_server_certificate(addr=('localhost', 2113))
 ```
-
 
 You can also start an "insecure" server using the following command.
 
@@ -245,6 +255,16 @@ You can also start an "insecure" server using the following command.
 The connection string URI for this "insecure" server would be:
 
     esdb://localhost:2114?Tls=false
+
+As we will see, when connecting to an "insecure" server, there is no need to include
+a "username" and a "password" in the connection string. If you do, these values will
+be ignored by the client, so that they will not be sent to the server over an
+insecure channel.
+
+Please note, the "insecure" connection string uses the query string `?Tls=false`. The
+value of this field is by default `true`. See the Notes section below for more
+information about EventStoreDB connection strings and the fields that can be used
+in the query string to specify connection options.
 
 ### Stop container
 
@@ -264,7 +284,7 @@ To stop and remove the "insecure" container, use the following Docker commands.
 This EventStoreDB client is implemented in the `esdbclient` package with
 the `ESDBClient` class.
 
-### Import class from package
+### Import class
 
 The `ESDBClient` class can be imported from the `esdbclient` package.
 
@@ -272,53 +292,49 @@ The `ESDBClient` class can be imported from the `esdbclient` package.
 from esdbclient import ESDBClient
 ```
 
-### Construct client class
+### Construct client
 
 The `ESDBClient` class can be constructed with a `uri` argument, which is required.
 And, to connect to a "secure" EventStoreDB server, the optional `root_certificates`
 argument is also required.
 
-The `uri` argument is expected to be an EventStoreDB connection string URI that conforms
-with the standard EventStoreDB "esdb" or "esdb+discover" URI schemes. The syntax
-and semantics of EventStoreDB connection strings are explained in the Notes section
-below.
+The `uri` argument is expected to be an EventStoreDB connection string URI that
+conforms with the standard EventStoreDB "esdb" or "esdb+discover" URI schemes. The
+syntax and semantics of EventStoreDB connection strings are explained in the Notes
+section below.
 
 For example, the following connection string specifies that the client should
 attempt to creae a "secure" connection to port 2113 on "localhost", and use the
 credentials "username" and "password" when making calls to the server.
 
-```
-esdb://username:password@localhost:2113
-```
+    esdb://username:password@localhost:2113
 
-You can specify connection options by using
-[query string syntax](https://en.wikipedia.org/wiki/Query_string). See the Notes
-section below for details of the connection options supported by this client.
+The client must be configured to create a "secure" connection to a "secure" server,
+and an "insecure" connection to an "insecure" server. By default, the client will
+attempt to create a "secure" connection. And so, when using an "insecure" server,
+the connection string must specify that the client should attempt to make an "insecure"
+connection.
 
-The following connection string uses the "Tls" option to specify that the
-client should create an "insecure" connection to port 2114. In this case,
-call credentials are not required.
+The following connection string specifies that the client should
+attempt to creae an "insecure" connection to port 2114 on "localhost".
+When connecting to an "insecure" server, the client will ignore any
+username and password information included in the connection string.
 
-```
-esdb://localhost:2114?Tls=false
-```
+    esdb://localhost:2114?Tls=false
 
-By default, the client will attempt to create a "secure" connection.
+Unless the connection string URI includes the field-value `Tls=false` in
+the query string, the `root_certificates` constructor argument is also required.
 
-Unless the connection string URI includes the query string field-value
-`Tls=false`, the `root_certificates` argument is also required when
-constructing the client class. The `root_certificates` argument is expected
-to be a Python `str` containing PEM encoded SSL/TLS root certificates, and
-it is used for authenticating the server to the client. This value is
-passed directly to `grpc.ssl_channel_credentials()`. It is commonly the certificate
-of the certificate authority that was responsible for generating the SSL/TLS
-certificate used by the EventStoreDB server. But, alternatively for development,
-you can use the server's certificate itself.
+When connecting to a "secure" server, the `root_certificates` argument is expected to
+be a Python `str` containing PEM encoded SSL/TLS root certificates, and it is used for
+authenticating the server to the client. This value is passed directly to
+`grpc.ssl_channel_credentials()`. It is commonly the certificate of the certificate
+authority that was responsible for generating the SSL/TLS certificate used by the
+EventStoreDB server. But, alternatively for development, you can use the server's
+certificate itself.
 
 In the example below, the constructor argument values are taken from the operating
-system environment (the examples in this document are tested with both
-a "secure" and an "insecure" server). This would be a typical arrangement in
-a production environment.
+system environment. This is a typical arrangement in a production environment.
 
 ```python
 import os
@@ -329,7 +345,6 @@ client = ESDBClient(
 )
 ```
 
-Please see the Notes section below for more information about connection strings.
 
 ## Streams
 
@@ -1838,40 +1853,85 @@ The scheme will be separated from the network location with the characters "://"
 If it exists, the query string will be separated from the network location with
 the "?" character.
 
+    uri = scheme , "://" , netloc, [ "?" , query-string ] ;
+
 There are two URI schemes used by EventStoreDB clients: the "esdb" scheme, and the
 "esdb+discover" scheme.
+
+    scheme = "esdb" | "esdb+discover" ;
 
 In both the "esdb" and "esdb+discover" schemes, the network location string may
 start with a user info string. If it exists in the URI, the user info string
 must be formed from a username and a password. The username and password strings
-will be separated in the user info string with a ":" character. The user info string
-will be separated from the rest of the network location string with the "@" character.
+will be separated in the user info string with a ":" character.
 
-In the "esdb" scheme, after the user info string, the rest of the network location will
-be a list of gRPC targets. The gRPC targets will be separated from each other in the
-network location string by the "," character. Each gRPC target should indicate an
-EventStoreDB gRPC server socket, by specifying a network address and a port number,
-separated with the ":" character. The network address may be an IP address or a
-hostname that can be resolved to an IP address.
+    user-info = username , ":" , password ;
+
+The user info string will be separated from the rest of the network location string
+with the "@" character. In the "esdb" scheme, after the user info string, the rest of
+the network location will be a list of gRPC targets. The gRPC targets will be separated
+from each other in the network location string by the "," character. Each gRPC target
+should indicate an EventStoreDB gRPC server socket, by specifying a host and a port
+number, separated with the ":" character. The host may be a hostname that can be
+resolved to an IP address, or an IP address.
+
+    esdb-netloc = [ user-info, "@" ] , grpc-target, { "," , grpc-target } ;
+
+    grpc-target = server-host , ":" , port-number ;
+
+    server-host = hostname | ip-address ;
 
 In the "esdb+discover" scheme, after the user info string, the rest of the network
-location will be a fully-qualified domain name, which identifies a cluster of
-EventStoreDB servers. The client will use a DNS server to resolve the full-qualified
-domain name to a list of addresses of EventStoreDB servers. In this case, the port
-number "2113" will be used to construct gRPC targets from the addresses obtained from
-the DNS server.
+location will be a domain name, which identifies a cluster of EventStoreDB servers.
+The client will use a DNS server to resolve the domain name to a list of addresses
+of EventStoreDB servers, by querying for 'A' records. In this case, the port number
+"2113" will be used to construct gRPC targets from the addresses obtained from 'A'
+records provided by the DNS server.
+
+    esdb-discover-netloc = [ user-info, "@" ] , cluster-domainname ;
+
+The client therefore obtains gRPC targets directly from "esdb" connection strings,
+or indirectly from "esdb+discover" connection strings via DNS.
+
+However the gRPC targets are obtained, the client will attempt to connect to each in
+turn, attempting to call the EventStoreDB Gossip API to obtain information about the
+EventStoreDB cluster. A member of the cluster is selected by the client, according to
+the node preference option (see below). The client may then need to close its
+connection and reconnect to the selected server.
+
+The two EventStoreDB URI schemes can be defined in the following way.
+
+    esdb-uri = "esdb://" , [ user-info , "@" ] , grpc-target, { "," , grpc-target } , [ "?" , query-string ] ;
+
+    esdb-discover-uri = "esdb+discover://" , [ user-info, "@" ] , cluster-domainname , [ "?" , query-string ] ;
 
 In both the "esdb" and "esdb+discover" schemes, the query string will be a list of
-field-value arguments, separated from each other with the "&" character. Each
-field-value argument must include a key and a value separated by the "=" character.
+field-value arguments, separated from each other with the "&" character.
 
-The table below describes the query arguments supported by this client.
+    query-string = field-value, { "&", field-value } ;
+
+Each field-value argument must include one of the supported fields, and an
+appropriate value, with the field separated from the value by the "=" character.
+
+    field-value = ( "Tls", "=" , "true" | "false" )
+                | ( "TlsVerifyCert", "=" , "true" | "false" )
+                | ( "ConnectionName", "=" , string )
+                | ( "NodePreference", "=" , "leader" | "follower" | "readonlyreplica" | "random" )
+                | ( "DefaultDeadline", "=" , integer )
+                | ( "GossipTimeout", "=" , integer )
+                | ( "MaxDiscoverAttempts", "=" , integer )
+                | ( "DiscoveryInterval", "=" , integer )
+                | ( "MaxDiscoverAttempts", "=" , integer )
+                | ( "KeepAliveInterval", "=" , integer )
+                | ( "KeepAliveInterval", "=" , integer ) ;
+
+The table below describes the query field-values supported by this client.
 
 | Field               | Value                                                                 | Description                                                                                                   |
 |---------------------|-----------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
 | Tls                 | "true", "false" (default: "true")                                     | Use a secure gRPC channel.                                                                                    |
-| TlsVerifyCert       | "true", "false" (default: "true")                                     | NOT IMPLEMENTED                                                                                               |
-| ConnectionName      | any string (default: auto-generated version-4 UUID)                   | Identifies the client to the cluster.                                                                         |
+| TlsVerifyCert       | "true", "false" (default: "true")                                     | NOT YET IMPLEMENTED                                                                                           |
+| ConnectionName      | string (default: auto-generated version-4 UUID)                       | Identifies the client to the cluster.                                                                         |
 | NodePreference      | "leader", "follower", "readonlyreplica", "random" (default: "leader") | The node state preferred by the client.                                                                       |
 | DefaultDeadline     | integer (default: `None`)                                             | The default value (in seconds) of the `timeout` argument of client "write" methods such as `append_events()`. |
 | GossipTimeout       | integer (default: 5)                                                  | The default value (in seconds) of the `timeout` argument of gossip read methods, such as `read_gossip()`.     |
@@ -1880,26 +1940,27 @@ The table below describes the query arguments supported by this client.
 | KeepAliveInterval   | integer (default: `None`)                                             | gRPC channel option: "grpc.keepalive_ms"                                                                      |
 | KeepAliveTimeout    | integer (default: `None`)                                             | gRPC channel option: "grpc.keepalive_timeout_ms"                                                              |
 
-Please note, the field names are case-insensitive. If fields are repeated in the
-query string, the query string will be parsed without error. However, the connection
-options used by the client will use the value of the first field. All the
-other field-values in the query string with the same field name will be ignored.
+Please note, the field names and values are case-insensitive. If fields are repeated
+in the query string, the query string will be parsed without error. However, the
+connection options used by the client will use the value of the first field. All the
+other field-values in the query string with the same field name will be ignored. Fields
+without values will also be ignored.
 
-Please note, if NodePreference is "leader" and the node becomes a follower, the client
-will attempt to reconnect to the current leader. The HTTP header "requires-leader" is
-set to "true" for "write" requests, this header is observed by the server, and a node
-which is not a leader that receives such a request will return an error. This error
-is detected by the client, which will then close the current gRPC connection and create
-a new connection to the leader. The request will then be sent to the leader, and will
-be expected to succeed.
+If the client's node preference is "leader" and the node becomes a
+"follower", the client will attempt to reconnect to the current leader when a method
+is called that expects to call a leader. Methods which mutate the state of the database
+expect to call a leader. For such methods, the HTTP header"requires-leader" is set to
+"true", and this header is observed by the server, and so a node which is not a leader
+that receives such a request will return an error. This error is detected by the client,
+which will then close the current gRPC connection and create a new connection to the
+leader. The request will then be retried with the leader.
 
-Please note, if NodePreference is "follower" and there are no follower nodes in the
-cluster, the client will fail to connect.
+If the client's node preference is "follower" and there are no follower
+nodes in the cluster, then the client will raise an exception. Similarly, if the
+client's node preference is "readonlyreplica" and there are no read-only replica
+nodes in the cluster, then the client will also raise an exception.
 
-Please note, if NodePreference is "readonlyreplica" and there are no read-only replica
-nodes in the cluster, the client will fail to connect.
-
-Please note, the gRPC channel option "grpc.max_receive_message_length" is automatically
+The gRPC channel option "grpc.max_receive_message_length" is automatically
 configured to the value `17 * 1024 * 1024`. This value cannot be changed.
 
 
