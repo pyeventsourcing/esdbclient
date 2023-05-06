@@ -219,18 +219,24 @@ For development, you can start a "secure" server locally, on port 2113.
 
     $ docker run -d --name my-eventstoredb -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:22.10.0-buster-slim --dev
 
+The connection string URI for this "secure" server would be:
+
+    esdb://admin:changeit@localhost:2113
+
+You will also need to get the SSL/TLS certificate from the server and use this as the
+`root_certificates` argument. You can get the server certificate with the following
+command:
+
+    $ python -c "import ssl; print(ssl.get_server_certificate(addr=('localhost', 2113)))"
+
+
 You can also start an "insecure" server locally, on port 2114.
 
     $ docker run -d --name my-eventstoredb -it -p 2114:2113 eventstore/eventstore:22.10.0-buster-slim --insecure
 
-To connect to the "insecure" local server using the client in this package, you just need
-to know the local hostname and the port number. To connect to the "secure" local
-development server, you will also need to know that the username is "admin" and
-the password is "changeit". You will also need to get the SSL/TLS certificate from
-the server. You can get the server certificate with the following command.
+The connection string URI for this "insecure" server would be:
 
-    $ python -c "import ssl; print(ssl.get_server_certificate(addr=('localhost', 2113)))"
-
+    esdb://localhost:2114?Tls=false
 
 ### Stop container
 
@@ -264,8 +270,8 @@ You can generate EventStoreDB connection string URIs using the online tool. The 
 and semantics are explained in the Notes section below.
 
 For example, the following connection string URI specifies that the client should
-attempt to connect to "localhost" on port 2113, using call credentials "username"
-and "password".
+attempt to creae a "secure" connection to port 2113 on "localhost", and use the
+credentials "username" and "password" when making calls to the server.
 
 ```
 esdb://username:password@localhost:2113
@@ -273,19 +279,18 @@ esdb://username:password@localhost:2113
 
 You can specify connection options by using the
 [query string syntax](https://en.wikipedia.org/wiki/Query_string). See the Notes
-section below for details for the connection options supported by this client.
+section below for details of the connection options supported by this client.
 
-The following connection string URI uses the "Tls" and "NodePreference"
-options to specify that the client should create an "insecure" gRPC connection to a
-"follower" node.
+The following connection string URI uses the "Tls" option to specify that the
+client should create an "insecure" connection.
 
 ```
-esdb://username:password@localhost:2113?Tls=false&NodePreference=follower
+esdb://username:password@localhost:2113?Tls=false
 ```
 
 By default, the client will attempt to create a "secure" connection to a "leader".
 
-Unless the `uri` argument specifies `Tls=false`, the `root_certificates` client
+Unless the connection string URI specifies `Tls=false`, the `root_certificates` client
 constructor argument is also required. It is expected to be a Python `str` containing
 PEM encoded SSL/TLS root certificates used for server authentication. This value is
 passed directly to `grpc.ssl_channel_credentials()`. It is commonly the certificate
