@@ -258,23 +258,26 @@ The `ESDBClient` class can be constructed with a required `uri` argument, and an
 optional `root_certificates` (by default the client will attempt to create a "secure"
 connection to the server, and in this case the `root_certificates` value is required).
 
-The `uri` argument is required, and is expected to conform with the standard
-EventStoreDB "esdb" or "esdb+discover" URI schemes. You can generate EventStoreDB
-connection strings using the online tool.
+The `uri` argument is required, and is expected to be an EventStoreDB connection string
+URI that conforms with the standard EventStoreDB "esdb" or "esdb+discover" URI schemes.
+You can generate EventStoreDB connection string URIs using the online tool. The syntax
+and semantics are explained in the Notes section below.
 
-For example, the URI below specifies that the client should attempt to connect to
-"localhost" on port 2113, using call credentials "username" and "password".
+For example, the following connection string URI specifies that the client should
+attempt to connect to "localhost" on port 2113, using call credentials "username"
+and "password".
 
 ```
 esdb://username:password@localhost:2113
 ```
 
-By using the [query string syntax](https://en.wikipedia.org/wiki/Query_string), the
-`uri` connection string can specify connection options. See the Notes section below
-for details of these options.
+You can specify connection options by using the
+[query string syntax](https://en.wikipedia.org/wiki/Query_string). See the Notes
+section below for details for the connection options supported by this client.
 
-For example, the URI below uses the "Tls" options to specify that the client should
-create an "insecure" gRPC connection to a "follower" node.
+The following connection string URI uses the "Tls" and "NodePreference"
+options to specify that the client should create an "insecure" gRPC connection to a
+"follower" node.
 
 ```
 esdb://username:password@localhost:2113?Tls=false&NodePreference=follower
@@ -302,13 +305,16 @@ client = ESDBClient(
 )
 ```
 
+Please see the Notes section below for more information about connection strings.
+
 ## Streams
 
 In EventStoreDB, a "stream" is a sequence of recorded events that all have
-the same "stream name". Each recorded event has a "stream position" in its stream,
-and a "commit position" in the database. The stream positions of the recorded events
-in a stream is a gapless sequence starting from zero. The commit positions of the
-recorded events in the database form a sequence that is not gapless.
+the same "stream name". There will normally be many streams in a database.
+Each recorded event has a "stream position" in its stream, and a "commit position"
+in the database. The stream positions of the recorded events in a stream is a gapless
+sequence starting from zero. The commit positions of the recorded events in the database
+form a sequence that is not gapless.
 
 The methods `append_events()`, `read_stream_events()` and `read_all_events()` can
 be used to record and read events in the database.
