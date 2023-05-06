@@ -2,12 +2,9 @@
 import queue
 import sys
 from base64 import b64encode
-from concurrent.futures import Future
 from dataclasses import dataclass, field
-from queue import Queue
 from typing import (
     TYPE_CHECKING,
-    Dict,
     Iterable,
     Iterator,
     List,
@@ -114,27 +111,27 @@ class BatchAppendResponse:
     commit_position: int
 
 
-if TYPE_CHECKING:  # pragma: no cover
-
-    class _BatchAppendFuture(Future[BatchAppendResponse]):
-        pass
-
-else:
-
-    class _BatchAppendFuture(Future):
-        pass
-
-
-class BatchAppendFuture(_BatchAppendFuture):
-    def __init__(self, batch_append_request: BatchAppendRequest):
-        super().__init__()
-        self.batch_append_request = batch_append_request
-
-
-if TYPE_CHECKING:  # pragma: no cover
-    BatchAppendFutureQueue = Queue[BatchAppendFuture]
-else:
-    BatchAppendFutureQueue = Queue
+# if TYPE_CHECKING:  # pragma: no cover
+#
+#     class _BatchAppendFuture(Future[BatchAppendResponse]):
+#         pass
+#
+# else:
+#
+#     class _BatchAppendFuture(Future):
+#         pass
+#
+#
+# class BatchAppendFuture(_BatchAppendFuture):
+#     def __init__(self, batch_append_request: BatchAppendRequest):
+#         super().__init__()
+#         self.batch_append_request = batch_append_request
+#
+#
+# if TYPE_CHECKING:  # pragma: no cover
+#     BatchAppendFutureQueue = Queue[BatchAppendFuture]
+# else:
+#     BatchAppendFutureQueue = Queue
 
 
 class ESDBService:
@@ -445,61 +442,61 @@ class StreamsService(ESDBService):
             )
             yield streams_pb2.AppendReq(proposed_message=proposed_message)
 
-    def batch_append_multiplexed(
-        self,
-        futures_queue: BatchAppendFutureQueue,
-        timeout: Optional[float] = None,
-        metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
-    ) -> None:
-        # Construct batch append requests iterator.
-        requests = BatchAppendFutureIterator(futures_queue)
-
-        # Call the gRPC method.
-        try:
-            for response in self._stub.BatchAppend(
-                requests,
-                timeout=timeout,
-                metadata=self._metadata(metadata, requires_leader=True),
-                credentials=credentials,
-            ):
-                # Use the correlation ID to get the future.
-                assert isinstance(response, streams_pb2.BatchAppendResp)
-                correlation_id = UUID(response.correlation_id.string)
-                future = requests.pop_future(correlation_id)
-
-                # Convert the result.
-                stream_name = future.batch_append_request.stream_name
-                result = self._convert_batch_append_result(response, stream_name)
-
-                # Finish the future.
-                if isinstance(result, BatchAppendResponse):
-                    future.set_result(result)
-                else:
-                    assert isinstance(result, ESDBClientException)
-                    future.set_exception(result)
-
-            else:
-                # The response stream ended without an RPC error.
-                for (
-                    correlation_id
-                ) in requests.futures_by_correlation_id:  # pragma: no cover
-                    future = requests.pop_future(correlation_id)
-                    future.set_exception(
-                        ESDBClientException("Batch append response not received")
-                    )
-
-        except RpcError as rpc_error:
-            # The response stream ended with an RPC error.
-            try:
-                raise handle_rpc_error(rpc_error) from rpc_error
-            except GrpcError as grpc_error:
-                for (
-                    correlation_id
-                ) in requests.futures_by_correlation_id:  # pragma: no cover
-                    future = requests.pop_future(correlation_id)
-                    future.set_exception(grpc_error)
-                raise
+    # def batch_append_multiplexed(
+    #     self,
+    #     futures_queue: BatchAppendFutureQueue,
+    #     timeout: Optional[float] = None,
+    #     metadata: Optional[Metadata] = None,
+    #     credentials: Optional[CallCredentials] = None,
+    # ) -> None:
+    #     # Construct batch append requests iterator.
+    #     requests = BatchAppendFutureIterator(futures_queue)
+    #
+    #     # Call the gRPC method.
+    #     try:
+    #         for response in self._stub.BatchAppend(
+    #             requests,
+    #             timeout=timeout,
+    #             metadata=self._metadata(metadata, requires_leader=True),
+    #             credentials=credentials,
+    #         ):
+    #             # Use the correlation ID to get the future.
+    #             assert isinstance(response, streams_pb2.BatchAppendResp)
+    #             correlation_id = UUID(response.correlation_id.string)
+    #             future = requests.pop_future(correlation_id)
+    #
+    #             # Convert the result.
+    #             stream_name = future.batch_append_request.stream_name
+    #             result = self._convert_batch_append_result(response, stream_name)
+    #
+    #             # Finish the future.
+    #             if isinstance(result, BatchAppendResponse):
+    #                 future.set_result(result)
+    #             else:
+    #                 assert isinstance(result, ESDBClientException)
+    #                 future.set_exception(result)
+    #
+    #         else:
+    #             # The response stream ended without an RPC error.
+    #             for (
+    #                 correlation_id
+    #             ) in requests.futures_by_correlation_id:  # pragma: no cover
+    #                 future = requests.pop_future(correlation_id)
+    #                 future.set_exception(
+    #                     ESDBClientException("Batch append response not received")
+    #                 )
+    #
+    #     except RpcError as rpc_error:
+    #         # The response stream ended with an RPC error.
+    #         try:
+    #             raise handle_rpc_error(rpc_error) from rpc_error
+    #         except GrpcError as grpc_error:
+    #             for (
+    #                 correlation_id
+    #             ) in requests.futures_by_correlation_id:  # pragma: no cover
+    #                 future = requests.pop_future(correlation_id)
+    #                 future.set_exception(grpc_error)
+    #             raise
 
     def _convert_batch_append_result(
         self, response: streams_pb2.BatchAppendResp, stream_name: str
@@ -687,19 +684,19 @@ class StreamsService(ESDBService):
             #     return tombstone_resp.no_position
 
 
-class BatchAppendFutureIterator(Iterator[streams_pb2.BatchAppendReq]):
-    def __init__(self, queue: BatchAppendFutureQueue):
-        self.queue = queue
-        self.futures_by_correlation_id: Dict[UUID, BatchAppendFuture] = {}
-
-    def __next__(self) -> streams_pb2.BatchAppendReq:
-        future = self.queue.get()
-        batch = future.batch_append_request
-        self.futures_by_correlation_id[batch.correlation_id] = future
-        return _construct_batch_append_req(batch)
-
-    def pop_future(self, correlation_id: UUID) -> BatchAppendFuture:
-        return self.futures_by_correlation_id.pop(correlation_id)
+# class BatchAppendFutureIterator(Iterator[streams_pb2.BatchAppendReq]):
+#     def __init__(self, queue: BatchAppendFutureQueue):
+#         self.queue = queue
+#         self.futures_by_correlation_id: Dict[UUID, BatchAppendFuture] = {}
+#
+#     def __next__(self) -> streams_pb2.BatchAppendReq:
+#         future = self.queue.get()
+#         batch = future.batch_append_request
+#         self.futures_by_correlation_id[batch.correlation_id] = future
+#         return _construct_batch_append_req(batch)
+#
+#     def pop_future(self, correlation_id: UUID) -> BatchAppendFuture:
+#         return self.futures_by_correlation_id.pop(correlation_id)
 
 
 def _construct_batch_append_req(

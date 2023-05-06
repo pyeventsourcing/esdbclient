@@ -3,8 +3,7 @@ import json
 import random
 import sys
 from functools import wraps
-from queue import Empty
-from threading import Event, Lock, Thread
+from threading import Event, Lock
 from time import sleep
 from typing import (
     Any,
@@ -39,8 +38,6 @@ from esdbclient.esdbapi import (
     NODE_STATE_LEADER,
     NODE_STATE_REPLICA,
     BasicAuthCallCredentials,
-    BatchAppendFuture,
-    BatchAppendFutureQueue,
     BatchAppendRequest,
     ClusterMember,
     SubscriptionInfo,
@@ -51,7 +48,6 @@ from esdbclient.esdbapi import (
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import (
     DiscoveryFailed,
-    ESDBClientException,
     FollowerNotFound,
     GossipSeedError,
     GrpcError,
@@ -151,12 +147,12 @@ class ESDBClient:
 
         self._connection = self._connect_to_preferred_node()
 
-        self._batch_append_futures_lock = Lock()
-        self._batch_append_futures_queue = BatchAppendFutureQueue()
-        self._batch_append_thread = Thread(
-            target=self._batch_append_future_result_loop, daemon=True
-        )
-        self._batch_append_thread.start()
+        # self._batch_append_futures_lock = Lock()
+        # self._batch_append_futures_queue = BatchAppendFutureQueue()
+        # self._batch_append_thread = Thread(
+        #     target=self._batch_append_future_result_loop, daemon=True
+        # )
+        # self._batch_append_thread.start()
 
     def _construct_call_credentials(
         self, username: Optional[str], password: Optional[str]
@@ -198,7 +194,7 @@ class ESDBClient:
                 else:
                     sleep(self.connection_spec.options.DiscoveryInterval / 1000)
             else:
-                break
+                break  # coverage issue with Python 3.8 and 3.9 only, pragma: no cover
 
         # Maybe reconnect to preferred node.
         if len(cluster_members) > 1:  # forgive not "advertising" single node
@@ -295,49 +291,49 @@ class ESDBClient:
 
         return ESDBConnection(grpc_channel=grpc_channel, grpc_target=grpc_target)
 
-    def _batch_append_future_result_loop(self) -> None:
-        # while self._channel_connectivity_state is not ChannelConnectivity.SHUTDOWN:
-        try:
-            self._connection.streams.batch_append_multiplexed(
-                futures_queue=self._batch_append_futures_queue,
-                timeout=None,
-                metadata=self._call_metadata,
-                credentials=self._call_credentials,
-            )
-        except ESDBClientException as e:
-            self._clear_batch_append_futures_queue(e)
-        else:
-            self._clear_batch_append_futures_queue(  # pragma: no cover
-                ESDBClientException("Request not sent")
-            )
-        # print("Looping on call to batch_append_multiplexed()....")
-
-    def _clear_batch_append_futures_queue(self, error: ESDBClientException) -> None:
-        with self._batch_append_futures_lock:
-            try:
-                while True:
-                    future = self._batch_append_futures_queue.get(block=False)
-                    future.set_exception(error)  # pragma: no cover
-            except Empty:
-                pass
-
-    def append_events_multiplexed(
-        self,
-        stream_name: str,
-        expected_position: Optional[int],
-        events: Iterable[NewEvent],
-        timeout: Optional[float] = None,
-    ) -> int:
-        timeout = timeout if timeout is not None else self._default_deadline
-        batch_append_request = BatchAppendRequest(
-            stream_name=stream_name, expected_position=expected_position, events=events
-        )
-        future = BatchAppendFuture(batch_append_request=batch_append_request)
-        with self._batch_append_futures_lock:
-            self._batch_append_futures_queue.put(future)
-        response = future.result(timeout=timeout)
-        assert isinstance(response.commit_position, int)
-        return response.commit_position
+    # def _batch_append_future_result_loop(self) -> None:
+    #     # while self._channel_connectivity_state is not ChannelConnectivity.SHUTDOWN:
+    #     try:
+    #         self._connection.streams.batch_append_multiplexed(
+    #             futures_queue=self._batch_append_futures_queue,
+    #             timeout=None,
+    #             metadata=self._call_metadata,
+    #             credentials=self._call_credentials,
+    #         )
+    #     except ESDBClientException as e:
+    #         self._clear_batch_append_futures_queue(e)
+    #     else:
+    #         self._clear_batch_append_futures_queue(  # pragma: no cover
+    #             ESDBClientException("Request not sent")
+    #         )
+    #     # print("Looping on call to batch_append_multiplexed()....")
+    #
+    # def _clear_batch_append_futures_queue(self, error: ESDBClientException) -> None:
+    #     with self._batch_append_futures_lock:
+    #         try:
+    #             while True:
+    #                 future = self._batch_append_futures_queue.get(block=False)
+    #                 future.set_exception(error)  # pragma: no cover
+    #         except Empty:
+    #             pass
+    #
+    # def append_events_multiplexed(
+    #     self,
+    #     stream_name: str,
+    #     expected_position: Optional[int],
+    #     events: Iterable[NewEvent],
+    #     timeout: Optional[float] = None,
+    # ) -> int:
+    #     timeout = timeout if timeout is not None else self._default_deadline
+    #     batch_append_request = BatchAppendRequest(
+    #         stream_name=stream_name, expected_position=expected_position, events=events
+    #     )
+    #     future = BatchAppendFuture(batch_append_request=batch_append_request)
+    #     with self._batch_append_futures_lock:
+    #         self._batch_append_futures_queue.put(future)
+    #     response = future.result(timeout=timeout)
+    #     assert isinstance(response.commit_position, int)
+    #     return response.commit_position
 
     @retrygrpc
     @autoreconnect

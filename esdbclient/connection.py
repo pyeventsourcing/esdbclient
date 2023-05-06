@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
-from time import sleep
 from typing import Any, Dict, Optional, Sequence
 from urllib.parse import ParseResult, parse_qs, urlparse
 from uuid import uuid4
 
-from grpc import Channel, ChannelConnectivity
+from grpc import Channel
 
 from esdbclient.esdbapi import (
     ClusterGossipService,
@@ -313,16 +312,16 @@ class ESDBConnection:
         self.persistent_subscriptions = PersistentSubscriptionsService(grpc_channel)
         self.gossip = GossipService(grpc_channel)
         self.cluster_gossip = ClusterGossipService(grpc_channel)
-        self._channel_connectivity_state: Optional[ChannelConnectivity] = None
-        self.grpc_channel.subscribe(self._receive_channel_connectivity_state)
+        # self._channel_connectivity_state: Optional[ChannelConnectivity] = None
+        # self.grpc_channel.subscribe(self._receive_channel_connectivity_state)
 
-    def _receive_channel_connectivity_state(
-        self, connectivity: ChannelConnectivity
-    ) -> None:
-        self._channel_connectivity_state = connectivity
-        # print("Channel connectivity state:", connectivity)
+    # def _receive_channel_connectivity_state(
+    #     self, connectivity: ChannelConnectivity
+    # ) -> None:
+    #     self._channel_connectivity_state = connectivity
+    #     # print("Channel connectivity state:", connectivity)
 
     def close(self) -> None:
-        self.grpc_channel.unsubscribe(self._receive_channel_connectivity_state)
-        sleep(0.1)  # Allow connectivity polling to stop.
+        # self.grpc_channel.unsubscribe(self._receive_channel_connectivity_state)
+        # sleep(0.1)  # Allow connectivity polling to stop.
         self.grpc_channel.close()
