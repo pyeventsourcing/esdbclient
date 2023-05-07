@@ -1846,72 +1846,56 @@ client.close()
 
 ### Connection strings
 
-The EventStoreDB connection string is a URI comprising a scheme, followed by a
-network location, optionally followed by a query string.
+The EventStoreDB connection string is a URI that conforms with one of two possible
+schemes, either the "esdb" scheme or the "esdb+discover" scheme.
 
-The scheme will be separated from the network location with the characters "://".
-If it exists, the query string will be separated from the network location with
-the "?" character.
-
-    uri = scheme , "://" , netloc, [ "?" , query-string ] ;
-
-There are two URI schemes used by EventStoreDB clients: the "esdb" scheme, and the
-"esdb+discover" scheme.
-
-    scheme = "esdb" | "esdb+discover" ;
-
-In both the "esdb" and "esdb+discover" schemes, the network location string may
-start with a user info string. If it exists in the URI, the user info string
-must be formed from a username and a password. The username and password strings
-will be separated in the user info string with a ":" character.
-
-    user-info = username , ":" , password ;
-
-The user info string will be separated from the rest of the network location string
-with the "@" character. In the "esdb" scheme, after the user info string, the rest of
-the network location will be a list of gRPC targets. The gRPC targets will be separated
-from each other in the network location string by the "," character. Each gRPC target
-should indicate an EventStoreDB gRPC server socket, by specifying a host and a port
-number, separated with the ":" character. The host may be a hostname that can be
-resolved to an IP address, or an IP address.
-
-    esdb-netloc = [ user-info, "@" ] , grpc-target, { "," , grpc-target } ;
-
-    grpc-target = server-host , ":" , port-number ;
-
-    server-host = hostname | ip-address ;
-
-In the "esdb+discover" scheme, after the user info string, the rest of the network
-location will be a domain name, which identifies a cluster of EventStoreDB servers.
-The client will use a DNS server to resolve the domain name to a list of addresses
-of EventStoreDB servers, by querying for 'A' records. In this case, the port number
-"2113" will be used to construct gRPC targets from the addresses obtained from 'A'
-records provided by the DNS server.
-
-    esdb-discover-netloc = [ user-info, "@" ] , cluster-domainname ;
-
-The client therefore obtains gRPC targets directly from "esdb" connection strings,
-or indirectly from "esdb+discover" connection strings via DNS.
-
-However the gRPC targets are obtained, the client will attempt to connect to each in
-turn, attempting to call the EventStoreDB Gossip API to obtain information about the
-EventStoreDB cluster. A member of the cluster is selected by the client, according to
-the node preference option (see below). The client may then need to close its
-connection and reconnect to the selected server.
-
-The two EventStoreDB URI schemes can be defined in the following way.
+The two EventStoreDB URI schemes can be defined in the following way using
+[EBNF](https://en.wikipedia.org/wiki/Extended_Backus–Naur_form).
 
     esdb-uri = "esdb://" , [ user-info , "@" ] , grpc-target, { "," , grpc-target } , [ "?" , query-string ] ;
 
     esdb-discover-uri = "esdb+discover://" , [ user-info, "@" ] , cluster-domainname , [ "?" , query-string ] ;
 
-In both the "esdb" and "esdb+discover" schemes, the query string will be a list of
-field-value arguments, separated from each other with the "&" character.
+
+In both the "esdb" and "esdb+discover" schemes, the URI may include a user info string.
+If it exists in the URI, the user info string must be separated from the rest of the URI
+with the "@" character. The user info string must include a username and a password,
+separated with the ":" character.
+
+    user-info = username , ":" , password ;
+
+In the "esdb" URI scheme, after the optional user info string, there must be at least
+one gRPC target. If there are several gRPC targets, they must be separated from each
+other with the "," character. Each gRPC target should indicate an EventStoreDB gRPC
+server socket, by specifying a host and a port number separated with the ":" character.
+The host may be a hostname that can be resolved to an IP address, or an IP address.
+
+    grpc-target = server-host , ":" , port-number ;
+
+    server-host = hostname | ip-address ;
+
+In the "esdb+discover" scheme, after the user info string, there must be a domain name,
+which should identify a cluster of EventStoreDB servers. The client will use a DNS
+server to resolve the domain name to a list of addresses of EventStoreDB servers,
+by querying for 'A' records. In this case, the port number "2113" will be used to
+construct gRPC targets from the addresses obtained from 'A' records provided by the
+DNS server.
+
+The client therefore obtains gRPC targets directly from "esdb" connection strings,
+or indirectly from "esdb+discover" connection strings via DNS. However the gRPC targets
+are obtained, the client will attempt to connect to each in turn, attempting to call the
+EventStoreDB Gossip API to obtain information about the EventStoreDB cluster. A member
+of the cluster is selected by the client, according to the node preference option
+(see below). The client may then need to close its connection and reconnect to the
+selected server.
+
+In both the "esdb" and "esdb+discover" schemes, the optional query string must be one
+or many field-value arguments, separated from each other with the "&" character.
 
     query-string = field-value, { "&", field-value } ;
 
-Each field-value argument must include one of the supported fields, and an
-appropriate value, with the field separated from the value by the "=" character.
+Each field-value argument must be one of the supported fields, and an
+appropriate value, separated with the "=" character.
 
     field-value = ( "Tls", "=" , "true" | "false" )
                 | ( "TlsVerifyCert", "=" , "true" | "false" )
@@ -1940,6 +1924,39 @@ The table below describes the query field-values supported by this client.
 | KeepAliveInterval   | integer (default: `None`)                                             | gRPC channel option: "grpc.keepalive_ms"                                                                      |
 | KeepAliveTimeout    | integer (default: `None`)                                             | gRPC channel option: "grpc.keepalive_timeout_ms"                                                              |
 
+
+Here are some examples of EventStoreDB connection string URIs.
+
+    # Get cluster info from secure server socket localhost:2113,
+    # and use "admin" and "changeit" as username and password
+    # when making calls to EventStoreDB API methods.
+
+    esdb://admin:changeit@localhost:2113
+
+
+    # Get cluster info from insecure server socket 127.0.0.1:2114
+
+    esdb://127.0.0.1:2114?Tls=false
+
+
+    # Get cluster info from addresses in 'A' records for cluster1.example.com,
+    # and use a default deadline for making calls to EventStore API method.
+
+    esdb+discover://admin:changeit@cluster1.example.com?DefaultDeadline=5
+
+
+    # Get cluster info from either localhost:2111 or localhost:2112 or
+    # localhost:2113, and then connect to a follower node in the cluster.
+
+    esdb://admin:changeit@localhost:2111,localhost:2112,localhost:2113?NodePreference=follower
+
+
+    # Get cluster info from addresses in 'A' records for cluster1.example.com,
+    # and configure "keep alive" timeout and interval in the gRPC channel.
+
+    esdb+discover://admin:changeit@cluster1.example.com?KeepAliveInterval=10000&KeepAliveTimeout=10000
+
+
 Please note, the field names and values are case-insensitive. If fields are repeated
 in the query string, the query string will be parsed without error. However, the
 connection options used by the client will use the value of the first field. All the
@@ -1962,6 +1979,7 @@ nodes in the cluster, then the client will also raise an exception.
 
 The gRPC channel option "grpc.max_receive_message_length" is automatically
 configured to the value `17 * 1024 * 1024`. This value cannot be changed.
+
 
 
 ### Regular expression filters
