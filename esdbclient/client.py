@@ -803,8 +803,6 @@ class ESDBClient:
         """
         Lists all persistent subscriptions.
         """
-        timeout = timeout if timeout is not None else self._default_deadline
-
         return self._connection.persistent_subscriptions.list(
             timeout=timeout,
             metadata=self._call_metadata,
@@ -819,8 +817,6 @@ class ESDBClient:
         """
         Lists persistent stream subscriptions.
         """
-        timeout = timeout if timeout is not None else self._default_deadline
-
         return self._connection.persistent_subscriptions.list(
             stream_name=stream_name,
             timeout=timeout,
