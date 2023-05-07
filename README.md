@@ -218,32 +218,29 @@ For development, you can run a "secure" EventStoreDB server using the following 
 
     $ docker run -d --name eventstoredb-secure -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:21.10.9-buster-slim --dev
 
+As we will see, the client needs an EventStoreDB connection string URI as the value of
+its `uri` constructor argument. See the Notes section below for detailed information
+about EventStoreDB connection string URIs.
+
 The connection string for this "secure" EventStoreDB server would be:
 
     esdb://admin:changeit@localhost:2113
 
-As we will see, the client needs an EventStoreDB connection string as the value of
-its `uri` constructor argument.
-
-To connect to a "secure" server, you will ususally need to include a "username"
+To connect to a "secure" server, you will usually need to include a "username"
 and a "password" in the connection string, so that the server can authenticate the
 client. The default username is "admin" and the default password is "changeit".
 
-See the Notes section below for more information about EventStoreDB connection strings.
-
-To connect to a "secure" server, you will also need an SSL/TLS certificate, so that the
-client can authenticate the server. For development, you can either use the SSL/TLS
-certificate of the certificate authority used to create the server's certificate, or
-when using a single-node cluster, you can get the certificate from the server. You can
-get the server certificate with the following Python code.
-
-As we will see, when connecting to a "secure" server, the client needs an SSL/TLS
-certificate as the value of its `root_certificates` constructor argument.
+When connecting to a "secure" server, the client also needs an SSL/TLS
+certificate as the value of its `root_certificates` constructor argument. To connect
+to a "secure" server you will need an SSL/TLS certificate so that the client can
+authenticate the server. For development, you can either use the SSL/TLS certificate
+of the certificate authority used to create the server's certificate, or when using a
+single-node cluster, you can use the server certificate itself. You can get the
+server certificate with the following Python code.
 
 
 ```python
 import ssl
-
 
 server_certificate = ssl.get_server_certificate(addr=('localhost', 2113))
 ```
@@ -261,10 +258,10 @@ a "username" and a "password" in the connection string. If you do, these values 
 be ignored by the client, so that they will not be sent to the server over an
 insecure channel.
 
-Please note, the "insecure" connection string uses the query string `?Tls=false`. The
-value of this field is by default `true`. See the Notes section below for more
-information about EventStoreDB connection strings and the fields that can be used
-in the query string to specify connection options.
+Please note, the "insecure" connection string uses a query string with the field-value
+`Tls=false`. The value of this field is by default `true`. See the Notes section below
+for more information about EventStoreDB connection strings and the fields that can be
+used in the query string to specify connection options.
 
 ### Stop container
 
@@ -310,20 +307,23 @@ credentials "username" and "password" when making calls to the server.
     esdb://username:password@localhost:2113
 
 The client must be configured to create a "secure" connection to a "secure" server,
-and an "insecure" connection to an "insecure" server. By default, the client will
-attempt to create a "secure" connection. And so, when using an "insecure" server,
-the connection string must specify that the client should attempt to make an "insecure"
-connection.
+or alternatively an "insecure" connection to an "insecure" server. By default, the
+client will attempt to create a "secure" connection. And so, when using an "insecure"
+server, the connection string must specify that the client should attempt to make an
+"insecure" connection.
 
 The following connection string specifies that the client should
-attempt to creae an "insecure" connection to port 2114 on "localhost".
+attempt to create an "insecure" connection to port 2114 on "localhost".
 When connecting to an "insecure" server, the client will ignore any
-username and password information included in the connection string.
+username and password information included in the connection string,
+so that usernames and passwords are not sent over an "insecure" connection.
 
     esdb://localhost:2114?Tls=false
 
-Unless the connection string URI includes the field-value `Tls=false` in
-the query string, the `root_certificates` constructor argument is also required.
+Please note, the "insecure" connection string uses a query string with the field-value
+`Tls=false`. The value of this field is by default `true`. Unless the connection string
+URI includes the field-value `Tls=false` in the query string, the `root_certificates`
+constructor argument is also required.
 
 When connecting to a "secure" server, the `root_certificates` argument is expected to
 be a Python `str` containing PEM encoded SSL/TLS root certificates, and it is used for
@@ -345,6 +345,9 @@ client = ESDBClient(
 )
 ```
 
+See the Notes section below for detailed information about EventStoreDB connection
+strings and the fields that can be used in the query string to specify connection
+options.
 
 ## Streams
 
