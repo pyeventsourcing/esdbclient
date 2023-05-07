@@ -2695,7 +2695,12 @@ class TestAutoReconnectToNewLeader(TestCase):
         )
 
         # Give the writer a connection to a follower.
-        self.writer._connection = self.reader._connection
+        old, self.writer._connection = self.writer._connection, self.reader._connection
+
+        # - this is hopeful mitigation for the "Exception was thrown by handler."
+        #   occasionally issue in test_append_events()
+        old.close()
+        sleep(0.1)
 
     def tearDown(self) -> None:
         self.writer.close()
@@ -2714,6 +2719,14 @@ class TestAutoReconnectToNewLeader(TestCase):
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
 
+        # Todo: Occasionally getting "Exception was thrown by handler." from this. Why?
+        #   esdbclient.exceptions.ExceptionThrownByHandler: <_MultiThreadedRendezvous of
+        #   RPC that terminated with:
+        #       status = StatusCode.UNKNOWN
+        #       details = "Exception was thrown by handler."
+        #       debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"
+        #       Exception was thrown by handler.", grpc_status:2, created_time:"2023-05
+        #       -07T12:04:26.287327771+00:00"}"
         self.writer.append_events(
             stream_name, expected_position=None, events=[event1, event2]
         )
