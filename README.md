@@ -1847,15 +1847,43 @@ client.close()
 ### Connection strings
 
 The EventStoreDB connection string is a URI that conforms with one of two possible
-schemes, either the "esdb" scheme or the "esdb+discover" scheme.
+schemes, either the "esdb" scheme or the "esdb+discover" scheme. The syntax and
+semantics of the EventStoreDB URI schemes are explained below. The syntax is
+defined using [EBNF](https://en.wikipedia.org/wiki/Extended_Backus–Naur_form).
 
-The two EventStoreDB URI schemes can be defined in the following way using
-[EBNF](https://en.wikipedia.org/wiki/Extended_Backus–Naur_form).
+The "esdb" URI scheme can be defined in the following way.
 
     esdb-uri = "esdb://" , [ user-info , "@" ] , grpc-target, { "," , grpc-target } , [ "?" , query-string ] ;
 
+In the "esdb" URI scheme, after the optional user info string, there must be at least
+one gRPC target. If there are several gRPC targets, they must be separated from each
+other with the "," character. Each gRPC target should indicate an EventStoreDB gRPC
+server socket, by specifying a host and a port number separated with the ":" character.
+The host may be a hostname that can be resolved to an IP address, or an IP address.
+
+    grpc-target = ( hostname | ip-address ) , ":" , port-number ;
+
+
+The "esdb+discover" URI scheme can be defined in the following way.
+
     esdb-discover-uri = "esdb+discover://" , [ user-info, "@" ] , cluster-domainname , [ "?" , query-string ] ;
 
+In the "esdb+discover" URI scheme, after the user info string, there must be a domain
+name which should identify a cluster of EventStoreDB servers. The client will use a DNS
+server to resolve the domain name to a list of addresses of EventStoreDB servers,
+by querying for 'A' records. In this case, the port number "2113" will be used to
+construct gRPC targets from the addresses obtained from 'A' records provided by the
+DNS server. Therefore, if you want to use the "esdb+discover" URI scheme, you will
+need to configure DNS when setting up your EventStoreDB cluster.
+
+With both the "esdb" and "esdb+disocver" URI schemes, the client firstly obtains
+a list of gRPC targets: either directly from "esdb" connection strings; or indirectly
+from "esdb+discover" connection strings via DNS. This list of targets is known as the
+"gossip seed". The client will then attempt to connect to each gRPC target in turn,
+attempting to call the EventStoreDB Gossip API to obtain information about the
+EventStoreDB cluster. A member of the cluster is selected by the client, according
+to the "node preference" option (see below). The client may then need to close its
+connection and reconnect to the selected server.
 
 In both the "esdb" and "esdb+discover" schemes, the URI may include a user info string.
 If it exists in the URI, the user info string must be separated from the rest of the URI
@@ -1864,30 +1892,10 @@ separated with the ":" character.
 
     user-info = username , ":" , password ;
 
-In the "esdb" URI scheme, after the optional user info string, there must be at least
-one gRPC target. If there are several gRPC targets, they must be separated from each
-other with the "," character. Each gRPC target should indicate an EventStoreDB gRPC
-server socket, by specifying a host and a port number separated with the ":" character.
-The host may be a hostname that can be resolved to an IP address, or an IP address.
-
-    grpc-target = server-host , ":" , port-number ;
-
-    server-host = hostname | ip-address ;
-
-In the "esdb+discover" scheme, after the user info string, there must be a domain name,
-which should identify a cluster of EventStoreDB servers. The client will use a DNS
-server to resolve the domain name to a list of addresses of EventStoreDB servers,
-by querying for 'A' records. In this case, the port number "2113" will be used to
-construct gRPC targets from the addresses obtained from 'A' records provided by the
-DNS server.
-
-The client therefore obtains gRPC targets directly from "esdb" connection strings,
-or indirectly from "esdb+discover" connection strings via DNS. However the gRPC targets
-are obtained, the client will attempt to connect to each in turn, attempting to call the
-EventStoreDB Gossip API to obtain information about the EventStoreDB cluster. A member
-of the cluster is selected by the client, according to the node preference option
-(see below). The client may then need to close its connection and reconnect to the
-selected server.
+The user info is sent by the client as "call credentials" in each call to a "secure"
+server, in a "basic auth" authorization header. This authorization header is used by
+the server to authenticate the client. The authorization header is not sent to
+"insecure" servers.
 
 In both the "esdb" and "esdb+discover" schemes, the optional query string must be one
 or many field-value arguments, separated from each other with the "&" character.
@@ -1911,18 +1919,18 @@ appropriate value, separated with the "=" character.
 
 The table below describes the query field-values supported by this client.
 
-| Field               | Value                                                                 | Description                                                                                                   |
-|---------------------|-----------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
-| Tls                 | "true", "false" (default: "true")                                     | Use a secure gRPC channel.                                                                                    |
-| TlsVerifyCert       | "true", "false" (default: "true")                                     | NOT YET IMPLEMENTED                                                                                           |
-| ConnectionName      | string (default: auto-generated version-4 UUID)                       | Identifies the client to the cluster.                                                                         |
-| NodePreference      | "leader", "follower", "readonlyreplica", "random" (default: "leader") | The node state preferred by the client.                                                                       |
-| DefaultDeadline     | integer (default: `None`)                                             | The default value (in seconds) of the `timeout` argument of client "write" methods such as `append_events()`. |
-| GossipTimeout       | integer (default: 5)                                                  | The default value (in seconds) of the `timeout` argument of gossip read methods, such as `read_gossip()`.     |
-| MaxDiscoverAttempts | integer (default: 10)                                                 | The number of attempts to read gossip when connecting or reconnecting to a cluster member.                    |
-| DiscoveryInterval   | integer (default: 100)                                                | How long to wait (in milliseconds) between gossip retries.                                                    |
-| KeepAliveInterval   | integer (default: `None`)                                             | gRPC channel option: "grpc.keepalive_ms"                                                                      |
-| KeepAliveTimeout    | integer (default: `None`)                                             | gRPC channel option: "grpc.keepalive_timeout_ms"                                                              |
+| Field               | Value                                                                 | Description                                                                                                                                                       |
+|---------------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Tls                 | "true", "false" (default: "true")                                     | If "true" the client will create a "secure" gRPC channel. If "false" the client will create an "insecure" gRPC channel. This must match the server configuration. |
+| TlsVerifyCert       | "true", "false" (default: "true")                                     | NOT YET IMPLEMENTED                                                                                                                                               |
+| ConnectionName      | string (default: auto-generated version-4 UUID)                       | Sent in call metadata for every call, to identify the client to the cluster.                                                                                      |
+| NodePreference      | "leader", "follower", "readonlyreplica", "random" (default: "leader") | The node state preferred by the client. The client will select a node from the cluster info received from the Gossip API according to this preference.            |
+| DefaultDeadline     | integer (default: `None`)                                             | The default value (in seconds) of the `timeout` argument of client "write" methods such as `append_events()`.                                                     |
+| GossipTimeout       | integer (default: 5)                                                  | The default value (in seconds) of the `timeout` argument of gossip read methods, such as `read_gossip()`.                                                         |
+| MaxDiscoverAttempts | integer (default: 10)                                                 | The number of attempts to read gossip when connecting or reconnecting to a cluster member.                                                                        |
+| DiscoveryInterval   | integer (default: 100)                                                | How long to wait (in milliseconds) between gossip retries.                                                                                                        |
+| KeepAliveInterval   | integer (default: `None`)                                             | The value of the "grpc.keepalive_ms" gRPC channel option.                                                                                                         |
+| KeepAliveTimeout    | integer (default: `None`)                                             | The value of the "grpc.keepalive_timeout_ms" gRPC channel option.                                                                                                 |
 
 
 Here are some examples of EventStoreDB connection string URIs.
