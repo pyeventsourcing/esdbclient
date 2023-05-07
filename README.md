@@ -216,7 +216,7 @@ The EventStoreDB server can be run locally using the official Docker container i
 
 For development, you can run a "secure" EventStoreDB server using the following command.
 
-    $ docker run -d --name eventstoredb-secure -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:22.10.0-buster-slim --dev
+    $ docker run -d --name eventstoredb-secure -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:21.10.9-buster-slim --dev
 
 The connection string for this "secure" EventStoreDB server would be:
 
@@ -250,7 +250,7 @@ server_certificate = ssl.get_server_certificate(addr=('localhost', 2113))
 
 You can also start an "insecure" server using the following command.
 
-    $ docker run -d --name eventstoredb-insecure -it -p 2114:2113 eventstore/eventstore:22.10.0-buster-slim --insecure
+    $ docker run -d --name eventstoredb-insecure -it -p 2114:2113 eventstore/eventstore:21.10.9-buster-slim --insecure
 
 The connection string URI for this "insecure" server would be:
 
