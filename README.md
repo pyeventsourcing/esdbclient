@@ -1957,11 +1957,11 @@ Here are some examples of EventStoreDB connection string URIs.
     esdb+discover://admin:changeit@cluster1.example.com?KeepAliveInterval=10000&KeepAliveTimeout=10000
 
 
-Please note, the field names and values are case-insensitive. If fields are repeated
-in the query string, the query string will be parsed without error. However, the
-connection options used by the client will use the value of the first field. All the
-other field-values in the query string with the same field name will be ignored. Fields
-without values will also be ignored.
+Please note, the client is insensitive to the case of fields and values. If fields are
+repeated in the query string, the query string will be parsed without error. However,
+the connection options used by the client will use the value of the first field. All
+the other field-values in the query string with the same field name will be ignored.
+Fields without values will also be ignored.
 
 If the client's node preference is "leader" and the node becomes a
 "follower", the client will attempt to reconnect to the current leader when a method
@@ -1979,7 +1979,6 @@ nodes in the cluster, then the client will also raise an exception.
 
 The gRPC channel option "grpc.max_receive_message_length" is automatically
 configured to the value `17 * 1024 * 1024`. This value cannot be changed.
-
 
 
 ### Regular expression filters
