@@ -1,7 +1,90 @@
 ## For version 1.0
 
-* DONE: Rename Client's "server_cert" constructor arg to "root_certificates".
+* Update persistent subscription
+  * very similar to Create (just without filter options)
+* Nack in persistent subscription
+  * would seem to make queuing and sending batches of acks more complicated?
+  * different types of nack, maybe also need to implement "park" stuff?
+* Filtering by stream name (currently only filtering by event type)
+* Commit position vs prepare position
+  * do we really need to include this?
+* Connection field 'TlsVerify' - what to verify? and how?
+* Need to update proto files
+  * https://github.com/EventStore/EventStore/tree/master/src/Protos/Grpc
+* Doc
+  * is the README file sufficient for v1.0?
+  * ClusterMember data class attributes (there are quite a lot of them...)
+  * exception classes, describe which methods might raise which exceptions and why
+* Sample
+  * is the eventsourcing-eventstoredb sufficient for v1.0?
+  * could port Joao's banking app?
 
+* OAuth (requires commercial license)?
+  * is there anything to do for this?
+
+* Change GitHub workflow to also test with 22.10.0? seems a little buggy (see tests)?
+
+* I noticed the issue raised about "consumer too slow" - does the server close subscriptions?
+
+-----
+
+Notes 21 February 2023:
+* The append operation is actually atomic for the whole request stream.
+* The BatchAppendResp is given:
+  * when there's an error
+  * when transaction / atomic commit is done
+  * when call completed (Joao is not sure why this in there...)
+* Consider opening gRPC batch append call immediately when the client is constructed
+  and then have it pull from a queue of batch append request futures, and then
+  send batch append requests and handle the batch append responses by setting
+  the result on the future - the client method would then get a future and wait
+  for the result.
+* In persistent.proto, is ReadResp.position ever "no_position"? or is there always a commit position now (in 22.10)?
+  * still might not have when reading events from a stream if those events have been committed through a TCP/IP interface transaction
+    * also applies to regular reading...
+  * note: transaction isolation is "read-commited", and such events do have commit position when read from "all streams"
+* Need to return prepare_position (but which commit_position. response.event.commit_position or response.event.event.commit_position)
+* Why isn't the "type" of 'PersistentSubscriptionX" events a past participle?
+  * Ans: it just isn't :)
+* What other types are used for "system events" other than '$.+' and 'PersistentSubscription\\d+'? Let's say I want only the events I have appended, what exclude filter do I use?
+  * None, just those. They are all just "PersistentSubscription1" at the moment...
+* Which content-type variations are possible? which are common? which is most usual?
+  * Ans: there are just these two supported ATM, future plans for other things e.g. scheme registry
+  * Perhaps actually subclass JSONNewEvent and BytesNewEvent so that it's more explicit
+* Is there a difference between a persistent subscription that uses StreamOptions, and one that uses AllOptions with stream identifier expression that matches a single stream identifier?
+  * Ans: the stream identifier in AllOptions is a regular expression, so can match a selection of streams
+* Can use filter options with AllOptions? why not also with StreamOptions, like with catchup subscription?
+  * Ans: you can't use filter with StreamOptions :) the proto is different, because development
+* What is the 'structured' alternative for UUIDOption?
+  * Ans: it's just for carrying UUID as two smaller integers, for compatibility with languages that can't deal with larger integers
+* What is 'window'?
+  * Ans: the number of events excluded by the filter before sending matching events that are undersized for the "page / response chunk"
+    * can we set the size of the page? no
+* What is 'checkpointIntervalMultiplier'?
+  * Ans: when reading events with large gap, have to wait for DB to go through all the intermediate records, and this avoids having
+    to repeat all that if we crash and have to resume from the position point before the gap of the last event that was processed.
+  * This is the number of window sized gaps before sending a "checkpoint"
+* Support filtering on stream name (currently just event type)?
+  * no (?)
+* If you delete a stream, can write to stream, but need correct expected version
+  (can't use position 0 again) and if OCC is disabled, then the stream positions
+  will increment from the last (deleted) one
+* If you tombstone a stream, then it's gone forever, and you can never get it back
+  * Qn: is there a way of getting a deleted stream back?
+    * Ans:
+  * Qn: what happens when try to append to a tombstoned stream? not sure... try it :-)
+    * Ans: response is a "StreamDeleted" error
+* Connect to cloud service?
+  * Need TailScale VPN - a bit complicated, but doesn't have any consequence for client
+* Check "SubscriptionConfirmation confirmation" of read response?
+  * in catch-up subscription, server telling client that subscription is working (will get data soon)
+  * saves not knowing whether subscription request was successfully received or not
+* Read / modify stream metadata;
+  * Metadata is a stream, stream name is two dollars in front of the stream name
+    * does this have consequences in the database?
+      * yes, has ACLs, "max-age", "max-count", "truncate before"
+  * To modify, read last, parse as JSON, make changes, serialise as JSON, then append new event
+  * See https://developers.eventstore.com/server/v22.10/streams.html#metadata-and-reserved-names
 * Cluster support & connectivity (different connections strings + node pref);
   * Support the esdb:// and esdb+discover:// URLs
     * which parameters are there to support?
@@ -39,81 +122,9 @@
           * because otherwise it might be too small
           * also should never write events this big - maybe enforce this?
 
-    * which parameters should we support?
-
-* Read / modify stream metadata;
-  * Metadata is a stream, stream name is two dollars in front of the stream name
-    * does this have consequences in the database?
-      * yes, has ACLs, "max-age", "max-count", "truncate before"
-  * To modify, read last, parse as JSON, make changes, serialise as JSON, then append new event
-  * See https://developers.eventstore.com/server/v22.10/streams.html#metadata-and-reserved-names
-
-* Doc & sample.
-
-* Check "SubscriptionConfirmation confirmation" of read response?
-  * in catch-up subscription, server telling client that subscription is working (will get data soon)
-  * saves not knowing whether or not subscription request was successfully received
-
-* OAuth (requires commercial license)?
-* Connect to cloud service? TailScale VPN... a bit complicated
-
-* Delete stream;
-* Tombstone stream?
-
-    * If you delete a stream, can write to stream, but need correct expected version
-      (can't use position 0 again) and if OCC is disabled, then the stream positions
-      will increment from the last (deleted) one
-    * If you tombstone a stream, then it's gone forever, and you can never get it back
-      * Qn: is there a way of getting a deleted stream back?
-        * Ans:
-      * Qn: what happens when try to append to a tombstoned stream? not sure... try it :-)
-        * Ans: response is a "StreamDeleted" error
-
------
-
-Notes 21 February 2023:
-* The append operation is actually atomic for the whole request stream.
-* The BatchAppendResp is given:
-  * when there's an error
-  * when transaction / atomic commit is done
-  * when call completed (Joao is not sure why this in there...)
-* Need to update proto files
-  * https://github.com/EventStore/EventStore/tree/master/src/Protos/Grpc
-* Consider opening gRPC batch append call immediately when the client is constructed
-  and then have it pull from a queue of batch append request futures, and then
-  send batch append requests and handle the batch append responses by setting
-  the result on the future - the client method would then get a future and wait
-  for the result.
-* In persistent.proto, is ReadResp.position ever "no_position"? or is there always a commit position now (in 22.10)?
-  * still might not have when reading events from a stream if those events have been committed through a TCP/IP interface transaction
-    * also applies to regular reading...
-  * note: transaction isolation is "read-commited", and such events do have commit position when read from "all streams"
-* Need to return prepare_position (but which commit_position. response.event.commit_position or response.event.event.commit_position)
-* Why isn't the "type" of 'PersistentSubscriptionX" events a past participle?
-  * Ans: it just isn't :)
-* What other types are used for "system events" other than '$.+' and 'PersistentSubscription\\d+'? Let's say I want only the events I have appended, what exclude filter do I use?
-  * None, just those. They are all just "PersistentSubscription1" at the moment...
-* Which content-type variations are possible? which are common? which is most usual?
-  * Ans: there are just these two supported ATM, future plans for other things e.g. scheme registry
-  * Perhaps actually subclass JSONNewEvent and BytesNewEvent so that it's more explicit
-* Is there a difference between a persistent subscription that uses StreamOptions, and one that uses AllOptions with stream identifier expression that matches a single stream identifier?
-  * Ans: the stream identifier in AllOptions is a regular expression, so can match a selection of streams
-* Can use filter options with AllOptions? why not also with StreamOptions, like with catchup subscription?
-  * Ans: you can't use filter with StreamOptions :) the proto is different, because development
-* What is the 'structured' alternative for UUIDOption?
-  * Ans: it's just for carrying UUID as two smaller integers, for compatibility with languages that can't deal with larger integers
-* What is 'window'?
-  * Ans: the number of events excluded by the filter before sending matching events that are undersized for the "page / response chunk"
-    * can we set the size of the page? no
-* What is 'checkpointIntervalMultiplier'?
-  * Ans: when reading events with large gap, have to wait for DB to go through all the intermediate records, and this avoids having
-    to repeat all that if we crash and have to resume from the position point before the gap of the last event that was processed.
-  * This is the number of window sized gaps before sending a "checkpoint"
-* Support filtering on stream name (currently just event type)?
-  * no (?)
 
 
 ----
 
-Notes from 14 February 2023:
+Notes from 14 April 2023:
 * mindsdb.com
