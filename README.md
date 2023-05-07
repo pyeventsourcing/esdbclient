@@ -302,15 +302,15 @@ section below.
 
 For example, the following connection string specifies that the client should
 attempt to create a "secure" connection to port 2113 on "localhost", and use the
-credentials "username" and "password" when making calls to the server.
+client credentials "username" and "password" when making calls to the server.
 
-    esdb://username:password@localhost:2113
+    esdb://username:password@localhost:2113?Tls=true
 
 The client must be configured to create a "secure" connection to a "secure" server,
 or alternatively an "insecure" connection to an "insecure" server. By default, the
-client will attempt to create a "secure" connection. And so, when using an "insecure"
-server, the connection string must specify that the client should attempt to make an
-"insecure" connection.
+client will attempt to create a "secure" connection. And so, when connecting to an
+"insecure" server, the connection string must specify that the client should attempt
+to make an "insecure" connection.
 
 The following connection string specifies that the client should
 attempt to create an "insecure" connection to port 2114 on "localhost".
@@ -326,15 +326,16 @@ URI includes the field-value `Tls=false` in the query string, the `root_certific
 constructor argument is also required.
 
 When connecting to a "secure" server, the `root_certificates` argument is expected to
-be a Python `str` containing PEM encoded SSL/TLS root certificates, and it is used for
-authenticating the server to the client. This value is passed directly to
-`grpc.ssl_channel_credentials()`. It is commonly the certificate of the certificate
-authority that was responsible for generating the SSL/TLS certificate used by the
-EventStoreDB server. But, alternatively for development, you can use the server's
-certificate itself.
+be a Python `str` containing PEM encoded SSL/TLS root certificates. This value is
+passed directly to `grpc.ssl_channel_credentials()`. It is used for authenticating the
+server to the client. It is commonly the certificate of the certificate authority that
+was responsible for generating the SSL/TLS certificate used by the EventStoreDB server.
+But, alternatively for development, you can use the server's certificate itself.
 
 In the example below, the constructor argument values are taken from the operating
-system environment. This is a typical arrangement in a production environment.
+system environment. This is a typical arrangement in a production environment. It is
+done this way here so that the code in this documentation can be tested with both
+a "secure" and an "insecure" server.
 
 ```python
 import os
