@@ -301,7 +301,7 @@ syntax and semantics of EventStoreDB connection strings are explained in the Not
 section below.
 
 For example, the following connection string specifies that the client should
-attempt to creae a "secure" connection to port 2113 on "localhost", and use the
+attempt to create a "secure" connection to port 2113 on "localhost", and use the
 credentials "username" and "password" when making calls to the server.
 
     esdb://username:password@localhost:2113
