@@ -48,7 +48,7 @@ class SubscriptionNotFound(ESDBClientException):
     """
 
 
-class ExpectedPositionError(ESDBClientException):
+class WrongExpectedPosition(ESDBClientException):
     """
     Raised when expected position does not match the
     actual position of the last event in a stream.
@@ -61,9 +61,13 @@ class AccessDeniedError(ESDBClientException):
     """
 
 
-class StreamDeletedError(ESDBClientException):
+class StreamIsDeleted(ESDBClientException):
     """
-    Raised when appending to a deleted stream.
+    Raised when a deleted stream is encountered, for example when
+    appending to a stream that has been deleted, or when reading
+    from a tombstoned stream (reading from a "soft deleted" stream
+    causes a StreamNotFound exception), or when deleting or tombstoning
+    a stream that has been deleeted or tomebstoned.
     """
 
 

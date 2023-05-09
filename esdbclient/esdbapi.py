@@ -41,17 +41,17 @@ from esdbclient.exceptions import (
     DeadlineExceeded,
     ESDBClientException,
     ExceptionThrownByHandler,
-    ExpectedPositionError,
     GrpcError,
     InvalidTransactionError,
     MaximumAppendSizeExceededError,
     NodeIsNotLeader,
     ServiceUnavailable,
-    StreamDeletedError,
+    StreamIsDeleted,
     StreamNotFound,
     SubscriptionNotFound,
     TimeoutError,
     UnknownError,
+    WrongExpectedPosition,
 )
 from esdbclient.protos.Grpc import (
     cluster_pb2,
@@ -397,12 +397,12 @@ class StreamsService(ESDBService):
                 wev = response.wrong_expected_version
                 cro_oneof = wev.WhichOneof("current_revision_option")
                 if cro_oneof == "current_revision":
-                    raise ExpectedPositionError(
+                    raise WrongExpectedPosition(
                         f"Current position is {wev.current_revision}"
                     )
                 else:
                     assert cro_oneof == "current_no_stream", cro_oneof
-                    raise ExpectedPositionError(
+                    raise WrongExpectedPosition(
                         f"Stream {stream_name!r} does not exist"
                     )
 
@@ -525,7 +525,7 @@ class StreamsService(ESDBService):
                 else:
                     assert csro_oneof == "current_stream_revision"
                     psn = wrong_version.current_stream_revision
-                    result = ExpectedPositionError(f"Current position is {psn}")
+                    result = WrongExpectedPosition(f"Current position is {psn}")
 
             # Todo: Write tests to cover all of this:
             elif error_details.Is(
@@ -537,7 +537,7 @@ class StreamsService(ESDBService):
                 error_details.Unpack(stream_deleted)
                 # Todo: Ask ESDB team if this is ever different from request value.
                 # stream_name = stream_deleted.stream_identifier.stream_name
-                result = StreamDeletedError(f"Stream {stream_name !r} is deleted")
+                result = StreamIsDeleted(f"Stream {stream_name !r} is deleted")
             elif error_details.Is(shared_pb2.Timeout.DESCRIPTOR):  # pragma: no cover
                 result = TimeoutError()
             elif error_details.Is(shared_pb2.Unknown.DESCRIPTOR):  # pragma: no cover
@@ -626,9 +626,19 @@ class StreamsService(ESDBService):
                 credentials=credentials,
             )
         except RpcError as e:
-            # Todo: Raise WrongExceptedVersion if expected_position is wrong...
-            raise handle_rpc_error(e) from e
-
+            if e.code() == StatusCode.FAILED_PRECONDITION:
+                details = e.details() or ""
+                if "WrongExpectedVersion" in details:
+                    if "Actual version: -1" in details:
+                        raise StreamNotFound() from e
+                    else:
+                        raise WrongExpectedPosition() from e
+                elif "is deleted" in details:
+                    raise StreamIsDeleted() from e
+                else:  # pragma: no cover
+                    raise handle_rpc_error(e) from e
+            else:
+                raise handle_rpc_error(e) from e
         else:
             assert isinstance(delete_resp, streams_pb2.DeleteResp)
             # position_option_oneof = delete_resp.WhichOneof("position_option")
@@ -672,9 +682,19 @@ class StreamsService(ESDBService):
                 credentials=credentials,
             )
         except RpcError as e:
-            # Todo: Raise WrongExceptedVersion if expected_position is wrong...
-            raise handle_rpc_error(e) from e
-
+            if e.code() == StatusCode.FAILED_PRECONDITION:
+                details = e.details() or ""
+                if "WrongExpectedVersion" in details:
+                    if "Actual version: -1" in details:
+                        raise StreamNotFound() from e
+                    else:
+                        raise WrongExpectedPosition() from e
+                elif "is deleted" in details:
+                    raise StreamIsDeleted() from e
+                else:  # pragma: no cover
+                    raise handle_rpc_error(e) from e
+            else:
+                raise handle_rpc_error(e) from e
         else:
             assert isinstance(tombstone_resp, streams_pb2.TombstoneResp)
             # position_option_oneof = tombstone_resp.WhichOneof("position_option")
@@ -810,7 +830,14 @@ class ReadResponse(Iterable[RecordedEvent]):
         try:
             read_resp = next(self.read_resp_iter)
         except RpcError as e:
-            raise handle_rpc_error(e) from e
+            if e.code() == StatusCode.FAILED_PRECONDITION:
+                details = e.details() or ""
+                if self.stream_name and details and "is deleted" in details:
+                    raise StreamIsDeleted() from e
+                else:  # pragma: no cover
+                    raise handle_rpc_error(e) from e
+            else:
+                raise handle_rpc_error(e) from e
         assert isinstance(read_resp, streams_pb2.ReadResp)
         return read_resp
 

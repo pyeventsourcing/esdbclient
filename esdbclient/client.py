@@ -54,6 +54,7 @@ from esdbclient.exceptions import (
     LeaderNotFound,
     NodeIsNotLeader,
     ReadOnlyReplicaNotFound,
+    ServiceUnavailable,
     StreamNotFound,
 )
 
@@ -69,39 +70,41 @@ _TCallable = TypeVar("_TCallable", bound=Callable[..., Any])
 
 def autoreconnect(f: _TCallable) -> _TCallable:
     @wraps(f)
-    def wrapper(self, *args, **kwargs):  # type: ignore
-        assert isinstance(self, ESDBClient)
+    def autoreconnect_decorator(client: "ESDBClient", *args: Any, **kwargs: Any) -> Any:
         try:
-            return f(self, *args, **kwargs)
+            return f(client, *args, **kwargs)
 
         except NodeIsNotLeader:
-            if self.connection_spec.options.NodePreference == NODE_PREFERENCE_LEADER:
-                self.reconnect()
-                return f(self, *args, **kwargs)
+            if client.connection_spec.options.NodePreference == NODE_PREFERENCE_LEADER:
+                client.reconnect()
+                return f(client, *args, **kwargs)
             else:
                 raise
 
         except ValueError as e:
             if "Channel closed!" in str(e):
-                self.reconnect()
-                return f(self, *args, **kwargs)
+                client.reconnect()
+                return f(client, *args, **kwargs)
             else:  # pragma: no cover
                 raise
 
-    return cast(_TCallable, wrapper)
+        except ServiceUnavailable:
+            client.reconnect()
+            return f(client, *args, **kwargs)
+
+    return cast(_TCallable, autoreconnect_decorator)
 
 
 def retrygrpc(f: _TCallable) -> _TCallable:
     @wraps(f)
-    def wrapper(self, *args, **kwargs):  # type: ignore
-        assert isinstance(self, ESDBClient)
+    def retrygrpc_decorator(*args: Any, **kwargs: Any) -> Any:
         try:
-            return f(self, *args, **kwargs)
+            return f(*args, **kwargs)
         except GrpcError:
             sleep(0.1)
-            return f(self, *args, **kwargs)
+            return f(*args, **kwargs)
 
-    return cast(_TCallable, wrapper)
+    return cast(_TCallable, retrygrpc_decorator)
 
 
 class ESDBClient:
@@ -386,6 +389,7 @@ class ESDBClient:
         expected_position: Optional[int],
         timeout: Optional[float] = None,
     ) -> None:
+        # Todo: Reconsider using expected_position=None to indicate "stream exists"?
         timeout = timeout if timeout is not None else self._default_deadline
         self._connection.streams.delete(
             stream_name=stream_name,
@@ -482,6 +486,9 @@ class ESDBClient:
                 )
             )[0]
         except StreamNotFound:
+            # None is the correct expected position when appending both to a stream that
+            # never existed, and for appending to a stream that has been deleted (in
+            # this case the old "stream position" int is also correct, but None works).
             return None
         else:
             return last_event.stream_position
