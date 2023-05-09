@@ -66,6 +66,10 @@ from esdbclient.protos.Grpc import (
     streams_pb2_grpc,
 )
 
+ConsumerStrategy = Literal[
+    "DispatchToSingle", "RoundRobin", "Pinned", "PinnedByCorrelation"
+]
+
 
 class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
     def __init__(self, username: str, password: str):
@@ -955,8 +959,6 @@ class SubscriptionReadRequest:
         assert action in ["unknown", "park", "retry", "skip", "stop"]
         self.queue.put((event_id, action))
 
-    # Todo: Implement nack().
-
 
 class SubscriptionReadResponse:
     def __init__(self, resp: Iterable[persistent_pb2.ReadResp]):
@@ -1044,8 +1046,7 @@ class PersistentSubscriptionsService(ESDBService):
         *,
         from_end: bool = False,
         commit_position: Optional[int] = None,
-        # Todo: Expose alternative consumer strategies.
-        consumer_strategy: str = "DispatchToSingle",
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
@@ -1065,7 +1066,7 @@ class PersistentSubscriptionsService(ESDBService):
         stream_name: Optional[str] = None,
         from_end: bool = False,
         stream_position: Optional[int] = None,
-        consumer_strategy: str = "DispatchToSingle",
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
@@ -1081,11 +1082,10 @@ class PersistentSubscriptionsService(ESDBService):
         from_end: bool = False,
         commit_position: Optional[int] = None,
         stream_position: Optional[int] = None,
-        # Todo: Expose alternative consumer strategies.
-        consumer_strategy: str = "DispatchToSingle",
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,

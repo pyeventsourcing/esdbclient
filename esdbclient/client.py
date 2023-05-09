@@ -40,6 +40,7 @@ from esdbclient.esdbapi import (
     BasicAuthCallCredentials,
     BatchAppendRequest,
     ClusterMember,
+    ConsumerStrategy,
     SubscriptionInfo,
     SubscriptionReadRequest,
     SubscriptionReadResponse,
@@ -621,6 +622,7 @@ class ESDBClient:
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -636,6 +638,7 @@ class ESDBClient:
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -651,6 +654,7 @@ class ESDBClient:
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -667,6 +671,7 @@ class ESDBClient:
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -678,6 +683,7 @@ class ESDBClient:
             group_name=group_name,
             from_end=from_end,
             commit_position=commit_position,
+            consumer_strategy=consumer_strategy,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
@@ -692,6 +698,7 @@ class ESDBClient:
         group_name: str,
         stream_name: str,
         *,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -705,6 +712,7 @@ class ESDBClient:
         stream_name: str,
         *,
         stream_position: int,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -718,6 +726,7 @@ class ESDBClient:
         stream_name: str,
         *,
         from_end: bool = True,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -732,6 +741,7 @@ class ESDBClient:
         stream_name: str,
         from_end: bool = False,
         stream_position: Optional[int] = None,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -744,6 +754,7 @@ class ESDBClient:
             stream_name=stream_name,
             from_end=from_end,
             stream_position=stream_position,
+            consumer_strategy=consumer_strategy,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=self._call_credentials,

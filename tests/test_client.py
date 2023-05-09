@@ -1330,6 +1330,7 @@ class TestESDBClient(TestCase):
         #     self.client.append_events(stream_name, expected_position=None, events=[event3])
         # self.client.append_events(stream_name, expected_position=1, events=[event3])
 
+        sleep(0.1)  # sometimes we need to wait a little bit for EventStoreDB
         self.assertEqual(2, self.client.get_stream_position(stream_name))
         self.client.append_events(stream_name, expected_position=2, events=[event4])
 
@@ -2462,6 +2463,52 @@ class TestESDBClient(TestCase):
             elif event.data == event3.data:
                 self.fail("Expected a 'system' event and a 'PersistentConfig' event")
 
+    def test_create_and_read_subscription_consumer_strategy_round_robin(self) -> None:
+        self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name1 = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription(
+            group_name=group_name1, consumer_strategy="RoundRobin"
+        )
+
+        # Append three events.
+        stream_name1 = str(uuid4())
+
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        self.client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Multiple consumers.
+        read_req1, read_resp1 = self.client.read_subscription(group_name=group_name1)
+        read_req2, read_resp2 = self.client.read_subscription(group_name=group_name1)
+
+        events1 = []
+        events2 = []
+        while True:
+            event = next(read_resp2)
+            read_req2.ack(event.id)
+            events2.append(event)
+            if event.id == event3.id:
+                break
+            event = next(read_resp1)
+            read_req1.ack(event.id)
+            events1.append(event)
+            if event.id == event3.id:
+                break
+
+        len1 = len(events1)
+        self.assertTrue(len1)
+        len2 = len(events2)
+        self.assertTrue(len2)
+
+        # Check the consumers have received an equal number of events.
+        self.assertLess((len1 - len2) ** 2, 2)
+
     def test_get_subscription_info(self) -> None:
         self.construct_esdb_client()
 
@@ -2739,6 +2786,61 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[1].id, event11.id)
         self.assertEqual(events[2].id, event12.id)
 
+    def test_create_and_read_stream_subscription_consumer_strategy_round_robin(
+        self,
+    ) -> None:
+        self.construct_esdb_client()
+
+        stream_name1 = str(uuid4())
+
+        # Create persistent subscription.
+        group_name1 = f"my-subscription-{uuid4().hex}"
+        self.client.create_stream_subscription(
+            group_name=group_name1,
+            stream_name=stream_name1,
+            consumer_strategy="RoundRobin",
+        )
+
+        # Append three events.
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event4 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+        self.client.append_events(
+            stream_name1,
+            expected_position=None,
+            events=[event1, event2, event3, event4],
+        )
+
+        # Multiple consumers.
+        read_req1, read_resp1 = self.client.read_stream_subscription(
+            group_name=group_name1, stream_name=stream_name1
+        )
+        read_req2, read_resp2 = self.client.read_stream_subscription(
+            group_name=group_name1, stream_name=stream_name1
+        )
+
+        events1 = []
+        events2 = []
+        while True:
+            event = next(read_resp1)
+            read_req1.ack(event.id)
+            events1.append(event)
+            event = next(read_resp2)
+            read_req2.ack(event.id)
+            events2.append(event)
+            event_ids = {e.id for e in events1 + events2}
+            if event4.id in event_ids:
+                break
+
+        # Check events have been distributed evenly.
+        self.assertEqual(len(events1), 2)
+        # self.assertEqual(events1[0].id, event1.id)
+        # self.assertEqual(events1[1].id, event2.id)
+        self.assertEqual(len(events2), 2)
+        # self.assertEqual(events2[0].id, event3.id)
+        # self.assertEqual(events2[1].id, event4.id)
+
     def test_get_stream_subscription_info(self) -> None:
         self.construct_esdb_client()
 
@@ -2927,6 +3029,7 @@ class TestESDBClient(TestCase):
 
     def test_read_gossip(self) -> None:
         self.construct_esdb_client()
+        sleep(0.1)  # sometimes we need to wait a little bit for EventStoreDB
         cluster_info = self.client.read_gossip()
         if self.ESDB_CLUSTER_SIZE == 1:
             self.assertEqual(len(cluster_info), 1)
@@ -2950,6 +3053,7 @@ class TestESDBClient(TestCase):
     def test_read_cluster_gossip(self) -> None:
         self.construct_esdb_client()
         cluster_info = self.client.read_cluster_gossip()
+        sleep(0.1)  # sometimes we need to wait a little bit for EventStoreDB
         if self.ESDB_CLUSTER_SIZE == 1:
             self.assertEqual(len(cluster_info), 1)
             self.assertEqual(cluster_info[0].state, NODE_STATE_LEADER)

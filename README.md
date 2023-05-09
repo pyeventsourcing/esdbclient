@@ -375,7 +375,7 @@ Three arguments are required, `stream_name`, `expected_position`
 and `events`.
 
 The `stream_name` argument is required, and is expected to be a Python
-`str` object that uniquely identifies the stream in the database.
+`str` that uniquely identifies the stream in the database.
 
 The `expected_position` argument is required, is expected to be: `None`
 if events are being written to a new stream, and otherwise an Python `int`
@@ -1393,17 +1393,18 @@ The method `create_subscription()` can be used to create a
 This method takes a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
 
-This method also takes six optional arguments, `from_end`, `commit_position`,
-`filter_exclude`, `filter_include`, `filter_by_stream_name`, and `timeout`.
+This method also takes seven optional arguments, `from_end`, `commit_position`,
+`filter_exclude`, `filter_include`, `filter_by_stream_name`, `consumer_strategy`,
+and `timeout`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
 was created.
 
 Alternatively, the optional `commit_position` argument can be used to specify a commit
-position from which the group of consumers of the subscription should receive events.
-Please note, the recorded event at the specified commit position might be included in
-the recorded events received by the group of consumers.
+position from which commit position the group of consumers of the subscription should
+receive events. Please note, the recorded event at the specified commit position might
+be included in the recorded events received by the group of consumers.
 
 If neither `from_end` or `commit_position` are specified, the group of consumers
 of the subscription will receive all recorded events.
@@ -1420,9 +1421,14 @@ that match recorded events that should be included. By default, this argument
 is an empty tuple. If this argument is set to a non-empty sequence, the
 `filter_exclude` argument is ignored.
 
-The argument `filter_by_stream_name` optional is a boolean value that indicates whether
+The optional `filter_by_stream_name` argument is a boolean value that indicates whether
 the filter will apply to event types or stream names. By default, this value is `False`
 and so the filtering will apply to the event type strings of recorded events.
+
+The optional `consumer_strategy` argument is a Python `str` that defines
+the consumer strategy for this persistent subscription. The value of this argument
+can be `'DispatchToSingle'`, `'RoundRobin'`, `'Pinned'`, or `'PinnedByCorrelation'`. The
+default value is `'DispatchToSingle'`.
 
 The optional `timeout` argument is a Python `float` which sets a
 deadline for the completion of the gRPC operation.
@@ -1430,10 +1436,6 @@ deadline for the completion of the gRPC operation.
 The method `create_subscription()` does not return a value, because
 recorded events are obtained by the group of consumers of the subscription
 using the `read_subscription()` method.
-
-*Please note, in this version of this client the "consumer strategy" is
-set to "DispatchToSingle". Support for choosing other consumer strategies
-supported by EventStoreDB will in future be supported in this client.*
 
 In the example below, a persistent subscription is created.
 
@@ -1662,15 +1664,23 @@ from this subscription. The `stream_name` argument specifies which stream
 the subscription will follow. The values of both these arguments are expected
 to be Python `str` objects.
 
-This method has an optional `stream_position` argument, which specifies a
-stream position from which to subscribe. The recorded event at this stream
+The method also takes four optional arguments, `stream_position`, `from_end`,
+`consumer_strategy`, and `timeout`.
+
+This optional `stream_position` argument specifies a stream position from
+which to subscribe. The recorded event at this stream
 position will be received when reading the subscription.
 
-This method has an optional `from_end` argument, which is a Python `bool`.
+This optional `from_end` argument is a Python `bool`.
 By default, the value of this argument is False. If this argument is set
 to a True value, reading from the subscription will receive only events
 recorded after the subscription was created. That is, it is not inclusive
 of the current stream position.
+
+The optional `consumer_strategy` argument is a Python `str` that defines
+the consumer strategy for this persistent subscription. The value of this argument
+can be `'DispatchToSingle'`, `'RoundRobin'`, `'Pinned'`, or `'PinnedByCorrelation'`. The
+default value is `'DispatchToSingle'`.
 
 This method also takes an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
@@ -2064,7 +2074,7 @@ the value of the `filter_exclude` argument when calling `read_all_events()`,
 
 The `NewEvent` class is used when appending events.
 
-The required argument `type` is a Python `str` object, used to indicate the type of
+The required argument `type` is a Python `str`, used to indicate the type of
 the event that will be recorded.
 
 The required argument `data` is a Python `bytes` object, used to indicate the data of
@@ -2074,7 +2084,7 @@ The optional argument `metadata` is a Python `bytes` object, used to indicate an
 metadata of the event that will be recorded. The default value is an empty `bytes`
 object.
 
-The optional argument `content_type` is a Python `str` object, used to indicate the
+The optional argument `content_type` is a Python `str`, used to indicate the
 type of the data that will be recorded for this event. The default value is
 `application/json`, which indicates that the `data` was serialised using JSON.
 An alternative value for this argument is `application/octet-stream`.
@@ -2112,7 +2122,7 @@ assert new_event2.id == event_id
 
 The `RecordedEvent` class is used when reading events.
 
-The attribute `type` is a Python `str` object, used to indicate the type of event
+The attribute `type` is a Python `str`, used to indicate the type of event
 that was recorded.
 
 The attribute `data` is a Python `bytes` object, used to indicate the data of the
@@ -2121,7 +2131,7 @@ event that was recorded.
 The attribute `metadata` is a Python `bytes` object, used to indicate the metadata of
 the event that was recorded.
 
-The attribute `content_type` is a Python `str` object, used to indicate the type of
+The attribute `content_type` is a Python `str`, used to indicate the type of
 data that was recorded for this event (usually `application/json` to indicate that
 this data can be parsed as JSON, but alternatively `application/octet-stream` to
 indicate that it is something else).
@@ -2135,7 +2145,7 @@ when reading recorded events from a stream. Recorded events will however have th
 values set when reading recorded events from `read_all_events()` and from both
 catch-up and persistent subscriptions.
 
-The attribute `stream_name` is a Python `str` object, used to indicate the name of the
+The attribute `stream_name` is a Python `str`, used to indicate the name of the
 stream in which the event was recorded.
 
 The attribute `stream_position` is a Python `int`, used to indicate the position in the
