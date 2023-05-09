@@ -192,6 +192,7 @@ class StreamsService(ESDBService):
         backwards: bool = False,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -208,6 +209,7 @@ class StreamsService(ESDBService):
         commit_position: Optional[int] = None,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
         subscribe: Literal[True],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -226,6 +228,7 @@ class StreamsService(ESDBService):
         backwards: bool = False,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
         limit: int = sys.maxsize,
         subscribe: bool = False,
         timeout: Optional[float] = None,
@@ -246,6 +249,7 @@ class StreamsService(ESDBService):
             backwards=backwards,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
+            filter_by_stream_name=filter_by_stream_name,
             limit=limit,
             subscribe=subscribe,
         )
@@ -270,6 +274,7 @@ class StreamsService(ESDBService):
         backwards: bool = False,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
         limit: int = sys.maxsize,
         subscribe: bool = False,
     ) -> streams_pb2.ReadReq:
@@ -334,21 +339,40 @@ class StreamsService(ESDBService):
         # Decide 'filter_option'.
         if filter_exclude or filter_include:
             if filter_include:
+                filter_include = (
+                    [filter_include]
+                    if isinstance(filter_include, str)
+                    else filter_include
+                )
                 filter_regex = "^" + "|".join(filter_include) + "$"
             else:
+                filter_exclude = (
+                    [filter_exclude]
+                    if isinstance(filter_exclude, str)
+                    else filter_exclude
+                )
                 filter_regex = "^(?!(" + "|".join(filter_exclude) + ")).*$"
 
-            filter = streams_pb2.ReadReq.Options.FilterOptions(
-                event_type=streams_pb2.ReadReq.Options.FilterOptions.Expression(
-                    regex=filter_regex
-                ),
+            filter_expression = streams_pb2.ReadReq.Options.FilterOptions.Expression(
+                regex=filter_regex
+            )
+            if filter_by_stream_name:
+                stream_identifier_filter = filter_expression
+                event_type_filter = None
+            else:
+                stream_identifier_filter = None
+                event_type_filter = filter_expression
+
+            filter_options = streams_pb2.ReadReq.Options.FilterOptions(
+                stream_identifier=stream_identifier_filter,
+                event_type=event_type_filter,
                 # Todo: What does 'window' mean?
                 # max=shared_pb2.Empty(),
                 count=shared_pb2.Empty(),
                 # Todo: What does 'checkpointIntervalMultiplier' mean?
                 checkpointIntervalMultiplier=5,
             )
-            options.filter.CopyFrom(filter)
+            options.filter.CopyFrom(filter_options)
         else:
             options.no_filter.CopyFrom(shared_pb2.Empty())
 
@@ -1024,6 +1048,7 @@ class PersistentSubscriptionsService(ESDBService):
         consumer_strategy: str = "DispatchToSingle",
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
@@ -1060,6 +1085,7 @@ class PersistentSubscriptionsService(ESDBService):
         consumer_strategy: str = "DispatchToSingle",
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
@@ -1122,14 +1148,36 @@ class PersistentSubscriptionsService(ESDBService):
             # Decide 'filter_option'.
             if filter_exclude or filter_include:
                 if filter_include:
+                    filter_include = (
+                        [filter_include]
+                        if isinstance(filter_include, str)
+                        else filter_include
+                    )
                     filter_regex = "^" + "|".join(filter_include) + "$"
                 else:
+                    filter_exclude = (
+                        [filter_exclude]
+                        if isinstance(filter_exclude, str)
+                        else filter_exclude
+                    )
                     filter_regex = "^(?!(" + "|".join(filter_exclude) + ")).*$"
 
-                filter = persistent_pb2.CreateReq.AllOptions.FilterOptions(
-                    event_type=persistent_pb2.CreateReq.AllOptions.FilterOptions.Expression(
+                filter_expression = (
+                    persistent_pb2.CreateReq.AllOptions.FilterOptions.Expression(
                         regex=filter_regex
-                    ),
+                    )
+                )
+
+                if filter_by_stream_name:
+                    stream_identifier_filter = filter_expression
+                    event_type_filter = None
+                else:
+                    stream_identifier_filter = None
+                    event_type_filter = filter_expression
+
+                filter = persistent_pb2.CreateReq.AllOptions.FilterOptions(
+                    stream_identifier=stream_identifier_filter,
+                    event_type=event_type_filter,
                     # Todo: What does 'window' mean?
                     # max=shared_pb2.Empty(),
                     count=shared_pb2.Empty(),

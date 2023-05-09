@@ -3,7 +3,7 @@
 * Update persistent subscription
   * very similar to Create (just without filter options)
 * Replay parked events in persistent subscription
-* Filtering by stream name (currently only filtering by event type)
+* Other consumer strategies in persistent subscription
 * Commit position vs prepare position
   * do we really need to include this?
 * Connection field 'TlsVerifyCert' - what to verify? and how?

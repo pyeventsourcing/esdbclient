@@ -447,6 +447,7 @@ class ESDBClient:
         backwards: bool = False,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
     ) -> Iterable[RecordedEvent]:
@@ -458,6 +459,7 @@ class ESDBClient:
             backwards=backwards,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
+            filter_by_stream_name=filter_by_stream_name,
             limit=limit,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -570,6 +572,7 @@ class ESDBClient:
         commit_position: Optional[int] = None,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
         timeout: Optional[float] = None,
     ) -> Iterator[RecordedEvent]:
         """
@@ -580,6 +583,7 @@ class ESDBClient:
             commit_position=commit_position,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
+            filter_by_stream_name=filter_by_stream_name,
             subscribe=True,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -616,6 +620,7 @@ class ESDBClient:
         *,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -630,6 +635,7 @@ class ESDBClient:
         commit_position: int,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -644,6 +650,7 @@ class ESDBClient:
         from_end: bool = True,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -659,6 +666,7 @@ class ESDBClient:
         commit_position: Optional[int] = None,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -672,6 +680,7 @@ class ESDBClient:
             commit_position=commit_position,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
+            filter_by_stream_name=filter_by_stream_name,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=self._call_credentials,

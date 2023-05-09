@@ -585,19 +585,19 @@ indicate the position in the stream from which to start reading. This argument i
 `None` by default, which means the stream will be read either from the start of the
 stream (the default behaviour), or from the end of the stream if `backwards` is
 `True` (see below). When reading a stream from a specific position in the stream, the
-recorded event at that position WILL be included, both when reading forwards
+recorded event at that position will be included, both when reading forwards
 from that position, and when reading backwards from that position.
 
-The optional argument `backwards` is a boolean, by default `False`, which means the
+The optional `backwards` argument is a boolean, by default `False`, which means the
 stream will be read forwards by default, so that events are returned in the
 order they were appended, If `backwards` is `True`, the stream will be read
 backwards, so that events are returned in reverse order.
 
-The optional argument `limit` is an integer which limits the number of events that will
+The optional `limit` argument is an integer which limits the number of events that will
 be returned. The default value is `sys.maxint`.
 
-The optional argument `timeout` is a Python `float` which sets a deadline for the completion of
-the gRPC operation.
+The optional `timeout` argument is a Python `float` which sets a deadline for
+the completion of the gRPC operation.
 
 This method returns a Python iterable object that yields `RecordedEvent` objects.
 These recorded event objects are instances of the `RecordedEvent` class (see below)
@@ -739,36 +739,42 @@ in the database in the order they were recorded. An iterable object of
 recorded events is returned. This iterable object will stop when it has
 yielded the last recorded event.
 
-This method supports six optional arguments, `commit_position`, `backwards`,
-`filter_exclude`, `filter_include`, `limit`, and `timeout`.
+This method supports seven optional arguments, `commit_position`, `backwards`,
+`filter_exclude`, `filter_include`, `filter_by_stream_name`, `limit`, and `timeout`.
 
-The optional argument `commit_position` is an optional integer that can be used to
+The optional `commit_position` argument is an optional integer that can be used to
 specify the commit position from which to start reading. This argument is `None` by
 default, meaning that all the events will be read either from the start, or
 from the end if `backwards` is `True` (see below). Please note, if specified,
 the specified position must be an actually existing commit position, because
 any other number will result in a server error (at least in EventStoreDB v21.10).
 
-The optional argument `backwards` is a boolean which is by default `False` meaning the
+The optional `backwards` argument is a boolean which is by default `False` meaning the
 events will be read forwards by default, so that events are returned in the
 order they were committed, If `backwards` is `True`, the events will be read
 backwards, so that events are returned in reverse order.
 
-The optional argument `filter_exclude` is a sequence of regular expressions that
-match the type strings of recorded events that should not be included. By default,
-this argument will match "system events", so that they will not be included.
-This argument is ignored if `filter_include` is set to a non-empty sequence.
+The optional `filter_exclude` argument is a sequence of regular expressions that
+match recorded events that should not be included. This argument is ignored
+if `filter_include` is set to a non-empty sequence. By default, this argument is set
+to match the event types of "system events", so that EventStoreDB system events
+will not normally be included. See the Notes section below for more information
+about filter expressions.
 
-The optional argument `filter_include` is a sequence of regular expressions
-that match the type strings of recorded events that should be included. By
-default, this argument is an empty tuple. If this argument is set to a
-non-empty sequence, the `filter_exclude` argument is ignored.
+The argument `filter_include` optional is a sequence of regular expressions
+that match recorded events that should be included. By default, this argument
+is an empty tuple. If this argument is set to a non-empty sequence, the
+`filter_exclude` argument is ignored.
 
-The optional argument `limit` is an integer which limits the number of events that will
+The argument `filter_by_stream_name` optional is a boolean value that indicates whether
+the filter will apply to event types or stream names. By default, this value is `False`
+and so the filtering will apply to the event type strings of recorded events.
+
+The argument `limit` optional is an integer which limits the number of events that will
 be returned. The default value is `sys.maxint`.
 
-The optional argument `timeout` is a Python `float` which sets a deadline for the completion of
-the gRPC operation.
+The optional `timeout` argument is a Python `float` which sets a
+deadline for the completion of the gRPC operation.
 
 The filtering of events is done on the EventStoreDB server. The
 `limit` argument is applied on the server after filtering. See below for
@@ -1121,26 +1127,31 @@ an actually existing commit position in the database. The events
 that are obtained will not include the event recorded at that commit
 position.
 
-This method also takes three other optional arguments, `filter_exclude`,
-`filter_include`, and `timeout`.
+This method also takes four other optional arguments, `filter_exclude`,
+`filter_include`, `filter_by_stream_name`, and `timeout`.
 
-The argument `filter_exclude` is a sequence of regular expressions matching
-the type strings of recorded events that should be excluded. By default,
-this argument will match "system events", so that they will not be included.
-This argument is ignored if `filter_include` is set to a non-empty sequence.
+The optional argument `filter_exclude` is a sequence of regular expressions that
+match recorded events that should not be included. This argument is ignored
+if `filter_include` is set to a non-empty sequence. By default, this argument is set
+to match the event types of "system events", so that EventStoreDB system events
+will not normally be included. See the Notes section below for more information
+about filter expressions.
 
-The argument `filter_include` is a sequence of regular expressions
-matching the type strings of recorded events that should be included. By
-default, this argument is an empty tuple. If this argument is set to a
-non-empty sequence, the `filter_exclude` argument is ignored.
+The optional argument `filter_include` is a sequence of regular expressions
+that match recorded events that should be included. By default, this argument
+is an empty tuple. If this argument is set to a non-empty sequence, the
+`filter_exclude` argument is ignored.
+
+The optional argument `filter_by_stream_name` is a boolean value that indicates whether
+the filter will apply to event types or stream names. By default, this value is `False`
+and so the filtering will apply to the event type strings of recorded events.
 
 Please note, the filtering happens on the EventStoreDB server, and the
 `limit` argument is applied on the server after filtering. See below for
 more information about filter regular expressions.
 
-The argument `timeout` is a Python `float` which sets a deadline for the completion of
-the gRPC operation. This probably isn't very useful, but is included for
-completeness and consistency with the other methods.
+The optional `timeout` argument is a Python `float` which sets a
+deadline for the completion of the gRPC operation.
 
 This method returns a Python iterator that yields recorded events, including events
 that are recorded after the subscription was created. Iterating over this object will
@@ -1282,14 +1293,16 @@ del subscription
 The`subscribe_stream_events()` method can be used to start a "catch-up" subscription
 that can return all events in a stream.
 
-This method takes a `stream_name` argument, which specifies the name of the stream
+This method takes a required `stream_name` argument, which specifies the name of the stream
 from which recorded events will be received.
 
-This method takes an optional `stream_position` argument, which specifies a
-stream position in the stream from which recorded events will be received. The
-event at the specified stream position will not be included.
+This method also takes two optional arguments, `stream_position`, and `timeout`.
 
-This method takes an optional `timeout` argument, which is a Python `float` that sets
+The optional `stream_position` argument specifies a position in the stream from which
+recorded events will be received. The event at the specified stream position will not
+be included.
+
+The optional `timeout` argument is a Python `float` that sets
 a deadline for the completion of the gRPC operation.
 
 The example below shows how to start a catch-up subscription to a stream.
@@ -1380,26 +1393,39 @@ The method `create_subscription()` can be used to create a
 This method takes a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
 
-This method takes an optional `from_end` argument, which can be
-used to specify that the group of consumers of the subscription should
-only receive events that were recorded after the subscription was created.
+This method also takes six optional arguments, `from_end`, `commit_position`,
+`filter_exclude`, `filter_include`, `filter_by_stream_name`, and `timeout`.
 
-This method takes an optional `commit_position` argument, which can be
-used to specify a commit position from which the group of consumers of
-the subscription should receive events. Please note, the recorded event
-at the specified commit position MAY be included in the recorded events
-received by the group of consumers.
+The optional `from_end` argument can be used to specify that the group of consumers
+of the subscription should only receive events that were recorded after the subscription
+was created.
+
+Alternatively, the optional `commit_position` argument can be used to specify a commit
+position from which the group of consumers of the subscription should receive events.
+Please note, the recorded event at the specified commit position might be included in
+the recorded events received by the group of consumers.
 
 If neither `from_end` or `commit_position` are specified, the group of consumers
 of the subscription will receive all recorded events.
 
-This method also takes option `filter_exclude`, `filter_include`
-arguments, which work in the same way as they do in the `subscribe_all_events()`
-method.
+The optional `filter_exclude` argument is a sequence of regular expressions that
+match recorded events that should not be included. This argument is ignored
+if `filter_include` is set to a non-empty sequence. By default, this argument is set
+to match the event types of "system events", so that EventStoreDB system events
+will not normally be included. See the Notes section below for more information
+about filter expressions.
 
-This method also takes an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
+The optional `filter_include` argument is a sequence of regular expressions
+that match recorded events that should be included. By default, this argument
+is an empty tuple. If this argument is set to a non-empty sequence, the
+`filter_exclude` argument is ignored.
+
+The argument `filter_by_stream_name` optional is a boolean value that indicates whether
+the filter will apply to event types or stream names. By default, this value is `False`
+and so the filtering will apply to the event type strings of recorded events.
+
+The optional `timeout` argument is a Python `float` which sets a
+deadline for the completion of the gRPC operation.
 
 The method `create_subscription()` does not return a value, because
 recorded events are obtained by the group of consumers of the subscription
@@ -2003,7 +2029,7 @@ configured to the value `17 * 1024 * 1024`. This value cannot be changed.
 ### Regular expression filters
 
 The filter arguments in `read_all_events()`, `subscribe_all_events()`,
-`create_subscription()` and `commit_position()` are applied to the `type`
+`create_subscription()` and `get_commit_position()` are applied to the `type`
 attribute of recorded events.
 
 The default value of the `filter_exclude` arguments is designed to exclude

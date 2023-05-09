@@ -939,7 +939,7 @@ class TestESDBClient(TestCase):
         # with self.assertRaises(DeadlineExceeded):
         #     list(self.client.read_stream_events(stream_name1, timeout=0))
 
-    def test_read_all_events(self) -> None:
+    def test_read_all_events_filter_default(self) -> None:
         self.construct_esdb_client()
 
         num_old_events = len(list(self.client.read_all_events()))
@@ -1070,7 +1070,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(events[2].stream_name, stream_name1)
         self.assertEqual(events[2].type, "OrderDeleted")
 
-    def test_timeout_read_all_events(self) -> None:
+    def test_read_all_events_timeout(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -1092,7 +1092,7 @@ class TestESDBClient(TestCase):
         with self.assertRaises(DeadlineExceeded):
             list(self.client.read_all_events(timeout=0.001))
 
-    def test_read_all_filter_include(self) -> None:
+    def test_read_all_events_filter_include_event_types(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -1117,7 +1117,60 @@ class TestESDBClient(TestCase):
         types = set([e.type for e in events])
         self.assertEqual(types, {"OrderCreated", "OrderDeleted"})
 
-    def test_read_all_filter_exclude(self) -> None:
+    def test_read_all_events_filter_include_stream_identifiers(self) -> None:
+        self.construct_esdb_client()
+
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+
+        # Append new events.
+        prefix1 = str(uuid4())
+        prefix2 = str(uuid4())
+        stream_name1 = prefix1 + str(uuid4())
+        stream_name2 = prefix1 + str(uuid4())
+        stream_name3 = prefix2 + str(uuid4())
+        self.client.append_events(stream_name1, expected_position=None, events=[event1])
+        self.client.append_events(stream_name2, expected_position=None, events=[event2])
+        self.client.append_events(stream_name3, expected_position=None, events=[event3])
+
+        # Read only stream1 and stream2.
+        events = list(
+            self.client.read_all_events(
+                filter_include=(stream_name1, stream_name2), filter_by_stream_name=True
+            )
+        )
+        event_ids = set([e.id for e in events])
+        self.assertEqual(event_ids, {event1.id, event2.id})
+
+        # Read only stream2 and stream3.
+        events = list(
+            self.client.read_all_events(
+                filter_include=(stream_name2, stream_name3), filter_by_stream_name=True
+            )
+        )
+        event_ids = set([e.id for e in events])
+        self.assertEqual(event_ids, {event2.id, event3.id})
+
+        # Read only prefix1.
+        events = list(
+            self.client.read_all_events(
+                filter_include=(prefix1 + ".*",), filter_by_stream_name=True
+            )
+        )
+        event_ids = set([e.id for e in events])
+        self.assertEqual(event_ids, {event1.id, event2.id})
+
+        # Read only prefix2.
+        events = list(
+            self.client.read_all_events(
+                filter_include=(prefix2 + ".*",), filter_by_stream_name=True
+            )
+        )
+        event_ids = set([e.id for e in events])
+        self.assertEqual(event_ids, {event3.id})
+
+    def test_read_all_events_filter_exclude_event_types(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -1146,7 +1199,60 @@ class TestESDBClient(TestCase):
         self.assertIn("OrderUpdated", types)
         self.assertNotIn("OrderDeleted", types)
 
-    def test_read_all_filter_exclude_ignored_when_filter_include_is_set(self) -> None:
+    def test_read_all_events_filter_exclude_stream_identifiers(self) -> None:
+        self.construct_esdb_client()
+
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+
+        # Append new events.
+        prefix1 = str(uuid4())
+        prefix2 = str(uuid4())
+        stream_name1 = prefix1 + str(uuid4())
+        stream_name2 = prefix1 + str(uuid4())
+        stream_name3 = prefix2 + str(uuid4())
+        self.client.append_events(stream_name1, expected_position=None, events=[event1])
+        self.client.append_events(stream_name2, expected_position=None, events=[event2])
+        self.client.append_events(stream_name3, expected_position=None, events=[event3])
+
+        # Read everything except stream1 and stream2.
+        events = list(
+            self.client.read_all_events(
+                filter_exclude=(stream_name1, stream_name2), filter_by_stream_name=True
+            )
+        )
+        event_ids = set([e.id for e in events])
+        self.assertEqual(event_ids.intersection({event1.id, event2.id}), set())
+
+        # Read everything except stream2 and stream3.
+        events = list(
+            self.client.read_all_events(
+                filter_exclude=(stream_name2, stream_name3), filter_by_stream_name=True
+            )
+        )
+        event_ids = set([e.id for e in events])
+        self.assertEqual(event_ids.intersection({event2.id, event3.id}), set())
+
+        # Read everything except prefix1.
+        events = list(
+            self.client.read_all_events(
+                filter_exclude=(prefix1 + ".*",), filter_by_stream_name=True
+            )
+        )
+        event_ids = set([e.id for e in events])
+        self.assertEqual(event_ids.intersection({event1.id, event2.id}), set())
+
+        # Read everything except prefix2.
+        events = list(
+            self.client.read_all_events(
+                filter_exclude=(prefix2 + ".*",), filter_by_stream_name=True
+            )
+        )
+        event_ids = set([e.id for e in events])
+        self.assertEqual(event_ids.intersection({event3.id}), set())
+
+    def test_read_all_events_filter_include_ignores_filter_exclude(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -1699,7 +1805,7 @@ class TestESDBClient(TestCase):
         else:
             self.fail("Didn't get a system event")
 
-    def test_subscribe_all_events_include_filter(self) -> None:
+    def test_subscribe_all_events_filter_include_event_types(self) -> None:
         self.construct_esdb_client()
 
         # Append new events.
@@ -1713,7 +1819,6 @@ class TestESDBClient(TestCase):
 
         # Subscribe from the beginning.
         subscription = self.client.subscribe_all_events(
-            filter_exclude=[],
             filter_include=["OrderCreated"],
         )
 
@@ -1731,6 +1836,50 @@ class TestESDBClient(TestCase):
 
         # Check we actually got some 'OrderCreated' events.
         self.assertGreater(len(events), 0)
+
+    def test_subscribe_all_events_filter_include_stream_names(self) -> None:
+        self.construct_esdb_client()
+
+        # Append new events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+        stream_name1 = str(uuid4())
+        stream_name2 = str(uuid4())
+        stream_name3 = str(uuid4())
+        self.client.append_events(stream_name1, expected_position=None, events=[event1])
+        self.client.append_events(stream_name2, expected_position=None, events=[event2])
+        self.client.append_events(stream_name3, expected_position=None, events=[event3])
+
+        # Expect to only get stream_name1 events.
+        subscription = self.client.subscribe_all_events(
+            filter_include=stream_name1, filter_by_stream_name=True
+        )
+        for event in subscription:
+            if event.stream_name != stream_name1:
+                self.fail("Filtering included other stream names")
+            if event.id == event1.id:
+                break
+
+        # Expect to only get stream_name2 events.
+        subscription = self.client.subscribe_all_events(
+            filter_include=stream_name2, filter_by_stream_name=True
+        )
+        for event in subscription:
+            if event.stream_name != stream_name2:
+                self.fail("Filtering included other stream names")
+            if event.id == event2.id:
+                break
+
+        # Expect to only get stream_name3 events.
+        subscription = self.client.subscribe_all_events(
+            filter_include=stream_name3, filter_by_stream_name=True
+        )
+        for event in subscription:
+            if event.stream_name != stream_name3:
+                self.fail("Filtering included other stream names")
+            if event.id == event3.id:
+                break
 
     def test_subscribe_all_events_from_commit_position_zero(self) -> None:
         self.construct_esdb_client()
@@ -2085,7 +2234,6 @@ class TestESDBClient(TestCase):
         events = []
         for event in read_resp:
             read_req.ack(event.id)
-            # print(event.type)
             events.append(event)
             if event.id == event3.id:
                 break
@@ -2101,36 +2249,7 @@ class TestESDBClient(TestCase):
         assert events[1].data == event2.data
         assert events[2].data == event3.data
 
-    def test_create_and_read_subscription_include_filter(self) -> None:
-        self.construct_esdb_client()
-
-        # Create persistent subscription.
-        group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(
-            group_name=group_name,
-            filter_include=["OrderCreated"],
-        )
-
-        # Append three events.
-        stream_name1 = str(uuid4())
-        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
-
-        self.client.append_events(
-            stream_name1, expected_position=None, events=[event1, event2, event3]
-        )
-
-        # Read events from subscription.
-        read_req, read_resp = self.client.read_subscription(group_name=group_name)
-
-        for event in read_resp:
-            read_req.ack(event.id)
-            self.assertEqual(event.type, "OrderCreated")
-            if event.data == event1.data:
-                break
-
-    def test_create_and_read_subscription_exclude_filter(self) -> None:
+    def test_create_and_read_subscription_filter_exclude_event_types(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
@@ -2153,22 +2272,156 @@ class TestESDBClient(TestCase):
         # Read events from subscription.
         read_req, read_resp = self.client.read_subscription(group_name=group_name)
 
-        # start = datetime.now()
-        # absstart = start
-        for _, event in enumerate(read_resp):
-            # received = datetime.now()
-            # duration = (received - start).total_seconds()
-            # total_duration = (received - absstart).total_seconds()
-            # rate = i / total_duration
-            # start = received
+        # Check we don't receive any OrderCreated events.
+        for event in read_resp:
             read_req.ack(event.id)
-            # print(i, f"duration: {duration:.4f}s", f"rate: {rate:.1f}/s --", event)
-            # if duration > 0.5:
-            #     print("^^^^^^^^^^^^^^^^^^^^^^^^ seemed to take a long time")
-            #     print()
             self.assertNotEqual(event.type, "OrderCreated")
             if event.data == event3.data:
                 break
+
+    def test_create_and_read_subscription_filter_exclude_stream_names(self) -> None:
+        self.construct_esdb_client()
+
+        stream_name1 = str(uuid4())
+        prefix1 = str(uuid4())
+        stream_name2 = prefix1 + str(uuid4())
+        stream_name3 = prefix1 + str(uuid4())
+        stream_name4 = str(uuid4())
+
+        # Create persistent subscriptions.
+        group_name1 = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription(
+            group_name=group_name1,
+            filter_exclude=stream_name1,
+            filter_by_stream_name=True,
+        )
+        group_name2 = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription(
+            group_name=group_name2,
+            filter_exclude=prefix1 + ".*",
+            filter_by_stream_name=True,
+        )
+
+        # Append events.
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+        event4 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        self.client.append_events(stream_name1, expected_position=None, events=[event1])
+        self.client.append_events(stream_name2, expected_position=None, events=[event2])
+        self.client.append_events(stream_name3, expected_position=None, events=[event3])
+        self.client.append_events(stream_name4, expected_position=None, events=[event4])
+
+        # Check we don't receive any events from stream_name1.
+        read_req, read_resp = self.client.read_subscription(group_name=group_name1)
+
+        for event in read_resp:
+            if event.stream_name == stream_name1:
+                self.fail("Received event from stream_name1")
+            read_req.ack(event.id)
+            if event.data == event4.data:
+                break
+
+        # Check we don't receive any events from stream names starting with prefix1.
+        read_req, read_resp = self.client.read_subscription(group_name=group_name2)
+
+        for event in read_resp:
+            if event.stream_name.startswith(prefix1):
+                self.fail("Received event with stream name starting with prefix1")
+            read_req.ack(event.id)
+            if event.data == event4.data:
+                break
+
+    def test_create_and_read_subscription_filter_include_event_types(self) -> None:
+        self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription(
+            group_name=group_name,
+            filter_include=["OrderCreated"],
+        )
+
+        # Append events.
+        stream_name1 = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        self.client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Check we only receive any OrderCreated events.
+        read_req, read_resp = self.client.read_subscription(group_name=group_name)
+
+        for event in read_resp:
+            read_req.ack(event.id)
+            self.assertEqual(event.type, "OrderCreated")
+            if event.data == event1.data:
+                break
+
+    def test_create_and_read_subscription_filter_include_stream_names(self) -> None:
+        self.construct_esdb_client()
+
+        stream_name1 = str(uuid4())
+        prefix1 = str(uuid4())
+        stream_name2 = str(uuid4())
+        stream_name3 = prefix1 + str(uuid4())
+        stream_name4 = prefix1 + str(uuid4())
+
+        # Create persistent subscriptions.
+        group_name1 = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription(
+            group_name=group_name1,
+            filter_include=stream_name4,
+            filter_by_stream_name=True,
+        )
+        group_name2 = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription(
+            group_name=group_name2,
+            filter_include=prefix1 + ".*",
+            filter_by_stream_name=True,
+        )
+
+        # Append events.
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+        event4 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        self.client.append_events(stream_name1, expected_position=None, events=[event1])
+        self.client.append_events(stream_name2, expected_position=None, events=[event2])
+        self.client.append_events(stream_name3, expected_position=None, events=[event3])
+        self.client.append_events(stream_name4, expected_position=None, events=[event4])
+
+        # Check we only receive events from stream4.
+        read_req, read_resp = self.client.read_subscription(group_name=group_name1)
+
+        events = []
+        for event in read_resp:
+            read_req.ack(event1.id)
+            events.append(event)
+            if event.data == event4.data:
+                break
+
+        self.assertEqual(1, len(events))
+        self.assertEqual(events[0].id, event4.id)
+
+        # Check we only receive events with stream name starting with prefix1.
+        read_req, read_resp = self.client.read_subscription(group_name=group_name2)
+
+        events = []
+        for event in read_resp:
+            events.append(event)
+            read_req.ack(event.id)
+            if event.data == event4.data:
+                break
+
+        self.assertEqual(2, len(events))
+        self.assertEqual(events[0].id, event3.id)
+        self.assertEqual(events[1].id, event4.id)
 
     def test_create_and_read_subscription_no_filter(self) -> None:
         self.construct_esdb_client()
