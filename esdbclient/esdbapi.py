@@ -846,7 +846,8 @@ class SubscriptionReadRequest:
     def __init__(self, group_name: str, stream_name: Optional[str] = None) -> None:
         self.group_name = group_name
         self.stream_name = stream_name
-        self.queue: queue.Queue[shared_pb2.UUID] = queue.Queue()
+        self.queue: queue.Queue[Tuple[UUID, str]] = queue.Queue()
+        self.held: Optional[Tuple[UUID, str]] = None
         self._has_requested_options = False
 
     def __next__(self) -> persistent_pb2.ReadReq:
@@ -871,27 +872,64 @@ class SubscriptionReadRequest:
                 options.all.CopyFrom(shared_pb2.Empty())
             return persistent_pb2.ReadReq(options=options)
         else:
+            # Send a response whenever there are 100 acks or nacks of
+            # the same kind, or when the kind of ack or nack changes,
+            # or at least every 100ms when there is something to send.
             ids = []
-            # Send an Ack whenever there are 100 acks, or at least
-            # every 100ms when there are some acks, otherwise don't.
+            current_action: Optional[str] = None
+            if self.held is not None:
+                held_id, current_action = self.held
+                self.held = None
+                ids.append(shared_pb2.UUID(string=str(held_id)))
             while True:
                 try:
-                    event_id = self.queue.get(timeout=0.1)
-                    ids.append(event_id)
+                    event_id, action = self.queue.get(timeout=0.1)
+                    if current_action is None:
+                        current_action = action
+                    elif current_action != action:
+                        self.held = (event_id, action)
+                        return self._construct_read_req(ids, current_action)
+                    ids.append(shared_pb2.UUID(string=str(event_id)))
                     if len(ids) >= 100:
-                        return persistent_pb2.ReadReq(
-                            ack=persistent_pb2.ReadReq.Ack(ids=ids)
-                        )
+                        return self._construct_read_req(ids, current_action)
                 except queue.Empty:
                     if len(ids) >= 1:
-                        return persistent_pb2.ReadReq(
-                            ack=persistent_pb2.ReadReq.Ack(ids=ids)
-                        )
+                        assert current_action is not None
+                        return self._construct_read_req(ids, current_action)
                     else:  # pragma: no cover
                         pass
 
+    def _construct_read_req(
+        self, ids: List[shared_pb2.UUID], action: str
+    ) -> persistent_pb2.ReadReq:
+        if action == "ack":
+            ack = persistent_pb2.ReadReq.Ack(ids=ids)
+            return persistent_pb2.ReadReq(ack=ack)
+        else:
+            if action == "unknown":
+                grpc_action = persistent_pb2.ReadReq.Nack.Unknown
+            elif action == "park":
+                grpc_action = persistent_pb2.ReadReq.Nack.Park
+            elif action == "retry":
+                grpc_action = persistent_pb2.ReadReq.Nack.Retry
+            elif action == "skip":
+                grpc_action = persistent_pb2.ReadReq.Nack.Skip
+            else:
+                assert action == "stop"
+                grpc_action = persistent_pb2.ReadReq.Nack.Stop
+            nack = persistent_pb2.ReadReq.Nack(ids=ids, action=grpc_action)
+            return persistent_pb2.ReadReq(nack=nack)
+
     def ack(self, event_id: UUID) -> None:
-        self.queue.put(shared_pb2.UUID(string=str(event_id)))
+        self.queue.put((event_id, "ack"))
+
+    def nack(
+        self,
+        event_id: UUID,
+        action: Literal["unknown", "park", "retry", "skip", "stop"],
+    ) -> None:
+        assert action in ["unknown", "park", "retry", "skip", "stop"]
+        self.queue.put((event_id, action))
 
     # Todo: Implement nack().
 

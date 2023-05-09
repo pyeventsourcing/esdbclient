@@ -1439,11 +1439,18 @@ read_req, read_resp = client.read_subscription(group_name=group_name)
 The "read response" object is an iterator that yields recorded events from
 the specified commit position.
 
-The "read request" object has an `ack()` method that can be used by a consumer
+The "read request" object has an `ack()` method that should be used by a consumer
 in a group to acknowledge to the server that it has received and successfully
 processed a recorded event. This will prevent that recorded event being received
 by another consumer in the same group. The `ack()` method takes an `event_id`
 argument, which is the ID of the recorded event that has been received.
+
+The "read request" object also has an `nack()` method that should be used by a consumer
+in a group to negatively acknowledge to the server that it has received but not
+successfully processed a recorded event. The `nack()` method takes an `event_id`
+argument, which is the ID of the recorded event that has been received, and an
+`action` argument, which should be a Python `str`, either `'unknown'`, `'park'`,
+`'retry'`, `'skip'`, or `'stop'`.
 
 The example below iterates over the "read response" object, and calls `ack()`
 on the "read response" object. The for loop breaks when we have received

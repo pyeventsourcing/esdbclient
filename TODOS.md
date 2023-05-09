@@ -2,9 +2,7 @@
 
 * Update persistent subscription
   * very similar to Create (just without filter options)
-* Nack in persistent subscription
-  * would seem to make queuing and sending batches of acks more complicated?
-  * different types of nack, maybe also need to implement "park" stuff?
+* Replay parked events in persistent subscription
 * Filtering by stream name (currently only filtering by event type)
 * Commit position vs prepare position
   * do we really need to include this?
