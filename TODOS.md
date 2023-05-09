@@ -6,7 +6,7 @@
 * Filtering by stream name (currently only filtering by event type)
 * Commit position vs prepare position
   * do we really need to include this?
-* Connection field 'TlsVerify' - what to verify? and how?
+* Connection field 'TlsVerifyCert' - what to verify? and how?
 * Need to update proto files
   * https://github.com/EventStore/EventStore/tree/master/src/Protos/Grpc
 * Doc
