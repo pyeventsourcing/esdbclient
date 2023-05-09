@@ -69,7 +69,7 @@ DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
     b' \x01(\x0b\x32\x1d.event_store.cluster.EndPoint"?\n\x0b\x43lusterInfo\x12\x30\n\x07members\x18\x01'
     b' \x03(\x0b\x32\x1f.event_store.cluster.MemberInfo")\n\x08\x45ndPoint\x12\x0f\n\x07\x61\x64\x64ress\x18\x01'
     b" \x01(\t\x12\x0c\n\x04port\x18\x02"
-    b' \x01(\r"\xf3\x07\n\nMemberInfo\x12-\n\x0binstance_id\x18\x01'
+    b' \x01(\r"\x87\x08\n\nMemberInfo\x12-\n\x0binstance_id\x18\x01'
     b" \x01(\x0b\x32\x18.event_store.client.UUID\x12\x12\n\ntime_stamp\x18\x02"
     b" \x01(\x03\x12\x39\n\x05state\x18\x03"
     b" \x01(\x0e\x32*.event_store.cluster.MemberInfo.VNodeState\x12\x10\n\x08is_alive\x18\x04"
@@ -89,25 +89,27 @@ DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
     b" \x01(\x08\x12#\n\x1b\x61\x64vertise_host_to_client_as\x18\x12 \x01(\t\x12(\n"
     b" advertise_http_port_to_client_as\x18\x13"
     b" \x01(\r\x12'\n\x1f\x61\x64vertise_tcp_port_to_client_as\x18\x14"
-    b' \x01(\r"\x9a\x02\n\nVNodeState\x12\x10\n\x0cInitializing\x10\x00\x12\x12\n\x0e\x44iscoverLeader\x10\x01\x12\x0b\n\x07Unknown\x10\x02\x12\x0e\n\nPreReplica\x10\x03\x12\x0e\n\nCatchingUp\x10\x04\x12\t\n\x05\x43lone\x10\x05\x12\x0c\n\x08\x46ollower\x10\x06\x12\r\n\tPreLeader\x10\x07\x12\n\n\x06Leader\x10\x08\x12\x0b\n\x07Manager\x10\t\x12\x10\n\x0cShuttingDown\x10\n\x12\x0c\n\x08Shutdown\x10\x0b\x12\x16\n\x12ReadOnlyLeaderless\x10\x0c\x12\x16\n\x12PreReadOnlyReplica\x10\r\x12\x13\n\x0fReadOnlyReplica\x10\x0e\x12\x13\n\x0fResigningLeader\x10\x0f";\n\x0fReplicaLogWrite\x12\x14\n\x0clog_position\x18\x01'
+    b" \x01(\r\x12\x12\n\nes_version\x18\x15"
+    b' \x01(\t"\x9a\x02\n\nVNodeState\x12\x10\n\x0cInitializing\x10\x00\x12\x12\n\x0e\x44iscoverLeader\x10\x01\x12\x0b\n\x07Unknown\x10\x02\x12\x0e\n\nPreReplica\x10\x03\x12\x0e\n\nCatchingUp\x10\x04\x12\t\n\x05\x43lone\x10\x05\x12\x0c\n\x08\x46ollower\x10\x06\x12\r\n\tPreLeader\x10\x07\x12\n\n\x06Leader\x10\x08\x12\x0b\n\x07Manager\x10\t\x12\x10\n\x0cShuttingDown\x10\n\x12\x0c\n\x08Shutdown\x10\x0b\x12\x16\n\x12ReadOnlyLeaderless\x10\x0c\x12\x16\n\x12PreReadOnlyReplica\x10\r\x12\x13\n\x0fReadOnlyReplica\x10\x0e\x12\x13\n\x0fResigningLeader\x10\x0f";\n\x0fReplicaLogWrite\x12\x14\n\x0clog_position\x18\x01'
     b" \x01(\x03\x12\x12\n\nreplica_id\x18\x02"
     b' \x01(\x0c"$\n\x0cReplicatedTo\x12\x14\n\x0clog_position\x18\x01'
     b' \x01(\x03"G\n\x05\x45poch\x12\x16\n\x0e\x65poch_position\x18\x01'
     b" \x01(\x03\x12\x14\n\x0c\x65poch_number\x18\x02"
     b" \x01(\x05\x12\x10\n\x08\x65poch_id\x18\x03"
-    b' \x01(\x0c"\xc7\x01\n\x10SubscribeReplica\x12\x14\n\x0clog_position\x18\x01'
+    b' \x01(\x0c"\xd8\x01\n\x10SubscribeReplica\x12\x14\n\x0clog_position\x18\x01'
     b" \x01(\x03\x12\x10\n\x08\x63hunk_id\x18\x02 \x01(\x0c\x12.\n\nLastEpochs\x18\x03"
     b" \x03(\x0b\x32\x1a.event_store.cluster.Epoch\x12\n\n\x02ip\x18\x04"
     b" \x01(\x0c\x12\x0c\n\x04port\x18\x05 \x01(\x05\x12\x11\n\tleader_id\x18\x06"
     b" \x01(\x0c\x12\x17\n\x0fsubscription_id\x18\x07"
-    b" \x01(\x0c\x12\x15\n\ris_promotable\x18\x08"
-    b' \x01(\x08"F\n\x18ReplicaSubscriptionRetry\x12\x11\n\tleader_id\x18\x01'
+    b" \x01(\x0c\x12\x15\n\ris_promotable\x18\x08 \x01(\x08\x12\x0f\n\x07version\x18\t"
+    b' \x01(\x05"F\n\x18ReplicaSubscriptionRetry\x12\x11\n\tleader_id\x18\x01'
     b" \x01(\x0c\x12\x17\n\x0fsubscription_id\x18\x02"
     b' \x01(\x0c"^\n\x11ReplicaSubscribed\x12\x11\n\tleader_id\x18\x01'
     b" \x01(\x0c\x12\x17\n\x0fsubscription_id\x18\x02"
     b" \x01(\x0c\x12\x1d\n\x15subscription_position\x18\x03"
-    b' \x01(\x03"R\n\x15ReplicaLogPositionAck\x12\x17\n\x0fsubscription_id\x18\x01'
+    b' \x01(\x03"o\n\x15ReplicaLogPositionAck\x12\x17\n\x0fsubscription_id\x18\x01'
     b" \x01(\x0c\x12 \n\x18replication_log_position\x18\x02"
+    b" \x01(\x03\x12\x1b\n\x13writer_log_position\x18\x03"
     b' \x01(\x03"\x84\x01\n\x0b\x43reateChunk\x12\x11\n\tleader_id\x18\x01'
     b" \x01(\x0c\x12\x17\n\x0fsubscription_id\x18\x02"
     b" \x01(\x0c\x12\x1a\n\x12\x63hunk_header_bytes\x18\x03"
@@ -168,37 +170,37 @@ if _descriptor._USE_C_DESCRIPTORS == False:
     _ENDPOINT._serialized_start = 2201
     _ENDPOINT._serialized_end = 2242
     _MEMBERINFO._serialized_start = 2245
-    _MEMBERINFO._serialized_end = 3256
-    _MEMBERINFO_VNODESTATE._serialized_start = 2974
-    _MEMBERINFO_VNODESTATE._serialized_end = 3256
-    _REPLICALOGWRITE._serialized_start = 3258
-    _REPLICALOGWRITE._serialized_end = 3317
-    _REPLICATEDTO._serialized_start = 3319
-    _REPLICATEDTO._serialized_end = 3355
-    _EPOCH._serialized_start = 3357
-    _EPOCH._serialized_end = 3428
-    _SUBSCRIBEREPLICA._serialized_start = 3431
-    _SUBSCRIBEREPLICA._serialized_end = 3630
-    _REPLICASUBSCRIPTIONRETRY._serialized_start = 3632
-    _REPLICASUBSCRIPTIONRETRY._serialized_end = 3702
-    _REPLICASUBSCRIBED._serialized_start = 3704
-    _REPLICASUBSCRIBED._serialized_end = 3798
-    _REPLICALOGPOSITIONACK._serialized_start = 3800
-    _REPLICALOGPOSITIONACK._serialized_end = 3882
-    _CREATECHUNK._serialized_start = 3885
-    _CREATECHUNK._serialized_end = 4017
-    _RAWCHUNKBULK._serialized_start = 4020
-    _RAWCHUNKBULK._serialized_end = 4197
-    _DATACHUNKBULK._serialized_start = 4200
-    _DATACHUNKBULK._serialized_end = 4388
-    _FOLLOWERASSIGNMENT._serialized_start = 4390
-    _FOLLOWERASSIGNMENT._serialized_end = 4454
-    _CLONEASSIGNMENT._serialized_start = 4456
-    _CLONEASSIGNMENT._serialized_end = 4517
-    _DROPSUBSCRIPTION._serialized_start = 4519
-    _DROPSUBSCRIPTION._serialized_end = 4581
-    _GOSSIP._serialized_start = 4584
-    _GOSSIP._serialized_end = 4741
-    _ELECTIONS._serialized_start = 4744
-    _ELECTIONS._serialized_end = 5425
+    _MEMBERINFO._serialized_end = 3276
+    _MEMBERINFO_VNODESTATE._serialized_start = 2994
+    _MEMBERINFO_VNODESTATE._serialized_end = 3276
+    _REPLICALOGWRITE._serialized_start = 3278
+    _REPLICALOGWRITE._serialized_end = 3337
+    _REPLICATEDTO._serialized_start = 3339
+    _REPLICATEDTO._serialized_end = 3375
+    _EPOCH._serialized_start = 3377
+    _EPOCH._serialized_end = 3448
+    _SUBSCRIBEREPLICA._serialized_start = 3451
+    _SUBSCRIBEREPLICA._serialized_end = 3667
+    _REPLICASUBSCRIPTIONRETRY._serialized_start = 3669
+    _REPLICASUBSCRIPTIONRETRY._serialized_end = 3739
+    _REPLICASUBSCRIBED._serialized_start = 3741
+    _REPLICASUBSCRIBED._serialized_end = 3835
+    _REPLICALOGPOSITIONACK._serialized_start = 3837
+    _REPLICALOGPOSITIONACK._serialized_end = 3948
+    _CREATECHUNK._serialized_start = 3951
+    _CREATECHUNK._serialized_end = 4083
+    _RAWCHUNKBULK._serialized_start = 4086
+    _RAWCHUNKBULK._serialized_end = 4263
+    _DATACHUNKBULK._serialized_start = 4266
+    _DATACHUNKBULK._serialized_end = 4454
+    _FOLLOWERASSIGNMENT._serialized_start = 4456
+    _FOLLOWERASSIGNMENT._serialized_end = 4520
+    _CLONEASSIGNMENT._serialized_start = 4522
+    _CLONEASSIGNMENT._serialized_end = 4583
+    _DROPSUBSCRIPTION._serialized_start = 4585
+    _DROPSUBSCRIPTION._serialized_end = 4647
+    _GOSSIP._serialized_start = 4650
+    _GOSSIP._serialized_end = 4807
+    _ELECTIONS._serialized_start = 4810
+    _ELECTIONS._serialized_end = 5491
 # @@protoc_insertion_point(module_scope)

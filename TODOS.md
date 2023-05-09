@@ -7,8 +7,6 @@
 * Commit position vs prepare position
   * do we really need to include this?
 * Connection field 'TlsVerifyCert' - what to verify? and how?
-* Need to update proto files
-  * https://github.com/EventStore/EventStore/tree/master/src/Protos/Grpc
 * Doc
   * is the README file sufficient for v1.0?
   * ClusterMember data class attributes (there are quite a lot of them...)

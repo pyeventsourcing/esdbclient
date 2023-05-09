@@ -3,7 +3,7 @@ package event_store.client.monitoring;
 option java_package = "com.eventstore.dbclient.proto.monitoring";
 
 service Monitoring {
-	rpc Stats(StatsReq) returns (stream StatsResp);	
+	rpc Stats(StatsReq) returns (stream StatsResp);
 }
 
 message StatsReq {

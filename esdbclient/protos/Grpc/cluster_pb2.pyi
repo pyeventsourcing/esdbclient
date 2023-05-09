@@ -613,6 +613,7 @@ class MemberInfo(google.protobuf.message.Message):
     ADVERTISE_HOST_TO_CLIENT_AS_FIELD_NUMBER: builtins.int
     ADVERTISE_HTTP_PORT_TO_CLIENT_AS_FIELD_NUMBER: builtins.int
     ADVERTISE_TCP_PORT_TO_CLIENT_AS_FIELD_NUMBER: builtins.int
+    ES_VERSION_FIELD_NUMBER: builtins.int
     @property
     def instance_id(self) -> esdbclient.protos.Grpc.shared_pb2.UUID: ...
     time_stamp: builtins.int
@@ -638,6 +639,7 @@ class MemberInfo(google.protobuf.message.Message):
     advertise_host_to_client_as: builtins.str
     advertise_http_port_to_client_as: builtins.int
     advertise_tcp_port_to_client_as: builtins.int
+    es_version: builtins.str
     def __init__(
         self,
         *,
@@ -661,6 +663,7 @@ class MemberInfo(google.protobuf.message.Message):
         advertise_host_to_client_as: builtins.str = ...,
         advertise_http_port_to_client_as: builtins.int = ...,
         advertise_tcp_port_to_client_as: builtins.int = ...,
+        es_version: builtins.str = ...,
     ) -> None: ...
     def HasField(
         self,
@@ -694,6 +697,8 @@ class MemberInfo(google.protobuf.message.Message):
             b"epoch_number",
             "epoch_position",
             b"epoch_position",
+            "es_version",
+            b"es_version",
             "external_tcp",
             b"external_tcp",
             "external_tcp_uses_tls",
@@ -808,6 +813,7 @@ class SubscribeReplica(google.protobuf.message.Message):
     LEADER_ID_FIELD_NUMBER: builtins.int
     SUBSCRIPTION_ID_FIELD_NUMBER: builtins.int
     IS_PROMOTABLE_FIELD_NUMBER: builtins.int
+    VERSION_FIELD_NUMBER: builtins.int
     log_position: builtins.int
     chunk_id: builtins.bytes
     @property
@@ -821,6 +827,7 @@ class SubscribeReplica(google.protobuf.message.Message):
     leader_id: builtins.bytes
     subscription_id: builtins.bytes
     is_promotable: builtins.bool
+    version: builtins.int
     def __init__(
         self,
         *,
@@ -832,6 +839,7 @@ class SubscribeReplica(google.protobuf.message.Message):
         leader_id: builtins.bytes = ...,
         subscription_id: builtins.bytes = ...,
         is_promotable: builtins.bool = ...,
+        version: builtins.int = ...,
     ) -> None: ...
     def ClearField(
         self,
@@ -852,6 +860,8 @@ class SubscribeReplica(google.protobuf.message.Message):
             b"port",
             "subscription_id",
             b"subscription_id",
+            "version",
+            b"version",
         ],
     ) -> None: ...
 
@@ -917,13 +927,16 @@ class ReplicaLogPositionAck(google.protobuf.message.Message):
 
     SUBSCRIPTION_ID_FIELD_NUMBER: builtins.int
     REPLICATION_LOG_POSITION_FIELD_NUMBER: builtins.int
+    WRITER_LOG_POSITION_FIELD_NUMBER: builtins.int
     subscription_id: builtins.bytes
     replication_log_position: builtins.int
+    writer_log_position: builtins.int
     def __init__(
         self,
         *,
         subscription_id: builtins.bytes = ...,
         replication_log_position: builtins.int = ...,
+        writer_log_position: builtins.int = ...,
     ) -> None: ...
     def ClearField(
         self,
@@ -932,6 +945,8 @@ class ReplicaLogPositionAck(google.protobuf.message.Message):
             b"replication_log_position",
             "subscription_id",
             b"subscription_id",
+            "writer_log_position",
+            b"writer_log_position",
         ],
     ) -> None: ...
 

@@ -87,6 +87,7 @@ build:
 publish:
 	$(POETRY) publish
 
+# Orig proto files: https://github.com/EventStore/EventStore/tree/master/src/Protos/Grpc
 .PHONY: grpc-stubs
 grpc-stubs:
 	$(POETRY) run python -m grpc_tools.protoc \
