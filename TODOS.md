@@ -2,25 +2,47 @@
 
 * Update persistent subscription
   * very similar to Create (just without filter options)
-* Replay parked events in persistent subscription
-* Other consumer strategies in persistent subscription
-* Commit position vs prepare position
-  * do we really need to include this?
-* Connection field 'TlsVerifyCert' - what to verify? and how?
+
+* Replay parked events in persistent subscription?
+
+* Reconnect to leader when reading persistent subscription against follower
+  * setting require-leader doesn't seem to create an error
+    * is there a "confirmation" response, like with catch-up subscriptions?
+    * how is this to be detected? how can I trigger a reconnect()
+
+* Seems that "requires-leader" isn't implemented on server for list subscriptions?
+  * getting from follower: status code: UNAVAILABLE, details: "Server Is Not Ready", rather than "Leader info available"
+
+* What is the "requires-leader" header actually for, since the server can decide if
+  methods require leader? should this instead be something the client sets according to
+  its node preference?
+
+* Commit position vs prepare position?
+
 * Doc
   * is the README file sufficient for v1.0?
   * ClusterMember data class attributes (there are quite a lot of them...)
-  * exception classes, describe which methods might raise which exceptions and why
+
+* Exception classes: describe which methods might raise which exceptions and why?
+
 * Sample
   * is the eventsourcing-eventstoredb sufficient for v1.0?
   * could port Joao's banking app?
 
-* OAuth (requires commercial license)?
+* OAuth (requires commercial license)
   * is there anything to do for this?
 
-* Change GitHub workflow to also test with 22.10.0? seems a little buggy (see tests)?
+* Change GitHub workflow to also test with 22.10.0?
+  * 22.10.0 seems a little buggy (see tests)?
 
 * I noticed the issue raised about "consumer too slow" - does the server close subscriptions?
+
+* Connection field 'TlsVerifyCert' - what to verify? and how?
+  * design intention: if "false" configure client to avoid checking server certificate
+    * not sure that we can do this with the Python library, although there is a callback...
+      * there is a discussion about this on GH, with a PR that wasn't merged
+        * https://github.com/grpc/grpc/issues/15461
+
 
 -----
 

@@ -19,6 +19,7 @@ from typing import (
     overload,
 )
 
+import dns.exception
 import dns.resolver
 import grpc
 from grpc import CallCredentials, RpcError
@@ -33,30 +34,31 @@ from esdbclient.connection import (
     ConnectionSpec,
     ESDBConnection,
 )
-from esdbclient.esdbapi import (
-    NODE_STATE_FOLLOWER,
-    NODE_STATE_LEADER,
-    NODE_STATE_REPLICA,
-    BasicAuthCallCredentials,
-    BatchAppendRequest,
-    ClusterMember,
-    ConsumerStrategy,
-    SubscriptionInfo,
-    SubscriptionReadRequest,
-    SubscriptionReadResponse,
-    handle_rpc_error,
-)
+from esdbclient.esdbapibase import BasicAuthCallCredentials, handle_rpc_error
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import (
     DiscoveryFailed,
+    DNSError,
     FollowerNotFound,
     GossipSeedError,
     GrpcError,
     LeaderNotFound,
     NodeIsNotLeader,
+    NotFound,
     ReadOnlyReplicaNotFound,
     ServiceUnavailable,
-    StreamNotFound,
+)
+from esdbclient.gossip import (
+    NODE_STATE_FOLLOWER,
+    NODE_STATE_LEADER,
+    NODE_STATE_REPLICA,
+    ClusterMember,
+)
+from esdbclient.persistent import (
+    ConsumerStrategy,
+    SubscriptionInfo,
+    SubscriptionReadRequests,
+    SubscriptionReadResponse,
 )
 
 # Matches the 'type' of "system" events.
@@ -173,7 +175,10 @@ class ESDBClient:
         if self.connection_spec.scheme == URI_SCHEME_ESDB_DISCOVER:
             assert len(self.connection_spec.targets) == 1
             cluster_fqdn = self.connection_spec.targets[0]
-            answers = dns.resolver.resolve(cluster_fqdn, "A")
+            try:
+                answers = dns.resolver.resolve(cluster_fqdn, "A")
+            except dns.exception.DNSException as e:  # pragma: no cover
+                raise DNSError() from e
             gossip_seed: Sequence[str] = [f"{s.address}:2113" for s in answers]
         else:
             assert self.connection_spec.scheme == URI_SCHEME_ESDB
@@ -268,6 +273,7 @@ class ESDBClient:
                 new = self._connect_to_preferred_node()
                 old, self._connection = self._connection, new
                 old.close()
+                self._is_reconnection_required.clear()
             else:  # pragma: no cover
                 # Todo: Test with concurrent writes to wrong node state.
                 pass
@@ -350,11 +356,9 @@ class ESDBClient:
     ) -> int:
         timeout = timeout if timeout is not None else self._default_deadline
         return self._connection.streams.batch_append(
-            BatchAppendRequest(
-                stream_name=stream_name,
-                expected_position=expected_position,
-                events=events,
-            ),
+            stream_name=stream_name,
+            expected_position=expected_position,
+            events=events,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=self._call_credentials,
@@ -426,6 +430,27 @@ class ESDBClient:
         backwards: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
+    ) -> Sequence[RecordedEvent]:
+        """
+        Lists recorded events from the named stream.
+        """
+        return tuple(
+            self.iter_stream_events(
+                stream_name=stream_name,
+                stream_position=stream_position,
+                backwards=backwards,
+                limit=limit,
+                timeout=timeout,
+            )
+        )
+
+    def iter_stream_events(
+        self,
+        stream_name: str,
+        stream_position: Optional[int] = None,
+        backwards: bool = False,
+        limit: int = sys.maxsize,
+        timeout: Optional[float] = None,
     ) -> Iterable[RecordedEvent]:
         """
         Reads recorded events from the named stream.
@@ -440,8 +465,6 @@ class ESDBClient:
             credentials=self._call_credentials,
         )
 
-    @retrygrpc
-    @autoreconnect
     def read_all_events(
         self,
         commit_position: Optional[int] = None,
@@ -488,7 +511,7 @@ class ESDBClient:
                     credentials=self._call_credentials,
                 )
             )[0]
-        except StreamNotFound:
+        except NotFound:
             # None is the correct expected position when appending both to a stream that
             # never existed, and for appending to a stream that has been deleted (in
             # this case the old "stream position" int is also correct, but None works).
@@ -536,7 +559,7 @@ class ESDBClient:
                     timeout=timeout,
                 )
             )
-        except StreamNotFound:
+        except NotFound:
             return {}, None
         else:
             metadata_event = metadata_events[0]
@@ -764,7 +787,7 @@ class ESDBClient:
     @autoreconnect
     def read_subscription(
         self, group_name: str, timeout: Optional[float] = None
-    ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
+    ) -> Tuple[SubscriptionReadRequests, SubscriptionReadResponse]:
         """
         Reads a persistent subscription on all streams.
         """
@@ -779,7 +802,7 @@ class ESDBClient:
     @autoreconnect
     def read_stream_subscription(
         self, group_name: str, stream_name: str, timeout: Optional[float] = None
-    ) -> Tuple[SubscriptionReadRequest, SubscriptionReadResponse]:
+    ) -> Tuple[SubscriptionReadRequests, SubscriptionReadResponse]:
         """
         Reads a persistent subscription on one stream.
         """

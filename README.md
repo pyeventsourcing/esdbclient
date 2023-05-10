@@ -75,10 +75,8 @@ client.append_events(
 
 # Read all events recorded in a stream.
 
-recorded = list(
-    client.read_stream_events(
-        stream_name=stream_name
-    )
+recorded = client.read_stream_events(
+    stream_name=stream_name
 )
 
 assert len(recorded) == 3
@@ -364,6 +362,8 @@ be used to record and read events in the database.
 
 ### Append events
 
+*requires leader*
+
 The `append_events()` method can be used to write a sequence of new events atomically
 to a "stream". Writing new events either creates a stream, or appends events to the end
 of a stream. This method is idempotent (see below).
@@ -479,6 +479,8 @@ processed those new events, after which time the view will not be stale.
 
 ### Append event
 
+*requires leader*
+
 The `append_event()` method can be used to write a single new event to a stream.
 
 Three arguments are required, `stream_name`, `expected_position` and `event`.
@@ -530,11 +532,10 @@ twice with the same arguments, by calling `read_stream_events()`. That is, there
 are still only three events in the stream.
 
 ```python
-response = client.read_stream_events(
+events = client.read_stream_events(
     stream_name=stream_name1
 )
 
-events = list(response)
 assert len(events) == 3
 ```
 
@@ -568,10 +569,9 @@ instantiated.
 
 ### Read stream events
 
-The `read_stream_events()` method can be used to read the recorded events of a stream.
-
-This method can be used to retrieve all the recorded events for an aggregate before
-executing a command in an application.
+The `read_stream_events()` method can be used to obtain the recorded events in a
+stream. It returns a sequence of recorded events objects. The received recorded event
+object are instances of the `RecordedEvent` class (see below).
 
 This method has one required argument, `stream_name`, which is the name of
 the stream from which to read events. By default, the recorded events in the
@@ -599,24 +599,17 @@ be returned. The default value is `sys.maxint`.
 The optional `timeout` argument is a Python `float` which sets a deadline for
 the completion of the gRPC operation.
 
-This method returns a Python iterable object that yields `RecordedEvent` objects.
-These recorded event objects are instances of the `RecordedEvent` class (see below)
-
 The example below shows how to read the recorded events of a stream
 forwards from the start of the stream to the end of the stream. The
-name of a stream is given when calling the method. In this example,
-the iterable response object is converted into a Python `list`, which
-contains all the recorded event objects that were read from the stream.
+name of a stream is given when calling the method.
 
 ```python
-response = client.read_stream_events(
+events = client.read_stream_events(
     stream_name=stream_name1
 )
-
-events = list(response)
 ```
 
-Now that we have a list of event objects, we can check we got the
+Now that we have a sequence of event objects, we can check we got the
 three events that were appended to the stream, and that they are
 ordered exactly as they were appended.
 
@@ -643,11 +636,9 @@ The example below shows how to read recorded events in a stream forwards from
 a specific stream position to the end of the stream.
 
 ```python
-events = list(
-    client.read_stream_events(
-        stream_name=stream_name1,
-        stream_position=1,
-    )
+events = client.read_stream_events(
+    stream_name=stream_name1,
+    stream_position=1,
 )
 
 assert len(events) == 2
@@ -667,11 +658,9 @@ The example below shows how to read the recorded events in a stream backwards fr
 the end of the stream to the start of the stream.
 
 ```python
-events = list(
-    client.read_stream_events(
-        stream_name=stream_name1,
-        backwards=True,
-    )
+events = client.read_stream_events(
+    stream_name=stream_name1,
+    backwards=True,
 )
 
 assert len(events) == 3
@@ -691,11 +680,9 @@ The example below shows how to read a limited number (two) of the recorded event
 in a stream forwards from the start of the stream.
 
 ```python
-events = list(
-    client.read_stream_events(
-        stream_name=stream_name1,
-        limit=2,
-    )
+events = client.read_stream_events(
+    stream_name=stream_name1,
+    limit=2,
 )
 
 assert len(events) == 2
@@ -715,13 +702,11 @@ The example below shows how to read a limited number (one) of the recorded
 events in a stream backwards from a given stream position.
 
 ```python
-events = list(
-    client.read_stream_events(
-        stream_name=stream_name1,
-        stream_position=2,
-        backwards=True,
-        limit=1,
-    )
+events = client.read_stream_events(
+    stream_name=stream_name1,
+    stream_position=2,
+    backwards=True,
+    limit=1,
 )
 
 assert len(events) == 1
@@ -735,9 +720,10 @@ assert events[0].data == event3.data
 ### Read all events
 
 The method `read_all_events()` can be used to read all recorded events
-in the database in the order they were recorded. An iterable object of
-recorded events is returned. This iterable object will stop when it has
-yielded the last recorded event.
+in the database in the order they were recorded. It returns an iterable of
+events that have been recorded in the database. Iterating over this iterable
+object will stop when it has yielded the last recorded event. The received
+recorded event object are instances of the `RecordedEvent` class (see below).
 
 This method supports seven optional arguments, `commit_position`, `backwards`,
 `filter_exclude`, `filter_include`, `filter_by_stream_name`, `limit`, and `timeout`.
@@ -981,7 +967,6 @@ be determined by the recorded commit position of the last successfully processed
 event in a downstream component.
 
 
-
 ### Get stream metadata
 
 The method `get_stream_metadata()` gets the metadata for a stream, along
@@ -997,6 +982,8 @@ be passed into `set_stream_metadata()`.
 
 
 ### Set stream metadata
+
+*requires leader*
 
 The method `set_stream_metadata()` sets the metadata for a stream, along
 with the version of the stream metadata.
@@ -1018,6 +1005,8 @@ metadata.
 
 ### Delete stream
 
+*requires leader*
+
 The method `delete_stream()` can be used to "delete" a stream.
 
 ```python
@@ -1030,6 +1019,8 @@ deleted.
 
 ### Tombstone stream
 
+*requires leader*
+
 The method `tombstone_stream()` can be used to "tombstone" a stream.
 
 ```python
@@ -1041,22 +1032,23 @@ After tombstoning a stream, it's not possible to append new events.
 
 ## Catch-up subscriptions
 
-A "catch-up subscription" can be used to receive already recorded events, but
-it will also return events that are recorded after the subscription was started.
+"Catch-up" subscriptions can be used to receive events that have been recorded
+in the database, and also events that are recorded after a subscription was started.
 
 The method `subscribe_all_events()` starts a catch-up subscription to receive all
-events in the database. The method `subscribe_stream_events()` starts a catch-up
-subscription to receive events from a specific stream.
+events that have been and will be recorded in the database. The method
+`subscribe_stream_events()` starts a catch-up subscription to receive events from
+a specific stream.
 
-Catch-up subscriptions are simply a streaming gRPC call which is
+Catch-up subscriptions encapsulate a streaming gRPC call which is
 kept open by the server, with newly recorded events sent to the client
-as the client iterates over the subscription.
+as the client iterates over the subscription response.
 
 Many catch-up subscriptions can be created, concurrently or successively, and all
 will receive all the recorded events they have been requested to receive.
 
-Received recorded events are instances of the `RecordedEvent` class (see below).
-Recorded event objects have a commit position, amonst other attributes.
+The received recorded event object are instances of the `RecordedEvent` class
+(see below).
 
 ### How to implement exactly-once event processing
 
@@ -1113,19 +1105,17 @@ component is an example of dual writing.
 ### Subscribe all events
 
 The`subscribe_all_events()` method can be used to start a "catch-up" subscription
-that can return all events in the database.
+that can return events from all streams in the database.
 
 This method can be used by a downstream component
 to process recorded events with exactly-once semantics.
 
 This method takes an optional `commit_position` argument, which can be
-used to specify a commit position from which to subscribe for
-recorded events. The default value is `None`, which means
-the subscription will operate from the first recorded event
-in the database. If a commit position is given, it must match
-an actually existing commit position in the database. The events
-that are obtained will not include the event recorded at that commit
-position.
+used to specify a commit position from which to subscribe. The default
+value is `None`, which means the subscription will operate from the first
+recorded event in the database. If a commit position is given, it must match
+an actually existing commit position in the database. The recoded events that
+are obtained will not include the event recorded at that commit position.
 
 This method also takes four other optional arguments, `filter_exclude`,
 `filter_include`, `filter_by_stream_name`, and `timeout`.
@@ -1155,9 +1145,9 @@ deadline for the completion of the gRPC operation.
 
 This method returns a Python iterator that yields recorded events, including events
 that are recorded after the subscription was created. Iterating over this object will
-therefore not stop, unless the connection to the database is lost. The connection will
-be closed when the iterator object is deleted from memory, which will happen when the
-iterator object goes out of scope or is explicitly deleted (see below). The connection
+therefore not stop, unless the connection to the database is lost. The call will
+be ended when the iterator object is deleted from memory, which will happen when the
+iterator object goes out of scope or is explicitly deleted (see below). The call
 may also be closed by the server.
 
 The subscription object can be used directly, but it might be used within a threaded
@@ -1280,7 +1270,7 @@ assert received_events[-2].id == event8.id
 assert received_events[-1].id == event9.id
 ```
 
-The catch-up subscription gRPC operation is ended as soon as the subscription object
+The catch-up subscription call is ended as soon as the subscription object
 goes out of scope or is explicitly deleted from memory.
 
 ```python
@@ -1291,7 +1281,7 @@ del subscription
 ### Subscribe stream events
 
 The`subscribe_stream_events()` method can be used to start a "catch-up" subscription
-that can return all events in a stream.
+that can return events that are recorded in a single stream.
 
 This method takes a required `stream_name` argument, which specifies the name of the stream
 from which recorded events will be received.
@@ -1387,6 +1377,8 @@ events[1].stream_name == stream_name2
 
 ### Create subscription
 
+*requires leader*
+
 The method `create_subscription()` can be used to create a
 "persistent subscription" to EventStoreDB.
 
@@ -1407,17 +1399,17 @@ receive events. Please note, the recorded event at the specified commit position
 be included in the recorded events received by the group of consumers.
 
 If neither `from_end` or `commit_position` are specified, the group of consumers
-of the subscription will receive all recorded events.
+of the subscription will potentially receive all recorded events in the database.
 
 The optional `filter_exclude` argument is a sequence of regular expressions that
 match recorded events that should not be included. This argument is ignored
 if `filter_include` is set to a non-empty sequence. By default, this argument is set
 to match the event types of "system events", so that EventStoreDB system events
-will not normally be included. See the Notes section below for more information
+will not normally be received. See the Notes section below for more information
 about filter expressions.
 
 The optional `filter_include` argument is a sequence of regular expressions
-that match recorded events that should be included. By default, this argument
+that match recorded events that should be received. By default, this argument
 is an empty tuple. If this argument is set to a non-empty sequence, the
 `filter_exclude` argument is ignored.
 
@@ -1446,6 +1438,8 @@ client.create_subscription(group_name=group_name)
 ```
 
 ### Read subscription
+
+*requires leader*
 
 The method `read_subscription()` can be used by a group of consumers to receive
 recorded events from a persistent subscription created using `create_subscription`.
@@ -1602,6 +1596,8 @@ idempotent handling of duplicate messages, and resilience to out-of-order delive
 
 ### Get subscription info
 
+*requires leader*
+
 The `get_subscription_info()` method can be used to get information for a
 persistent subscription.
 
@@ -1622,6 +1618,8 @@ The returned value is a `SubscriptionInfo` object.
 
 ### List subscriptions
 
+*requires leader*
+
 The `list_subscriptions()` method can be used to get information for all
 existing persistent subscriptions.
 
@@ -1636,6 +1634,8 @@ subscriptions = client.list_subscriptions()
 The returned value is a list of `SubscriptionInfo` objects.
 
 ### Delete subscription
+
+*requires leader*
 
 The `delete_subscription()` method can be used to delete a persistent
 subscription.
@@ -1654,6 +1654,8 @@ client.delete_subscription(
 ```
 
 ### Create stream subscription
+
+*requires leader*
 
 The `create_stream_subscription()` method can be used to create a persistent
 subscription for a stream.
@@ -1726,6 +1728,8 @@ client.create_stream_subscription(
 
 ### Read stream subscription
 
+*requires leader*
+
 The `read_stream_subscription()` method can be used to create a persistent
 subscription for a stream.
 
@@ -1781,6 +1785,8 @@ assert events[3].id == event11.id
 
 ### Get stream subscription info
 
+*requires leader*
+
 The `get_stream_subscription_info()` method can be used to get information for a
 persistent subscription for a stream.
 
@@ -1802,6 +1808,8 @@ The returned value is a `SubscriptionInfo` object.
 
 ### List stream subscriptions
 
+*requires leader*
+
 The `list_stream_subscriptions()` method can be used to get information for all
 the persistent subscriptions for a stream.
 
@@ -1820,6 +1828,8 @@ subscriptions = client.list_stream_subscriptions(
 The returned value is a list of `SubscriptionInfo` objects.
 
 ### Delete stream subscription
+
+*requires leader*
 
 The `delete_stream_subscription()` method can be used to delete a persistent
 subscription for a stream.
@@ -1843,13 +1853,13 @@ client.delete_stream_subscription(
 ### Reconnect
 
 The `reconnect()` method can be used to manually reconnect the client to a
-suitable EventStoreDB node. This method uses the same routine, for discovering the
-cluster nodes and connecting to a suitable node according to the node preference
-specified in the connection string, that is used when the client is
-instantiated. This method is thread-safe, and it is "conservative"
-in that only one reconnection will occur. Concurrent attempts to reconnect
-will block until the client has reconnected successfully, and then they will
-all return normally.
+suitable EventStoreDB node. This method uses the same routine for reading the
+cluster node states and then connecting to a suitable node according to the
+client's node preference that is used when the client is constructed. This
+method is thread-safe, and it is "conservative" in that, when it is called
+by several threads at the same time, only one reconnection will occur.
+Concurrent attempts to reconnect will block until the client has reconnected
+successfully, and then they will all return normally.
 
 ```python
 client.reconnect()
@@ -1861,24 +1871,31 @@ cluster, and, after a cluster leader election, the follower node becomes a leade
 Reconnecting to a follower node in this case is currently beyond the capabilities of
 this client, but this behavior might be implemented in a future release.
 
-Please note, all the client methods use an `@autoreconnect` decorator (which calls the
+Please note, all the client methods are decorated with `@autoreconnect` (which calls the
 `reconnect()` method) and a `@retry` decorator that will retry operations that fail
-due to connectivity issues. This means, for example, that when the node preference
-is for the client to be connected to a leader (which is the default) and when, after a
-cluster leader election, the node to which the client is connected becomes a follower,
-so that write operations will begin to fail because the client is no longer connected
-to a leader, then the client will automatically reconnect to the new leader and also
-the client will retry the failed write operations. The client also will reconnect
-according to the node preference when there are connectivity issues causing read
-operations to fail with the current connection.
+due to connection issues. The `@autoreconnect` decorator will reconnect to an available
+node in the cluster when the server that the client has been connected to has become
+unavailable, or if the client's gRPC channel happens to have been closed, and also when
+a method is called that requires a leader but the node that the client has been
+connected to stops being the leader then the client will reconnect to the current
+leader. The `@retry` decorator will then retry operations that have failed due to
+these connection issues. This means that a method that has failed due to connection
+issues will be retried after the client has reconnected.
 
-Please also note, an event-processing component that uses a catch-up subscription will
-need to be monitored for errors, and, if it fails after the subscription started, it
-will need to be restarted from the last saved commit position. In this case, the
-client will automatically reconnect to a node in the cluster when the subsequent call
-to start a catch-up subscription is made. You just need to catch the error, read
-the last saved commit position, and restart the event processing, using the same
-`ESDBClient` instance, but with a new call to `subscribe_all_events()`.
+Please also note, the exceptions to this behaviour have to do with the methods that
+return iterators. For example, an event-processing component that iterates over the
+response to a catch-up subscription method call will always need to be monitored for
+errors, and, if it fails after it has started iterating over the response, the catch-up
+subscription will need to be restarted from the event-processing component's last saved
+commit position. In this case, the client will automatically reconnect to a node in the
+cluster when the subsequent call to a catch-up subscription method is made. You just
+need to handle the exception that occurs from the iterator, then read your last saved
+commit position, and then restart your event-processing component, using the same
+`ESDBClient` instance, but with a new catch-up subscription iterator. Similarly, when
+reading persistent subscriptions: if there are connectivity issues after you have
+started iterating over the response, then the server call will need to be restarted.
+For the operations return an iterator, the decorators mentioned above will have exited
+before any subsequent gRPC streaming error occurs.
 
 
 ### Close

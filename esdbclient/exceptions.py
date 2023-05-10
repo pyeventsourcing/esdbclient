@@ -36,15 +36,15 @@ class NodeIsNotLeader(ESDBClientException):
     """
 
 
-class StreamNotFound(ESDBClientException):
+class NotFound(ESDBClientException):
     """
-    Raised when stream is not found.
+    Raised when stream or subscription is not found.
     """
 
 
-class SubscriptionNotFound(ESDBClientException):
+class SubscriptionConfirmationError(ESDBClientException):
     """
-    Raised when persistent subscription is not found.
+    Raised when subscription confirmation fails.
     """
 
 
@@ -101,15 +101,21 @@ class BadRequestError(ESDBClientException):
     """
 
 
-class GossipSeedError(ESDBClientException):
+class DiscoveryFailed(ESDBClientException):
+    """
+    Raised when client fails to satisfy node preference using gossip cluster info.
+    """
+
+
+class GossipSeedError(DiscoveryFailed):
     """
     Raised when client has no gossip seeds.
     """
 
 
-class DiscoveryFailed(ESDBClientException):
+class DNSError(DiscoveryFailed):
     """
-    Raised when client fails to satisfy node preference using gossip cluster info.
+    Raised when client request to DNS fails.
     """
 
 

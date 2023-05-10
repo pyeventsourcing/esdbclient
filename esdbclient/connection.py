@@ -5,12 +5,9 @@ from uuid import uuid4
 
 from grpc import Channel
 
-from esdbclient.esdbapi import (
-    ClusterGossipService,
-    GossipService,
-    PersistentSubscriptionsService,
-    StreamsService,
-)
+from esdbclient.gossip import ClusterGossipService, GossipService
+from esdbclient.persistent import PersistentSubscriptionsService
+from esdbclient.streams import StreamsService
 
 URI_SCHEME_ESDB = "esdb"
 URI_SCHEME_ESDB_DISCOVER = "esdb+discover"

@@ -18,12 +18,7 @@ from esdbclient.connection import (
     NODE_PREFERENCE_LEADER,
     ConnectionSpec,
 )
-from esdbclient.esdbapi import (
-    NODE_STATE_FOLLOWER,
-    NODE_STATE_LEADER,
-    SubscriptionReadRequest,
-    handle_rpc_error,
-)
+from esdbclient.esdbapibase import handle_rpc_error
 from esdbclient.events import NewEvent
 from esdbclient.exceptions import (
     DeadlineExceeded,
@@ -33,13 +28,14 @@ from esdbclient.exceptions import (
     GossipSeedError,
     GrpcError,
     NodeIsNotLeader,
+    NotFound,
     ReadOnlyReplicaNotFound,
     ServiceUnavailable,
     StreamIsDeleted,
-    StreamNotFound,
-    SubscriptionNotFound,
     WrongExpectedPosition,
 )
+from esdbclient.gossip import NODE_STATE_FOLLOWER, NODE_STATE_LEADER
+from esdbclient.persistent import SubscriptionReadRequests
 from esdbclient.protos.Grpc import persistent_pb2
 
 
@@ -329,7 +325,21 @@ class TestESDBClient(TestCase):
             ESDBClient(uri="esdb://")
 
     def test_raises_discovery_failed_exception(self) -> None:
+        self.construct_esdb_client()
+
         # Reconstruct connection with wrong port.
+        self.client._connection.close()
+        self.client._connection = self.client._construct_connection("localhost:2222")
+        self.client.connection_spec._targets = ["localhost:2222"]
+
+        cm: _AssertRaisesContext[Any]
+
+        with self.assertRaises(DiscoveryFailed):
+            self.client.read_stream_events(str(uuid4()))
+
+        # Todo: Maybe other methods here...?
+
+        # Reconstruct client with wrong port.
         esdb_target = "localhost:2222"
 
         if self.ESDB_TLS:
@@ -366,45 +376,15 @@ class TestESDBClient(TestCase):
         # Reconstruct connection with wrong port.
         self.client._connection.close()
         self.client._connection = self.client._construct_connection("localhost:2222")
-        # self.client.connection_spec._targets = ["localhost:2222"]
+        self.client.connection_spec._targets = ["localhost:2222"]
 
-        cm: _AssertRaisesContext[Any]
+        with self.assertRaises(ServiceUnavailable):
+            list(self.client.iter_stream_events(str(uuid4())))
 
-        resp = self.client.read_stream_events(str(uuid4()))
-        with self.assertRaises(ServiceUnavailable) as cm:
-            list(resp)
-        self.assertIn(
-            "failed to connect to all addresses", cm.exception.args[0].details()
-        )
+        with self.assertRaises(ServiceUnavailable):
+            list(self.client.read_all_events())
 
-        resp = self.client.read_all_events()
-        with self.assertRaises(ServiceUnavailable) as cm:
-            list(resp)
-        self.assertIn(
-            "failed to connect to all addresses", cm.exception.args[0].details()
-        )
-
-        group_name = f"my-subscription-{uuid4().hex}"
-        read_req, read_resp = self.client.read_subscription(
-            group_name=group_name,
-        )
-        with self.assertRaises(ServiceUnavailable) as cm:
-            list(read_resp)
-        self.assertIn(
-            "failed to connect to all addresses", cm.exception.args[0].details()
-        )
-
-        group_name = f"my-subscription-{uuid4().hex}"
-        read_req, read_resp = self.client.read_stream_subscription(
-            group_name=group_name, stream_name=str(uuid4())
-        )
-        with self.assertRaises(ServiceUnavailable) as cm:
-            list(read_resp)
-        self.assertIn(
-            "failed to connect to all addresses", cm.exception.args[0].details()
-        )
-
-    def test_stream_not_found_exception_from_read_stream_events(self) -> None:
+    def test_read_stream_events_raises_not_found(self) -> None:
         # Note, we never get a StreamNotFound from subscribe_stream_events(), which is
         # logical because the stream might be written after the subscription. So here
         # we just test read_stream_events().
@@ -412,38 +392,32 @@ class TestESDBClient(TestCase):
         self.construct_esdb_client()
         stream_name = str(uuid4())
 
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
 
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name, backwards=True))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name, backwards=True)
 
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name, stream_position=1))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name, stream_position=1)
 
-        with self.assertRaises(StreamNotFound):
-            list(
-                self.client.read_stream_events(
-                    stream_name, stream_position=1, backwards=True
-                )
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(
+                stream_name, stream_position=1, backwards=True
             )
 
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name, limit=10))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name, limit=10)
 
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name, backwards=True, limit=10))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name, backwards=True, limit=10)
 
-        with self.assertRaises(StreamNotFound):
-            list(
-                self.client.read_stream_events(stream_name, stream_position=1, limit=10)
-            )
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name, stream_position=1, limit=10)
 
-        with self.assertRaises(StreamNotFound):
-            list(
-                self.client.read_stream_events(
-                    stream_name, stream_position=1, backwards=True, limit=10
-                )
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(
+                stream_name, stream_position=1, backwards=True, limit=10
             )
 
     def test_append_event_and_read_stream_with_occ(self) -> None:
@@ -451,8 +425,8 @@ class TestESDBClient(TestCase):
         stream_name = str(uuid4())
 
         # Check stream not found.
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
 
         # Check stream position is None.
         self.assertEqual(self.client.get_stream_position(stream_name), None)
@@ -471,7 +445,7 @@ class TestESDBClient(TestCase):
 
         # # Check stream still not found.
         # with self.assertRaises(StreamNotFound):
-        #     list(self.client.read_stream_events(stream_name))
+        #     self.client.read_stream_events(stream_name)
 
         # # Check stream position is None.
         # self.assertEqual(self.client.get_stream_position(stream_name), None)
@@ -523,7 +497,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(self.client.get_stream_position(stream_name), 0)
 
         # Read the stream forwards from the start (expect one event).
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 1)
 
         # Check the attributes of the recorded event.
@@ -555,40 +529,36 @@ class TestESDBClient(TestCase):
         self.assertGreater(commit_position2, commit_position1)
 
         # Read the stream (expect two events in 'forwards' order).
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
 
         # Read the stream backwards from the end.
-        events = list(self.client.read_stream_events(stream_name, backwards=True))
+        events = self.client.read_stream_events(stream_name, backwards=True)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event2.id)
         self.assertEqual(events[1].id, event1.id)
 
         # Read the stream forwards from position 1.
-        events = list(self.client.read_stream_events(stream_name, stream_position=1))
+        events = self.client.read_stream_events(stream_name, stream_position=1)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)
 
         # Read the stream backwards from position 0.
-        events = list(
-            self.client.read_stream_events(
-                stream_name, stream_position=0, backwards=True
-            )
+        events = self.client.read_stream_events(
+            stream_name, stream_position=0, backwards=True
         )
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event1.id)
 
         # Read the stream forwards from start with limit.
-        events = list(self.client.read_stream_events(stream_name, limit=1))
+        events = self.client.read_stream_events(stream_name, limit=1)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event1.id)
 
         # Read the stream backwards from end with limit.
-        events = list(
-            self.client.read_stream_events(stream_name, backwards=True, limit=1)
-        )
+        events = self.client.read_stream_events(stream_name, backwards=True, limit=1)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)
 
@@ -609,31 +579,27 @@ class TestESDBClient(TestCase):
         self.assertGreater(commit_position3, commit_position2)
 
         # Read the stream forwards from start (expect three events).
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
         self.assertEqual(events[2].id, event3.id)
 
         # Read the stream backwards from end (expect three events).
-        events = list(self.client.read_stream_events(stream_name, backwards=True))
+        events = self.client.read_stream_events(stream_name, backwards=True)
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].id, event3.id)
         self.assertEqual(events[1].id, event2.id)
         self.assertEqual(events[2].id, event1.id)
 
         # Read the stream forwards from position 1 with limit 1.
-        events = list(
-            self.client.read_stream_events(stream_name, stream_position=1, limit=1)
-        )
+        events = self.client.read_stream_events(stream_name, stream_position=1, limit=1)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)
 
         # Read the stream backwards from position 1 with limit 1.
-        events = list(
-            self.client.read_stream_events(
-                stream_name, stream_position=1, backwards=True, limit=1
-            )
+        events = self.client.read_stream_events(
+            stream_name, stream_position=1, backwards=True, limit=1
         )
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)
@@ -644,7 +610,7 @@ class TestESDBClient(TestCase):
         )
         self.assertEqual(commit_position2_1, commit_position2)
 
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -660,9 +626,7 @@ class TestESDBClient(TestCase):
         commit_position = self.client.append_event(
             stream_name, expected_position=-1, event=event1
         )
-        events = list(
-            self.client.read_stream_events(stream_name, backwards=True, limit=1)
-        )
+        events = self.client.read_stream_events(stream_name, backwards=True, limit=1)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event1.id)
 
@@ -686,7 +650,7 @@ class TestESDBClient(TestCase):
     #     )
     #
     #     # Read stream and check recorded events.
-    #     events = list(self.client.read_stream_events(stream_name))
+    #     events = self.client.read_stream_events(stream_name)
     #     self.assertEqual(len(events), 2)
     #     self.assertEqual(events[0].id, event1.id)
     #     self.assertEqual(events[1].id, event2.id)
@@ -707,7 +671,7 @@ class TestESDBClient(TestCase):
     #     )
     #
     #     # Read stream and check recorded events.
-    #     events = list(self.client.read_stream_events(stream_name))
+    #     events = self.client.read_stream_events(stream_name)
     #     self.assertEqual(len(events), 4)
     #     self.assertEqual(events[0].id, event1.id)
     #     self.assertEqual(events[1].id, event2.id)
@@ -744,7 +708,7 @@ class TestESDBClient(TestCase):
     #     )
     #
     #     # Read stream and check recorded events.
-    #     events = list(self.client.read_stream_events(stream_name))
+    #     events = self.client.read_stream_events(stream_name)
     #     self.assertEqual(len(events), 2)
     #     self.assertEqual(events[0].id, event1.id)
     #     self.assertEqual(events[1].id, event2.id)
@@ -772,7 +736,7 @@ class TestESDBClient(TestCase):
     #         )
     #
     #     # Read stream and check recorded events.
-    #     events = list(self.client.read_stream_events(stream_name))
+    #     events = self.client.read_stream_events(stream_name)
     #     self.assertEqual(len(events), 2)
     #     self.assertEqual(events[0].id, event1.id)
     #     self.assertEqual(events[1].id, event2.id)
@@ -787,7 +751,7 @@ class TestESDBClient(TestCase):
         event2 = NewEvent(type="OrderUpdated", data=random_data())
 
         # Fail to append (stream does not exist).
-        with self.assertRaises(StreamNotFound):
+        with self.assertRaises(NotFound):
             self.client.append_events(
                 stream_name, expected_position=1, events=[event1, event2]
             )
@@ -798,7 +762,7 @@ class TestESDBClient(TestCase):
         )
 
         # Read stream and check recorded events.
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -826,7 +790,7 @@ class TestESDBClient(TestCase):
             )
 
         # Read stream and check recorded events.
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -846,7 +810,7 @@ class TestESDBClient(TestCase):
         )
 
         # Read stream and check recorded events.
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -867,7 +831,7 @@ class TestESDBClient(TestCase):
         )
 
         # Read stream and check recorded events.
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 4)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -926,8 +890,8 @@ class TestESDBClient(TestCase):
                 timeout=0,
             )
 
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name1))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name1)
 
         # # Timeout appending new event.
         # with self.assertRaises(DeadlineExceeded):
@@ -937,7 +901,7 @@ class TestESDBClient(TestCase):
         #
         # # Timeout reading stream.
         # with self.assertRaises(DeadlineExceeded):
-        #     list(self.client.read_stream_events(stream_name1, timeout=0))
+        #     self.client.read_stream_events(stream_name1, timeout=0)
 
     def test_read_all_events_filter_default(self) -> None:
         self.construct_esdb_client()
@@ -1281,8 +1245,8 @@ class TestESDBClient(TestCase):
         stream_name = str(uuid4())
 
         # Check stream not found.
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
 
         # Construct three events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -1295,7 +1259,7 @@ class TestESDBClient(TestCase):
         self.client.append_events(stream_name, expected_position=0, events=[event2])
 
         # Read stream, expect two events.
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 2)
 
         # Expect stream position is an int.
@@ -1316,8 +1280,8 @@ class TestESDBClient(TestCase):
         self.client.delete_stream(stream_name, expected_position=1)
 
         # Expect "stream not found" when reading deleted stream.
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
 
         # Expect stream position is None.
         # Todo: Then how to you know which expected_position to use
@@ -1337,7 +1301,7 @@ class TestESDBClient(TestCase):
         # Can read from deleted stream if new events have been appended.
         # Todo: This behaviour is a little bit flakey? Sometimes we get StreamNotFound.
         sleep(0.1)
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         # Expect only to get events appended after stream was deleted.
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event3.id)
@@ -1349,15 +1313,15 @@ class TestESDBClient(TestCase):
 
         # Can still read the events.
         self.assertEqual(3, self.client.get_stream_position(stream_name))
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 2)
 
         # Can delete the stream again, using correct expected position.
         self.client.delete_stream(stream_name, expected_position=3)
 
         # Stream is now "not found".
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
         self.assertEqual(None, self.client.get_stream_position(stream_name))
 
         # Can't call delete again with incorrect expected position.
@@ -1372,12 +1336,12 @@ class TestESDBClient(TestCase):
         stream_name = str(uuid4())
 
         # Check stream not found.
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
 
         # Can't delete stream that doesn't exist, while expecting "any" version.
         # Todo: I don't fully understand why this should cause an error.
-        with self.assertRaises(StreamNotFound):
+        with self.assertRaises(NotFound):
             self.client.delete_stream(stream_name, expected_position=-1)
 
         # Construct three events.
@@ -1390,7 +1354,7 @@ class TestESDBClient(TestCase):
         self.client.append_events(stream_name, expected_position=0, events=[event2])
 
         # Read stream, expect two events.
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 2)
 
         # Expect stream position is an int.
@@ -1403,8 +1367,8 @@ class TestESDBClient(TestCase):
         self.client.delete_stream(stream_name, expected_position=-1)
 
         # Expect "stream not found" when reading deleted stream.
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
 
         # Expect stream position is None.
         self.assertEqual(None, self.client.get_stream_position(stream_name))
@@ -1417,15 +1381,15 @@ class TestESDBClient(TestCase):
         # Can read from deleted stream if new events have been appended.
         # Todo: This behaviour is a little bit flakey? Sometimes we get StreamNotFound.
         sleep(0.1)
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         # Expect only to get events appended after stream was deleted.
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event3.id)
 
         # Delete the stream again, specifying "any" expected position.
         self.client.delete_stream(stream_name, expected_position=-1)
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
         self.assertEqual(None, self.client.get_stream_position(stream_name))
 
         # Can delete again without error.
@@ -1436,11 +1400,11 @@ class TestESDBClient(TestCase):
         stream_name = str(uuid4())
 
         # Check stream not found.
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
 
         # Can't delete stream, expecting stream exists, because stream never existed.
-        with self.assertRaises(StreamNotFound):
+        with self.assertRaises(NotFound):
             self.client.delete_stream(stream_name, expected_position=None)
 
         # Construct three events.
@@ -1453,7 +1417,7 @@ class TestESDBClient(TestCase):
         self.client.append_events(stream_name, expected_position=0, events=[event2])
 
         # Read stream, expect two events.
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 2)
 
         # Expect stream position is an int.
@@ -1467,8 +1431,8 @@ class TestESDBClient(TestCase):
             self.client.delete_stream(stream_name, expected_position=None)
 
         # Expect "stream not found" when reading deleted stream.
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
 
         # Expect stream position is None.
         self.assertEqual(None, self.client.get_stream_position(stream_name))
@@ -1483,15 +1447,15 @@ class TestESDBClient(TestCase):
         # Can read from deleted stream if new events have been appended.
         # Todo: This behaviour is a little bit flakey? Sometimes we get StreamNotFound.
         sleep(0.1)
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         # Expect only to get events appended after stream was deleted.
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event3.id)
 
         # Can delete the appended stream, whilst expecting stream exists.
         self.client.delete_stream(stream_name, expected_position=None)
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
         self.assertEqual(None, self.client.get_stream_position(stream_name))
 
         # Can't call delete again, expecting stream exists, because it was deleted.
@@ -1503,8 +1467,8 @@ class TestESDBClient(TestCase):
         stream_name = str(uuid4())
 
         # Check stream not found.
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
 
         # Construct three events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -1516,7 +1480,7 @@ class TestESDBClient(TestCase):
         self.client.append_events(stream_name, expected_position=0, events=[event2])
 
         # Read stream, expect two events.
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 2)
 
         # Expect stream position is an int.
@@ -1538,7 +1502,7 @@ class TestESDBClient(TestCase):
 
         # Can't read from stream, because stream is deleted.
         with self.assertRaises(StreamIsDeleted):
-            list(self.client.read_stream_events(stream_name))
+            self.client.read_stream_events(stream_name)
 
         # Can't get stream position, because stream is deleted.
         with self.assertRaises(StreamIsDeleted):
@@ -1573,7 +1537,7 @@ class TestESDBClient(TestCase):
         self.client.append_events(stream_name2, expected_position=0, events=[event2])
 
         # Read stream, expect two events.
-        events = list(self.client.read_stream_events(stream_name2))
+        events = self.client.read_stream_events(stream_name2)
         self.assertEqual(len(events), 2)
 
         # Expect stream position is an int.
@@ -1587,7 +1551,7 @@ class TestESDBClient(TestCase):
             self.client.tombstone_stream(stream_name2, expected_position=-1)
 
         with self.assertRaises(StreamIsDeleted):
-            list(self.client.read_stream_events(stream_name2))
+            self.client.read_stream_events(stream_name2)
 
         with self.assertRaises(StreamIsDeleted):
             self.client.get_stream_position(stream_name2)
@@ -1597,11 +1561,11 @@ class TestESDBClient(TestCase):
         stream_name = str(uuid4())
 
         # Check stream not found.
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
 
         # Can't tombstone stream that doesn't exist, while expecting "stream exists".
-        with self.assertRaises(StreamNotFound):
+        with self.assertRaises(NotFound):
             self.client.tombstone_stream(stream_name, expected_position=None)
 
         # Construct two events.
@@ -1613,7 +1577,7 @@ class TestESDBClient(TestCase):
         self.client.append_events(stream_name, expected_position=0, events=[event2])
 
         # Read stream, expect two events.
-        events = list(self.client.read_stream_events(stream_name))
+        events = self.client.read_stream_events(stream_name)
         self.assertEqual(len(events), 2)
 
         # Expect stream position is an int.
@@ -1627,7 +1591,7 @@ class TestESDBClient(TestCase):
             self.client.tombstone_stream(stream_name, expected_position=None)
 
         with self.assertRaises(StreamIsDeleted):
-            list(self.client.read_stream_events(stream_name))
+            self.client.read_stream_events(stream_name)
 
         with self.assertRaises(StreamIsDeleted):
             self.client.get_stream_position(stream_name)
@@ -2514,7 +2478,7 @@ class TestESDBClient(TestCase):
 
         group_name = f"my-subscription-{uuid4().hex}"
 
-        with self.assertRaises(SubscriptionNotFound):
+        with self.assertRaises(NotFound):
             self.client.get_subscription_info(group_name)
 
         # Create persistent subscription.
@@ -2546,7 +2510,7 @@ class TestESDBClient(TestCase):
 
         group_name = f"my-subscription-{uuid4().hex}"
 
-        with self.assertRaises(SubscriptionNotFound):
+        with self.assertRaises(NotFound):
             self.client.delete_subscription(group_name=group_name)
 
         # Create persistent subscription.
@@ -2567,7 +2531,7 @@ class TestESDBClient(TestCase):
         group_names = [s.group_name for s in subscriptions_after]
         self.assertNotIn(group_name, group_names)
 
-        with self.assertRaises(SubscriptionNotFound):
+        with self.assertRaises(NotFound):
             self.client.delete_subscription(group_name=group_name)
 
     def test_create_and_read_stream_subscription_from_start(self) -> None:
@@ -2847,7 +2811,7 @@ class TestESDBClient(TestCase):
         stream_name = str(uuid4())
         group_name = f"my-subscription-{uuid4().hex}"
 
-        with self.assertRaises(SubscriptionNotFound):
+        with self.assertRaises(NotFound):
             self.client.get_stream_subscription_info(
                 group_name=group_name,
                 stream_name=stream_name,
@@ -2895,7 +2859,7 @@ class TestESDBClient(TestCase):
         stream_name = str(uuid4())
         group_name = f"my-subscription-{uuid4().hex}"
 
-        with self.assertRaises(SubscriptionNotFound):
+        with self.assertRaises(NotFound):
             self.client.delete_stream_subscription(
                 group_name=group_name, stream_name=stream_name
             )
@@ -2916,7 +2880,7 @@ class TestESDBClient(TestCase):
         subscriptions_after = self.client.list_stream_subscriptions(stream_name)
         self.assertEqual(len(subscriptions_after), 0)
 
-        with self.assertRaises(SubscriptionNotFound):
+        with self.assertRaises(NotFound):
             self.client.delete_stream_subscription(
                 group_name=group_name, stream_name=stream_name
             )
@@ -2938,7 +2902,7 @@ class TestESDBClient(TestCase):
         self.client.append_events(
             stream_name, expected_position=None, events=[event1, event2]
         )
-        self.assertEqual(2, len(list(self.client.read_stream_events(stream_name))))
+        self.assertEqual(2, len(self.client.read_stream_events(stream_name)))
 
         # Get stream metadata (should be empty).
         stream_metadata, position = self.client.get_stream_metadata(stream_name)
@@ -2946,8 +2910,8 @@ class TestESDBClient(TestCase):
 
         # Delete stream.
         self.client.delete_stream(stream_name, expected_position=None)
-        with self.assertRaises(StreamNotFound):
-            list(self.client.read_stream_events(stream_name))
+        with self.assertRaises(NotFound):
+            self.client.read_stream_events(stream_name)
 
         # Get stream metadata (should have "$tb").
         stream_metadata, position = self.client.get_stream_metadata(stream_name)
@@ -3046,6 +3010,8 @@ class TestESDBClient(TestCase):
                 elif member_info.state == NODE_STATE_FOLLOWER:
                     num_followers += 1
             self.assertEqual(num_leaders, 1)
+
+            # Todo: This is very occasionally 1...
             self.assertEqual(num_followers, 2)
         else:
             self.fail(f"Test doesn't work with cluster size {self.ESDB_CLUSTER_SIZE}")
@@ -3069,6 +3035,8 @@ class TestESDBClient(TestCase):
                 elif member_info.state == NODE_STATE_FOLLOWER:
                     num_followers += 1
             self.assertEqual(num_leaders, 1)
+
+            # Todo: This is very occasionally 1...
             self.assertEqual(num_followers, 2)
         else:
             self.fail(f"Test doesn't work with cluster size {self.ESDB_CLUSTER_SIZE}")
@@ -3128,74 +3096,7 @@ class TestGrpcOptions(TestCase):
         self.assertEqual(self.client.grpc_options["grpc.keepalive_timeout_ms"], 1000)
 
 
-class TestSeparateReadAndWriteClients(TestCase):
-    def setUp(self) -> None:
-        uri = "esdb://admin:changeit@127.0.0.1:2111"
-        ca_cert = read_ca_cert()
-        self.writer = ESDBClient(
-            uri + "?NodePreference=leader", root_certificates=ca_cert
-        )
-        self.reader = ESDBClient(
-            uri + "?NodePreference=follower", root_certificates=ca_cert
-        )
-
-    def tearDown(self) -> None:
-        self.writer.close()
-        self.reader.close()
-
-    def test_can_write_to_leader_and_read_from_follower(self) -> None:
-        # Write to leader.
-        stream_name = str(uuid4())
-        event1 = NewEvent(type="OrderCreated", data=random_data())
-        event2 = NewEvent(type="OrderUpdated", data=random_data())
-        self.writer.append_events(
-            stream_name=stream_name,
-            expected_position=None,
-            events=[event1, event2],
-        )
-        # Read from follower.
-        recorded_events = []
-        for recorded_event in self.reader.subscribe_stream_events(
-            stream_name, timeout=5
-        ):
-            recorded_events.append(recorded_event)
-            if len(recorded_events) == 2:
-                break
-
-    def test_cannot_write_to_follower(self) -> None:
-        # Try writing to follower...
-        stream_name = str(uuid4())
-        event1 = NewEvent(type="OrderCreated", data=random_data())
-        event2 = NewEvent(type="OrderUpdated", data=random_data())
-
-        with self.assertRaises(NodeIsNotLeader):
-            self.reader.append_event(stream_name, expected_position=None, event=event1)
-
-        # Todo: Sometimes this just causes an "Exception was thrown by handler." error.
-        with self.assertRaises(NodeIsNotLeader):
-            self.reader.append_events(
-                stream_name, expected_position=None, events=[event1, event2]
-            )
-
-        with self.assertRaises(NodeIsNotLeader):
-            self.reader.set_stream_metadata(stream_name, metadata={})
-
-        with self.assertRaises(NodeIsNotLeader):
-            self.reader.delete_stream(stream_name, expected_position=None)
-
-        with self.assertRaises(NodeIsNotLeader):
-            self.reader.tombstone_stream(stream_name, expected_position=None)
-
-        with self.assertRaises(NodeIsNotLeader):
-            self.reader.create_subscription(group_name="group1")
-
-        with self.assertRaises(NodeIsNotLeader):
-            self.reader.create_stream_subscription(
-                group_name="group1", stream_name=stream_name
-            )
-
-
-class TestAutoReconnectToNewLeader(TestCase):
+class TestRequiresLeaderHeader(TestCase):
     def setUp(self) -> None:
         self.uri = "esdb://admin:changeit@127.0.0.1:2111"
         self.ca_cert = read_ca_cert()
@@ -3206,30 +3107,77 @@ class TestAutoReconnectToNewLeader(TestCase):
             self.uri + "?NodePreference=follower", root_certificates=self.ca_cert
         )
 
-        # Give the writer a connection to a follower.
-        old, self.writer._connection = self.writer._connection, self.reader._connection
-
-        # - this is hopeful mitigation for the "Exception was thrown by handler."
-        #   occasionally issue in test_append_events()
-        old.close()
-        sleep(0.1)
-
     def tearDown(self) -> None:
         self.writer.close()
         self.reader.close()
 
-    def test_append_event(self) -> None:
-        # Append event.
-        stream_name = str(uuid4())
-        event1 = NewEvent(type="OrderCreated", data=random_data())
-
-        self.writer.append_event(stream_name, expected_position=None, event=event1)
-
-    def test_append_events(self) -> None:
-        # Append events.
+    def test_can_subscribe_all_events_on_follower(self) -> None:
+        # Write to leader.
         stream_name = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
+        self.writer.append_events(
+            stream_name=stream_name,
+            expected_position=None,
+            events=[event1, event2],
+        )
+        # Read from follower.
+        for recorded_event in self.reader.subscribe_all_events(timeout=5):
+            if recorded_event.id == event2.id:
+                break
+
+    def test_can_subscribe_stream_events_on_follower(self) -> None:
+        # Write to leader.
+        stream_name = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        self.writer.append_events(
+            stream_name=stream_name,
+            expected_position=None,
+            events=[event1, event2],
+        )
+        # Read from follower.
+        for recorded_event in self.reader.subscribe_stream_events(
+            stream_name, timeout=5
+        ):
+            if recorded_event.id == event2.id:
+                break
+
+    def _set_reader_connection_on_writer(self) -> None:
+        # Give the writer a connection to a follower.
+        old, self.writer._connection = self.writer._connection, self.reader._connection
+        # - this is hopeful mitigation for the "Exception was thrown by handler."
+        #   occasionally issue in test_append_events()
+        #   - which might just have been a bug in EventStoreDB 22.10.0...
+        old.close()
+        sleep(0.1)
+
+    def test_reconnects_to_new_leader_on_append_event(self) -> None:
+        # Fail to write to follower.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        stream_name = str(uuid4())
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.append_event(stream_name, expected_position=None, event=event1)
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Reconnect and write to leader.
+        self.writer.append_event(stream_name, expected_position=None, event=event1)
+
+    def test_reconnects_to_new_leader_on_append_events(self) -> None:
+        # Fail to write to follower.
+        stream_name = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.append_events(
+                stream_name, expected_position=None, events=[event1, event2]
+            )
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
 
         # Todo: Occasionally getting "Exception was thrown by handler." from this. Why?
         #   esdbclient.exceptions.ExceptionThrownByHandler: <_MultiThreadedRendezvous of
@@ -3239,25 +3187,25 @@ class TestAutoReconnectToNewLeader(TestCase):
         #       debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"
         #       Exception was thrown by handler.", grpc_status:2, created_time:"2023-05
         #       -07T12:04:26.287327771+00:00"}"
+
+        # Reconnect and write to leader.
         self.writer.append_events(
             stream_name, expected_position=None, events=[event1, event2]
         )
 
-    def test_set_stream_metadata(self) -> None:
-        self.writer.set_stream_metadata(str(uuid4()), metadata={})
+    def test_reconnects_to_new_leader_on_set_stream_metadata(self) -> None:
+        # Fail to write to follower.
+        stream_name = str(uuid4())
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.set_stream_metadata(stream_name=stream_name, metadata={})
 
-    def test_delete_stream(self) -> None:
-        # Setup again (need different setup)...
-        self.writer.close()
-        self.reader.close()
+        # Swap connection.
+        self._set_reader_connection_on_writer()
 
-        self.writer = ESDBClient(
-            self.uri + "?NodePreference=leader", root_certificates=self.ca_cert
-        )
-        self.reader = ESDBClient(
-            self.uri + "?NodePreference=follower", root_certificates=self.ca_cert
-        )
+        # Reconnect and write to leader.
+        self.writer.set_stream_metadata(stream_name=stream_name, metadata={})
 
+    def test_reconnects_to_new_leader_on_delete_stream(self) -> None:
         # Need to append some events before deleting stream...
         stream_name = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -3266,24 +3214,201 @@ class TestAutoReconnectToNewLeader(TestCase):
             stream_name, expected_position=None, events=[event1, event2]
         )
 
-        # Give the writer a connection to the follower.
-        self.writer._connection = self.reader._connection
+        # Fail to delete stream on follower.
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.delete_stream(stream_name, expected_position=1)
 
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Delete stream on leader.
         self.writer.delete_stream(stream_name, expected_position=1)
 
-    def test_tombstone_stream(self) -> None:
+    def test_reconnects_to_new_leader_on_tombstone_stream(self) -> None:
+        # Fail to tombstone stream on follower.
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.tombstone_stream(str(uuid4()), expected_position=-1)
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Tombstone stream on leader.
         self.writer.tombstone_stream(str(uuid4()), expected_position=-1)
 
-    def test_create_subscription(self) -> None:
+    def test_reconnects_to_new_leader_on_create_subscription(self) -> None:
+        # Fail to create subscription on follower.
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.create_subscription(group_name=f"group{str(uuid4())}")
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Create subscription on leader.
         self.writer.create_subscription(group_name=f"group{str(uuid4())}")
 
-    def test_create_stream_subscription(self) -> None:
+    def test_reconnects_to_new_leader_on_create_stream_subscription(self) -> None:
+        # Fail to create subscription on follower.
+        group_name = f"group{str(uuid4())}"
+        stream_name = str(uuid4())
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.create_stream_subscription(
+                group_name=group_name, stream_name=stream_name
+            )
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Create subscription on leader.
         self.writer.create_stream_subscription(
-            group_name="group1", stream_name=str(uuid4())
+            group_name=group_name, stream_name=stream_name
+        )
+
+    def test_reconnects_to_new_leader_on_read_subscription(self) -> None:
+        # Create subscription on leader.
+        group_name = f"group{str(uuid4())}"
+        self.writer.create_subscription(group_name=group_name)
+
+        # Fail to read subscription on follower.
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.read_subscription(group_name=group_name)
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Reconnect and read subscription on leader.
+        self.writer.read_subscription(group_name=group_name)
+
+    def test_reconnects_to_new_leader_on_read_stream_subscription(self) -> None:
+        # Create stream subscription on leader.
+        group_name = f"group{str(uuid4())}"
+        stream_name = str(uuid4())
+        self.writer.create_stream_subscription(
+            group_name=group_name, stream_name=stream_name
+        )
+
+        # Fail to read stream subscription on follower.
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.read_stream_subscription(
+                group_name=group_name, stream_name=stream_name
+            )
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Reconnect and read stream subscription on leader.
+        self.writer.read_stream_subscription(
+            group_name=group_name, stream_name=stream_name
+        )
+
+    def test_reconnects_to_new_leader_on_list_subscriptions(self) -> None:
+        # Create subscription on leader.
+        group_name = f"group{str(uuid4())}"
+        self.writer.create_subscription(group_name=group_name)
+
+        # Fail to list subscriptions on follower.
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.list_subscriptions()
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Reconnect and list subscriptions on leader.
+        self.writer.list_subscriptions()
+
+    def test_reconnects_to_new_leader_on_list_stream_subscriptions(self) -> None:
+        # Create stream subscription on leader.
+        group_name = f"group{str(uuid4())}"
+        stream_name = str(uuid4())
+        self.writer.create_stream_subscription(
+            group_name=group_name, stream_name=stream_name
+        )
+
+        # Fail to list stream subscriptions on follower.
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.list_stream_subscriptions(stream_name=stream_name)
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Reconnect and list stream subscriptions on leader.
+        self.writer.list_stream_subscriptions(stream_name=stream_name)
+
+    def test_reconnects_to_new_leader_on_get_subscription_info(self) -> None:
+        # Create subscription on leader.
+        group_name = f"group{str(uuid4())}"
+        self.writer.create_subscription(group_name=group_name)
+
+        # Fail to get subscription info on follower.
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.get_subscription_info(group_name=group_name)
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Reconnect and get subscription info on leader.
+        self.writer.get_subscription_info(group_name=group_name)
+
+    def test_reconnects_to_new_leader_on_get_stream_subscription_info(self) -> None:
+        # Create subscription on leader.
+        group_name = f"group{str(uuid4())}"
+        stream_name = str(uuid4())
+        self.writer.create_stream_subscription(
+            group_name=group_name, stream_name=stream_name
+        )
+
+        # Fail to get subscription info on follower.
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.get_stream_subscription_info(
+                group_name=group_name, stream_name=stream_name
+            )
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Reconnect and get subscription info on leader.
+        self.writer.get_stream_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+
+    def test_reconnects_to_new_leader_on_delete_subscription(self) -> None:
+        # Create subscription on leader.
+        group_name = f"group{str(uuid4())}"
+        self.writer.create_subscription(group_name=group_name)
+
+        # Fail to delete subscription on follower.
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.delete_subscription(group_name=group_name)
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Reconnect and delete subscription on leader.
+        self.writer.delete_subscription(group_name=group_name)
+
+    def test_reconnects_to_new_leader_on_delete_stream_subscription(self) -> None:
+        # Create stream subscription on leader.
+        group_name = f"group{str(uuid4())}"
+        stream_name = str(uuid4())
+        self.writer.create_stream_subscription(
+            group_name=group_name, stream_name=stream_name
+        )
+
+        # Fail to delete stream subscription on follower.
+        with self.assertRaises(NodeIsNotLeader):
+            self.reader.delete_stream_subscription(
+                group_name=group_name, stream_name=stream_name
+            )
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Reconnect and delete stream subscription on leader.
+        self.writer.delete_stream_subscription(
+            group_name=group_name, stream_name=stream_name
         )
 
 
-class TestAutoReconnectToPreferredNode(TestCase):
+class TestAutoReconnectClosedConnection(TestCase):
     def setUp(self) -> None:
         self.uri = "esdb://admin:changeit@127.0.0.1:2111"
         self.ca_cert = read_ca_cert()
@@ -3301,21 +3426,15 @@ class TestAutoReconnectToPreferredNode(TestCase):
         event1 = NewEvent(type="OrderCreated", data=random_data())
         self.writer.append_events(stream_name, expected_position=None, events=[event1])
 
-    def test_read_all_events(self) -> None:
-        # Read all events - should reconnect.
-        self.writer.read_all_events()
-
     def test_read_stream_events(self) -> None:
         # Read all events - should reconnect.
-        resp = self.writer.read_stream_events(str(uuid4()))
-        with self.assertRaises(StreamNotFound):
-            list(resp)
+        with self.assertRaises(NotFound):
+            self.writer.read_stream_events(str(uuid4()))
 
     def test_read_subscription(self) -> None:
         # Read subscription - should reconnect.
-        req, resp = self.writer.read_subscription(str(uuid4()))
-        with self.assertRaises(SubscriptionNotFound):
-            list(resp)
+        with self.assertRaises(NotFound):
+            self.writer.read_subscription(str(uuid4()))
 
 
 class TestAutoReconnectAfterServiceUnavailable(TestCase):
@@ -3359,7 +3478,7 @@ class TestAutoReconnectAfterServiceUnavailable(TestCase):
         self.client.subscribe_stream_events(str(uuid4()))
 
     def test_get_subscription_info(self) -> None:
-        with self.assertRaises(SubscriptionNotFound):
+        with self.assertRaises(NotFound):
             self.client.get_subscription_info(
                 group_name=f"my-subscription-{uuid4().hex}"
             )
@@ -3371,15 +3490,15 @@ class TestAutoReconnectAfterServiceUnavailable(TestCase):
         self.client.list_stream_subscriptions(stream_name=str(uuid4()))
 
     def test_delete_stream(self) -> None:
-        with self.assertRaises(StreamNotFound):
+        with self.assertRaises(NotFound):
             self.client.delete_stream(stream_name=str(uuid4()), expected_position=None)
 
     def test_delete_subscription(self) -> None:
-        with self.assertRaises(SubscriptionNotFound):
+        with self.assertRaises(NotFound):
             self.client.delete_subscription(group_name=f"my-subscription-{uuid4().hex}")
 
     def test_delete_stream_subscription(self) -> None:
-        with self.assertRaises(SubscriptionNotFound):
+        with self.assertRaises(NotFound):
             self.client.delete_stream_subscription(
                 group_name=f"my-subscription-{uuid4().hex}", stream_name=str(uuid4())
             )
@@ -3409,7 +3528,7 @@ class TestConnectToPreferredNode(TestCase):
 
 class TestSubscriptionReadRequest(TestCase):
     def test_request_ack_after_100_acks(self) -> None:
-        read_request = SubscriptionReadRequest("group1")
+        read_request = SubscriptionReadRequests("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
@@ -3438,7 +3557,7 @@ class TestSubscriptionReadRequest(TestCase):
         self.assertEqual(len(grpc_read_req.nack.ids), 0)
 
     def test_request_nack_after_100_nacks(self) -> None:
-        read_request = SubscriptionReadRequest("group1")
+        read_request = SubscriptionReadRequests("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
@@ -3467,7 +3586,7 @@ class TestSubscriptionReadRequest(TestCase):
         self.assertEqual(len(grpc_read_req.nack.ids), 100)
 
     def test_request_ack_after_100ms(self) -> None:
-        read_request = SubscriptionReadRequest("group1")
+        read_request = SubscriptionReadRequests("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
@@ -3488,7 +3607,7 @@ class TestSubscriptionReadRequest(TestCase):
         self.assertEqual(grpc_read_req.ack.ids[2].string, str(event_id3))
 
     def test_request_nack_unknown_after_100ms(self) -> None:
-        read_request = SubscriptionReadRequest("group1")
+        read_request = SubscriptionReadRequests("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
@@ -3510,7 +3629,7 @@ class TestSubscriptionReadRequest(TestCase):
         self.assertEqual(grpc_read_req.nack.action, persistent_pb2.ReadReq.Nack.Unknown)
 
     def test_request_nack_park_after_100ms(self) -> None:
-        read_request = SubscriptionReadRequest("group1")
+        read_request = SubscriptionReadRequests("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
@@ -3532,7 +3651,7 @@ class TestSubscriptionReadRequest(TestCase):
         self.assertEqual(grpc_read_req.nack.action, persistent_pb2.ReadReq.Nack.Park)
 
     def test_request_nack_retry_after_100ms(self) -> None:
-        read_request = SubscriptionReadRequest("group1")
+        read_request = SubscriptionReadRequests("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
@@ -3554,7 +3673,7 @@ class TestSubscriptionReadRequest(TestCase):
         self.assertEqual(grpc_read_req.nack.action, persistent_pb2.ReadReq.Nack.Retry)
 
     def test_request_nack_skip_after_100ms(self) -> None:
-        read_request = SubscriptionReadRequest("group1")
+        read_request = SubscriptionReadRequests("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
@@ -3576,7 +3695,7 @@ class TestSubscriptionReadRequest(TestCase):
         self.assertEqual(grpc_read_req.nack.action, persistent_pb2.ReadReq.Nack.Skip)
 
     def test_request_nack_stop_after_100ms(self) -> None:
-        read_request = SubscriptionReadRequest("group1")
+        read_request = SubscriptionReadRequests("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
@@ -3598,7 +3717,7 @@ class TestSubscriptionReadRequest(TestCase):
         self.assertEqual(grpc_read_req.nack.action, persistent_pb2.ReadReq.Nack.Stop)
 
     def test_request_ack_after_ack_followed_by_nack(self) -> None:
-        read_request = SubscriptionReadRequest("group1")
+        read_request = SubscriptionReadRequests("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
@@ -3621,7 +3740,7 @@ class TestSubscriptionReadRequest(TestCase):
         self.assertEqual(grpc_read_req.nack.ids[0].string, str(event_id2))
 
     def test_request_nack_after_nack_followed_by_ack(self) -> None:
-        read_request = SubscriptionReadRequest("group1")
+        read_request = SubscriptionReadRequests("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
@@ -3644,7 +3763,7 @@ class TestSubscriptionReadRequest(TestCase):
         self.assertEqual(grpc_read_req.ack.ids[0].string, str(event_id2))
 
     def test_request_nack_after_nack_followed_by_nack_with_other_action(self) -> None:
-        read_request = SubscriptionReadRequest("group1")
+        read_request = SubscriptionReadRequests("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
