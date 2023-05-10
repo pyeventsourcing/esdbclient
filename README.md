@@ -1,4 +1,4 @@
-# Python gRPC Client for EventStoreDB
+from esdbclient import AsyncioESDBClient# Python gRPC Client for EventStoreDB
 
 This [Python package](https://pypi.org/project/esdbclient/) provides a Python
 gRPC client for [EventStoreDB](https://www.eventstore.com/).
@@ -182,6 +182,7 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Regular expression filters](#regular-expression-filters)
   * [New event objects](#new-event-objects)
   * [Recorded event objects](#recorded-event-objects)
+  * [Asyncio client](#asyncio-client)
 * [Contributors](#contributors)
   * [Install Poetry](#install-poetry)
   * [Setup for PyCharm users](#setup-for-pycharm-users)
@@ -770,8 +771,7 @@ When reading forwards from a specific commit position, the event at the specifie
 position WILL be included. However, when reading backwards, the event at the
 specified position will NOT be included. (This non-inclusive behaviour, of excluding
 the specified commit position when reading all streams backwards, differs from the
-behaviour when reading a stream backwards from a specific stream position, I'm
-not sure why.)
+behaviour when reading a stream backwards from a specific stream position.)
 
 The example below shows how to read all events in the database in the
 order they were recorded.
@@ -2183,6 +2183,89 @@ recorded_event = RecordedEvent(
     stream_name='stream1',
     stream_position=0,
     commit_position=512,
+)
+```
+
+### Asyncio client
+
+The `esdbclient` package also includes an early version of an asynchronous I/O
+gRPC Python client. It follows exactly the same behaviors as the multithreaded
+`ESDBClient`, but uses `grpc.aio` package and the `asyncio` module, instead of
+`grpc` and `threading`.
+
+The `async` function `AsyncioESDBClient` constructs the client, and connects to
+a server. It can be imported from `esdbclient`, and can be called with the same
+arguments as `ESDBClient`.
+
+```python
+from esdbclient import AsyncioESDBClient
+```
+
+The asynchronous I/O client has `async` methods `append_events()`,
+`read_stream_events()`, `read_all_events()`, `subscribe_all_events()`,
+`delete_stream()`, `tombstone_stream()`, and `reconnect()`.
+
+These methods are equivalent to the methods on `ESDBClient`. They have the same
+method signatures, and can be called with the same arguments, to the same effect.
+The methods which appear on `ESDBClient` but not on `AsyncioESDBClient` will be
+added soon.
+
+The example below demonstrates `append_events()`, `read_stream_events()` and
+`subscribe_all_events()` methods. These are the most useful methods for writing
+an event-sourced application, allowing new aggregate events to be recorded, the
+recorded events of an aggregate to be obtained so aggregates can be reconstructed,
+and the state of an application to propagated and processed with "exactly-once"
+semantics.
+
+```python
+import asyncio
+
+async def demonstrate_asyncio_client():
+
+    # Construct client.
+    client = await AsyncioESDBClient(
+        uri=os.getenv("ESDB_URI"),
+        root_certificates=os.getenv("ESDB_ROOT_CERTIFICATES"),
+    )
+
+    # Append events.
+    stream_name = str(uuid4())
+    event1 = NewEvent("OrderCreated", data=b'{}')
+    event2 = NewEvent("OrderUpdated", data=b'{}')
+    event3 = NewEvent("OrderDeleted", data=b'{}')
+
+    await client.append_events(
+        stream_name=stream_name,
+        expected_position=None,
+        events=[event1, event2, event3]
+    )
+
+    # Read stream events.
+    recorded = await client.read_stream_events(stream_name)
+    assert len(recorded) == 3
+    assert recorded[0].id == event1.id
+    assert recorded[1].id == event2.id
+    assert recorded[2].id == event3.id
+
+
+    # Subscribe all events.
+    received = []
+    async for event in await client.subscribe_all_events():
+        received.append(event)
+        if event.id == event3.id:
+            break
+    assert recorded[-3].id == event1.id
+    assert recorded[-2].id == event2.id
+    assert recorded[-1].id == event3.id
+
+
+    # Close the client.
+    await client.close()
+
+
+# Run the demo.
+asyncio.get_event_loop().run_until_complete(
+    demonstrate_asyncio_client()
 )
 ```
 

@@ -5,11 +5,6 @@
 
 * Replay parked events in persistent subscription?
 
-* Reconnect to leader when reading persistent subscription against follower
-  * setting require-leader doesn't seem to create an error
-    * is there a "confirmation" response, like with catch-up subscriptions?
-    * how is this to be detected? how can I trigger a reconnect()
-
 * Seems that "requires-leader" isn't implemented on server for list subscriptions?
   * getting from follower: status code: UNAVAILABLE, details: "Server Is Not Ready", rather than "Leader info available"
 

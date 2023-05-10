@@ -110,19 +110,13 @@ def retrygrpc(f: _TCallable) -> _TCallable:
     return cast(_TCallable, retrygrpc_decorator)
 
 
-class ESDBClient:
-    """
-    Encapsulates the EventStoreDB gRPC API.
-    """
-
+class BaseESDBClient:
     def __init__(
         self,
         uri: Optional[str] = None,
         *,
         root_certificates: Optional[str] = None,
     ) -> None:
-        self._is_reconnection_required = Event()
-        self._reconnection_lock = Lock()
         self.root_certificates = root_certificates
         self.connection_spec = ConnectionSpec(uri)
 
@@ -151,15 +145,6 @@ class ESDBClient:
         else:
             self._call_credentials = None
 
-        self._connection = self._connect_to_preferred_node()
-
-        # self._batch_append_futures_lock = Lock()
-        # self._batch_append_futures_queue = BatchAppendFutureQueue()
-        # self._batch_append_thread = Thread(
-        #     target=self._batch_append_future_result_loop, daemon=True
-        # )
-        # self._batch_append_thread.start()
-
     def _construct_call_credentials(
         self, username: Optional[str], password: Optional[str]
     ) -> Optional[CallCredentials]:
@@ -170,6 +155,30 @@ class ESDBClient:
         else:
             return None
 
+
+class ESDBClient(BaseESDBClient):
+    """
+    Encapsulates the EventStoreDB gRPC API.
+    """
+
+    def __init__(
+        self,
+        uri: Optional[str] = None,
+        *,
+        root_certificates: Optional[str] = None,
+    ) -> None:
+        super().__init__(uri, root_certificates=root_certificates)
+        self._is_reconnection_required = Event()
+        self._reconnection_lock = Lock()
+        self._connection = self._connect_to_preferred_node()
+
+        # self._batch_append_futures_lock = Lock()
+        # self._batch_append_futures_queue = BatchAppendFutureQueue()
+        # self._batch_append_thread = Thread(
+        #     target=self._batch_append_future_result_loop, daemon=True
+        # )
+        # self._batch_append_thread.start()
+
     def _connect_to_preferred_node(self) -> ESDBConnection:
         # Obtain the gossip seed (a list of gRPC targets).
         if self.connection_spec.scheme == URI_SCHEME_ESDB_DISCOVER:
@@ -177,7 +186,7 @@ class ESDBClient:
             cluster_fqdn = self.connection_spec.targets[0]
             try:
                 answers = dns.resolver.resolve(cluster_fqdn, "A")
-            except dns.exception.DNSException as e:  # pragma: no cover
+            except dns.exception.DNSException as e:
                 raise DNSError() from e
             gossip_seed: Sequence[str] = [f"{s.address}:2113" for s in answers]
         else:

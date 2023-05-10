@@ -23,6 +23,7 @@ from esdbclient.events import NewEvent
 from esdbclient.exceptions import (
     DeadlineExceeded,
     DiscoveryFailed,
+    DNSError,
     ExceptionThrownByHandler,
     FollowerNotFound,
     GossipSeedError,
@@ -251,7 +252,7 @@ class TestConnectionSpec(TestCase):
         self.assertIn("Unknown fields in", cm2.exception.args[0])
 
 
-def read_ca_cert() -> str:
+def get_ca_certificate() -> str:
     ca_cert_path = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "certs/ca/ca.crt"
     )
@@ -286,7 +287,7 @@ class TestESDBClient(TestCase):
         if self.ESDB_CLUSTER_SIZE == 1:
             return get_server_certificate(self.ESDB_TARGET)
         elif self.ESDB_CLUSTER_SIZE == 3:
-            return read_ca_cert()
+            return get_ca_certificate()
         else:
             raise ValueError(
                 f"Test doesn't work with cluster size {self.ESDB_CLUSTER_SIZE}"
@@ -911,6 +912,9 @@ class TestESDBClient(TestCase):
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
         event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+        event4 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event5 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event6 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
 
         # Append new events.
         stream_name1 = str(uuid4())
@@ -920,7 +924,7 @@ class TestESDBClient(TestCase):
 
         stream_name2 = str(uuid4())
         commit_position2 = self.client.append_events(
-            stream_name2, expected_position=None, events=[event1, event2, event3]
+            stream_name2, expected_position=None, events=[event4, event5, event6]
         )
 
         # Check we can read forwards from the start.
@@ -950,6 +954,10 @@ class TestESDBClient(TestCase):
         # Check we can read forwards from commit position 1.
         events = list(self.client.read_all_events(commit_position=commit_position1))
         self.assertEqual(len(events), 4)
+        self.assertEqual(events[0].id, event3.id)
+        self.assertEqual(events[1].id, event4.id)
+        self.assertEqual(events[2].id, event5.id)
+        self.assertEqual(events[3].id, event6.id)
         self.assertEqual(events[0].stream_name, stream_name1)
         self.assertEqual(events[0].type, "OrderDeleted")
         self.assertEqual(events[1].stream_name, stream_name2)
@@ -962,6 +970,7 @@ class TestESDBClient(TestCase):
         # Check we can read forwards from commit position 2.
         events = list(self.client.read_all_events(commit_position=commit_position2))
         self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event6.id)
         self.assertEqual(events[0].stream_name, stream_name2)
         self.assertEqual(events[0].type, "OrderDeleted")
 
@@ -974,6 +983,8 @@ class TestESDBClient(TestCase):
             )
         )
         self.assertEqual(len(events) - num_old_events, 2)
+        self.assertEqual(events[0].id, event2.id)
+        self.assertEqual(events[1].id, event1.id)
         self.assertEqual(events[0].stream_name, stream_name1)
         self.assertEqual(events[0].type, "OrderUpdated")
         self.assertEqual(events[1].stream_name, stream_name1)
@@ -987,6 +998,11 @@ class TestESDBClient(TestCase):
             )
         )
         self.assertEqual(len(events) - num_old_events, 5)
+        self.assertEqual(events[0].id, event5.id)
+        self.assertEqual(events[1].id, event4.id)
+        self.assertEqual(events[2].id, event3.id)
+        self.assertEqual(events[3].id, event2.id)
+        self.assertEqual(events[4].id, event1.id)
         self.assertEqual(events[0].stream_name, stream_name2)
         self.assertEqual(events[0].type, "OrderUpdated")
         self.assertEqual(events[1].stream_name, stream_name2)
@@ -3067,13 +3083,17 @@ class TestESDBClusterNode3(TestESDBClient):
 
 
 class TestESDBDiscoverScheme(TestCase):
-    def test(self) -> None:
+    def test_calls_dns(self) -> None:
         uri = (
             "esdb+discover://example.com"
             "?Tls=false&GossipTimeout=0&DiscoveryInterval=0&MaxDiscoverAttempts=2"
         )
         with self.assertRaises(DiscoveryFailed):
             ESDBClient(uri)
+
+    def test_raises_dns_error(self) -> None:
+        with self.assertRaises(DNSError):
+            ESDBClient("esdb+discover://xxxxxxxxxxxxxx")
 
 
 class TestGrpcOptions(TestCase):
@@ -3099,7 +3119,7 @@ class TestGrpcOptions(TestCase):
 class TestRequiresLeaderHeader(TestCase):
     def setUp(self) -> None:
         self.uri = "esdb://admin:changeit@127.0.0.1:2111"
-        self.ca_cert = read_ca_cert()
+        self.ca_cert = get_ca_certificate()
         self.writer = ESDBClient(
             self.uri + "?NodePreference=leader", root_certificates=self.ca_cert
         )
@@ -3411,7 +3431,7 @@ class TestRequiresLeaderHeader(TestCase):
 class TestAutoReconnectClosedConnection(TestCase):
     def setUp(self) -> None:
         self.uri = "esdb://admin:changeit@127.0.0.1:2111"
-        self.ca_cert = read_ca_cert()
+        self.ca_cert = get_ca_certificate()
         self.writer = ESDBClient(
             self.uri + "?NodePreference=leader", root_certificates=self.ca_cert
         )

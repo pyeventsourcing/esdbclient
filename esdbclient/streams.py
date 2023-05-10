@@ -1,11 +1,20 @@
 # -*- coding: utf-8 -*-
 import sys
 from dataclasses import dataclass
-from typing import Iterable, Iterator, Optional, Sequence, Union, overload
+from typing import (
+    AsyncIterable,
+    Iterable,
+    Iterator,
+    Optional,
+    Sequence,
+    Union,
+    overload,
+)
 from uuid import UUID, uuid4
 
+import grpc.aio
 from google.protobuf import duration_pb2, empty_pb2
-from grpc import CallCredentials, Channel, RpcError, StatusCode
+from grpc import CallCredentials, RpcError, StatusCode
 from typing_extensions import Literal
 
 from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
@@ -24,6 +33,88 @@ from esdbclient.exceptions import (
     WrongExpectedPosition,
 )
 from esdbclient.protos.Grpc import shared_pb2, status_pb2, streams_pb2, streams_pb2_grpc
+
+
+class AsyncioReadResponse:
+    def __init__(
+        self,
+        read_resp_iter: AsyncIterable[streams_pb2.ReadResp],
+        stream_name: Optional[str],
+        is_subscription: bool,
+    ):
+        self.read_resp_iter = read_resp_iter.__aiter__()
+        self.stream_name = stream_name
+        self.subscription_id: Optional[UUID] = None
+        self.is_subscription = is_subscription
+
+    async def _get_next_read_resp(self) -> streams_pb2.ReadResp:
+        try:
+            read_resp = await self.read_resp_iter.__anext__()
+        except RpcError as e:
+            if e.code() == StatusCode.FAILED_PRECONDITION:
+                details = e.details() or ""
+                if self.stream_name and details and "is deleted" in details:
+                    raise StreamIsDeleted() from e
+                else:  # pragma: no cover
+                    raise handle_rpc_error(e) from e
+            else:
+                raise handle_rpc_error(e) from e
+        assert isinstance(read_resp, streams_pb2.ReadResp)
+        return read_resp
+
+    async def check_confirmation(self) -> None:
+        if self.is_subscription:
+            read_resp = await self._get_next_read_resp()
+            content_oneof = read_resp.WhichOneof("content")
+            if content_oneof != "confirmation":  # pragma: no cover
+                raise SubscriptionConfirmationError(
+                    f"Expected subscription confirmation, got: {read_resp}"
+                )
+
+    def __aiter__(self) -> "AsyncioReadResponse":
+        return self
+
+    async def __anext__(self) -> "RecordedEvent":
+        while True:
+            read_resp = await self._get_next_read_resp()
+            content_oneof = read_resp.WhichOneof("content")
+            if content_oneof == "event":
+                event = read_resp.event.event
+                position_oneof = read_resp.event.WhichOneof("position")
+                if position_oneof == "commit_position":
+                    commit_position = read_resp.event.commit_position
+                else:  # pragma: no cover
+                    # We only get here with EventStoreDB < 22.10.
+                    assert position_oneof == "no_position", position_oneof
+                    commit_position = None
+
+                return RecordedEvent(
+                    id=UUID(event.id.string),
+                    type=event.metadata["type"],
+                    data=event.data,
+                    content_type=event.metadata["content-type"],
+                    metadata=event.custom_metadata,
+                    stream_name=event.stream_identifier.stream_name.decode("utf8"),
+                    stream_position=event.stream_revision,
+                    commit_position=commit_position,
+                )
+            elif content_oneof == "stream_not_found":
+                raise NotFound(f"Stream {self.stream_name!r} not found")
+            else:
+                pass  # pragma: no cover
+                # Todo: Maybe support other content_oneof values:
+                #   oneof content {
+                # 		ReadEvent event = 1;
+                # 		SubscriptionConfirmation confirmation = 2;
+                # 		Checkpoint checkpoint = 3;
+                # 		StreamNotFound stream_not_found = 4;
+                # 		uint64 first_stream_position = 5;
+                # 		uint64 last_stream_position = 6;
+                # 		AllStreamPosition last_all_stream_position = 7;
+                # 	}
+                #
+                # Todo: Not sure how to request to get first_stream_position,
+                #   last_stream_position, first_all_stream_position.
 
 
 class ReadResponse(Iterable[RecordedEvent]):
@@ -163,7 +254,7 @@ class BatchAppendResponse:
 
 
 class BaseStreamsService(ESDBService):
-    def __init__(self, channel: Channel):
+    def __init__(self, channel: Union[grpc.Channel, grpc.aio.Channel]):
         self._stub = streams_pb2_grpc.StreamsStub(channel)
 
     def _construct_read_request(
@@ -435,6 +526,228 @@ class BaseStreamsService(ESDBService):
             # Stream is expected to exist.
             options.stream_exists.CopyFrom(shared_pb2.Empty())
         return streams_pb2.TombstoneReq(options=options)
+
+
+class AsyncioStreamsService(BaseStreamsService):
+    async def batch_append(
+        self,
+        stream_name: str,
+        expected_position: Optional[int],
+        events: Iterable[NewEvent],
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> BatchAppendResponse:
+        # Call the gRPC method.
+        try:
+            req = self._construct_batch_append_req(
+                stream_name=stream_name,
+                expected_position=expected_position,
+                events=events,
+                deadline=DEFAULT_BATCH_APPEND_REQUEST_DEADLINE,
+                correlation_id=uuid4(),
+            )
+            async for response in self._stub.BatchAppend(
+                iter([req]),
+                timeout=timeout,
+                metadata=self._metadata(metadata, requires_leader=True),
+                credentials=credentials,
+            ):
+                assert isinstance(response, streams_pb2.BatchAppendResp)
+                result = self._convert_batch_append_resp(response, stream_name)
+                if isinstance(result, BatchAppendResponse):
+                    return result
+                else:
+                    assert isinstance(result, ESDBClientException)
+                    raise result
+            else:  # pragma: no cover
+                raise ESDBClientException("Batch append response not received")
+
+        except RpcError as e:
+            raise handle_rpc_error(e) from e
+
+    @overload
+    async def read(
+        self,
+        *,
+        stream_name: Optional[str] = None,
+        stream_position: Optional[int] = None,
+        backwards: bool = False,
+        limit: int = sys.maxsize,
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> AsyncIterable[RecordedEvent]:
+        """
+        Signature for reading events from a stream.
+        """
+
+    @overload
+    async def read(
+        self,
+        *,
+        stream_name: Optional[str] = None,
+        stream_position: Optional[int] = None,
+        subscribe: Literal[True],
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> AsyncIterable[RecordedEvent]:
+        """
+        Signature for reading events from a stream with a catch-up subscription.
+        """
+
+    @overload
+    async def read(
+        self,
+        *,
+        commit_position: Optional[int] = None,
+        backwards: bool = False,
+        filter_exclude: Sequence[str] = (),
+        filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
+        limit: int = sys.maxsize,
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> AsyncIterable[RecordedEvent]:
+        """
+        Signature for reading all events.
+        """
+
+    @overload
+    async def read(
+        self,
+        *,
+        commit_position: Optional[int] = None,
+        filter_exclude: Sequence[str] = (),
+        filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
+        subscribe: Literal[True],
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> AsyncIterable[RecordedEvent]:
+        """
+        Signature for reading all events with a catch-up subscription.
+        """
+
+    async def read(
+        self,
+        *,
+        stream_name: Optional[str] = None,
+        stream_position: Optional[int] = None,
+        commit_position: Optional[int] = None,
+        backwards: bool = False,
+        filter_exclude: Sequence[str] = (),
+        filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
+        limit: int = sys.maxsize,
+        subscribe: bool = False,
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> AsyncIterable[RecordedEvent]:
+        """
+        Constructs and sends a gRPC 'ReadReq' to the 'Read' rpc.
+
+        Returns a generator which yields RecordedEvent objects.
+        """
+
+        # Construct read request.
+        read_req = self._construct_read_request(
+            stream_name=stream_name,
+            stream_position=stream_position,
+            commit_position=commit_position,
+            backwards=backwards,
+            filter_exclude=filter_exclude,
+            filter_include=filter_include,
+            filter_by_stream_name=filter_by_stream_name,
+            limit=limit,
+            subscribe=subscribe,
+        )
+
+        # Send the read request, and iterate over the response.
+        unary_stream_call: AsyncIterable[streams_pb2.ReadResp] = self._stub.Read(
+            read_req,
+            timeout=timeout,
+            metadata=self._metadata(metadata),
+            credentials=credentials,
+        )
+
+        response = AsyncioReadResponse(
+            unary_stream_call, stream_name=stream_name, is_subscription=subscribe
+        )
+        await response.check_confirmation()
+        return response
+
+    async def delete(
+        self,
+        stream_name: str,
+        expected_position: Optional[int],
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> None:
+        delete_req = self._construct_delete_req(stream_name, expected_position)
+
+        try:
+            delete_resp = await self._stub.Delete(
+                delete_req,
+                timeout=timeout,
+                metadata=self._metadata(metadata, requires_leader=True),
+                credentials=credentials,
+            )
+        except RpcError as e:
+            if e.code() == StatusCode.FAILED_PRECONDITION:
+                details = e.details() or ""
+                if "WrongExpectedVersion" in details:
+                    if "Actual version: -1" in details:
+                        raise NotFound() from e
+                    else:
+                        raise WrongExpectedPosition() from e
+                elif "is deleted" in details:
+                    raise StreamIsDeleted() from e
+                else:  # pragma: no cover
+                    raise handle_rpc_error(e) from e
+            else:
+                raise handle_rpc_error(e) from e
+        else:
+            assert isinstance(delete_resp, streams_pb2.DeleteResp), delete_resp
+
+    async def tombstone(
+        self,
+        stream_name: str,
+        expected_position: Optional[int],
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> None:
+        tombstone_req = self._construct_tombstone_req(stream_name, expected_position)
+
+        try:
+            tombstone_resp = await self._stub.Tombstone(
+                tombstone_req,
+                timeout=timeout,
+                metadata=self._metadata(metadata, requires_leader=True),
+                credentials=credentials,
+            )
+        except RpcError as e:
+            if e.code() == StatusCode.FAILED_PRECONDITION:
+                details = e.details() or ""
+                if "WrongExpectedVersion" in details:
+                    if "Actual version: -1" in details:
+                        raise NotFound() from e
+                    else:
+                        raise WrongExpectedPosition() from e
+                elif "is deleted" in details:
+                    raise StreamIsDeleted() from e
+                else:  # pragma: no cover
+                    raise handle_rpc_error(e) from e
+            else:
+                raise handle_rpc_error(e) from e
+        else:
+            assert isinstance(tombstone_resp, streams_pb2.TombstoneResp)
 
 
 class StreamsService(BaseStreamsService):

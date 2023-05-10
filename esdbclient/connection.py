@@ -3,11 +3,20 @@ from typing import Any, Dict, Optional, Sequence
 from urllib.parse import ParseResult, parse_qs, urlparse
 from uuid import uuid4
 
+import grpc.aio
 from grpc import Channel
 
-from esdbclient.gossip import ClusterGossipService, GossipService
-from esdbclient.persistent import PersistentSubscriptionsService
-from esdbclient.streams import StreamsService
+from esdbclient.gossip import (
+    AsyncioClusterGossipService,
+    AsyncioGossipService,
+    ClusterGossipService,
+    GossipService,
+)
+from esdbclient.persistent import (
+    AsyncioPersistentSubscriptionsService,
+    PersistentSubscriptionsService,
+)
+from esdbclient.streams import AsyncioStreamsService, StreamsService
 
 URI_SCHEME_ESDB = "esdb"
 URI_SCHEME_ESDB_DISCOVER = "esdb+discover"
@@ -322,3 +331,18 @@ class ESDBConnection:
         # self.grpc_channel.unsubscribe(self._receive_channel_connectivity_state)
         # sleep(0.1)  # Allow connectivity polling to stop.
         self.grpc_channel.close()
+
+
+class AsyncioESDBConnection:
+    def __init__(self, grpc_channel: grpc.aio.Channel, grpc_target: str) -> None:
+        self.grpc_channel = grpc_channel
+        self.grpc_target = grpc_target
+        self.streams = AsyncioStreamsService(grpc_channel)
+        self.persistent_subscriptions = AsyncioPersistentSubscriptionsService(
+            grpc_channel
+        )
+        self.gossip = AsyncioGossipService(grpc_channel)
+        self.cluster_gossip = AsyncioClusterGossipService(grpc_channel)
+
+    async def close(self) -> None:
+        await self.grpc_channel.close(grace=5)

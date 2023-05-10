@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
-from typing import Optional, Sequence
+from typing import Optional, Sequence, Union
 
-from grpc import CallCredentials, Channel, RpcError
+import grpc
+from grpc import CallCredentials, RpcError
 
 from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
 from esdbclient.protos.Grpc import (
@@ -32,8 +33,8 @@ GOSSIP_API_NODE_STATES_MAPPING = {
 }
 
 
-class BaseGossipService:
-    def __init__(self, channel: Channel):
+class BaseGossipService(ESDBService):
+    def __init__(self, channel: Union[grpc.Channel, grpc.aio.Channel]):
         self._stub = gossip_pb2_grpc.GossipStub(channel)
 
     def _construct_cluster_members(
@@ -50,7 +51,27 @@ class BaseGossipService:
         return tuple(members)
 
 
-class GossipService(ESDBService, BaseGossipService):
+class AsyncioGossipService(BaseGossipService):
+    async def read(
+        self,
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> Sequence[ClusterMember]:
+        try:
+            read_resp = await self._stub.Read(
+                shared_pb2.Empty(),
+                timeout=timeout,
+                metadata=self._metadata(metadata),
+                credentials=credentials,
+            )
+        except RpcError as e:
+            raise handle_rpc_error(e) from e
+
+        return self._construct_cluster_members(read_resp)
+
+
+class GossipService(BaseGossipService):
     """
     Encapsulates the 'gossip.Gossip' gRPC service.
     """
@@ -81,13 +102,19 @@ CLUSTER_GOSSIP_NODE_STATES_MAPPING = {
 }
 
 
-class ClusterGossipService(ESDBService):
+class BaseClusterGossipService(ESDBService):
+    def __init__(self, channel: Union[grpc.Channel, grpc.aio.Channel]):
+        self._stub = cluster_pb2_grpc.GossipStub(channel)
+
+
+class AsyncioClusterGossipService(BaseClusterGossipService):
+    pass
+
+
+class ClusterGossipService(BaseClusterGossipService):
     """
     Encapsulates the 'cluster.Gossip' gRPC service.
     """
-
-    def __init__(self, channel: Channel):
-        self._stub = cluster_pb2_grpc.GossipStub(channel)
 
     def read(
         self,

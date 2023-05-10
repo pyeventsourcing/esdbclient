@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 import queue
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, Sequence, Tuple, overload
+from typing import Iterable, List, Optional, Sequence, Tuple, Union, overload
 from uuid import UUID
 
-from grpc import CallCredentials, Channel, RpcError, StatusCode
+import grpc
+from grpc import CallCredentials, RpcError, StatusCode
 from typing_extensions import Literal
 
 from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
@@ -124,7 +125,7 @@ class SubscriptionInfo:
 
 
 class BasePersistentSubscriptionsService(ESDBService):
-    def __init__(self, channel: Channel):
+    def __init__(self, channel: Union[grpc.Channel, grpc.aio.Channel]):
         self._stub = persistent_pb2_grpc.PersistentSubscriptionsStub(channel)
 
     def _construct_create_req(
@@ -425,6 +426,10 @@ class SubscriptionReadResponse(BaseSubscriptionReadResponse):
             raise handle_rpc_error(e) from e
         assert isinstance(response, persistent_pb2.ReadResp)
         return response
+
+
+class AsyncioPersistentSubscriptionsService(BasePersistentSubscriptionsService):
+    pass
 
 
 class PersistentSubscriptionsService(BasePersistentSubscriptionsService):

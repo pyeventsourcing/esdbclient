@@ -13,6 +13,17 @@ files = [
 ]
 
 [[package]]
+name = "async-case"
+version = "10.1.0"
+description = "Backport of Python 3.8's unittest.async_case"
+category = "dev"
+optional = false
+python-versions = "*"
+files = [
+    {file = "async_case-10.1.0.tar.gz", hash = "sha256:b819f68c78f6c640ab1101ecf69fac189402b490901fa2abc314c48edab5d3da"},
+]
+
+[[package]]
 name = "attrs"
 version = "23.1.0"
 description = "Classes Without Boilerplate"
@@ -1115,4 +1126,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.7,<4.0"
-content-hash = "c7eb627d89e8b7eba43c4238e6a3c2e17475434b284346b79565b2d27858bb29"
+content-hash = "ad1e361d6965bb31faf34c9ffa91826ca472414ccea804ba9e3642be1a0fe54f"

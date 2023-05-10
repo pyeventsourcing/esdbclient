@@ -1,15 +1,10 @@
 # -*- coding: utf-8 -*-
 from base64 import b64encode
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 import grpc
-from grpc import (
-    AuthMetadataContext,
-    AuthMetadataPluginCallback,
-    Call,
-    RpcError,
-    StatusCode,
-)
+from grpc import AuthMetadataContext, AuthMetadataPluginCallback, RpcError, StatusCode
+from grpc.aio import AioRpcError
 
 from esdbclient.exceptions import (
     DeadlineExceeded,
@@ -41,14 +36,13 @@ class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
         callback(self._metadata, None)
 
 
-def handle_rpc_error(e: RpcError) -> ESDBClientException:
+def handle_rpc_error(e: Union[RpcError, AioRpcError]) -> ESDBClientException:
     """
     Converts gRPC errors to client exceptions.
     """
-    if isinstance(e, Call):
-        if (
-            e.code() == StatusCode.UNKNOWN
-            and "Exception was thrown by handler" in e.details()
+    if isinstance(e, (grpc.Call, AioRpcError)):
+        if e.code() == StatusCode.UNKNOWN and "Exception was thrown by handler" in str(
+            e.details()
         ):
             return ExceptionThrownByHandler(e)
         elif e.code() == StatusCode.UNAVAILABLE:
