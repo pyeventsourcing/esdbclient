@@ -2213,12 +2213,14 @@ recorded_event = RecordedEvent(
 
 The `esdbclient` package also includes an early version of an asynchronous I/O
 gRPC Python client. It follows exactly the same behaviors as the multithreaded
-`ESDBClient`, but uses `grpc.aio` package and the `asyncio` module, instead of
+`ESDBClient`, but uses the `grpc.aio` package and the `asyncio` module, instead of
 `grpc` and `threading`.
 
 The `async` function `AsyncioESDBClient` constructs the client, and connects to
 a server. It can be imported from `esdbclient`, and can be called with the same
-arguments as `ESDBClient`.
+arguments as `ESDBClient`. It supports both the "esdb" and the "esdb+discover"
+connection string URI schemes, and reconnects and retries methods when connection
+issues are encountered, just like `ESDBClient`.
 
 ```python
 from esdbclient import AsyncioESDBClient
@@ -2233,7 +2235,7 @@ method signatures, and can be called with the same arguments, to the same effect
 The methods which appear on `ESDBClient` but not on `AsyncioESDBClient` will be
 added soon.
 
-The example below demonstrates `append_events()`, `read_stream_events()` and
+The example below demonstrates the `append_events()`, `read_stream_events()` and
 `subscribe_all_events()` methods. These are the most useful methods for writing
 an event-sourced application, allowing new aggregate events to be recorded, the
 recorded events of an aggregate to be obtained so aggregates can be reconstructed,
