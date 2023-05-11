@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from base64 import b64encode
-from typing import TYPE_CHECKING, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import grpc
 from grpc import AuthMetadataContext, AuthMetadataPluginCallback, RpcError, StatusCode
