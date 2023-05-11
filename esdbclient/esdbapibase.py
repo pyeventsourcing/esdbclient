@@ -36,7 +36,7 @@ class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
         callback(self._metadata, None)
 
 
-def handle_rpc_error(e: Union[RpcError, AioRpcError]) -> ESDBClientException:
+def handle_rpc_error(e: RpcError) -> ESDBClientException:
     """
     Converts gRPC errors to client exceptions.
     """
