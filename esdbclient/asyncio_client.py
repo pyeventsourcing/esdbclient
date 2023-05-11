@@ -64,6 +64,7 @@ def autoreconnect(f: _TCallable) -> _TCallable:
         except NodeIsNotLeader:
             if client.connection_spec.options.NodePreference == NODE_PREFERENCE_LEADER:
                 await client.reconnect()
+                await asyncio.sleep(0.1)
                 return await f(client, *args, **kwargs)
             else:
                 raise
@@ -71,15 +72,29 @@ def autoreconnect(f: _TCallable) -> _TCallable:
         except UsageError as e:
             if "Channel is closed" in str(e):
                 await client.reconnect()
+                await asyncio.sleep(0.1)
                 return await f(client, *args, **kwargs)
             else:  # pragma: no cover
                 raise
 
         except ServiceUnavailable:
             await client.reconnect()
+            await asyncio.sleep(0.1)
             return await f(client, *args, **kwargs)
 
     return cast(_TCallable, autoreconnect_decorator)
+
+
+def retrygrpc(f: _TCallable) -> _TCallable:
+    @wraps(f)
+    async def retrygrpc_decorator(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return await f(*args, **kwargs)
+        except GrpcError:
+            await asyncio.sleep(0.1)
+            return await f(*args, **kwargs)
+
+    return cast(_TCallable, retrygrpc_decorator)
 
 
 async def AsyncioESDBClient(
@@ -232,6 +247,7 @@ class _AsyncioESDBClient(BaseESDBClient):
 
         return AsyncioESDBConnection(grpc_channel=grpc_channel, grpc_target=grpc_target)
 
+    @retrygrpc
     @autoreconnect
     async def append_events(
         self,
@@ -251,6 +267,7 @@ class _AsyncioESDBClient(BaseESDBClient):
         )
         return result.commit_position
 
+    @retrygrpc
     @autoreconnect
     async def read_all_events(
         self,
@@ -277,6 +294,7 @@ class _AsyncioESDBClient(BaseESDBClient):
             credentials=self._call_credentials,
         )
 
+    @retrygrpc
     @autoreconnect
     async def read_stream_events(
         self,
@@ -342,6 +360,7 @@ class _AsyncioESDBClient(BaseESDBClient):
             credentials=self._call_credentials,
         )
 
+    @retrygrpc
     @autoreconnect
     async def delete_stream(
         self,
@@ -359,6 +378,7 @@ class _AsyncioESDBClient(BaseESDBClient):
             credentials=self._call_credentials,
         )
 
+    @retrygrpc
     @autoreconnect
     async def tombstone_stream(
         self,

@@ -14,6 +14,7 @@ from uuid import uuid4
 from esdbclient import NewEvent
 from esdbclient.asyncio_client import AsyncioESDBClient, _AsyncioESDBClient
 from esdbclient.exceptions import (
+    DeadlineExceeded,
     DiscoveryFailed,
     DNSError,
     FollowerNotFound,
@@ -259,6 +260,20 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
         await self.reader.append_events(
             stream_name=stream_name1, events=[event1], expected_position=None
         )
+
+    async def test_append_events_raises_deadline_exceeded(self) -> None:
+        await self.setup_reader()
+        self.reader.connection_spec.options._NodePreference = "leader"
+
+        stream_name1 = str(uuid4())
+        events = [NewEvent(type="SomethingHappened", data=b"{}") for _ in range(1000)]
+        with self.assertRaises(DeadlineExceeded):
+            await self.reader.append_events(
+                stream_name=stream_name1,
+                events=events,
+                expected_position=None,
+                timeout=0,
+            )
 
     async def test_read_stream_events_raises_not_found(self) -> None:
         with self.assertRaises(NotFound):
