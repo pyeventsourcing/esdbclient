@@ -1,4 +1,4 @@
-from esdbclient import AsyncioESDBClient# Python gRPC Client for EventStoreDB
+# Python gRPC Client for EventStoreDB
 
 This [Python package](https://pypi.org/project/esdbclient/) provides a Python
 gRPC client for [EventStoreDB](https://www.eventstore.com/).
