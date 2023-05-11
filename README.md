@@ -1855,47 +1855,70 @@ client.delete_stream_subscription(
 The `reconnect()` method can be used to manually reconnect the client to a
 suitable EventStoreDB node. This method uses the same routine for reading the
 cluster node states and then connecting to a suitable node according to the
-client's node preference that is used when the client is constructed. This
-method is thread-safe, and it is "conservative" in that, when it is called
-by several threads at the same time, only one reconnection will occur.
-Concurrent attempts to reconnect will block until the client has reconnected
-successfully, and then they will all return normally.
+client's node preference that is specified in the connection string URI when
+the client is constructed. This method is thread-safe, and it is "conservative"
+in that, when it is called by several threads at the same time, only one
+reconnection will occur. Concurrent attempts to reconnect will block until
+the client has reconnected successfully, and then they will all return normally.
 
 ```python
 client.reconnect()
 ```
 
 An example of when it might be desirable to reconnect manually is when (for performance
-reasons) the node preference is for the client to be connected to a follower node in the
-cluster, and, after a cluster leader election, the follower node becomes a leader node.
+reasons) the client's node preference is to be connected to a follower node in the
+cluster, and, after a cluster leader election, the follower becomes the leader.
 Reconnecting to a follower node in this case is currently beyond the capabilities of
 this client, but this behavior might be implemented in a future release.
 
-Please note, all the client methods are decorated with `@autoreconnect` (which calls the
-`reconnect()` method) and a `@retry` decorator that will retry operations that fail
-due to connection issues. The `@autoreconnect` decorator will reconnect to an available
-node in the cluster when the server that the client has been connected to has become
-unavailable, or if the client's gRPC channel happens to have been closed, and also when
-a method is called that requires a leader but the node that the client has been
-connected to stops being the leader then the client will reconnect to the current
-leader. The `@retry` decorator will then retry operations that have failed due to
-these connection issues. This means that a method that has failed due to connection
-issues will be retried after the client has reconnected.
+Please note, nearly all the client methods are decorated with `@autoreconnect` (which
+calls the `reconnect()` method when the client detects that reconnecting is required)
+and a `@retry` decorator that more generally will retry operations that fail due to
+connection issues.
 
-Please also note, the exceptions to this behaviour have to do with the methods that
-return iterators. For example, an event-processing component that iterates over the
-response to a catch-up subscription method call will always need to be monitored for
+The `@autoreconnect` decorator will reconnect to a suitable node in the cluster when
+the server to which the client has been connected has become unavailable, or when the
+client's gRPC channel happens to have been closed. The client will also reconnect when
+a method is called that requires a leader, and the client's node preference is to be
+connected to a leader, but the node that the client has been connected to stops being
+the leader. In this case, the client will reconnect to the current leader. After
+reconnecting, the failed operation will be retried.
+
+The `@retry` decorator retries operations that have failed due to more general
+connection issues, such as a deadline being reached (so that the operation times
+out), or in case the server throws an exception when handling a client request.
+
+Please also note, the aspects not covered by the reconnect and retry decorator
+behaviours have to do with methods that return iterators. For example, consider
+the `read_all_events()` method, which returns an iterator of `RecordedEvent` objects.
+The method has returned and the method decorators have therefore exited before the
+iterating of the response begins. Therefore, it isn't possible for this method to
+trigger a reconnection or for it to retry, when the streaming response somehow fails.
+
+Another example is the "catch-up" and persistent subscription read methods, although
+with these methods there is an initial "confirmation" response from the server which
+is received and checked by the client before the method returns, so if the server is
+unavailable when the call is made, or if the channel is somehow closed, or if the
+server throws an error for some reason, then the client will either reconnect and
+retry, or more simply just retry the operation, according the type of error that
+was encountered. However, an event-processing component that iterates over a
+successfully returned "catch-up" subscription response will need to be monitored for
 errors, and, if it fails after it has started iterating over the response, the catch-up
-subscription will need to be restarted from the event-processing component's last saved
-commit position. In this case, the client will automatically reconnect to a node in the
-cluster when the subsequent call to a catch-up subscription method is made. You just
-need to handle the exception that occurs from the iterator, then read your last saved
-commit position, and then restart your event-processing component, using the same
-`ESDBClient` instance, but with a new catch-up subscription iterator. Similarly, when
-reading persistent subscriptions: if there are connectivity issues after you have
-started iterating over the response, then the server call will need to be restarted.
-For the operations return an iterator, the decorators mentioned above will have exited
-before any subsequent gRPC streaming error occurs.
+subscription will need to be restarted from the event-processing component's "last
+saved commit position". If the event-processing component is recording the commit
+position of each recorded event atomically along with any new state that results from
+processing the recorded events, and the commit positions are recorded with a uniqueness
+constraint, then there will no danger to the projected state becoming inconsistent due
+to these connection issues. In this case, the client will automatically reconnect to a
+node in the cluster when the subsequent call to a catch-up subscription method is made.
+You just need to handle the exception that occurs from the iterator, then read your last
+saved commit position, and then restart your event-processing component, using the same
+client object. The client will reconnect if there is a need to do so when the subsequent
+call is made. Similarly, when reading persistent subscriptions, if there are
+connectivity issues after you have started iterating over a successfully received
+response, then the server call will need to be restarted. In this case, the received
+events will start with the last saved checkpoint on the server (potentially returning
+events that were in fact successfully processed).
 
 
 ### Close
