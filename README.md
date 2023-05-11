@@ -528,9 +528,9 @@ We can see that the same commit position is returned as above.
 assert commit_position_retry == commit_position2
 ```
 
-We can also see the stream has been unchanged despite calling the append_events()
-twice with the same arguments, by calling `read_stream_events()`. That is, there
-are still only three events in the stream.
+By calling `read_stream_events()`, we can also see the stream has been unchanged
+despite the `append_events()` method having been called twice with the same arguments.
+That is, there are still only three events in the stream.
 
 ```python
 events = client.read_stream_events(
@@ -748,16 +748,16 @@ to match the event types of "system events", so that EventStoreDB system events
 will not normally be included. See the Notes section below for more information
 about filter expressions.
 
-The argument `filter_include` optional is a sequence of regular expressions
+The optional `filter_include` argument is a sequence of regular expressions
 that match recorded events that should be included. By default, this argument
 is an empty tuple. If this argument is set to a non-empty sequence, the
 `filter_exclude` argument is ignored.
 
-The argument `filter_by_stream_name` optional is a boolean value that indicates whether
+The optional `filter_by_stream_name` argument is a boolean value that indicates whether
 the filter will apply to event types or stream names. By default, this value is `False`
 and so the filtering will apply to the event type strings of recorded events.
 
-The argument `limit` optional is an integer which limits the number of events that will
+The optional `limit` argument is an integer which limits the number of events that will
 be returned. The default value is `sys.maxint`.
 
 The optional `timeout` argument is a Python `float` which sets a
