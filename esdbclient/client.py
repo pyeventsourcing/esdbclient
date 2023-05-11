@@ -80,6 +80,7 @@ def autoreconnect(f: _TCallable) -> _TCallable:
         except NodeIsNotLeader:
             if client.connection_spec.options.NodePreference == NODE_PREFERENCE_LEADER:
                 client.reconnect()
+                sleep(0.1)
                 return f(client, *args, **kwargs)
             else:
                 raise
@@ -87,12 +88,14 @@ def autoreconnect(f: _TCallable) -> _TCallable:
         except ValueError as e:
             if "Channel closed!" in str(e):
                 client.reconnect()
+                sleep(0.1)
                 return f(client, *args, **kwargs)
             else:  # pragma: no cover
                 raise
 
         except ServiceUnavailable:
             client.reconnect()
+            sleep(0.1)
             return f(client, *args, **kwargs)
 
     return cast(_TCallable, autoreconnect_decorator)
