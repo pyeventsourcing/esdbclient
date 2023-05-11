@@ -2254,9 +2254,9 @@ async def demonstrate_asyncio_client():
         received.append(event)
         if event.id == event3.id:
             break
-    assert recorded[-3].id == event1.id
-    assert recorded[-2].id == event2.id
-    assert recorded[-1].id == event3.id
+    assert received[-3].id == event1.id
+    assert received[-2].id == event2.id
+    assert received[-1].id == event3.id
 
 
     # Close the client.
