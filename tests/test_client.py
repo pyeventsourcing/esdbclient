@@ -3336,9 +3336,9 @@ class TestRequiresLeaderHeader(TestCase):
     def _set_reader_connection_on_writer(self) -> None:
         # Give the writer a connection to a follower.
         old, self.writer._connection = self.writer._connection, self.reader._connection
-        # - this is hopeful mitigation for the "Exception was thrown by handler."
-        #   occasionally issue in test_append_events()
-        #   - which might just have been a bug in EventStoreDB 22.10.0...
+        # - this is hopeful mitigation for the "Exception was thrown by handler"
+        #   which is occasionally a cause of failure of test_append_events()
+        #   with both EventStoreDB 21.10.9 and 22.10.0.
         old.close()
         sleep(0.1)
 
