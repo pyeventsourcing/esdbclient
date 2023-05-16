@@ -174,6 +174,7 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Get stream subscription info](#get-stream-subscription-info)
   * [List stream subscriptions](#list-stream-subscriptions)
   * [Delete stream subscription](#delete-stream-subscription)
+  * [Persistent subscription consumer](#persistent-subscription-consumer)
 * [Connection](#connection)
   * [Reconnect](#reconnect)
   * [Close](#close)
