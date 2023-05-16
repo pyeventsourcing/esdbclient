@@ -873,19 +873,23 @@ a snapshot.
 from dataclasses import dataclass
 
 
-dataclass(frozen=True)
-class Dog:
-    def __init__(self, dog_id, version, name, tricks, is_from_snapshot):
-        self.id = dog_id
-        self.version = version
-        self.name = name
-        self.tricks = tricks
-        self.is_from_snapshot = is_from_snapshot
+@dataclass(frozen=True)
+class Aggregate:
+    id: str
+    version: int
+    is_from_snapshot: bool
+
+
+@dataclass(frozen=True)
+class Dog(Aggregate):
+    name: str
+    tricks: list
+
 ```
 
 Let's also define a mutator function `mutate_dog()` that can evolve the state of a
 `Dog` aggregate given various different types of events, `'DogRegistered'`,
-`'DogLearnedTrick'`, and `'$DogSnapshot`'. The snapshot event type is prefixed with
+`'DogLearnedTrick'`, and `'$Snapshot`'. The snapshot event type is prefixed with
 `'$'` so that it can be filtered out when reading all events from the database.
 
 ```python
@@ -893,29 +897,29 @@ def mutate_dog(dog, event):
     data = deserialize(event.data)
     if event.type == 'DogRegistered':
         return Dog(
-            dog_id=event.stream_name,
+            id=event.stream_name,
             version=event.stream_position,
+            is_from_snapshot=False,
             name=data['name'],
             tricks=[],
-            is_from_snapshot=False,
         )
     elif event.type == 'DogLearnedTrick':
         assert event.stream_position == dog.version + 1
         assert event.stream_name == dog.id
         return Dog(
-            dog_id=dog.id,
+            id=dog.id,
             version=event.stream_position,
+            is_from_snapshot=dog.is_from_snapshot,
             name=dog.name,
             tricks=dog.tricks + [data['trick']],
-            is_from_snapshot=dog.is_from_snapshot,
         )
-    elif event.type == '$DogSnapshot':
+    elif event.type == '$Snapshot':
         return Dog(
-            dog_id=strip_snapshot_stream_name(event.stream_name),
+            id=strip_snapshot_stream_name(event.stream_name),
             version=deserialize(event.metadata)['version'],
+            is_from_snapshot=True,
             name=data['name'],
             tricks=data['tricks'],
-            is_from_snapshot=True,
         )
     else:
         raise Exception(f"Unknown event type: {event.type}")
@@ -935,11 +939,11 @@ def get_dog(dog_id):
 We can also define some "command" functions that append new events to the
 database. The `register_dog()` function appends a `DogRegistered` event. The
 `record_trick_learned()` appends a `DogLearnedTrick` event. The function
-`snapshot_dog()` appends a `$DogSnapshot` event. Notice that the
+`snapshot_dog()` appends a `$Snapshot` event. Notice that the
 `record_trick_learned()` and `snapshot_dog()` functions use `get_dog()`.
 
 Notice also that the `DogRegistered` and `DogLearnedTrick` events are appended to a
-stream for aggregate events, whilst the `$DogSnapshot` is appended to a separate stream
+stream for aggregate events, whilst the `$Snapshot` is appended to a separate stream
 for aggregate snapshots. The snapshot event type is prefixed with `'$'` so that it can
 be filtered out when reading all events from the database.
 
@@ -974,7 +978,7 @@ def record_trick_learned(dog_id, trick):
 def snapshot_dog(dog_id):
     dog = get_dog(dog_id)
     event = NewEvent(
-        type='$DogSnapshot',
+        type='$Snapshot',
         data=serialize({'name': dog.name, 'tricks': dog.tricks}),
         metadata=serialize({'version': dog.version}),
     )
@@ -1019,7 +1023,7 @@ assert dog.is_from_snapshot is False
 ```
 
 After we call `snapshot_dog()`, the `get_dog()` function will return a `Dog`
-object that has been constructed using the `$DogSnapshot` event.
+object that has been constructed using the `$Snapshot` event.
 
 ```python
 # Snapshot 'Fido'.
@@ -2536,10 +2540,6 @@ The constant `DEFAULT_EXCLUDE_FILTER` is a sequence of regular expressions that 
 the events that EventStoreDB generates internally, events that are extraneous to those
 which you append using the `append_events()` method.
 
-For example, to exclude system events and persistence subscription configuration events,
-and snapshots, you might use the sequence `DEFAULT_EXCLUDE_FILTER + ['.*Snapshot']` as
-the value of the `filter_exclude` argument when calling `read_all_events()`,
-`subscribe_all_events()`, `create_subscription()` or `get_commit_position()`.
 
 ### New event objects
 
