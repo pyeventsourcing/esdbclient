@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
 import queue
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, Sequence, Tuple, Union, overload
+from typing import Iterator, List, Optional, Sequence, Tuple, Union, overload
 from uuid import UUID
 
 import grpc
 from grpc import CallCredentials, RpcError, StatusCode
+from grpc._channel import _MultiThreadedRendezvous
 from typing_extensions import Literal
 
 from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
 from esdbclient.events import RecordedEvent
 from esdbclient.exceptions import (
+    CancelledByClient,
     ESDBClientException,
     NodeIsNotLeader,
     SubscriptionConfirmationError,
@@ -22,16 +24,20 @@ ConsumerStrategy = Literal[
 ]
 
 
-class BaseSubscriptionReadRequests:
-    def __init__(self, group_name: str, stream_name: Optional[str] = None) -> None:
+class BaseSubscriptionReadReqs:
+    def __init__(
+        self, group_name: str, stream_name: Optional[str] = None, buffer_size: int = 100
+    ) -> None:
         self.group_name = group_name
         self.stream_name = stream_name
+        assert isinstance(buffer_size, int) and buffer_size > 0, buffer_size
+        self._buffer_size = buffer_size
         self._has_requested_options = False
 
     def _construct_initial_read_req(self) -> persistent_pb2.ReadReq:
         options = persistent_pb2.ReadReq.Options(
             group_name=self.group_name,
-            buffer_size=100,
+            buffer_size=self._buffer_size,
             uuid_option=persistent_pb2.ReadReq.Options.UUIDOption(
                 # structured=shared_pb2.Empty(),
                 string=shared_pb2.Empty(),
@@ -46,8 +52,9 @@ class BaseSubscriptionReadRequests:
             options.all.CopyFrom(shared_pb2.Empty())
         return persistent_pb2.ReadReq(options=options)
 
-    def _construct_ack_nack_read_req(
-        self, ids: List[shared_pb2.UUID], action: str
+    @staticmethod
+    def _construct_ack_or_nack_read_req(
+        ids: List[shared_pb2.UUID], action: str
     ) -> persistent_pb2.ReadReq:
         if action == "ack":
             return persistent_pb2.ReadReq(ack=persistent_pb2.ReadReq.Ack(ids=ids))
@@ -68,14 +75,13 @@ class BaseSubscriptionReadRequests:
             )
 
 
-class BaseSubscriptionReadResponse:
-    def _construct_recorded_event(
-        self, response: persistent_pb2.ReadResp
-    ) -> RecordedEvent:
-        event = response.event.event
-        position_oneof = response.event.WhichOneof("position")
+class BasePersistentSubscription:
+    @staticmethod
+    def _construct_recorded_event(read_resp: persistent_pb2.ReadResp) -> RecordedEvent:
+        event = read_resp.event.event
+        position_oneof = read_resp.event.WhichOneof("position")
         if position_oneof == "commit_position":
-            commit_position = response.event.commit_position
+            commit_position = read_resp.event.commit_position
         else:  # pragma: no cover
             # We only get here with EventStoreDB < 22.10.
             assert position_oneof == "no_position", position_oneof
@@ -89,6 +95,7 @@ class BaseSubscriptionReadResponse:
             stream_name=event.stream_identifier.stream_name.decode("utf8"),
             stream_position=event.stream_revision,
             commit_position=commit_position,
+            retry_count=read_resp.event.retry_count,
         )
         return recorded_event
 
@@ -241,8 +248,8 @@ class BasePersistentSubscriptionsService(ESDBService):
         # Construct RPC request.
         return persistent_pb2.CreateReq(options=options)
 
+    @staticmethod
     def _construct_get_info_req(
-        self,
         group_name: str,
         stream_name: Optional[str] = None,
     ) -> persistent_pb2.GetInfoReq:
@@ -260,7 +267,8 @@ class BasePersistentSubscriptionsService(ESDBService):
             )
         return persistent_pb2.GetInfoReq(options=options)
 
-    def _construct_list_req(self, stream_name: Optional[str]) -> persistent_pb2.ListReq:
+    @staticmethod
+    def _construct_list_req(stream_name: Optional[str]) -> persistent_pb2.ListReq:
         if stream_name is None:
             options = persistent_pb2.ListReq.Options(
                 list_all_subscriptions=shared_pb2.Empty()
@@ -275,8 +283,9 @@ class BasePersistentSubscriptionsService(ESDBService):
             )
         return persistent_pb2.ListReq(options=options)
 
+    @staticmethod
     def _construct_delete_req(
-        self, group_name: str, stream_name: Optional[str]
+        group_name: str, stream_name: Optional[str]
     ) -> persistent_pb2.DeleteReq:
         if stream_name is None:
             options = persistent_pb2.DeleteReq.Options(
@@ -332,11 +341,16 @@ class BasePersistentSubscriptionsService(ESDBService):
         )
 
 
-class SubscriptionReadRequests(BaseSubscriptionReadRequests):
-    def __init__(self, group_name: str, stream_name: Optional[str] = None) -> None:
-        super().__init__(group_name=group_name, stream_name=stream_name)
+class SubscriptionReadReqs(BaseSubscriptionReadReqs):
+    def __init__(
+        self, group_name: str, stream_name: Optional[str] = None, buffer_size: int = 100
+    ) -> None:
+        super().__init__(
+            group_name=group_name, stream_name=stream_name, buffer_size=buffer_size
+        )
         self.queue: queue.Queue[Tuple[UUID, str]] = queue.Queue()
         self.held: Optional[Tuple[UUID, str]] = None
+        self._is_stopped = True
 
     def __next__(self) -> persistent_pb2.ReadReq:
         if not self._has_requested_options:
@@ -359,14 +373,16 @@ class SubscriptionReadRequests(BaseSubscriptionReadRequests):
                         current_action = action
                     elif current_action != action:
                         self.held = (event_id, action)
-                        return self._construct_ack_nack_read_req(ids, current_action)
+                        return self._construct_ack_or_nack_read_req(ids, current_action)
                     ids.append(shared_pb2.UUID(string=str(event_id)))
-                    if len(ids) >= 100:
-                        return self._construct_ack_nack_read_req(ids, current_action)
-                except queue.Empty:
+                    if len(ids) >= self._buffer_size:
+                        return self._construct_ack_or_nack_read_req(ids, current_action)
+                except queue.Empty as e:
                     if len(ids) >= 1:
                         assert current_action is not None
-                        return self._construct_ack_nack_read_req(ids, current_action)
+                        return self._construct_ack_or_nack_read_req(ids, current_action)
+                    elif self._is_stopped:
+                        raise StopIteration() from e
                     else:  # pragma: no cover
                         pass
 
@@ -381,16 +397,24 @@ class SubscriptionReadRequests(BaseSubscriptionReadRequests):
         assert action in ["unknown", "park", "retry", "skip", "stop"]
         self.queue.put((event_id, action))
 
+    def stop(self) -> None:
+        self._is_stopped = True
 
-class SubscriptionReadResponse(BaseSubscriptionReadResponse):
+
+class AsyncioPersistentSubscriptionsService(BasePersistentSubscriptionsService):
+    pass
+
+
+class PersistentSubscription(Iterator[RecordedEvent], BasePersistentSubscription):
     def __init__(
         self,
-        resp: Iterable[persistent_pb2.ReadResp],
+        reqs: SubscriptionReadReqs,
+        resps: _MultiThreadedRendezvous,
         group_name: str,
         stream_name: Optional[str],
     ):
-        self.resp = iter(resp)
-
+        self.reqs = reqs
+        self.resps = resps
         read_resp = self._get_next_read_resp()
         content_oneof = read_resp.WhichOneof("content")
 
@@ -407,29 +431,45 @@ class SubscriptionReadResponse(BaseSubscriptionReadResponse):
                 f"Expected subscription confirmation, got: {read_resp}"
             )
 
-    def __iter__(self) -> "SubscriptionReadResponse":
+    def __iter__(self) -> Iterator[RecordedEvent]:
         return self
 
     def __next__(self) -> RecordedEvent:
         while True:
-            response = self._get_next_read_resp()
-            content_oneof = response.WhichOneof("content")
+            try:
+                read_resp = self._get_next_read_resp()
+            except CancelledByClient as e:
+                raise StopIteration() from e
+            content_oneof = read_resp.WhichOneof("content")
             if content_oneof == "event":
-                return self._construct_recorded_event(response)
+                return self._construct_recorded_event(read_resp)
             else:  # pragma: no cover
                 pass
 
     def _get_next_read_resp(self) -> persistent_pb2.ReadResp:
         try:
-            response = next(self.resp)
+            read_resp = next(self.resps)
         except RpcError as e:
             raise handle_rpc_error(e) from e
-        assert isinstance(response, persistent_pb2.ReadResp)
-        return response
+        assert isinstance(read_resp, persistent_pb2.ReadResp)
+        return read_resp
 
+    def stop(self) -> None:
+        self.reqs.stop()
+        self.resps.cancel()
 
-class AsyncioPersistentSubscriptionsService(BasePersistentSubscriptionsService):
-    pass
+    def ack(self, event_id: UUID) -> None:
+        self.reqs.ack(event_id)
+
+    def nack(
+        self,
+        event_id: UUID,
+        action: Literal["unknown", "park", "retry", "skip", "stop"],
+    ) -> None:
+        self.reqs.nack(event_id, action=action)
+
+    def __del__(self) -> None:
+        self.stop()
 
 
 class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
@@ -515,25 +555,27 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         self,
         group_name: str,
         stream_name: Optional[str] = None,
+        buffer_size: int = 100,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
-    ) -> Tuple[SubscriptionReadRequests, SubscriptionReadResponse]:
-        read_req = SubscriptionReadRequests(
+    ) -> PersistentSubscription:
+        read_reqs = SubscriptionReadReqs(
             group_name=group_name,
             stream_name=stream_name,
+            buffer_size=buffer_size,
         )
-        read_resp = self._stub.Read(
-            read_req,
+        read_resps: _MultiThreadedRendezvous = self._stub.Read(
+            read_reqs,
             timeout=timeout,
             metadata=self._metadata(metadata, requires_leader=True),
             credentials=credentials,
         )
-        return (
-            read_req,
-            SubscriptionReadResponse(
-                read_resp, group_name=group_name, stream_name=stream_name
-            ),
+        return PersistentSubscription(
+            reqs=read_reqs,
+            resps=read_resps,
+            group_name=group_name,
+            stream_name=stream_name,
         )
 
     def get_info(

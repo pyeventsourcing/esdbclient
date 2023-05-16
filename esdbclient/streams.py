@@ -15,6 +15,7 @@ from uuid import UUID, uuid4
 import grpc.aio
 from google.protobuf import duration_pb2, empty_pb2
 from grpc import CallCredentials, RpcError, StatusCode
+from grpc._channel import _MultiThreadedRendezvous
 from typing_extensions import Literal
 
 from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
@@ -22,6 +23,7 @@ from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import (
     AccessDeniedError,
     BadRequestError,
+    CancelledByClient,
     ESDBClientException,
     InvalidTransactionError,
     MaximumAppendSizeExceededError,
@@ -74,7 +76,7 @@ class AsyncioReadResponse:
     def __aiter__(self) -> "AsyncioReadResponse":
         return self
 
-    async def __anext__(self) -> "RecordedEvent":
+    async def __anext__(self) -> RecordedEvent:
         while True:
             read_resp = await self._get_next_read_resp()
             content_oneof = read_resp.WhichOneof("content")
@@ -117,14 +119,14 @@ class AsyncioReadResponse:
                 #   last_stream_position, first_all_stream_position.
 
 
-class ReadResponse(Iterable[RecordedEvent]):
+class ReadResponse(Iterator[RecordedEvent]):
     def __init__(
         self,
-        read_resp_iter: Iterable[streams_pb2.ReadResp],
+        read_resps: _MultiThreadedRendezvous,
         stream_name: Optional[str],
         is_subscription: bool,
     ):
-        self.read_resp_iter = iter(read_resp_iter)
+        self.read_resps = read_resps
         self.stream_name = stream_name
         self.subscription_id: Optional[UUID] = None
         if is_subscription:
@@ -143,7 +145,10 @@ class ReadResponse(Iterable[RecordedEvent]):
 
     def __next__(self) -> RecordedEvent:
         while True:
-            read_resp = self._get_next_read_resp()
+            try:
+                read_resp = self._get_next_read_resp()
+            except CancelledByClient as e:
+                raise StopIteration() from e
             content_oneof = read_resp.WhichOneof("content")
             if content_oneof == "event":
                 event = read_resp.event.event
@@ -185,7 +190,7 @@ class ReadResponse(Iterable[RecordedEvent]):
 
     def _get_next_read_resp(self) -> streams_pb2.ReadResp:
         try:
-            read_resp = next(self.read_resp_iter)
+            read_resp = next(self.read_resps)
         except RpcError as e:
             if e.code() == StatusCode.FAILED_PRECONDITION:
                 details = e.details() or ""
@@ -197,6 +202,12 @@ class ReadResponse(Iterable[RecordedEvent]):
                 raise handle_rpc_error(e) from e
         assert isinstance(read_resp, streams_pb2.ReadResp)
         return read_resp
+
+    def stop(self) -> None:
+        self.read_resps.cancel()
+
+    def __del__(self) -> None:
+        self.stop()
 
 
 DEFAULT_BATCH_APPEND_REQUEST_DEADLINE = 315576000000
@@ -766,7 +777,7 @@ class StreamsService(BaseStreamsService):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
-    ) -> Iterable[RecordedEvent]:
+    ) -> ReadResponse:
         """
         Signature for reading events from a stream.
         """
@@ -781,7 +792,7 @@ class StreamsService(BaseStreamsService):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
-    ) -> Iterable[RecordedEvent]:
+    ) -> ReadResponse:
         """
         Signature for reading events from a stream with a catch-up subscription.
         """
@@ -799,7 +810,7 @@ class StreamsService(BaseStreamsService):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
-    ) -> Iterable[RecordedEvent]:
+    ) -> ReadResponse:
         """
         Signature for reading all events.
         """
@@ -816,7 +827,7 @@ class StreamsService(BaseStreamsService):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
-    ) -> Iterable[RecordedEvent]:
+    ) -> ReadResponse:
         """
         Signature for reading all events with a catch-up subscription.
         """
@@ -836,7 +847,7 @@ class StreamsService(BaseStreamsService):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
-    ) -> Iterable[RecordedEvent]:
+    ) -> ReadResponse:
         """
         Constructs and sends a gRPC 'ReadReq' to the 'Read' rpc.
 

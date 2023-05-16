@@ -35,3 +35,4 @@ class RecordedEvent:
     stream_name: str
     stream_position: int
     commit_position: Optional[int]
+    retry_count: Optional[int] = None

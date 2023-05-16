@@ -30,6 +30,12 @@ class DeadlineExceeded(GrpcError):
     """
 
 
+class CancelledByClient(GrpcError):
+    """
+    Raised when gRPC operation is cancelled.
+    """
+
+
 class NodeIsNotLeader(ESDBClientException):
     """
     Raised when client attempts to write to a node that is not a leader.

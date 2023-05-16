@@ -10,7 +10,6 @@ from typing import (
     Callable,
     Dict,
     Iterable,
-    Iterator,
     Optional,
     Sequence,
     Tuple,
@@ -22,7 +21,7 @@ from typing import (
 import dns.exception
 import dns.resolver
 import grpc
-from grpc import CallCredentials, RpcError
+from grpc import CallCredentials
 
 from esdbclient.connection import (
     NODE_PREFERENCE_FOLLOWER,
@@ -34,7 +33,7 @@ from esdbclient.connection import (
     ConnectionSpec,
     ESDBConnection,
 )
-from esdbclient.esdbapibase import BasicAuthCallCredentials, handle_rpc_error
+from esdbclient.esdbapibase import BasicAuthCallCredentials
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import (
     DiscoveryFailed,
@@ -56,10 +55,10 @@ from esdbclient.gossip import (
 )
 from esdbclient.persistent import (
     ConsumerStrategy,
+    PersistentSubscription,
     SubscriptionInfo,
-    SubscriptionReadRequests,
-    SubscriptionReadResponse,
 )
+from esdbclient.streams import ReadResponse
 
 # Matches the 'type' of "system" events.
 ESDB_SYSTEM_EVENTS_REGEX = r"\$.+"
@@ -486,7 +485,7 @@ class ESDBClient(BaseESDBClient):
         filter_by_stream_name: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
-    ) -> Iterable[RecordedEvent]:
+    ) -> ReadResponse:
         """
         Reads recorded events in "all streams" in the database.
         """
@@ -610,12 +609,12 @@ class ESDBClient(BaseESDBClient):
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
         timeout: Optional[float] = None,
-    ) -> Iterator[RecordedEvent]:
+    ) -> ReadResponse:
         """
         Starts a catch-up subscription, from which all
         recorded events in the database can be received.
         """
-        read_resp = self._connection.streams.read(
+        return self._connection.streams.read(
             commit_position=commit_position,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
@@ -625,7 +624,6 @@ class ESDBClient(BaseESDBClient):
             metadata=self._call_metadata,
             credentials=self._call_credentials,
         )
-        return CatchupSubscription(read_resp=read_resp)
 
     @retrygrpc
     @autoreconnect
@@ -634,12 +632,12 @@ class ESDBClient(BaseESDBClient):
         stream_name: str,
         stream_position: Optional[int] = None,
         timeout: Optional[float] = None,
-    ) -> Iterator[RecordedEvent]:
+    ) -> ReadResponse:
         """
         Starts a catch-up subscription from which
         recorded events in a stream can be received.
         """
-        read_resp = self._connection.streams.read(
+        return self._connection.streams.read(
             stream_name=stream_name,
             stream_position=stream_position,
             subscribe=True,
@@ -647,7 +645,6 @@ class ESDBClient(BaseESDBClient):
             metadata=self._call_metadata,
             credentials=self._call_credentials,
         )
-        return CatchupSubscription(read_resp=read_resp)
 
     @overload
     def create_subscription(
@@ -798,13 +795,14 @@ class ESDBClient(BaseESDBClient):
     @retrygrpc
     @autoreconnect
     def read_subscription(
-        self, group_name: str, timeout: Optional[float] = None
-    ) -> Tuple[SubscriptionReadRequests, SubscriptionReadResponse]:
+        self, group_name: str, buffer_size: int = 100, timeout: Optional[float] = None
+    ) -> PersistentSubscription:
         """
         Reads a persistent subscription on all streams.
         """
         return self._connection.persistent_subscriptions.read(
             group_name=group_name,
+            buffer_size=buffer_size,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=self._call_credentials,
@@ -813,14 +811,19 @@ class ESDBClient(BaseESDBClient):
     @retrygrpc
     @autoreconnect
     def read_stream_subscription(
-        self, group_name: str, stream_name: str, timeout: Optional[float] = None
-    ) -> Tuple[SubscriptionReadRequests, SubscriptionReadResponse]:
+        self,
+        group_name: str,
+        stream_name: str,
+        buffer_size: int = 100,
+        timeout: Optional[float] = None,
+    ) -> PersistentSubscription:
         """
         Reads a persistent subscription on one stream.
         """
         return self._connection.persistent_subscriptions.read(
             group_name=group_name,
             stream_name=stream_name,
+            buffer_size=buffer_size,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=self._call_credentials,
@@ -964,24 +967,3 @@ class ESDBClient(BaseESDBClient):
 
     def __del__(self) -> None:
         self.close()
-
-
-class CatchupSubscription(Iterator[RecordedEvent]):
-    """
-    Encapsulates read response for a catch-up subscription.
-    """
-
-    def __init__(
-        self,
-        read_resp: Iterable[RecordedEvent],
-    ):
-        self.read_resp = iter(read_resp)
-
-    def __iter__(self) -> Iterator[RecordedEvent]:
-        return self
-
-    def __next__(self) -> RecordedEvent:
-        try:
-            return next(self.read_resp)
-        except RpcError as e:
-            raise handle_rpc_error(e) from e  # pragma: no cover

@@ -594,10 +594,10 @@ stream (the default behaviour), or from the end of the stream if `backwards` is
 recorded event at that position will be included, both when reading forwards
 from that position, and when reading backwards from that position.
 
-The optional `backwards` argument is a boolean, by default `False`, which means the
-stream will be read forwards by default, so that events are returned in the
-order they were appended, If `backwards` is `True`, the stream will be read
-backwards, so that events are returned in reverse order.
+The optional `backwards` argument is a Python `bool`. The default is `False`, which
+means the stream will be read forwards by default, so that events are returned in the
+order they were appended, If `backwards` is `True`, the events are returned in reverse
+order.
 
 The optional `limit` argument is an integer which restricts the number of events that
 will be returned. The default value is `sys.maxint`.
@@ -742,10 +742,10 @@ from the end if `backwards` is `True`. Please note, if a commit position is spec
 it must be an actually existing commit position in the database.
 Any other number will result in a server error (at least in EventStoreDB v21.10).
 
-The optional `backwards` argument is a boolean which is by default `False` meaning the
-events will be read forwards by default, so that events are returned in the
-order they were committed, If `backwards` is `True`, the events will be read
-backwards, so that events are returned in reverse order.
+The optional `backwards` argument is a Python `bool`. The default is `False`, which
+means the database will be read forwards by default, so that events are returned in the
+order they were recorded, If `backwards` is `True`, the events are returned in reverse
+order.
 
 The optional `filter_exclude` argument is a sequence of regular expressions that
 match recorded events that should not be included. This argument is ignored
@@ -759,7 +759,7 @@ that match recorded events that should be included. By default, this argument
 is an empty tuple. If this argument is set to a non-empty sequence, the
 `filter_exclude` argument is ignored.
 
-The optional `filter_by_stream_name` argument is a boolean value that indicates whether
+The optional `filter_by_stream_name` argument is a Python `bool` that indicates whether
 the filter will apply to event types or stream names. By default, this value is `False`
 and so the filtering will apply to the event type strings of recorded events.
 
@@ -1137,7 +1137,7 @@ that match recorded events that should be included. By default, this argument
 is an empty tuple. If this argument is set to a non-empty sequence, the
 `filter_exclude` argument is ignored.
 
-The optional argument `filter_by_stream_name` is a boolean value that indicates whether
+The optional argument `filter_by_stream_name` is a Python `bool` that indicates whether
 the filter will apply to event types or stream names. By default, this value is `False`
 and so the filtering will apply to the event type strings of recorded events.
 
@@ -1417,7 +1417,7 @@ that match recorded events that should be received. By default, this argument
 is an empty tuple. If this argument is set to a non-empty sequence, the
 `filter_exclude` argument is ignored.
 
-The optional `filter_by_stream_name` argument is a boolean value that indicates whether
+The optional `filter_by_stream_name` argument is a Python `bool` that indicates whether
 the filter will apply to event types or stream names. By default, this value is `False`
 and so the filtering will apply to the event type strings of recorded events.
 
@@ -1456,43 +1456,35 @@ This method also takes an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
 for the completion of the gRPC operation.
 
-This method returns a 2-tuple: a "read request" object and a "read response" object.
+This method returns a `PersistentSubscription` object, which is an iterator
+giving `RecordedEvent` objects, that also has `ack()`, `nack()` and `stop()`
+methods.
 
 ```python
-read_req, read_resp = client.read_subscription(group_name=group_name)
+subscription = client.read_subscription(group_name=group_name)
 ```
 
-The "read response" object is an iterator that yields recorded events from
-the specified commit position.
+The `ack()` method should be used by a consumer to indicate to the server that it
+has received and successfully processed a recorded event. This will prevent that
+recorded event being received by another consumer in the same group. The `ack()`
+method takes an `event_id` argument, which is the ID of the recorded event that
+has been received.
 
-The "read request" object has an `ack()` method that should be used by a consumer
-in a group to acknowledge to the server that it has received and successfully
-processed a recorded event. This will prevent that recorded event being received
-by another consumer in the same group. The `ack()` method takes an `event_id`
-argument, which is the ID of the recorded event that has been received.
-
-The "read request" object also has an `nack()` method that should be used by a consumer
-in a group to negatively acknowledge to the server that it has received but not
-successfully processed a recorded event. The `nack()` method takes an `event_id`
-argument, which is the ID of the recorded event that has been received, and an
-`action` argument, which should be a Python `str`, either `'unknown'`, `'park'`,
-`'retry'`, `'skip'`, or `'stop'`.
-
-The example below iterates over the "read response" object, and calls `ack()`
-on the "read response" object. The for loop breaks when we have received
-the last event, so that we can continue with the examples below.
+The example below iterates over the subscription object, and calls `ack()`. The
+`stop()` method is called when we have received the last event, so that we can
+continue with the examples below.
 
 ```python
 events = []
-for event in read_resp:
+for event in subscription:
     events.append(event)
 
     # Acknowledge the received event.
-    read_req.ack(event_id=event.id)
+    subscription.ack(event_id=event.id)
 
     # Break when the last event has been received.
     if event.id == event11.id:
-        break
+        subscription.stop()
 ```
 
 The received events are the events we appended above.
@@ -1511,92 +1503,18 @@ assert events[-2].id == event10.id
 assert events[-1].id == event11.id
 ```
 
-The "read request" object also has an `nack()` method that can be used by a consumer
-in a group to acknowledge to the server that it has failed successfully to
-process a recorded event. This will allow that recorded event to be received
-by this or another consumer in the same group.
-
-It might be more useful to encapsulate the request and response objects and to iterate
-over the "read response" in a separate thread, to call back to a handler function when
-a recorded event is received, and call `ack()` if the handler does not raise an
-exception, and to call `nack()` if an exception is raised. The example below shows how
-this might be done.
-
-```python
-from threading import Thread
-
-
-class SubscriptionReader:
-    def __init__(self, client, group_name, callback):
-        self.client = client
-        self.group_name = group_name
-        self.callback = callback
-        self.thread = Thread(target=self.read_subscription, daemon=True)
-        self.error = None
-
-    def start(self):
-        self.thread.start()
-
-    def join(self):
-        self.thread.join()
-
-    def read_subscription(self):
-        req, resp = self.client.read_subscription(group_name=self.group_name)
-        for event in resp:
-            try:
-                self.callback(event)
-            except Exception as e:
-                # req.nack(event.id)  # not yet implemented....
-                self.error = e
-                break
-            else:
-                req.ack(event.id)
-
-
-# Create another persistent subscription.
-group_name = f"group-{uuid4()}"
-client.create_subscription(group_name=group_name)
-
-events = []
-
-def handle_event(event):
-    events.append(event)
-    if event.id == event11.id:
-        raise Exception()
-
-
-reader = SubscriptionReader(
-    client=client,
-    group_name=group_name,
-    callback=handle_event
-)
-
-reader.start()
-reader.join()
-
-assert events[-1].id == event11.id
-```
-
-Please note, when processing events in a downstream component, the commit position of
-the last successfully processed event is usefully recorded by the downstream component
-so that the commit position can be determined by the downstream component from its own
-recorded when it is restarted. This commit position can be used to specify the commit
-position from which to subscribe. Since this commit position represents the position of
-the last successfully processed event in a downstream component, so it will be usual to
-want to read from the next event after this position, because that is the next event
-that needs to be processed. However, when subscribing for events using a persistent
-subscription in EventStoreDB, the event at the specified commit position MAY be returned
-as the first event in the received sequence of recorded events, and so it may
-be necessary to check the commit position of the received events and to discard
-any  recorded event object that has a commit position equal to the commit position
-specified in the request.
+The "subscription" object also has an `nack()` method that should be used by a consumer
+to negatively acknowledge to the server that it has received but not successfully
+processed a recorded event. The `nack()` method takes an `event_id` argument, which is
+the ID of the recorded event that has been received, and an `action` argument, which
+should be a Python `str`, either `'unknown'`, `'park'`, `'retry'`, `'skip'`, or `'stop'`.
 
 Whilst there are some advantages of persistent subscriptions, in particular the
-processing of recorded events by a group of consumers, by tracking in the
-upstream server the position in the commit sequence of events that have been processed,
-there is a danger of "dual writing" in the consumption of events. Reliability
-in processing of recorded events by a group of consumers will rely instead on
-idempotent handling of duplicate messages, and resilience to out-of-order delivery.
+processing of recorded events by a group of consumers, by tracking in the server
+the position in the commit sequence of events that have been processed, there is
+the danger of "dual writing" in the consumption of events. Reliability in processing
+of recorded events by a group of consumers will rely instead on idempotent handling
+of duplicate messages, and resilience to out-of-order delivery.
 
 ### Get subscription info
 
@@ -1678,8 +1596,8 @@ which to subscribe. The recorded event at this stream
 position will be received when reading the subscription.
 
 This optional `from_end` argument is a Python `bool`.
-By default, the value of this argument is False. If this argument is set
-to a True value, reading from the subscription will receive only events
+By default, the value of this argument is `False`. If this argument is set
+to `True`, reading from the subscription will receive only events
 recorded after the subscription was created. That is, it is not inclusive
 of the current stream position.
 
@@ -1734,8 +1652,8 @@ client.create_stream_subscription(
 
 *requires leader*
 
-The `read_stream_subscription()` method can be used to create a persistent
-subscription for a stream.
+The `read_stream_subscription()` method can be used to read a persistent
+stream subscription.
 
 This method has two required arguments, `group_name` and `stream_name`, which
 should match the values of arguments used when calling `create_stream_subscription()`.
@@ -1744,32 +1662,32 @@ This method also takes an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
 for the completion of the gRPC operation.
 
-Just like `read_subscription`, this method returns a 2-tuple: a "read request" object
-and a "read response" object.
+This method returns a `PersistentSubscription` object, which is an iterator
+giving `RecordedEvent` objects, that also has `ack()`, `nack()` and `stop()`
+methods.
 
 ```python
-read_req, read_resp = client.read_stream_subscription(
+subscription = client.read_stream_subscription(
     group_name=group_name1,
     stream_name=stream_name2,
 )
 ```
 
-The example below iterates over the "read response" object, and calls `ack()`
-on the "read response" object. The for loop breaks when we have received
-the last event in the stream, so that we can finish the examples in this
-documentation.
+The example below iterates over the subscription object, and calls `ack()`.
+The for loop breaks when we have received the last event in the stream, so
+that we can finish the examples in this documentation.
 
 ```python
 events = []
-for event in read_resp:
+for event in subscription:
     events.append(event)
 
     # Acknowledge the received event.
-    read_req.ack(event_id=event.id)
+    subscription.ack(event_id=event.id)
 
-    # Break when the last event has been received.
+    # Stop when 'event11' has been received.
     if event.id == event11.id:
-        break
+        subscription.stop()
 ```
 
 We can check we received all the events that were appended to `stream_name2`
@@ -1850,6 +1768,95 @@ client.delete_stream_subscription(
     group_name=group_name1,
     stream_name=stream_name2,
 )
+```
+
+### Persistent subscription consumer
+
+The reading of a persistent subscription can be encapsulated in a "consumer" that calls
+a "policy" function when a recorded event is received and then automatically calls
+`ack()` if the policy function returns normally, and `nack()` if it raises an exception,
+perhaps retrying the event for a certain number of times, and then parking the event.
+
+The simple example below shows how this might be done. We can see that 'event11' is
+acknowledged before 'event5' is finally parked.
+
+
+```python
+acked_events = {}
+nacked_events = {}
+
+
+class ExampleConsumer:
+    def __init__(self, subscription, max_retries, final_action):
+        self.subscription = subscription
+        self.max_retries = max_retries
+        self.final_action = final_action
+        self.error = None
+
+    def run(self):
+        try:
+            for event in self.subscription:
+                try:
+                    self.policy(event)
+                except Exception:
+                    if event.retry_count < self.max_retries:
+                        action = "retry"
+                    else:
+                        action = self.final_action
+                    self.subscription.nack(event.id, action=action)
+                    self.after_nack(event, action)
+                else:
+                    self.subscription.ack(event.id)
+                    self.after_ack(event)
+        except Exception:
+            self.subscription.stop()
+            raise
+
+    def stop(self):
+        self.subscription.stop()
+
+    def policy(self, event):
+        # Raise an exception when we see "event5".
+        if event.id == event5.id:
+            raise Exception()
+
+    def after_ack(self, event):
+        # Track retry count of acked events.
+        acked_events[event.id] = event.retry_count
+
+    def after_nack(self, event, action):
+        # Track retry count of nacked events.
+        nacked_events[event.id] = event.retry_count
+
+        if action == self.final_action:
+            # Stop the consumer, so we can continue with the examples.
+            self.stop()
+
+
+# Create subscription.
+group_name = f"group-{uuid4()}"
+client.create_subscription(group_name, commit_position=commit_position1)
+
+# Read subscription.
+subscription = client.read_subscription(group_name)
+
+# Construct consumer.
+consumer = ExampleConsumer(
+    subscription=subscription,
+    max_retries=5,
+    final_action="park",
+)
+
+# Run consumer.
+consumer.run()
+
+# Check 'event11' was acked and never retried.
+assert acked_events[event11.id] == 0
+assert event11.id not in nacked_events
+
+# Check 'event5' was retried five times and never acked.
+assert nacked_events[event5.id] == 5
+assert event5.id not in acked_events
 ```
 
 ## Connection

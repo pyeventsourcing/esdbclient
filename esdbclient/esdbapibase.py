@@ -7,6 +7,7 @@ from grpc import AuthMetadataContext, AuthMetadataPluginCallback, RpcError, Stat
 from grpc.aio import AioRpcError
 
 from esdbclient.exceptions import (
+    CancelledByClient,
     DeadlineExceeded,
     ESDBClientException,
     ExceptionThrownByHandler,
@@ -45,10 +46,15 @@ def handle_rpc_error(e: RpcError) -> ESDBClientException:
             e.details()
         ):
             return ExceptionThrownByHandler(e)
-        elif e.code() == StatusCode.UNAVAILABLE:
-            return ServiceUnavailable(e)
+        elif (
+            e.code() == StatusCode.CANCELLED
+            and e.details() == "Locally cancelled by application!"
+        ):
+            return CancelledByClient(e)
         elif e.code() == StatusCode.DEADLINE_EXCEEDED:
             return DeadlineExceeded(e)
+        elif e.code() == StatusCode.UNAVAILABLE:
+            return ServiceUnavailable(e)
         elif (
             e.code() == StatusCode.NOT_FOUND and e.details() == "Leader info available"
         ):
