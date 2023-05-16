@@ -1,27 +1,27 @@
 ## For version 1.0
 
 * Replay parked events in persistent subscription?
-
-* Seems that "requires-leader" isn't implemented on server for list subscriptions?
-  * getting from follower: status code: UNAVAILABLE, details: "Server Is Not Ready", rather than "Leader info available"
+  * There is a request that could be called. Do the events then reappear when reading?
 
 * Commit position vs prepare position?
+  * As I understand it, these values only differ when using TCP/IP client transaction?
+    * So probably only used by a small number of people, if any?
 
 * Doc
-  * is the README file sufficient for v1.0?
+  * Exception classes: describe which methods might raise which exceptions and why?
+  * Is the README file sufficient for v1.0? or do I need to use Sphinx?
   * ClusterMember data class attributes (there are quite a lot of them...)
 
-* Exception classes: describe which methods might raise which exceptions and why?
-
 * Sample
-  * is the eventsourcing-eventstoredb sufficient for v1.0?
-  * could port Joao's banking app?
+  * Is the eventsourcing-eventstoredb package sufficient for v1.0?
+  * Should I port Joao's banking app?
 
 * OAuth (requires commercial license)
-  * is there anything to do for this?
+  * What if anything would be needed in the client to support OAuth?
 
 * Change GitHub workflow to also test with 22.10.0?
   * 22.10.0 seems a little buggy (see tests)?
+    * Actually, occasionally getting "Exception was thrown by handler" from 21.10.9...
 
 -----
 Issues:
@@ -29,6 +29,8 @@ Issues:
 * What is the "requires-leader" header actually for, since the server can decide if
   methods require leader? should this instead be something the client sets according to
   its node preference?
+  * Seems that "requires-leader" isn't implemented on server for list subscriptions?
+    * getting from follower: status code: UNAVAILABLE, details: "Server Is Not Ready", rather than "Leader info available"
 
 * Update persistent subscription
   * very similar to Create (just without filter options)
