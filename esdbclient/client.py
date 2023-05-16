@@ -889,6 +889,127 @@ class ESDBClient(BaseESDBClient):
             credentials=self._call_credentials,
         )
 
+    @overload
+    def update_subscription(
+        self,
+        group_name: str,
+        *,
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Signature for updating persistent subscription from start of database.
+        """
+
+    @overload
+    def update_subscription(
+        self,
+        group_name: str,
+        *,
+        commit_position: int,
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Signature for updating persistent subscription from a commit position.
+        """
+
+    @overload
+    def update_subscription(
+        self,
+        group_name: str,
+        *,
+        from_end: bool = True,
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Signature for updating persistent subscription from end of database.
+        """
+
+    @retrygrpc
+    @autoreconnect
+    def update_subscription(
+        self,
+        group_name: str,
+        from_end: bool = False,
+        commit_position: Optional[int] = None,
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Updates a persistent subscription on all streams.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        self._connection.persistent_subscriptions.update(
+            group_name=group_name,
+            from_end=from_end,
+            commit_position=commit_position,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=self._call_credentials,
+        )
+
+    @overload
+    def update_stream_subscription(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Signature for updating stream subscription from start of stream.
+        """
+
+    @overload
+    def update_stream_subscription(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        stream_position: int,
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Signature for updating stream subscription from stream position.
+        """
+
+    @overload
+    def update_stream_subscription(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        from_end: bool = True,
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Signature for updating stream subscription from end of stream.
+        """
+
+    @retrygrpc
+    @autoreconnect
+    def update_stream_subscription(
+        self,
+        group_name: str,
+        stream_name: str,
+        from_end: bool = False,
+        stream_position: Optional[int] = None,
+        timeout: Optional[float] = None,
+    ) -> None:
+        """
+        Updates a persistent subscription on one stream.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        self._connection.persistent_subscriptions.update(
+            group_name=group_name,
+            stream_name=stream_name,
+            from_end=from_end,
+            stream_position=stream_position,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=self._call_credentials,
+        )
+
     @retrygrpc
     @autoreconnect
     def delete_subscription(

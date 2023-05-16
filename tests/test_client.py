@@ -2640,11 +2640,52 @@ class TestESDBClient(TestCase):
         group_names = [s.group_name for s in subscriptions_after]
         self.assertIn(group_name, group_names)
 
+    def test_subscription_update(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-subscription-{uuid4().hex}"
+
+        # Can't update a subscription that doesn't exist.
+        with self.assertRaises(NotFound):
+            self.client.update_subscription(group_name=group_name)
+
+        # Create persistent subscription.
+        self.client.create_subscription(
+            group_name=group_name,
+            filter_exclude=[],
+            filter_include=[],
+        )
+
+        # Can update a subscription that does exist.
+        self.client.update_subscription(group_name=group_name)
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+
+        # Update subscription to run from end.
+        self.client.update_subscription(group_name=group_name, from_end=True)
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:-1/P:-1")
+
+        # Update subscription to run from commit position.
+        commit_position = self.client.get_commit_position()
+        self.client.update_subscription(
+            group_name=group_name, commit_position=commit_position
+        )
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, f"C:{commit_position}/P:{commit_position}")
+
+        # Update subscription to run from start.
+        self.client.update_subscription(group_name=group_name)
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+
     def test_subscription_delete(self) -> None:
         self.construct_esdb_client()
 
         group_name = f"my-subscription-{uuid4().hex}"
 
+        # Can't delete a subscription that doesn't exist.
         with self.assertRaises(NotFound):
             self.client.delete_subscription(group_name=group_name)
 
@@ -3035,6 +3076,61 @@ class TestESDBClient(TestCase):
         all_subscriptions = self.client.list_subscriptions()
         group_names = [s.group_name for s in all_subscriptions]
         self.assertIn(group_name, group_names)
+
+    def test_stream_subscription_update(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-subscription-{uuid4().hex}"
+        stream_name = str(uuid4().hex)
+
+        # Can't update a subscription that doesn't exist.
+        with self.assertRaises(NotFound):
+            self.client.update_stream_subscription(
+                group_name=group_name, stream_name=stream_name
+            )
+
+        # Create persistent subscription.
+        self.client.create_stream_subscription(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+
+        # Can update a subscription that does exist.
+        self.client.update_stream_subscription(
+            group_name=group_name, stream_name=stream_name
+        )
+
+        info = self.client.get_stream_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+
+        # Update subscription to run from end.
+        self.client.update_stream_subscription(
+            group_name=group_name, stream_name=stream_name, from_end=True
+        )
+        info = self.client.get_stream_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "-1")
+
+        # Update subscription to run from stream position.
+        self.client.update_stream_subscription(
+            group_name=group_name, stream_name=stream_name, stream_position=10
+        )
+        info = self.client.get_stream_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "10")
+
+        # Update subscription to run from start.
+        self.client.update_stream_subscription(
+            group_name=group_name, stream_name=stream_name
+        )
+        info = self.client.get_stream_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
 
     def test_stream_subscription_delete(self) -> None:
         self.construct_esdb_client()

@@ -169,10 +169,12 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Get subscription info](#get-subscription-info)
   * [List subscriptions](#list-subscriptions)
   * [Delete subscription](#delete-subscription)
+  * [Update subscription](#update-subscription)
   * [Create stream subscription](#create-stream-subscription)
   * [Read stream subscription](#read-stream-subscription)
   * [Get stream subscription info](#get-stream-subscription-info)
   * [List stream subscriptions](#list-stream-subscriptions)
+  * [Update stream subscription](#update-stream-subscription)
   * [Delete stream subscription](#delete-stream-subscription)
   * [Persistent subscription consumer](#persistent-subscription-consumer)
 * [Connection](#connection)
@@ -1556,6 +1558,46 @@ subscriptions = client.list_subscriptions()
 
 The returned value is a list of `SubscriptionInfo` objects.
 
+### Update subscription
+
+*requires leader*
+
+The method `update_subscription()` can be used to update a
+"persistent subscription".
+
+This method takes a required `group_name` argument, which is the
+name of a "group" of consumers of the subscription.
+
+This method also takes three optional arguments, `from_end`, `commit_position`,
+and `timeout`.
+
+The optional `from_end` argument can be used to specify that the group of consumers
+of the subscription should only receive events that were recorded after the subscription
+was updated.
+
+Alternatively, the optional `commit_position` argument can be used to specify a commit
+position from which commit position the group of consumers of the subscription should
+receive events. Please note, the recorded event at the specified commit position might
+be included in the recorded events received by the group of consumers.
+
+If neither `from_end` or `commit_position` are specified, the group of consumers
+of the subscription will potentially receive all recorded events in the database.
+
+Please note, the filter options and consumer strategy cannot be adjusted.
+
+The optional `timeout` argument is a Python `float` which sets a
+deadline for the completion of the gRPC operation.
+
+The method `update_subscription()` does not return a value.
+
+In the example below, a persistent subscription is updated to run from the end of the
+database.
+
+```python
+# Create a persistent subscription.
+client.update_subscription(group_name=group_name, from_end=True)
+```
+
 ### Delete subscription
 
 *requires leader*
@@ -1749,6 +1791,51 @@ subscriptions = client.list_stream_subscriptions(
 ```
 
 The returned value is a list of `SubscriptionInfo` objects.
+
+### Update stream subscription
+
+*requires leader*
+
+The method `update_stream_subscription()` can be used to update a
+persistent subscription for a stream.
+
+This method takes a required `group_name` argument, which is the
+name of a "group" of consumers of the subscription, and a required
+`stream_name` argument, which is the name of a stream.
+
+This method also takes three optional arguments, `from_end`, `stream_position`,
+and `timeout`.
+
+The optional `from_end` argument can be used to specify that the group of consumers
+of the subscription should only receive events that were recorded after the subscription
+was updated.
+
+Alternatively, the optional `stream_position` argument can be used to specify a stream
+position from which commit position the group of consumers of the subscription should
+receive events. Please note, the recorded event at the specified stream position might
+be included in the recorded events received by the group of consumers.
+
+If neither `from_end` or `commit_position` are specified, the group of consumers
+of the subscription will potentially receive all recorded events in the stream.
+
+Please note, the consumer strategy cannot be adjusted.
+
+The optional `timeout` argument is a Python `float` which sets a
+deadline for the completion of the gRPC operation.
+
+The method `update_stream_subscription()` does not return a value.
+
+In the example below, a persistent subscription for a stream is updated to run from the
+end of the stream.
+
+```python
+# Create a persistent subscription.
+client.update_stream_subscription(
+    group_name=group_name1,
+    stream_name=stream_name2,
+    from_end=True,
+)
+```
 
 ### Delete stream subscription
 

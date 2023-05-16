@@ -7,17 +7,10 @@
   from the snapshotted stream, then run the snapshot event and the subsequent events
   through the aggregate projector function).
 
-* Update persistent subscription
-  * very similar to Create (just without filter options)
-
 * Replay parked events in persistent subscription?
 
 * Seems that "requires-leader" isn't implemented on server for list subscriptions?
   * getting from follower: status code: UNAVAILABLE, details: "Server Is Not Ready", rather than "Leader info available"
-
-* What is the "requires-leader" header actually for, since the server can decide if
-  methods require leader? should this instead be something the client sets according to
-  its node preference?
 
 * Commit position vs prepare position?
 
@@ -37,6 +30,17 @@
 * Change GitHub workflow to also test with 22.10.0?
   * 22.10.0 seems a little buggy (see tests)?
 
+-----
+Issues:
+
+* What is the "requires-leader" header actually for, since the server can decide if
+  methods require leader? should this instead be something the client sets according to
+  its node preference?
+
+* Update persistent subscription
+  * very similar to Create (just without filter options)
+    * Qn: Why is named_consumer_strategy is deprecated in CreateReq but not UpdateReq?
+
 * I noticed the issue raised about "consumer too slow" - does the server close subscriptions?
 
 * Connection field 'TlsVerifyCert' - what to verify? and how?
@@ -44,6 +48,7 @@
     * not sure that we can do this with the Python library, although there is a callback...
       * there is a discussion about this on GH, with a PR that wasn't merged
         * https://github.com/grpc/grpc/issues/15461
+
 
 
 -----

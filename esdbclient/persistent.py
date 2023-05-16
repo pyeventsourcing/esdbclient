@@ -169,7 +169,6 @@ class BasePersistentSubscriptionsService(ESDBService):
         )
         # Decide 'stream_option'.
         if isinstance(stream_name, str):
-            # Todo: Support persistent subscription to a stream.
             stream_options = persistent_pb2.CreateReq.StreamOptions(
                 stream_identifier=shared_pb2.StreamIdentifier(
                     stream_name=stream_name.encode("utf8")
@@ -282,6 +281,69 @@ class BasePersistentSubscriptionsService(ESDBService):
                 )
             )
         return persistent_pb2.ListReq(options=options)
+
+    def _construct_update_req(
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        from_end: bool = False,
+        commit_position: Optional[int] = None,
+        stream_position: Optional[int] = None,
+    ) -> persistent_pb2.UpdateReq:
+        # Construct 'settings'.
+        settings = persistent_pb2.UpdateReq.Settings(
+            resolve_links=False,
+            extra_statistics=False,
+            max_retry_count=5,
+            min_checkpoint_count=10,  # server recorded position
+            max_checkpoint_count=10,  # server recorded position
+            max_subscriber_count=5,
+            live_buffer_size=1000,  # how many new events to hold in memory?
+            read_batch_size=8,  # how many events to read from DB records?
+            history_buffer_size=200,  # how many recorded events to hold in memory?
+            message_timeout_ms=1000,
+            checkpoint_after_ms=100,
+        )
+        # Construct UpdateReq.Options.
+        options = persistent_pb2.UpdateReq.Options(
+            group_name=group_name,
+            settings=settings,
+        )
+        # Decide 'stream_option'.
+        if isinstance(stream_name, str):
+            stream_options = persistent_pb2.UpdateReq.StreamOptions(
+                stream_identifier=shared_pb2.StreamIdentifier(
+                    stream_name=stream_name.encode("utf8")
+                ),
+            )
+            # Decide 'revision_option'.
+            if isinstance(stream_position, int):
+                stream_options.revision = stream_position
+            elif from_end is False:
+                stream_options.start.CopyFrom(shared_pb2.Empty())
+            else:
+                stream_options.end.CopyFrom(shared_pb2.Empty())
+            options.stream.CopyFrom(stream_options)
+        else:
+            if commit_position is not None:
+                all_options = persistent_pb2.UpdateReq.AllOptions(
+                    position=persistent_pb2.UpdateReq.Position(
+                        commit_position=commit_position,
+                        prepare_position=commit_position,
+                    ),
+                )
+            elif from_end:
+                all_options = persistent_pb2.UpdateReq.AllOptions(
+                    end=shared_pb2.Empty(),
+                )
+            else:
+                all_options = persistent_pb2.UpdateReq.AllOptions(
+                    start=shared_pb2.Empty(),
+                )
+
+            options.all.CopyFrom(all_options)
+        # Construct RPC request.
+        return persistent_pb2.UpdateReq(options=options)
 
     @staticmethod
     def _construct_delete_req(
@@ -634,6 +696,67 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
 
         assert isinstance(resp, persistent_pb2.ListResp)
         return self._construct_subscription_infos(resp)
+
+    @overload
+    def update(
+        self,
+        group_name: str,
+        *,
+        from_end: bool = False,
+        commit_position: Optional[int] = None,
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for updating a persistent "all streams" subscription.
+        """
+
+    @overload
+    def update(
+        self,
+        group_name: str,
+        *,
+        stream_name: Optional[str] = None,
+        from_end: bool = False,
+        stream_position: Optional[int] = None,
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for updating a persistent stream subscription.
+        """
+
+    def update(
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        from_end: bool = False,
+        commit_position: Optional[int] = None,
+        stream_position: Optional[int] = None,
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[CallCredentials] = None,
+    ) -> None:
+        request = self._construct_update_req(
+            group_name=group_name,
+            stream_name=stream_name,
+            from_end=from_end,
+            commit_position=commit_position,
+            stream_position=stream_position,
+        )
+        # Call 'Update' RPC.
+        try:
+            response = self._stub.Update(
+                request,
+                timeout=timeout,
+                metadata=self._metadata(metadata, requires_leader=True),
+                credentials=credentials,
+            )
+        except RpcError as e:
+            raise handle_rpc_error(e) from e
+        assert isinstance(response, persistent_pb2.UpdateResp)
 
     def delete(
         self,
