@@ -153,7 +153,7 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Append event](#append-event)
   * [Idempotent append operations](#idempotent-append-operations)
   * [Read stream events](#read-stream-events)
-  * [How to do snapshotting](#how-to-do-snapshotting)
+  * [How to implement snapshotting with EventStoreDB](#how-to-implement-snapshotting-with-eventstoredb)
   * [Read all events](#read-all-events)
   * [Get current stream position](#get-current-stream-position)
   * [Get current commit position](#get-current-commit-position)
@@ -743,7 +743,7 @@ else:
     raise Exception("Shouldn't get here")
 ```
 
-### How to do snapshotting
+### How to implement snapshotting with EventStoreDB
 
 Event-sourced aggregates are typically reconstructed from recorded events by calling
 a mutator function for each recorded event, evolving from an initial state
@@ -753,6 +753,8 @@ how this can be done. The aggregate ID is used as a stream name. The exception
 
 ```python
 def get_aggregate(aggregate_id, mutator_func):
+    stream_name = aggregate_id
+
     # Get recorded events.
     try:
         events = client.read_stream_events(
@@ -791,8 +793,8 @@ reconstructed from the last snapshot and any subsequent events, without having
 to replay the entire history.
 
 We will use a separate stream for an aggregate's snapshots that is named after the
-stream used for recording its events. The name of a snapshot stream will be constructed
-by prefixing the aggregate event stream with `'$snapshot-'`.
+stream used for recording its events. The name of the snapshot stream will be
+constructed by prefixing the aggregate's stream name with `'$snapshot-'`.
 
 ```python
 SNAPSHOT_PREFIX = '$snapshot-'
@@ -805,32 +807,20 @@ def strip_snapshot_stream_name(snapshot_stream_name):
     return snapshot_stream_name.lstrip(SNAPSHOT_PREFIX)
 ```
 
-We will also use JSON to serialize and deserialize Python `dict` objects.
+Let's redefine the `get_aggregate()` function, so that it looks for a snapshot event,
+then selects subsequent aggregate events, and then calls a mutator function for each
+recorded event. We will use JSON to serialize and deserialize Python `dict` objects.
+
+Notice that the aggregate events are read from a stream for aggregate
+events, whilst the snapshot is read from a separate stream for aggregate snapshots.
 
 ```python
 import json
 
 
-def serialize(d):
-    return json.dumps(d).encode()
-
-
-def deserialize(s):
-    return json.loads(s.decode())
-```
-
-Let's redefine the `get_aggregate()` function, so that it looks for a snapshot event,
-then selects subsequent aggregate events, and then calls a mutator function for each
-recorded event, evolving from an initial state `None` to the current state of the
-aggregate identified by `aggregate_id`.
-
-Notice that the aggregate events are read from a stream for aggregate events, whilst
-the snapshot is read from a separate stream for aggregate snapshots.
-
-```python
 def get_aggregate(aggregate_id, mutator_func):
-    recorded_events = []
     stream_name = aggregate_id
+    recorded_events = []
 
     # Look for a snapshot.
     try:
@@ -863,6 +853,14 @@ def get_aggregate(aggregate_id, mutator_func):
         aggregate = mutator_func(aggregate, event)
 
     return aggregate
+
+
+def serialize(d):
+    return json.dumps(d).encode()
+
+
+def deserialize(s):
+    return json.loads(s.decode())
 ```
 
 To show how this can be used, let's define an "immutable" `Dog` aggregate class, with
@@ -937,14 +935,13 @@ def get_dog(dog_id):
 We can also define some "command" functions that append new events to the
 database. The `register_dog()` function appends a `DogRegistered` event. The
 `record_trick_learned()` appends a `DogLearnedTrick` event. The function
-`snapshot_dog()` appends a `$DogSnapshot` event.
+`snapshot_dog()` appends a `$DogSnapshot` event. Notice that the
+`record_trick_learned()` and `snapshot_dog()` functions use `get_dog()`.
 
-Notice that the `DogRegistered` and `DogLearnedTrick` events are appended to a stream
-for aggregate events, whilst the `$DogSnapshot` is appended to a separate stream for
-aggregate snapshots.
-
-The snapshot event type is prefixed with `'$'` so that it can be filtered out when
-reading all events from the database.
+Notice also that the `DogRegistered` and `DogLearnedTrick` events are appended to a
+stream for aggregate events, whilst the `$DogSnapshot` is appended to a separate stream
+for aggregate snapshots. The snapshot event type is prefixed with `'$'` so that it can
+be filtered out when reading all events from the database.
 
 ```python
 def register_dog(name):
@@ -1051,6 +1048,7 @@ assert dog.is_from_snapshot is True
 
 We can see from the `is_from_snapshot` attribute that the `Dog` object was indeed
 reconstructed from the snapshot.
+
 
 ### Read all events
 
