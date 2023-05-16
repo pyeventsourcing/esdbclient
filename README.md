@@ -745,45 +745,106 @@ else:
 
 ### How to do snapshotting
 
-Snapshotting of aggregates can be implemented by using a separate stream for
-snapshots that is named after the stream name used for recording aggregate events.
-The name of a snapshot stream can be constructed by prefixing the aggregate event
-stream with something like `'$snapshot-'`. The state of an aggregate can be recorded
-as an event, and the version number of the aggregate, which should probably correspond
-to the stream position of the last event that was used to reconstruct the state of the
-aggregate, can be recorded in the snapshot event metadata. This version number can be
-used to read subsequent stream events. The aggregate can be reconstructed by reading
-the last snapshot, and then reading the subsequent events, and then running the snapshot
-and the subsequent events through a mutator function. The example below shows how this
-can be done.
-
-First, let's define a `get_aggregate()` function that can reconstruct the current
-state of an aggregate from an aggregate ID and a mutator function. It looks for a
-snapshot, and for subsequent events, and calls the mutator function for each event,
-evolving from an initial state `None` to the current state of the aggregate identified
-by `aggregate_id`. The aggregate ID is used as a stream name, and it raises an
-`AggregateNotFound` exception if the stream does not exist.
+Event-sourced aggregates are typically reconstructed from recorded events by calling
+a mutator function for each recorded event, evolving from an initial state
+`None` to the current state of the aggregate. The function `get_aggregate()` shows
+how this can be done. The aggregate ID is used as a stream name. The exception
+`AggregateNotFound` is raised if the aggregate stream is not found.
 
 ```python
+def get_aggregate(aggregate_id, mutator_func):
+    # Get recorded events.
+    try:
+        events = client.read_stream_events(
+            stream_name=stream_name,
+            stream_position=None
+        )
+    except NotFound as e:
+        raise AggregateNotFound(aggregate_id) from e
+    else:
+        # Reconstruct aggregate from recorded events.
+        aggregate = None
+        for event in events:
+            aggregate = mutator_func(aggregate, event)
+        return aggregate
+
+
 class AggregateNotFound(Exception):
     """Raised when an aggregate is not found."""
+```
+
+Snapshots can improve the performance of aggregates that would otherwise be
+reconstructed from very long streams. However, it is generally recommended to
+design aggregates to have a finite lifecycle, and hence relatively short streams,
+thereby avoiding the need for snapshotting. This "how to" section is intended
+merely to show how snapshotting of aggregates can be implemented with EventStoreDB
+using this Python client.
+
+Snapshotting of aggregates can be implemented by recording the current state of
+an aggregate as a new event.
+
+If an aggregate object has a version number that corresponds to the stream position of
+the last event that was used to reconstruct the aggregate, and this version number
+is recorded in the snapshot metadata, then any events that are recorded after the
+snapshot can be selected using this version number. The aggregate can then be
+reconstructed from the last snapshot and any subsequent events, without having
+to replay the entire history.
+
+We will use a separate stream for an aggregate's snapshots that is named after the
+stream used for recording its events. The name of a snapshot stream will be constructed
+by prefixing the aggregate event stream with `'$snapshot-'`.
+
+```python
+SNAPSHOT_PREFIX = '$snapshot-'
+
+def make_snapshot_stream_name(stream_name):
+    return f'{SNAPSHOT_PREFIX}{stream_name}'
 
 
+def strip_snapshot_stream_name(snapshot_stream_name):
+    return snapshot_stream_name.lstrip(SNAPSHOT_PREFIX)
+```
+
+We will also use JSON to serialize and deserialize Python `dict` objects.
+
+```python
+import json
+
+
+def serialize(d):
+    return json.dumps(d).encode()
+
+
+def deserialize(s):
+    return json.loads(s.decode())
+```
+
+Let's redefine the `get_aggregate()` function, so that it looks for a snapshot event,
+then selects subsequent aggregate events, and then calls a mutator function for each
+recorded event, evolving from an initial state `None` to the current state of the
+aggregate identified by `aggregate_id`.
+
+Notice that the aggregate events are read from a stream for aggregate events, whilst
+the snapshot is read from a separate stream for aggregate snapshots.
+
+```python
 def get_aggregate(aggregate_id, mutator_func):
     recorded_events = []
     stream_name = aggregate_id
 
     # Look for a snapshot.
     try:
-        snapshot = client.read_stream_events(
-            stream_name='$snapshot-' + stream_name,
+        snapshots = client.read_stream_events(
+            stream_name=make_snapshot_stream_name(stream_name),
             backwards=True,
             limit=1
-        )[0]
-        recorded_events.append(snapshot)
-        stream_position = json.loads(snapshot.metadata)['version'] + 1
+        )
     except NotFound:
         stream_position = None
+    else:
+        snapshot = snapshots[0]
+        stream_position = deserialize(snapshot.metadata)['version'] + 1
+        recorded_events.append(snapshot)
 
     # Get subsequent events.
     try:
@@ -791,8 +852,8 @@ def get_aggregate(aggregate_id, mutator_func):
             stream_name=stream_name,
             stream_position=stream_position
         )
-    except NotFound:
-        raise AggregateNotFound(aggregate_id) from None
+    except NotFound as e:
+        raise AggregateNotFound(aggregate_id) from e
     else:
         recorded_events += events
 
@@ -804,33 +865,41 @@ def get_aggregate(aggregate_id, mutator_func):
     return aggregate
 ```
 
-
-Next, let's define an "immutable" `Dog` aggregate class, and a mutator function
-`mutate_dog()` that can evolve the state of a `Dog` aggregate given various different
-types of events (`'DogRegistered'`, `'DogLearnedTrick'`, and `'$DogSnapshot`').
+To show how this can be used, let's define an "immutable" `Dog` aggregate class, with
+attributes `name` and `tricks`. The attributes `id` and `version` will indicate an
+aggregate object's ID and version number. The attribute `is_from_snapshot` is added
+here merely to demonstrate below when an aggregate object has been reconstructed using
+a snapshot.
 
 ```python
-import json
 from dataclasses import dataclass
 
 
 dataclass(frozen=True)
 class Dog:
-    def __init__(self, dog_id, version, name, tricks):
+    def __init__(self, dog_id, version, name, tricks, is_from_snapshot):
         self.id = dog_id
         self.version = version
         self.name = name
         self.tricks = tricks
+        self.is_from_snapshot = is_from_snapshot
+```
 
+Let's also define a mutator function `mutate_dog()` that can evolve the state of a
+`Dog` aggregate given various different types of events, `'DogRegistered'`,
+`'DogLearnedTrick'`, and `'$DogSnapshot`'. The snapshot event type is prefixed with
+`'$'` so that it can be filtered out when reading all events from the database.
 
+```python
 def mutate_dog(dog, event):
-    data = json.loads(event.data)
+    data = deserialize(event.data)
     if event.type == 'DogRegistered':
         return Dog(
             dog_id=event.stream_name,
-            version=0,
+            version=event.stream_position,
             name=data['name'],
-            tricks=[]
+            tricks=[],
+            is_from_snapshot=False,
         )
     elif event.type == 'DogLearnedTrick':
         assert event.stream_position == dog.version + 1
@@ -839,42 +908,50 @@ def mutate_dog(dog, event):
             dog_id=dog.id,
             version=event.stream_position,
             name=dog.name,
-            tricks=dog.tricks + [data['trick']]
+            tricks=dog.tricks + [data['trick']],
+            is_from_snapshot=dog.is_from_snapshot,
         )
     elif event.type == '$DogSnapshot':
-        metadata = json.loads(event.metadata)
         return Dog(
-            dog_id=event.stream_name.lstrip('$snapshot-'),
-            version=metadata['version'],
+            dog_id=strip_snapshot_stream_name(event.stream_name),
+            version=deserialize(event.metadata)['version'],
             name=data['name'],
             tricks=data['tricks'],
+            is_from_snapshot=True,
         )
     else:
         raise Exception(f"Unknown event type: {event.type}")
 ```
 
 For convenience, let's also define a `get_dog()` function that calls `get_aggregate()`
-with `mutate_dog` as the mutator function.
+with the `mutate_dog()` function as the `mutator_func` argument.
 
 ```python
 def get_dog(dog_id):
-    return get_aggregate(dog_id, mutate_dog)
+    return get_aggregate(
+        aggregate_id=dog_id,
+        mutator_func=mutate_dog,
+    )
 ```
 
 We can also define some "command" functions that append new events to the
 database. The `register_dog()` function appends a `DogRegistered` event. The
 `record_trick_learned()` appends a `DogLearnedTrick` event. The function
-`snapshot_dog()` appends a `DogSnapshot` event. Notice that the `DogRegistered`
-and `DogLearnedTrick` events are appended to stream name `dog_id`, whilst the
-`DogSnapshot` is appended to a stream that is named with prefix `'snapshot-'`.
+`snapshot_dog()` appends a `$DogSnapshot` event.
+
+Notice that the `DogRegistered` and `DogLearnedTrick` events are appended to a stream
+for aggregate events, whilst the `$DogSnapshot` is appended to a separate stream for
+aggregate snapshots.
+
+The snapshot event type is prefixed with `'$'` so that it can be filtered out when
+reading all events from the database.
 
 ```python
-
 def register_dog(name):
     dog_id = str(uuid4())
     event = NewEvent(
         type='DogRegistered',
-        data=json.dumps({'name': name}).encode(),
+        data=serialize({'name': name}),
     )
     client.append_event(
         stream_name=dog_id,
@@ -888,7 +965,7 @@ def record_trick_learned(dog_id, trick):
     dog = get_dog(dog_id)
     event = NewEvent(
         type='DogLearnedTrick',
-        data=json.dumps({'trick': trick}).encode(),
+        data=serialize({'trick': trick}),
     )
     client.append_event(
         stream_name=dog_id,
@@ -901,53 +978,66 @@ def snapshot_dog(dog_id):
     dog = get_dog(dog_id)
     event = NewEvent(
         type='$DogSnapshot',
-        data=json.dumps({'name': dog.name, 'tricks': dog.tricks}).encode(),
-        metadata=json.dumps({'version': dog.version}).encode(),
+        data=serialize({'name': dog.name, 'tricks': dog.tricks}),
+        metadata=serialize({'version': dog.version}),
     )
     client.append_event(
-        stream_name=f"$snapshot-{dog_id}",
+        stream_name=make_snapshot_stream_name(dog_id),
         expected_position=-1,
         event=event,
     )
 ```
 
-Now we can call `register_dog()`, `get_dog()`, `record_trick_learned()`.
+Now we can register a new dog, and record that some tricks have been learned.
 
 ```python
-
+# Register a new dog.
 dog_id = register_dog('Fido')
 
 dog = get_dog(dog_id)
 assert dog.name == 'Fido'
 assert dog.tricks == []
+assert dog.version == 0
+assert dog.is_from_snapshot is False
 
+
+# Record that 'Fido' learned a new trick.
 record_trick_learned(dog_id, trick='roll over')
 
 dog = get_dog(dog_id)
 assert dog.name == 'Fido'
 assert dog.tricks == ['roll over']
+assert dog.version == 1
+assert dog.is_from_snapshot is False
 
 
+# Record that 'Fido' learned another new trick.
 record_trick_learned(dog_id, trick='fetch ball')
 
 dog = get_dog(dog_id)
 assert dog.name == 'Fido'
 assert dog.tricks == ['roll over', 'fetch ball']
+assert dog.version == 2
+assert dog.is_from_snapshot is False
 ```
 
 After we call `snapshot_dog()`, the `get_dog()` function will return a `Dog`
-object that has been constructed using the `DogSnapshot` event.
+object that has been constructed using the `$DogSnapshot` event.
 
 ```python
-
+# Snapshot 'Fido'.
 snapshot_dog(dog_id)
 
 dog = get_dog(dog_id)
 assert dog.name == 'Fido'
 assert dog.tricks == ['roll over', 'fetch ball']
+assert dog.version == 2
+assert dog.is_from_snapshot is True
 ```
 
-We can continue to evolve the state of the `Dog` aggregate.
+We can continue to evolve the state of the `Dog` aggregate, using
+the snapshot both during the call the `record_trick_learned()` and
+when calling `get_dog()`.
 
 ```python
 record_trick_learned(dog_id, trick='sit')
@@ -955,8 +1045,12 @@ record_trick_learned(dog_id, trick='sit')
 dog = get_dog(dog_id)
 assert dog.name == 'Fido'
 assert dog.tricks == ['roll over', 'fetch ball', 'sit']
-
+assert dog.version == 3
+assert dog.is_from_snapshot is True
 ```
+
+We can see from the `is_from_snapshot` attribute that the `Dog` object was indeed
+reconstructed from the snapshot.
 
 ### Read all events
 
