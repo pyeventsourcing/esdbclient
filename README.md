@@ -25,17 +25,18 @@ SSL/TLS certificate.
 
 Probably the three most useful methods of `ESDBClient` are:
 
-* `append_events()` This method can be used to record
-events in a particular "stream". This is useful when executing a command
-in an application. Either all or none of the events will be recorded.
+* `append_events()` This method can be used to record events in a particular
+"stream". This is useful for example when executing a command in an application
+that mutates an aggregate. This method is "atomic" in that either all or none of
+the events will be recorded.
 
 * `read_stream_events()` This method can be used to retrieve all the recorded
-events in a "stream". This is useful for reconstructing an aggregate before
-executing a command in an application.
+events in a "stream". This is useful for example when reconstructing an aggregate
+before executing a command in an application.
 
 * `subscribe_all_events()` This method can be used to receive all recorded
-events across all "streams". This is useful in event-processing components,
-and supports processing events with "exactly-once" semantics.
+events across all "streams". This is useful in downstream event-processing
+components, and supports processing events with "exactly-once" semantics (see below).
 
 The example below uses an "insecure" EventStoreDB server running locally on port 2114.
 
@@ -152,6 +153,7 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Append event](#append-event)
   * [Idempotent append operations](#idempotent-append-operations)
   * [Read stream events](#read-stream-events)
+  * [How to do snapshotting](#how-to-do-snapshotting)
   * [Read all events](#read-all-events)
   * [Get current stream position](#get-current-stream-position)
   * [Get current commit position](#get-current-commit-position)
@@ -726,6 +728,236 @@ assert events[0].type == event3.type
 assert events[0].data == event3.data
 ```
 
+The `read_stream_events()` method will raise a `NotFound` exception if the stream
+does not exist.
+
+```python
+from esdbclient.exceptions import NotFound
+
+
+try:
+    client.read_stream_events('not-a-stream')
+except NotFound:
+    pass  # The stream 'not-a-stream' does not exist.
+else:
+    raise Exception("Shouldn't get here")
+```
+
+### How to do snapshotting
+
+Snapshotting of aggregates can be implemented by using a separate stream for
+snapshots that is named after the stream name used for recording aggregate events.
+The name of a snapshot stream can be constructed by prefixing the aggregate event
+stream with something like `'$snapshot-'`. The state of an aggregate can be recorded
+as an event, and the version number of the aggregate, which should probably correspond
+to the stream position of the last event that was used to reconstruct the state of the
+aggregate, can be recorded in the snapshot event metadata. This version number can be
+used to read subsequent stream events. The aggregate can be reconstructed by reading
+the last snapshot, and then reading the subsequent events, and then running the snapshot
+and the subsequent events through a mutator function. The example below shows how this
+can be done.
+
+First, let's define a `get_aggregate()` function that can reconstruct the current
+state of an aggregate from an aggregate ID and a mutator function. It looks for a
+snapshot, and for subsequent events, and calls the mutator function for each event,
+evolving from an initial state `None` to the current state of the aggregate identified
+by `aggregate_id`. The aggregate ID is used as a stream name, and it raises an
+`AggregateNotFound` exception if the stream does not exist.
+
+```python
+class AggregateNotFound(Exception):
+    """Raised when an aggregate is not found."""
+
+
+def get_aggregate(aggregate_id, mutator_func):
+    recorded_events = []
+    stream_name = aggregate_id
+
+    # Look for a snapshot.
+    try:
+        snapshot = client.read_stream_events(
+            stream_name='$snapshot-' + stream_name,
+            backwards=True,
+            limit=1
+        )[0]
+        recorded_events.append(snapshot)
+        stream_position = json.loads(snapshot.metadata)['version'] + 1
+    except NotFound:
+        stream_position = None
+
+    # Get subsequent events.
+    try:
+        events = client.read_stream_events(
+            stream_name=stream_name,
+            stream_position=stream_position
+        )
+    except NotFound:
+        raise AggregateNotFound(aggregate_id) from None
+    else:
+        recorded_events += events
+
+    # Reconstruct aggregate from recorded events.
+    aggregate = None
+    for event in recorded_events:
+        aggregate = mutator_func(aggregate, event)
+
+    return aggregate
+```
+
+
+Next, let's define an "immutable" `Dog` aggregate class, and a mutator function
+`mutate_dog()` that can evolve the state of a `Dog` aggregate given various different
+types of events (`'DogRegistered'`, `'DogLearnedTrick'`, and `'$DogSnapshot`').
+
+```python
+import json
+from dataclasses import dataclass
+
+
+dataclass(frozen=True)
+class Dog:
+    def __init__(self, dog_id, version, name, tricks):
+        self.id = dog_id
+        self.version = version
+        self.name = name
+        self.tricks = tricks
+
+
+def mutate_dog(dog, event):
+    data = json.loads(event.data)
+    if event.type == 'DogRegistered':
+        return Dog(
+            dog_id=event.stream_name,
+            version=0,
+            name=data['name'],
+            tricks=[]
+        )
+    elif event.type == 'DogLearnedTrick':
+        assert event.stream_position == dog.version + 1
+        assert event.stream_name == dog.id
+        return Dog(
+            dog_id=dog.id,
+            version=event.stream_position,
+            name=dog.name,
+            tricks=dog.tricks + [data['trick']]
+        )
+    elif event.type == '$DogSnapshot':
+        metadata = json.loads(event.metadata)
+        return Dog(
+            dog_id=event.stream_name.lstrip('$snapshot-'),
+            version=metadata['version'],
+            name=data['name'],
+            tricks=data['tricks'],
+        )
+    else:
+        raise Exception(f"Unknown event type: {event.type}")
+```
+
+For convenience, let's also define a `get_dog()` function that calls `get_aggregate()`
+with `mutate_dog` as the mutator function.
+
+```python
+def get_dog(dog_id):
+    return get_aggregate(dog_id, mutate_dog)
+```
+
+We can also define some "command" functions that append new events to the
+database. The `register_dog()` function appends a `DogRegistered` event. The
+`record_trick_learned()` appends a `DogLearnedTrick` event. The function
+`snapshot_dog()` appends a `DogSnapshot` event. Notice that the `DogRegistered`
+and `DogLearnedTrick` events are appended to stream name `dog_id`, whilst the
+`DogSnapshot` is appended to a stream that is named with prefix `'snapshot-'`.
+
+```python
+
+def register_dog(name):
+    dog_id = str(uuid4())
+    event = NewEvent(
+        type='DogRegistered',
+        data=json.dumps({'name': name}).encode(),
+    )
+    client.append_event(
+        stream_name=dog_id,
+        expected_position=None,
+        event=event,
+    )
+    return dog_id
+
+
+def record_trick_learned(dog_id, trick):
+    dog = get_dog(dog_id)
+    event = NewEvent(
+        type='DogLearnedTrick',
+        data=json.dumps({'trick': trick}).encode(),
+    )
+    client.append_event(
+        stream_name=dog_id,
+        expected_position=dog.version,
+        event=event,
+    )
+
+
+def snapshot_dog(dog_id):
+    dog = get_dog(dog_id)
+    event = NewEvent(
+        type='$DogSnapshot',
+        data=json.dumps({'name': dog.name, 'tricks': dog.tricks}).encode(),
+        metadata=json.dumps({'version': dog.version}).encode(),
+    )
+    client.append_event(
+        stream_name=f"$snapshot-{dog_id}",
+        expected_position=-1,
+        event=event,
+    )
+```
+
+Now we can call `register_dog()`, `get_dog()`, `record_trick_learned()`.
+
+```python
+
+dog_id = register_dog('Fido')
+
+dog = get_dog(dog_id)
+assert dog.name == 'Fido'
+assert dog.tricks == []
+
+record_trick_learned(dog_id, trick='roll over')
+
+dog = get_dog(dog_id)
+assert dog.name == 'Fido'
+assert dog.tricks == ['roll over']
+
+
+record_trick_learned(dog_id, trick='fetch ball')
+
+dog = get_dog(dog_id)
+assert dog.name == 'Fido'
+assert dog.tricks == ['roll over', 'fetch ball']
+```
+
+After we call `snapshot_dog()`, the `get_dog()` function will return a `Dog`
+object that has been constructed using the `DogSnapshot` event.
+
+```python
+
+snapshot_dog(dog_id)
+
+dog = get_dog(dog_id)
+assert dog.name == 'Fido'
+assert dog.tricks == ['roll over', 'fetch ball']
+```
+
+We can continue to evolve the state of the `Dog` aggregate.
+
+```python
+record_trick_learned(dog_id, trick='sit')
+
+dog = get_dog(dog_id)
+assert dog.name == 'Fido'
+assert dog.tricks == ['roll over', 'fetch ball', 'sit']
+
+```
+
 ### Read all events
 
 The method `read_all_events()` can be used to read all recorded events
@@ -799,7 +1031,7 @@ events = list(
     )
 )
 
-assert len(events) == 3
+assert len(events) == 7
 
 assert events[0].stream_name == stream_name1
 assert events[0].stream_position == 0
@@ -815,6 +1047,11 @@ assert events[2].stream_name == stream_name1
 assert events[2].stream_position == 2
 assert events[2].type == event3.type
 assert events[2].data == event3.data
+
+assert events[3].type == "DogRegistered"
+assert events[4].type == "DogLearnedTrick"
+assert events[5].type == "DogLearnedTrick"
+assert events[6].type == "DogLearnedTrick"
 ```
 
 The example below shows how to read all recorded events in reverse order.
@@ -828,20 +1065,26 @@ events = list(
 
 assert len(events) >= 3
 
-assert events[0].stream_name == stream_name1
-assert events[0].stream_position == 2
-assert events[0].type == event3.type
-assert events[0].data == event3.data
+assert events[0].type == "DogLearnedTrick"
+assert events[1].type == "DogLearnedTrick"
+assert events[2].type == "DogLearnedTrick"
+assert events[3].type == "DogRegistered"
 
-assert events[1].stream_name == stream_name1
-assert events[1].stream_position == 1
-assert events[1].type == event2.type
-assert events[1].data == event2.data
+assert events[4].stream_name == stream_name1
+assert events[4].stream_position == 2
+assert events[4].type == event3.type
+assert events[4].data == event3.data
 
-assert events[2].stream_name == stream_name1
-assert events[2].stream_position == 0
-assert events[2].type == event1.type
-assert events[2].data == event1.data
+assert events[5].stream_name == stream_name1
+assert events[5].stream_position == 1
+assert events[5].type == event2.type
+assert events[5].data == event2.data
+
+assert events[6].stream_name == stream_name1
+assert events[6].stream_position == 0
+assert events[6].type == event1.type
+assert events[6].data == event1.data
+
 ```
 
 The example below shows how to read a limited number (one) of the recorded events
@@ -881,10 +1124,7 @@ events = list(
 
 assert len(events) == 1
 
-assert events[0].stream_name == stream_name1
-assert events[0].stream_position == 2
-assert events[0].type == event3.type
-assert events[0].data == event3.data
+assert events[0].type == "DogLearnedTrick"
 ```
 
 The example below shows how to read a limited number (one) of the recorded events
@@ -1191,9 +1431,13 @@ for event in subscription:
     if event.id == event4.id:
         break
 
-assert received_events[-4].id == event1.id
-assert received_events[-3].id == event2.id
-assert received_events[-2].id == event3.id
+assert received_events[-8].id == event1.id
+assert received_events[-7].id == event2.id
+assert received_events[-6].id == event3.id
+assert received_events[-5].type == "DogRegistered"
+assert received_events[-4].type == "DogLearnedTrick"
+assert received_events[-3].type == "DogLearnedTrick"
+assert received_events[-2].type == "DogLearnedTrick"
 assert received_events[-1].id == event4.id
 
 # Append subsequent events to the stream.
@@ -1212,9 +1456,7 @@ for event in subscription:
         break
 
 
-assert received_events[-5].id == event1.id
-assert received_events[-4].id == event2.id
-assert received_events[-3].id == event3.id
+
 assert received_events[-2].id == event4.id
 assert received_events[-1].id == event5.id
 
@@ -1240,9 +1482,6 @@ for event in subscription:
     if event.id == event6.id:
         break
 
-assert received_events[-6].id == event1.id
-assert received_events[-5].id == event2.id
-assert received_events[-4].id == event3.id
 assert received_events[-3].id == event4.id
 assert received_events[-2].id == event5.id
 assert received_events[-1].id == event6.id
@@ -1266,9 +1505,6 @@ for event in subscription:
     if event.id == event9.id:
         break
 
-assert received_events[-9].id == event1.id
-assert received_events[-8].id == event2.id
-assert received_events[-7].id == event3.id
 assert received_events[-6].id == event4.id
 assert received_events[-5].id == event5.id
 assert received_events[-4].id == event6.id
@@ -1493,9 +1729,13 @@ for event in subscription:
 The received events are the events we appended above.
 
 ```python
-assert events[-11].id == event1.id
-assert events[-10].id == event2.id
-assert events[-9].id == event3.id
+assert events[-15].id == event1.id
+assert events[-14].id == event2.id
+assert events[-13].id == event3.id
+assert events[-12].type == "DogRegistered"
+assert events[-11].type == "DogLearnedTrick"
+assert events[-10].type == "DogLearnedTrick"
+assert events[-9].type == "DogLearnedTrick"
 assert events[-8].id == event4.id
 assert events[-7].id == event5.id
 assert events[-6].id == event6.id

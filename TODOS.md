@@ -1,12 +1,5 @@
 ## For version 1.0
 
-* Explain how to implement snapshotting (use a snapshot stream, snapshot stream name
-  is snapshotted stream name prefixed with "snapshot", put stream position in the
-  snapshot event metadata, get last event from snapshot stream, read the metadata
-  of snapshot event to get the stream position, get events after that stream position
-  from the snapshotted stream, then run the snapshot event and the subsequent events
-  through the aggregate projector function).
-
 * Replay parked events in persistent subscription?
 
 * Seems that "requires-leader" isn't implemented on server for list subscriptions?
