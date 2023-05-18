@@ -874,15 +874,14 @@ class TestESDBClient(TestCase):
     def test_stream_append_events_raises_deadline_exceeded(self) -> None:
         self.construct_esdb_client()
 
+        large_data = b"a" * 10000
         # Append two events.
         stream_name1 = str(uuid4())
         event1 = NewEvent(
-            type="OrderCreated",
-            data=b"{}",
-            metadata=b"{}",
+            type="SomethingHappened",
+            data=large_data,
         )
-        new_events = [event1]
-        new_events += [NewEvent(type="OrderUpdated", data=b"") for _ in range(1000)]
+        new_events = [event1] * 10000
         # Timeout appending new event.
         with self.assertRaises(DeadlineExceeded):
             self.client.append_events(
