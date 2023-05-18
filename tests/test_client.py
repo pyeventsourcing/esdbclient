@@ -3474,6 +3474,8 @@ class TestRequiresLeaderHeader(TestCase):
         #       Exception was thrown by handler.", grpc_status:2, created_time:"2023-05
         #       -07T12:04:26.287327771+00:00"}"
 
+        sleep(1)  # this is hopeful mitigation for the "Exception was thrown by handler"
+
         # Reconnect and write to leader.
         self.writer.append_events(
             stream_name, expected_position=None, events=[event1, event2]
