@@ -566,7 +566,7 @@ is the default behavior of `read_stream_events()`. If `backwards` is `True` and
 starting from the last recorded event.
 
 The optional `limit` argument is a Python `int` which restricts the number of events
-that will be returned. The default value of is `sys.maxint`.
+that will be returned. The default value of `limit` is `sys.maxint`.
 
 The optional `timeout` argument is a Python `float` which sets a deadline for
 the completion of the gRPC operation.
