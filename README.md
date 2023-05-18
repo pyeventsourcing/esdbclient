@@ -776,8 +776,9 @@ def make_snapshot_stream_name(stream_name):
     return f'{SNAPSHOT_STREAM_NAME_PREFIX}{stream_name}'
 
 
-def strip_snapshot_stream_name(snapshot_stream_name):
-    return snapshot_stream_name.lstrip(SNAPSHOT_STREAM_NAME_PREFIX)
+def remove_snapshot_stream_prefix(snapshot_stream_name):
+    assert snapshot_stream_name.startswith(SNAPSHOT_STREAM_NAME_PREFIX)
+    return snapshot_stream_name[len(SNAPSHOT_STREAM_NAME_PREFIX):]
 ```
 
 Now, let's redefine the `get_aggregate()` function, so that it looks for a snapshot event,
@@ -887,7 +888,7 @@ def mutate_dog(dog, event):
         )
     elif event.type == 'Snapshot':
         return Dog(
-            id=strip_snapshot_stream_name(event.stream_name),
+            id=remove_snapshot_stream_prefix(event.stream_name),
             version=deserialize(event.metadata)['version'],
             is_from_snapshot=True,
             name=data['name'],
