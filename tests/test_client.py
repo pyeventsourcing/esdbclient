@@ -387,7 +387,7 @@ class TestESDBClient(TestCase):
             list(self.client.read_all_events())
 
     def test_stream_read_raises_not_found(self) -> None:
-        # Note, we never get a StreamNotFound from subscribe_stream_events(), which is
+        # Note, we never get a NotFound from subscribe_stream_events(), which is
         # logical because the stream might be written after the subscription. So here
         # we just test read_stream_events().
 
@@ -446,7 +446,7 @@ class TestESDBClient(TestCase):
         # self.assertIsInstance(commit_position0, int)
 
         # # Check stream still not found.
-        # with self.assertRaises(StreamNotFound):
+        # with self.assertRaises(NotFound):
         #     self.client.read_stream_events(stream_name)
 
         # # Check stream position is None.
@@ -486,7 +486,7 @@ class TestESDBClient(TestCase):
             self.client.append_event(stream_name, expected_position=1, event=event1)
         self.assertEqual(cm.exception.args[0], f"Stream {stream_name!r} does not exist")
 
-        # Append new event.
+        # Append new event with correct expected position of 'None'.
         commit_position0 = self.client.get_commit_position()
         commit_position1 = self.client.append_event(
             stream_name, expected_position=None, event=event1
@@ -699,7 +699,7 @@ class TestESDBClient(TestCase):
     #     event2 = NewEvent(type="OrderUpdated", data=random_data())
     #
     #     # Fail to append (stream does not exist).
-    #     with self.assertRaises(StreamNotFound):
+    #     with self.assertRaises(NotFound):
     #         self.client.append_events_multiplexed(
     #             stream_name, expected_position=1, events=[event1, event2]
     #         )
@@ -1294,7 +1294,7 @@ class TestESDBClient(TestCase):
         self.client.append_events(stream_name, expected_position=2, events=[event4])
 
         # Can read from deleted stream if new events have been appended.
-        # Todo: This behaviour is a little bit flakey? Sometimes we get StreamNotFound.
+        # Todo: This behaviour is a little bit flakey? Sometimes we get NotFound.
         sleep(0.1)
         events = self.client.read_stream_events(stream_name)
         # Expect only to get events appended after stream was deleted.
@@ -1425,7 +1425,7 @@ class TestESDBClient(TestCase):
         self.client.append_events(stream_name, expected_position=1, events=[event3])
 
         # Can read from deleted stream if new events have been appended.
-        # Todo: This behaviour is a little bit flakey? Sometimes we get StreamNotFound.
+        # Todo: This behaviour is a little bit flakey? Sometimes we get NotFound.
         sleep(0.1)
         events = self.client.read_stream_events(stream_name)
         # Expect only to get events appended after stream was deleted.
@@ -1491,7 +1491,7 @@ class TestESDBClient(TestCase):
         self.client.append_events(stream_name, expected_position=None, events=[event3])
 
         # Can read from deleted stream if new events have been appended.
-        # Todo: This behaviour is a little bit flakey? Sometimes we get StreamNotFound.
+        # Todo: This behaviour is a little bit flakey? Sometimes we get NotFound.
         sleep(0.1)
         events = self.client.read_stream_events(stream_name)
         # Expect only to get events appended after stream was deleted.

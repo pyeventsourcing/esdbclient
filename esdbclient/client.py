@@ -536,6 +536,8 @@ class ESDBClient(BaseESDBClient):
         self,
         timeout: Optional[float] = None,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
+        filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
     ) -> int:
         """
         Returns the current commit position of the database.
@@ -543,6 +545,8 @@ class ESDBClient(BaseESDBClient):
         recorded_events = self.read_all_events(
             backwards=True,
             filter_exclude=filter_exclude,
+            filter_include=filter_include,
+            filter_by_stream_name=filter_by_stream_name,
             limit=1,
             timeout=timeout,
         )

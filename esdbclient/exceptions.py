@@ -69,11 +69,12 @@ class AccessDeniedError(ESDBClientException):
 
 class StreamIsDeleted(ESDBClientException):
     """
-    Raised when a deleted stream is encountered, for example when
-    appending to a stream that has been deleted, or when reading
-    from a tombstoned stream (reading from a "soft deleted" stream
-    causes a StreamNotFound exception), or when deleting or tombstoning
-    a stream that has been deleeted or tomebstoned.
+    Raised when reading from or appending to a stream that has been
+    tombstoned, and when deleting a stream that has been deleted
+    whilst expecting the stream exists, and when getting or setting
+    metadata for a stream that has been tombstoned, and when deleting
+    a stream that has been tombstoned, and when tombstoning a stream
+    that has been tombstoned.
     """
 
 
