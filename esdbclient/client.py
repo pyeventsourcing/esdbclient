@@ -21,7 +21,6 @@ from typing import (
 import dns.exception
 import dns.resolver
 import grpc
-from grpc import CallCredentials
 
 from esdbclient.connection import (
     NODE_PREFERENCE_FOLLOWER,
@@ -149,7 +148,7 @@ class BaseESDBClient:
 
     def _construct_call_credentials(
         self, username: Optional[str], password: Optional[str]
-    ) -> Optional[CallCredentials]:
+    ) -> Optional[grpc.CallCredentials]:
         if username and password:
             return grpc.metadata_call_credentials(
                 BasicAuthCallCredentials(username, password)

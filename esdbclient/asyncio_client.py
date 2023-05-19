@@ -19,7 +19,6 @@ from typing import (
 import dns
 import dns.asyncresolver
 import grpc.aio
-from grpc.aio import UsageError
 
 from esdbclient.client import DEFAULT_EXCLUDE_FILTER, BaseESDBClient
 from esdbclient.connection import (
@@ -69,7 +68,7 @@ def autoreconnect(f: _TCallable) -> _TCallable:
             else:
                 raise
 
-        except UsageError as e:
+        except grpc.aio.UsageError as e:
             if "Channel is closed" in str(e):
                 await client.reconnect()
                 await asyncio.sleep(0.1)

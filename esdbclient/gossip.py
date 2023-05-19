@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Optional, Sequence, Union
 
 import grpc
-from grpc import CallCredentials, RpcError
+import grpc.aio
 
 from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
 from esdbclient.protos.Grpc import (
@@ -37,8 +37,9 @@ class BaseGossipService(ESDBService):
     def __init__(self, channel: Union[grpc.Channel, grpc.aio.Channel]):
         self._stub = gossip_pb2_grpc.GossipStub(channel)
 
+    @staticmethod
     def _construct_cluster_members(
-        self, cluster_info: gossip_pb2.ClusterInfo
+        cluster_info: gossip_pb2.ClusterInfo,
     ) -> Sequence[ClusterMember]:
         members = []
         for member_info in cluster_info.members:
@@ -56,7 +57,7 @@ class AsyncioGossipService(BaseGossipService):
         self,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> Sequence[ClusterMember]:
         try:
             read_resp = await self._stub.Read(
@@ -65,7 +66,7 @@ class AsyncioGossipService(BaseGossipService):
                 metadata=self._metadata(metadata),
                 credentials=credentials,
             )
-        except RpcError as e:
+        except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
 
         return self._construct_cluster_members(read_resp)
@@ -80,7 +81,7 @@ class GossipService(BaseGossipService):
         self,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> Sequence[ClusterMember]:
         try:
             read_resp = self._stub.Read(
@@ -89,7 +90,7 @@ class GossipService(BaseGossipService):
                 metadata=self._metadata(metadata),
                 credentials=credentials,
             )
-        except RpcError as e:
+        except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
 
         return self._construct_cluster_members(read_resp)
@@ -120,7 +121,7 @@ class ClusterGossipService(BaseClusterGossipService):
         self,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> Sequence[ClusterMember]:
         """
         Returns a sequence of ClusterMember
@@ -133,7 +134,7 @@ class ClusterGossipService(BaseClusterGossipService):
                 metadata=self._metadata(metadata),
                 credentials=credentials,
             )
-        except RpcError as e:
+        except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
 
         assert isinstance(read_resp, cluster_pb2.ClusterInfo)

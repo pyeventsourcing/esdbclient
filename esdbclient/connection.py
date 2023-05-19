@@ -3,8 +3,8 @@ from typing import Any, Dict, Optional, Sequence
 from urllib.parse import ParseResult, parse_qs, urlparse
 from uuid import uuid4
 
+import grpc
 import grpc.aio
-from grpc import Channel
 
 from esdbclient.gossip import (
     AsyncioClusterGossipService,
@@ -67,7 +67,8 @@ class ConnectionOptions:
         self._set_KeepAliveInterval(options)
         self._set_KeepAliveTimeout(options)
 
-    def _validate_field_names(self, options: Dict[str, Any]) -> None:
+    @staticmethod
+    def _validate_field_names(options: Dict[str, Any]) -> None:
         valid_fields = [s.upper() for s in VALID_CONNECTION_QUERY_STRING_FIELDS]
         invalid_fields = []
         for field in options.keys():
@@ -311,7 +312,7 @@ class ConnectionSpec:
 
 
 class ESDBConnection:
-    def __init__(self, grpc_channel: Channel, grpc_target: str) -> None:
+    def __init__(self, grpc_channel: grpc.Channel, grpc_target: str) -> None:
         self.grpc_channel = grpc_channel
         self.grpc_target = grpc_target
         self.streams = StreamsService(grpc_channel)

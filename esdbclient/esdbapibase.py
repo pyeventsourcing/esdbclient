@@ -3,8 +3,7 @@ from base64 import b64encode
 from typing import TYPE_CHECKING, Optional, Tuple
 
 import grpc
-from grpc import AuthMetadataContext, AuthMetadataPluginCallback, RpcError, StatusCode
-from grpc.aio import AioRpcError
+import grpc.aio
 
 from esdbclient.exceptions import (
     CancelledByClient,
@@ -23,7 +22,7 @@ if TYPE_CHECKING:  # pragma: no cover
 else:
     Metadata = Tuple[Tuple[str, str], ...]
 
-__all__ = ["Metadata"]
+__all__ = ["handle_rpc_error", "BasicAuthCallCredentials", "ESDBService", "Metadata"]
 
 
 class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
@@ -32,34 +31,38 @@ class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
         self._metadata = (("authorization", (b"Basic " + credentials)),)
 
     def __call__(
-        self, context: AuthMetadataContext, callback: AuthMetadataPluginCallback
+        self,
+        context: grpc.AuthMetadataContext,
+        callback: grpc.AuthMetadataPluginCallback,
     ) -> None:
         callback(self._metadata, None)
 
 
-def handle_rpc_error(e: RpcError) -> ESDBClientException:
+def handle_rpc_error(e: grpc.RpcError) -> ESDBClientException:
     """
     Converts gRPC errors to client exceptions.
     """
-    if isinstance(e, (grpc.Call, AioRpcError)):
-        if e.code() == StatusCode.UNKNOWN and "Exception was thrown by handler" in str(
-            e.details()
+    if isinstance(e, (grpc.Call, grpc.aio.AioRpcError)):
+        if (
+            e.code() == grpc.StatusCode.UNKNOWN
+            and "Exception was thrown by handler" in str(e.details())
         ):
             return ExceptionThrownByHandler(e)
         elif (
-            e.code() == StatusCode.CANCELLED
+            e.code() == grpc.StatusCode.CANCELLED
             and e.details() == "Locally cancelled by application!"
         ):
             return CancelledByClient(e)
-        elif e.code() == StatusCode.DEADLINE_EXCEEDED:
+        elif e.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
             return DeadlineExceeded(e)
-        elif e.code() == StatusCode.UNAVAILABLE:
+        elif e.code() == grpc.StatusCode.UNAVAILABLE:
             return ServiceUnavailable(e)
         elif (
-            e.code() == StatusCode.NOT_FOUND and e.details() == "Leader info available"
+            e.code() == grpc.StatusCode.NOT_FOUND
+            and e.details() == "Leader info available"
         ):
             return NodeIsNotLeader(e)
-        elif e.code() == StatusCode.NOT_FOUND:
+        elif e.code() == grpc.StatusCode.NOT_FOUND:
             return NotFound()
     return GrpcError(e)
 

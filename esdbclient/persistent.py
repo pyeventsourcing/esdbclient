@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 import queue
+from abc import abstractmethod
 from dataclasses import dataclass
 from typing import Iterator, List, Optional, Sequence, Tuple, Union, overload
 from uuid import UUID
 
 import grpc
-from grpc import CallCredentials, RpcError, StatusCode
-from grpc._channel import _MultiThreadedRendezvous
-from typing_extensions import Literal
+from typing_extensions import Literal, Protocol, runtime_checkable
 
 from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
 from esdbclient.events import RecordedEvent
@@ -18,6 +17,14 @@ from esdbclient.exceptions import (
     SubscriptionConfirmationError,
 )
 from esdbclient.protos.Grpc import persistent_pb2, persistent_pb2_grpc, shared_pb2
+
+
+@runtime_checkable
+class _ReadResps(Iterator[persistent_pb2.ReadResp], Protocol):
+    @abstractmethod
+    def cancel(self) -> None:
+        ...  # pragma: no cover
+
 
 ConsumerStrategy = Literal[
     "DispatchToSingle", "RoundRobin", "Pinned", "PinnedByCorrelation"
@@ -470,27 +477,29 @@ class AsyncioPersistentSubscriptionsService(BasePersistentSubscriptionsService):
 class PersistentSubscription(Iterator[RecordedEvent], BasePersistentSubscription):
     def __init__(
         self,
-        reqs: SubscriptionReadReqs,
-        resps: _MultiThreadedRendezvous,
-        group_name: str,
+        read_reqs: SubscriptionReadReqs,
+        read_resps: _ReadResps,
+        expected_group_name: str,
         stream_name: Optional[str],
     ):
-        self.reqs = reqs
-        self.resps = resps
-        read_resp = self._get_next_read_resp()
-        content_oneof = read_resp.WhichOneof("content")
+        self.read_reqs = read_reqs
+        self.read_resps = read_resps
 
-        if content_oneof == "subscription_confirmation":
-            confirmed_stream_name, _, confirmed_group_name = (
-                read_resp.subscription_confirmation.subscription_id.partition("::")
+        first_read_resp = self._get_next_read_resp()
+        if first_read_resp.WhichOneof("content") == "subscription_confirmation":
+            expected_stream_name = stream_name if stream_name is not None else "$all"
+            subscription_id = first_read_resp.subscription_confirmation.subscription_id
+            confirmed_stream_name, _, confirmed_group_name = subscription_id.partition(
+                "::"
             )
-            if confirmed_group_name != group_name or confirmed_stream_name != (
-                stream_name if stream_name is not None else "$all"
+            if (
+                confirmed_group_name != expected_group_name
+                or confirmed_stream_name != expected_stream_name
             ):  # pragma: no cover
                 raise SubscriptionConfirmationError()
         else:  # pragma: no cover
             raise ESDBClientException(
-                f"Expected subscription confirmation, got: {read_resp}"
+                f"Expected subscription confirmation, got: {first_read_resp}"
             )
 
     def __iter__(self) -> Iterator[RecordedEvent]:
@@ -510,25 +519,25 @@ class PersistentSubscription(Iterator[RecordedEvent], BasePersistentSubscription
 
     def _get_next_read_resp(self) -> persistent_pb2.ReadResp:
         try:
-            read_resp = next(self.resps)
-        except RpcError as e:
+            read_resp = next(self.read_resps)
+        except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
         assert isinstance(read_resp, persistent_pb2.ReadResp)
         return read_resp
 
     def stop(self) -> None:
-        self.reqs.stop()
-        self.resps.cancel()
+        self.read_reqs.stop()
+        self.read_resps.cancel()
 
     def ack(self, event_id: UUID) -> None:
-        self.reqs.ack(event_id)
+        self.read_reqs.ack(event_id)
 
     def nack(
         self,
         event_id: UUID,
         action: Literal["unknown", "park", "retry", "skip", "stop"],
     ) -> None:
-        self.reqs.nack(event_id, action=action)
+        self.read_reqs.nack(event_id, action=action)
 
     def __del__(self) -> None:
         self.stop()
@@ -552,7 +561,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         filter_by_stream_name: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for creating a persistent "all streams" subscription.
@@ -569,7 +578,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for creating a persistent stream subscription.
@@ -588,7 +597,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         request = self._construct_create_req(
             group_name=group_name,
@@ -609,7 +618,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
-        except RpcError as e:
+        except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
         assert isinstance(response, persistent_pb2.CreateResp)
 
@@ -620,23 +629,25 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         buffer_size: int = 100,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> PersistentSubscription:
         read_reqs = SubscriptionReadReqs(
             group_name=group_name,
             stream_name=stream_name,
             buffer_size=buffer_size,
         )
-        read_resps: _MultiThreadedRendezvous = self._stub.Read(
+        read_resps = self._stub.Read(
             read_reqs,
             timeout=timeout,
             metadata=self._metadata(metadata, requires_leader=True),
             credentials=credentials,
         )
+        assert isinstance(read_resps, _ReadResps)
+
         return PersistentSubscription(
-            reqs=read_reqs,
-            resps=read_resps,
-            group_name=group_name,
+            read_reqs=read_reqs,
+            read_resps=read_resps,
+            expected_group_name=group_name,
             stream_name=stream_name,
         )
 
@@ -646,7 +657,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         stream_name: Optional[str] = None,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> SubscriptionInfo:
         req = self._construct_get_info_req(group_name, stream_name)
         try:
@@ -656,9 +667,9 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
-        except RpcError as e:
+        except grpc.RpcError as e:
             if (
-                e.code() == StatusCode.UNAVAILABLE
+                e.code() == grpc.StatusCode.UNAVAILABLE
                 and e.details() == "Server Is Not Ready"
             ):
                 raise NodeIsNotLeader() from e
@@ -673,7 +684,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         stream_name: Optional[str] = None,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> List[SubscriptionInfo]:
         req = self._construct_list_req(stream_name)
         try:
@@ -683,11 +694,11 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
-        except RpcError as e:
-            if e.code() == StatusCode.NOT_FOUND:
+        except grpc.RpcError as e:
+            if e.code() == grpc.StatusCode.NOT_FOUND:
                 return []
             elif (
-                e.code() == StatusCode.UNAVAILABLE
+                e.code() == grpc.StatusCode.UNAVAILABLE
                 and e.details() == "Server Is Not Ready"
             ):
                 raise NodeIsNotLeader() from e
@@ -706,7 +717,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         commit_position: Optional[int] = None,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for updating a persistent "all streams" subscription.
@@ -722,7 +733,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         stream_position: Optional[int] = None,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for updating a persistent stream subscription.
@@ -737,7 +748,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         stream_position: Optional[int] = None,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         request = self._construct_update_req(
             group_name=group_name,
@@ -754,7 +765,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
-        except RpcError as e:
+        except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
         assert isinstance(response, persistent_pb2.UpdateResp)
 
@@ -764,7 +775,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         stream_name: Optional[str] = None,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         req = self._construct_delete_req(group_name, stream_name)
         try:
@@ -774,6 +785,6 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
-        except RpcError as e:
+        except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
         assert isinstance(resp, persistent_pb2.DeleteResp)

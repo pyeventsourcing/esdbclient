@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
+from abc import abstractmethod
 from dataclasses import dataclass
 from typing import (
     AsyncIterable,
@@ -12,11 +13,10 @@ from typing import (
 )
 from uuid import UUID, uuid4
 
+import grpc
 import grpc.aio
 from google.protobuf import duration_pb2, empty_pb2
-from grpc import CallCredentials, RpcError, StatusCode
-from grpc._channel import _MultiThreadedRendezvous
-from typing_extensions import Literal
+from typing_extensions import Literal, Protocol, runtime_checkable
 
 from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
 from esdbclient.events import NewEvent, RecordedEvent
@@ -37,6 +37,13 @@ from esdbclient.exceptions import (
 from esdbclient.protos.Grpc import shared_pb2, status_pb2, streams_pb2, streams_pb2_grpc
 
 
+@runtime_checkable
+class _ReadResps(Iterator[streams_pb2.ReadResp], Protocol):
+    @abstractmethod
+    def cancel(self) -> None:
+        ...  # pragma: no cover
+
+
 class AsyncioReadResponse:
     def __init__(
         self,
@@ -52,8 +59,8 @@ class AsyncioReadResponse:
     async def _get_next_read_resp(self) -> streams_pb2.ReadResp:
         try:
             read_resp = await self.read_resp_iter.__anext__()
-        except RpcError as e:
-            if e.code() == StatusCode.FAILED_PRECONDITION:
+        except grpc.RpcError as e:
+            if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
                 details = e.details() or ""
                 if self.stream_name and details and "is deleted" in details:
                     raise StreamIsDeleted() from e
@@ -122,7 +129,7 @@ class AsyncioReadResponse:
 class ReadResponse(Iterator[RecordedEvent]):
     def __init__(
         self,
-        read_resps: _MultiThreadedRendezvous,
+        read_resps: _ReadResps,
         stream_name: Optional[str],
     ):
         self.read_resps = read_resps
@@ -179,8 +186,8 @@ class ReadResponse(Iterator[RecordedEvent]):
     def _get_next_read_resp(self) -> streams_pb2.ReadResp:
         try:
             read_resp = next(self.read_resps)
-        except RpcError as e:
-            if e.code() == StatusCode.FAILED_PRECONDITION:
+        except grpc.RpcError as e:
+            if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
                 details = e.details() or ""
                 if self.stream_name and details and "is deleted" in details:
                     raise StreamIsDeleted() from e
@@ -201,7 +208,7 @@ class ReadResponse(Iterator[RecordedEvent]):
 class CatchupSubscription(ReadResponse):
     def __init__(
         self,
-        read_resps: _MultiThreadedRendezvous,
+        read_resps: _ReadResps,
         stream_name: Optional[str],
     ):
         super().__init__(read_resps=read_resps, stream_name=stream_name)
@@ -557,7 +564,7 @@ class AsyncioStreamsService(BaseStreamsService):
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> BatchAppendResponse:
         # Call the gRPC method.
         try:
@@ -584,7 +591,7 @@ class AsyncioStreamsService(BaseStreamsService):
             else:  # pragma: no cover
                 raise ESDBClientException("Batch append response not received")
 
-        except RpcError as e:
+        except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
 
     @overload
@@ -597,7 +604,7 @@ class AsyncioStreamsService(BaseStreamsService):
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> AsyncIterable[RecordedEvent]:
         """
         Signature for reading events from a stream.
@@ -612,7 +619,7 @@ class AsyncioStreamsService(BaseStreamsService):
         subscribe: Literal[True],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> AsyncIterable[RecordedEvent]:
         """
         Signature for reading events from a stream with a catch-up subscription.
@@ -630,7 +637,7 @@ class AsyncioStreamsService(BaseStreamsService):
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> AsyncIterable[RecordedEvent]:
         """
         Signature for reading all events.
@@ -647,7 +654,7 @@ class AsyncioStreamsService(BaseStreamsService):
         subscribe: Literal[True],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> AsyncIterable[RecordedEvent]:
         """
         Signature for reading all events with a catch-up subscription.
@@ -667,7 +674,7 @@ class AsyncioStreamsService(BaseStreamsService):
         subscribe: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> AsyncIterable[RecordedEvent]:
         """
         Constructs and sends a gRPC 'ReadReq' to the 'Read' rpc.
@@ -708,7 +715,7 @@ class AsyncioStreamsService(BaseStreamsService):
         expected_position: Optional[int],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         delete_req = self._construct_delete_req(stream_name, expected_position)
 
@@ -719,8 +726,8 @@ class AsyncioStreamsService(BaseStreamsService):
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
-        except RpcError as e:
-            if e.code() == StatusCode.FAILED_PRECONDITION:
+        except grpc.RpcError as e:
+            if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
                 details = e.details() or ""
                 if "WrongExpectedVersion" in details:
                     if "Actual version: -1" in details:
@@ -742,7 +749,7 @@ class AsyncioStreamsService(BaseStreamsService):
         expected_position: Optional[int],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         tombstone_req = self._construct_tombstone_req(stream_name, expected_position)
 
@@ -753,8 +760,8 @@ class AsyncioStreamsService(BaseStreamsService):
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
-        except RpcError as e:
-            if e.code() == StatusCode.FAILED_PRECONDITION:
+        except grpc.RpcError as e:
+            if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
                 details = e.details() or ""
                 if "WrongExpectedVersion" in details:
                     if "Actual version: -1" in details:
@@ -786,7 +793,7 @@ class StreamsService(BaseStreamsService):
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> ReadResponse:
         """
         Signature for reading events from a stream.
@@ -801,7 +808,7 @@ class StreamsService(BaseStreamsService):
         subscribe: Literal[True],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> CatchupSubscription:
         """
         Signature for reading events from a stream with a catch-up subscription.
@@ -819,7 +826,7 @@ class StreamsService(BaseStreamsService):
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> ReadResponse:
         """
         Signature for reading all events.
@@ -836,7 +843,7 @@ class StreamsService(BaseStreamsService):
         subscribe: Literal[True],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> CatchupSubscription:
         """
         Signature for reading all events with a catch-up subscription.
@@ -856,7 +863,7 @@ class StreamsService(BaseStreamsService):
         subscribe: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> Union[ReadResponse, CatchupSubscription]:
         """
         Constructs and sends a gRPC 'ReadReq' to the 'Read' rpc.
@@ -878,17 +885,18 @@ class StreamsService(BaseStreamsService):
         )
 
         # Send the read request, and iterate over the response.
-        read_resp = self._stub.Read(
+        read_resps = self._stub.Read(
             read_req,
             timeout=timeout,
             metadata=self._metadata(metadata),
             credentials=credentials,
         )
+        assert isinstance(read_resps, _ReadResps)  # a _MultiThreadedRendezvous
 
         if subscribe is False:
-            return ReadResponse(read_resp, stream_name=stream_name)
+            return ReadResponse(read_resps, stream_name=stream_name)
         else:
-            return CatchupSubscription(read_resp, stream_name=stream_name)
+            return CatchupSubscription(read_resps, stream_name=stream_name)
 
     def append(
         self,
@@ -897,7 +905,7 @@ class StreamsService(BaseStreamsService):
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> int:
         """
         Constructs and sends a stream of gRPC 'AppendReq' to the 'Append' rpc.
@@ -915,7 +923,7 @@ class StreamsService(BaseStreamsService):
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
-        except RpcError as e:
+        except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
         else:
             assert isinstance(response, streams_pb2.AppendResp)
@@ -978,7 +986,7 @@ class StreamsService(BaseStreamsService):
     #     futures_queue: BatchAppendFutureQueue,
     #     timeout: Optional[float] = None,
     #     metadata: Optional[Metadata] = None,
-    #     credentials: Optional[CallCredentials] = None,
+    #     credentials: Optional[grpc.CallCredentials] = None,
     # ) -> None:
     #     # Construct batch append requests iterator.
     #     requests = BatchAppendFutureIterator(futures_queue)
@@ -1017,7 +1025,7 @@ class StreamsService(BaseStreamsService):
     #                     ESDBClientException("Batch append response not received")
     #                 )
     #
-    #     except RpcError as rpc_error:
+    #     except grpc.RpcError as rpc_error:
     #         # The response stream ended with an RPC error.
     #         try:
     #             raise handle_rpc_error(rpc_error) from rpc_error
@@ -1036,7 +1044,7 @@ class StreamsService(BaseStreamsService):
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> BatchAppendResponse:
         # Call the gRPC method.
         try:
@@ -1063,7 +1071,7 @@ class StreamsService(BaseStreamsService):
             else:  # pragma: no cover
                 raise ESDBClientException("Batch append response not received")
 
-        except RpcError as e:
+        except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
 
     def delete(
@@ -1072,7 +1080,7 @@ class StreamsService(BaseStreamsService):
         expected_position: Optional[int],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         delete_req = self._construct_delete_req(stream_name, expected_position)
 
@@ -1083,8 +1091,8 @@ class StreamsService(BaseStreamsService):
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
-        except RpcError as e:
-            if e.code() == StatusCode.FAILED_PRECONDITION:
+        except grpc.RpcError as e:
+            if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
                 details = e.details() or ""
                 if "WrongExpectedVersion" in details:
                     if "Actual version: -1" in details:
@@ -1111,7 +1119,7 @@ class StreamsService(BaseStreamsService):
         expected_position: Optional[int],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
-        credentials: Optional[CallCredentials] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         tombstone_req = self._construct_tombstone_req(stream_name, expected_position)
 
@@ -1122,8 +1130,8 @@ class StreamsService(BaseStreamsService):
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
-        except RpcError as e:
-            if e.code() == StatusCode.FAILED_PRECONDITION:
+        except grpc.RpcError as e:
+            if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
                 details = e.details() or ""
                 if "WrongExpectedVersion" in details:
                     if "Actual version: -1" in details:
