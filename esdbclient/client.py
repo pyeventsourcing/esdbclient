@@ -58,7 +58,7 @@ from esdbclient.persistent import (
     PersistentSubscription,
     SubscriptionInfo,
 )
-from esdbclient.streams import ReadResponse
+from esdbclient.streams import CatchupSubscription, ReadResponse
 
 # Matches the 'type' of "system" events.
 ESDB_SYSTEM_EVENTS_REGEX = r"\$.+"
@@ -462,7 +462,7 @@ class ESDBClient(BaseESDBClient):
         backwards: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
-    ) -> Iterable[RecordedEvent]:
+    ) -> ReadResponse:
         """
         Reads recorded events from the named stream.
         """
@@ -613,7 +613,7 @@ class ESDBClient(BaseESDBClient):
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
         timeout: Optional[float] = None,
-    ) -> ReadResponse:
+    ) -> CatchupSubscription:
         """
         Starts a catch-up subscription, from which all
         recorded events in the database can be received.
@@ -636,7 +636,7 @@ class ESDBClient(BaseESDBClient):
         stream_name: str,
         stream_position: Optional[int] = None,
         timeout: Optional[float] = None,
-    ) -> ReadResponse:
+    ) -> CatchupSubscription:
         """
         Starts a catch-up subscription from which
         recorded events in a stream can be received.

@@ -124,21 +124,9 @@ class ReadResponse(Iterator[RecordedEvent]):
         self,
         read_resps: _MultiThreadedRendezvous,
         stream_name: Optional[str],
-        is_subscription: bool,
     ):
         self.read_resps = read_resps
         self.stream_name = stream_name
-        self.subscription_id: Optional[UUID] = None
-        if is_subscription:
-            read_resp = self._get_next_read_resp()
-            content_oneof = read_resp.WhichOneof("content")
-            if content_oneof == "confirmation":
-                pass
-                # Todo: What is 'read_resp.confirmation.subscription_id' for?
-            else:  # pragma: no cover
-                raise SubscriptionConfirmationError(
-                    f"Expected subscription confirmation, got: {read_resp}"
-                )
 
     def __iter__(self) -> "ReadResponse":
         return self
@@ -210,6 +198,25 @@ class ReadResponse(Iterator[RecordedEvent]):
         self.stop()
 
 
+class CatchupSubscription(ReadResponse):
+    def __init__(
+        self,
+        read_resps: _MultiThreadedRendezvous,
+        stream_name: Optional[str],
+    ):
+        super().__init__(read_resps=read_resps, stream_name=stream_name)
+        self.subscription_id: Optional[UUID] = None
+        first_read_resp = self._get_next_read_resp()
+        content_oneof = first_read_resp.WhichOneof("content")
+        if content_oneof == "confirmation":
+            pass
+            # Todo: What is '.confirmation.subscription_id' for?
+        else:  # pragma: no cover
+            raise SubscriptionConfirmationError(
+                f"Expected subscription confirmation, got: {first_read_resp}"
+            )
+
+
 DEFAULT_BATCH_APPEND_REQUEST_DEADLINE = 315576000000
 
 # @dataclass
@@ -268,8 +275,8 @@ class BaseStreamsService(ESDBService):
     def __init__(self, channel: Union[grpc.Channel, grpc.aio.Channel]):
         self._stub = streams_pb2_grpc.StreamsStub(channel)
 
+    @staticmethod
     def _construct_read_request(
-        self,
         stream_name: Optional[str] = None,
         stream_position: Optional[int] = None,
         commit_position: Optional[int] = None,
@@ -432,8 +439,9 @@ class BaseStreamsService(ESDBService):
             is_final=True,  # This specifies the end of an atomic transaction.
         )
 
+    @staticmethod
     def _convert_batch_append_resp(
-        self, response: streams_pb2.BatchAppendResp, stream_name: str
+        response: streams_pb2.BatchAppendResp, stream_name: str
     ) -> Union[BatchAppendResponse, ESDBClientException]:
         result: Union[BatchAppendResponse, ESDBClientException]
         # Response 'result' is either 'success' or 'error'.
@@ -496,8 +504,9 @@ class BaseStreamsService(ESDBService):
                 result = ESDBClientException(error_details)  # pragma: no cover
         return result
 
+    @staticmethod
     def _construct_delete_req(
-        self, stream_name: str, expected_position: Optional[int]
+        stream_name: str, expected_position: Optional[int]
     ) -> streams_pb2.DeleteReq:
         options = streams_pb2.DeleteReq.Options(
             stream_identifier=shared_pb2.StreamIdentifier(
@@ -517,8 +526,9 @@ class BaseStreamsService(ESDBService):
             options.stream_exists.CopyFrom(shared_pb2.Empty())
         return streams_pb2.DeleteReq(options=options)
 
+    @staticmethod
     def _construct_tombstone_req(
-        self, stream_name: str, expected_position: Optional[int]
+        stream_name: str, expected_position: Optional[int]
     ) -> streams_pb2.TombstoneReq:
         options = streams_pb2.TombstoneReq.Options(
             stream_identifier=shared_pb2.StreamIdentifier(
@@ -792,7 +802,7 @@ class StreamsService(BaseStreamsService):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
-    ) -> ReadResponse:
+    ) -> CatchupSubscription:
         """
         Signature for reading events from a stream with a catch-up subscription.
         """
@@ -827,7 +837,7 @@ class StreamsService(BaseStreamsService):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
-    ) -> ReadResponse:
+    ) -> CatchupSubscription:
         """
         Signature for reading all events with a catch-up subscription.
         """
@@ -847,7 +857,7 @@ class StreamsService(BaseStreamsService):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[CallCredentials] = None,
-    ) -> ReadResponse:
+    ) -> Union[ReadResponse, CatchupSubscription]:
         """
         Constructs and sends a gRPC 'ReadReq' to the 'Read' rpc.
 
@@ -875,9 +885,10 @@ class StreamsService(BaseStreamsService):
             credentials=credentials,
         )
 
-        return ReadResponse(
-            read_resp, stream_name=stream_name, is_subscription=subscribe
-        )
+        if subscribe is False:
+            return ReadResponse(read_resp, stream_name=stream_name)
+        else:
+            return CatchupSubscription(read_resp, stream_name=stream_name)
 
     def append(
         self,
@@ -926,8 +937,8 @@ class StreamsService(BaseStreamsService):
                         f"Stream {stream_name!r} does not exist"
                     )
 
+    @staticmethod
     def _generate_append_requests(
-        self,
         stream_name: str,
         expected_position: Optional[int],
         events: Iterable[NewEvent],
