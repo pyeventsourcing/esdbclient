@@ -34,7 +34,7 @@ Issues:
 
 * Update persistent subscription
   * very similar to Create (just without filter options)
-    * Qn: Why is named_consumer_strategy is deprecated in CreateReq but not UpdateReq?
+    * Qn: Why is named_consumer_strategy deprecated in CreateReq but not UpdateReq?
 
 * I noticed the issue raised about "consumer too slow" - does the server close subscriptions?
 
