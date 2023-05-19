@@ -370,6 +370,26 @@ class BasePersistentSubscriptionsService(ESDBService):
             )
         return persistent_pb2.DeleteReq(options=options)
 
+    @staticmethod
+    def _construct_replay_parked_req(
+        group_name: str, stream_name: Optional[str]
+    ) -> persistent_pb2.ReplayParkedReq:
+        if stream_name is None:
+            options = persistent_pb2.ReplayParkedReq.Options(
+                group_name=group_name,
+                all=shared_pb2.Empty(),
+                no_limit=shared_pb2.Empty(),
+            )
+        else:
+            options = persistent_pb2.ReplayParkedReq.Options(
+                group_name=group_name,
+                stream_identifier=shared_pb2.StreamIdentifier(
+                    stream_name=stream_name.encode("utf8")
+                ),
+                no_limit=shared_pb2.Empty(),
+            )
+        return persistent_pb2.ReplayParkedReq(options=options)
+
     def _construct_subscription_infos(
         self, resp: persistent_pb2.ListResp
     ) -> List[SubscriptionInfo]:
@@ -788,3 +808,23 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
         assert isinstance(resp, persistent_pb2.DeleteResp)
+
+    def replay_parked(
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        timeout: Optional[float] = None,
+        metadata: Optional[Metadata] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        req = self._construct_replay_parked_req(group_name, stream_name)
+        try:
+            resp = self._stub.ReplayParked(
+                req,
+                timeout=timeout,
+                metadata=self._metadata(metadata, requires_leader=True),
+                credentials=credentials,
+            )
+        except grpc.RpcError as e:
+            raise handle_rpc_error(e) from e
+        assert isinstance(resp, persistent_pb2.ReplayParkedResp)

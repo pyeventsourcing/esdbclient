@@ -166,13 +166,13 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Get subscription info](#get-subscription-info)
   * [List subscriptions](#list-subscriptions)
   * [Update subscription](#update-subscription)
-  * [Delete subscription](#delete-subscription)
   * [Create stream subscription](#create-stream-subscription)
   * [Read stream subscription](#read-stream-subscription)
   * [Get stream subscription info](#get-stream-subscription-info)
   * [List stream subscriptions](#list-stream-subscriptions)
   * [Update stream subscription](#update-stream-subscription)
-  * [Delete stream subscription](#delete-stream-subscription)
+  * [Replay parked events](#replay-parked-events)
+  * [Delete persistent subscription](#delete-persistent-subscription)
 * [Connection](#connection)
   * [Reconnect](#reconnect)
   * [Close](#close)
@@ -1596,13 +1596,12 @@ component is an example of dual writing.
 
 In EventStoreDB, "persistent" subscriptions are similar to catch-up subscriptions,
 in that reading a persistent subscription will block when there are no more recorded
-events to be received, and then continue when subsequently new events are recorded.
+events to be received, and then continue when new events are subsequently recorded.
 
-Persistent subscriptions can be created to read all recorded event in the database,
-or to read from a stream.
+Persistent subscriptions can
 
 Persistent subscriptions can be consumed by a group of consumers operating with one
-of many "consumer strategies".
+of the supported "consumer strategies".
 
 The significant different with persistent subscriptions is the server will keep track
 of the progress of the consumers. The consumer of a persistent subscription will
@@ -1610,36 +1609,24 @@ therefore need to "acknowledge" when a recorded event has been processed success
 and otherwise "negatively acknowledge" a recorded event that has been received but was
 not successfully processed.
 
-All of this requires that persistent subscriptions are firstly "created". Only
-persistent subscriptions that have been created can be "read". Persistent subscriptions
-that have been created can also be updated and deleted.
-
-The methods `create_subscription()`, `read_subscription()`, `update_subscription()`, and
-`delete_subscription()` are provided for these purposes. The `get_subscription_info()`
-method can be used to obtain a broad set of information about a persistent subscription.
-The `list_subscriptions()` method can be used to get subscription information for
-all persistent subscriptions. These methods are used for persistent subscriptions to
-the all the recorded events in a database across all streams.
-
-The methods `create_stream_subscription()`, `read_stream_subscription()`,
-`update_stream_subscription()`, `delete_stream_subscription()`,
-`get_stream_subscription_info()` and `list_stream_subscriptions()` are used for
-persistent subscriptions to the all the recorded events in a stream.
+All of this means that for persistent subscriptions there are "create", "read", "update"
+"delete", "ack", and "nack" operations to consider.
 
 Whilst there are some advantages of persistent subscriptions, in particular the
 concurrent processing of recorded events by a group of consumers, by tracking in
 the server the position in the commit sequence of events that have been processed,
-there is the danger of "dual writing" in the consumption of events. Reliability in
-processing of recorded events by a group of consumers will rely instead on idempotent
-handling of duplicate messages, and resilience to out-of-order delivery.
+the issue of "dual writing" in the consumption of events arises. Reliability in the
+processing of recorded events by a group of persistent subscription consumers will
+rely on their idempotent handling of duplicate messages, and their resilience to
+out-of-order delivery.
 
 
 ### Create subscription
 
 *requires leader*
 
-The `create_subscription()` method can be used to create a
-"persistent subscription" to all the recorded events in the database.
+The `create_subscription()` method can be used to create a "persistent subscription"
+to all the recorded events in the database across all streams.
 
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
@@ -1688,12 +1675,13 @@ deadline for the completion of the gRPC operation.
 The method `create_subscription()` does not return a value. Recorded events are
 obtained by calling the `read_subscription()` method.
 
-In the example below, a persistent subscription is created.
+In the example below, a persistent subscription is created to operate from the
+first recorded non-system event in the database.
 
 ```python
 # Create a persistent subscription.
-group_name = f"group-{uuid.uuid4()}"
-client.create_subscription(group_name=group_name)
+group_name1 = f"group-{uuid.uuid4()}"
+client.create_subscription(group_name=group_name1)
 ```
 
 ### Read subscription
@@ -1717,7 +1705,7 @@ giving `RecordedEvent` objects. It also has `ack()`, `nack()` and `stop()`
 methods.
 
 ```python
-subscription = client.read_subscription(group_name=group_name)
+subscription = client.read_subscription(group_name=group_name1)
 ```
 
 The `ack()` method should be used by a consumer to indicate to the server that it
@@ -1875,7 +1863,7 @@ for the completion of the gRPC operation.
 
 ```python
 subscription_info = client.get_subscription_info(
-    group_name=group_name,
+    group_name=group_name1,
 )
 ```
 
@@ -1935,27 +1923,7 @@ database.
 
 ```python
 # Create a persistent subscription.
-client.update_subscription(group_name=group_name, from_end=True)
-```
-
-### Delete subscription
-
-*requires leader*
-
-The `delete_subscription()` method can be used to delete a persistent
-subscription.
-
-This method has one required argument, `group_name`, which
-should match the value of argument used when calling `create_subscription()`.
-
-This method also takes an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
-
-```python
-client.delete_subscription(
-    group_name=group_name,
-)
+client.update_subscription(group_name=group_name1, from_end=True)
 ```
 
 ### Create stream subscription
@@ -2000,34 +1968,10 @@ The example below creates a persistent stream subscription from the start of the
 
 ```python
 # Create a persistent stream subscription from start of the stream.
-group_name1 = f"group-{uuid.uuid4()}"
-client.create_stream_subscription(
-    group_name=group_name1,
-    stream_name=stream_name2,
-)
-```
-
-The example below creates a persistent stream subscription from a stream position.
-
-```python
-# Create a persistent stream subscription from a stream position.
 group_name2 = f"group-{uuid.uuid4()}"
 client.create_stream_subscription(
     group_name=group_name2,
     stream_name=stream_name2,
-    stream_position=2
-)
-```
-
-The example below creates a persistent stream subscription from the end of the stream.
-
-```python
-# Create a persistent stream subscription from end of the stream.
-group_name3 = f"group-{uuid.uuid4()}"
-client.create_stream_subscription(
-    group_name=group_name3,
-    stream_name=stream_name2,
-    from_end=True
 )
 ```
 
@@ -2051,7 +1995,7 @@ methods.
 
 ```python
 subscription = client.read_stream_subscription(
-    group_name=group_name1,
+    group_name=group_name2,
     stream_name=stream_name2,
 )
 ```
@@ -2102,12 +2046,13 @@ for the completion of the gRPC operation.
 
 ```python
 subscription_info = client.get_stream_subscription_info(
-    group_name=group_name1,
+    group_name=group_name2,
     stream_name=stream_name2,
 )
 ```
 
 The returned value is a `SubscriptionInfo` object.
+
 
 ### List stream subscriptions
 
@@ -2169,29 +2114,76 @@ end of the stream.
 ```python
 # Create a persistent subscription.
 client.update_stream_subscription(
-    group_name=group_name1,
+    group_name=group_name2,
     stream_name=stream_name2,
     from_end=True,
 )
 ```
 
-### Delete stream subscription
+### Replay parked events
 
 *requires leader*
 
-The `delete_stream_subscription()` method can be used to delete a persistent
-subscription for a stream.
+The `replay_parked_events()` method can be used to "replay" events that have
+been "parked" (negatively acknowledged with the action `'park'`) when reading
+a persistent subscription. Parked events will then be received by the consumers
+reading from the persistent subscription.
 
-This method has two required arguments, `group_name` and `stream_name`, which
-should match the values of arguments used when calling `create_stream_subscription()`.
+This method has one required argument, `group_name`. It has one optional argument,
+`stream_name`. The values of these arguments should match those used when calling
+`create_subscription()` or `create_stream_subscription()`.
 
 This method also has an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
 for the completion of the gRPC operation.
 
+The example below replays parked events for group `group_name1`.
+
 ```python
-client.delete_stream_subscription(
+client.replay_parked_events(
     group_name=group_name1,
+)
+```
+
+The example below replays parked events for group `group_name2`.
+
+```python
+client.replay_parked_events(
+    group_name=group_name2,
+    stream_name=stream_name2,
+)
+```
+
+### Delete persistent subscription
+
+*requires leader*
+
+The `delete_persistent_subscription()` method can be used to delete a persistent
+subscription.
+
+This method has one required argument, `group_name`. It has one optional argument,
+`stream_name`. The values of these arguments should match those used when calling
+`create_subscription()` or `create_stream_subscription()`.
+
+This method also has an optional `timeout` argument, that
+is expected to be a Python `float`, which sets a deadline
+for the completion of the gRPC operation.
+
+The example below deletes the subscription for group `group_name1` which was created
+by calling `create_subscription()`.
+
+```python
+client.delete_persistent_subscription(
+    group_name=group_name1,
+)
+```
+
+The example below deletes the subscription for group `group_name2` which was created
+by calling `create_stream_subscription()`.
+
+```python
+client.delete_persistent_subscription(
+    group_name=group_name2,
     stream_name=stream_name2,
 )
 ```

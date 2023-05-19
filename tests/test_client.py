@@ -2109,6 +2109,99 @@ class TestESDBClient(TestCase):
         assert events[-2].data == event2.data
         assert events[-1].data == event3.data
 
+    def test_subscription_replay_parked(self) -> None:
+        self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription(group_name=group_name, from_end=True)
+
+        # Append three events.
+        stream_name1 = str(uuid4())
+
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        self.client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Read subscription.
+        subscription = self.client.read_subscription(group_name=group_name)
+
+        # Park event.
+        parked_events = []
+        for event in subscription:
+            subscription.nack(event.id, action="park")
+            parked_events.append(event)
+            if event.data == event3.data:
+                break
+
+        # Sleep before calling replay_parked_events() so EventStoreDB catches up.
+        sleep(0.5)
+        self.client.replay_parked_events(group_name=group_name)
+
+        replayed_events = []
+        for event in subscription:
+            subscription.ack(event.id)
+            replayed_events.append(event)
+            if event.data == event3.data:
+                subscription.stop()
+
+        assert replayed_events[-3].data == event1.data
+        assert replayed_events[-2].data == event2.data
+        assert replayed_events[-1].data == event3.data
+
+    def test_stream_subscription_replay_parked(self) -> None:
+        self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        stream_name1 = str(uuid4())
+        self.client.create_stream_subscription(
+            group_name=group_name, stream_name=stream_name1
+        )
+
+        # Append three events.
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        self.client.append_events(
+            stream_name1, expected_position=None, events=[event1, event2, event3]
+        )
+
+        # Read subscription.
+        subscription = self.client.read_stream_subscription(
+            group_name=group_name, stream_name=stream_name1
+        )
+
+        # Park event.
+        parked_events = []
+        for event in subscription:
+            subscription.nack(event.id, action="park")
+            parked_events.append(event)
+            if event.data == event3.data:
+                break
+
+        # Sleep before calling replay_parked_events() so EventStoreDB catches up.
+        sleep(0.5)
+        self.client.replay_parked_events(
+            group_name=group_name, stream_name=stream_name1
+        )
+
+        replayed_events = []
+        for event in subscription:
+            subscription.ack(event.id)
+            replayed_events.append(event)
+            if event.data == event3.data:
+                subscription.stop()
+
+        assert replayed_events[-3].data == event1.data
+        assert replayed_events[-2].data == event2.data
+        assert replayed_events[-1].data == event3.data
+
     def test_subscription_read_with_nack_retry(self) -> None:
         self.construct_esdb_client()
 
@@ -2686,7 +2779,7 @@ class TestESDBClient(TestCase):
 
         # Can't delete a subscription that doesn't exist.
         with self.assertRaises(NotFound):
-            self.client.delete_subscription(group_name=group_name)
+            self.client.delete_persistent_subscription(group_name=group_name)
 
         # Create persistent subscription.
         self.client.create_subscription(
@@ -2699,7 +2792,7 @@ class TestESDBClient(TestCase):
         group_names = [s.group_name for s in subscriptions_before]
         self.assertIn(group_name, group_names)
 
-        self.client.delete_subscription(group_name=group_name)
+        self.client.delete_persistent_subscription(group_name=group_name)
 
         subscriptions_after = self.client.list_subscriptions()
         self.assertEqual(len(subscriptions_before) - 1, len(subscriptions_after))
@@ -2707,7 +2800,7 @@ class TestESDBClient(TestCase):
         self.assertNotIn(group_name, group_names)
 
         with self.assertRaises(NotFound):
-            self.client.delete_subscription(group_name=group_name)
+            self.client.delete_persistent_subscription(group_name=group_name)
 
     def test_stream_subscription_from_start(self) -> None:
         self.construct_esdb_client()
@@ -3138,7 +3231,7 @@ class TestESDBClient(TestCase):
         group_name = f"my-subscription-{uuid4().hex}"
 
         with self.assertRaises(NotFound):
-            self.client.delete_stream_subscription(
+            self.client.delete_persistent_subscription(
                 group_name=group_name, stream_name=stream_name
             )
 
@@ -3151,7 +3244,7 @@ class TestESDBClient(TestCase):
         subscriptions_before = self.client.list_stream_subscriptions(stream_name)
         self.assertEqual(len(subscriptions_before), 1)
 
-        self.client.delete_stream_subscription(
+        self.client.delete_persistent_subscription(
             group_name=group_name, stream_name=stream_name
         )
 
@@ -3159,7 +3252,7 @@ class TestESDBClient(TestCase):
         self.assertEqual(len(subscriptions_after), 0)
 
         with self.assertRaises(NotFound):
-            self.client.delete_stream_subscription(
+            self.client.delete_persistent_subscription(
                 group_name=group_name, stream_name=stream_name
             )
 
@@ -3657,42 +3750,20 @@ class TestRequiresLeaderHeader(TestCase):
             group_name=group_name, stream_name=stream_name
         )
 
-    def test_reconnects_to_new_leader_on_delete_subscription(self) -> None:
+    def test_reconnects_to_new_leader_on_delete_persistent_subscription(self) -> None:
         # Create subscription on leader.
         group_name = f"group{str(uuid4())}"
         self.writer.create_subscription(group_name=group_name)
 
         # Fail to delete subscription on follower.
         with self.assertRaises(NodeIsNotLeader):
-            self.reader.delete_subscription(group_name=group_name)
+            self.reader.delete_persistent_subscription(group_name=group_name)
 
         # Swap connection.
         self._set_reader_connection_on_writer()
 
         # Reconnect and delete subscription on leader.
-        self.writer.delete_subscription(group_name=group_name)
-
-    def test_reconnects_to_new_leader_on_delete_stream_subscription(self) -> None:
-        # Create stream subscription on leader.
-        group_name = f"group{str(uuid4())}"
-        stream_name = str(uuid4())
-        self.writer.create_stream_subscription(
-            group_name=group_name, stream_name=stream_name
-        )
-
-        # Fail to delete stream subscription on follower.
-        with self.assertRaises(NodeIsNotLeader):
-            self.reader.delete_stream_subscription(
-                group_name=group_name, stream_name=stream_name
-            )
-
-        # Swap connection.
-        self._set_reader_connection_on_writer()
-
-        # Reconnect and delete stream subscription on leader.
-        self.writer.delete_stream_subscription(
-            group_name=group_name, stream_name=stream_name
-        )
+        self.writer.delete_persistent_subscription(group_name=group_name)
 
 
 class TestAutoReconnectClosedConnection(TestCase):
@@ -3780,13 +3851,25 @@ class TestAutoReconnectAfterServiceUnavailable(TestCase):
         with self.assertRaises(NotFound):
             self.client.delete_stream(stream_name=str(uuid4()), expected_position=None)
 
-    def test_delete_subscription(self) -> None:
+    def test_replay_parked_events(self) -> None:
         with self.assertRaises(NotFound):
-            self.client.delete_subscription(group_name=f"my-subscription-{uuid4().hex}")
+            self.client.replay_parked_events(
+                group_name=f"my-subscription-{uuid4().hex}"
+            )
 
-    def test_delete_stream_subscription(self) -> None:
         with self.assertRaises(NotFound):
-            self.client.delete_stream_subscription(
+            self.client.replay_parked_events(
+                group_name=f"my-subscription-{uuid4().hex}", stream_name=str(uuid4())
+            )
+
+    def test_delete_persistent_subscription(self) -> None:
+        with self.assertRaises(NotFound):
+            self.client.delete_persistent_subscription(
+                group_name=f"my-subscription-{uuid4().hex}"
+            )
+
+        with self.assertRaises(NotFound):
+            self.client.delete_persistent_subscription(
                 group_name=f"my-subscription-{uuid4().hex}", stream_name=str(uuid4())
             )
 

@@ -1,8 +1,5 @@
 ## For version 1.0
 
-* Replay parked events in persistent subscription?
-  * There is a request that could be called. Do the events then reappear when reading?
-
 * Commit position vs prepare position?
   * As I understand it, these values only differ when using TCP/IP client transaction?
     * So probably only used by a small number of people, if any?

@@ -1015,16 +1015,17 @@ class ESDBClient(BaseESDBClient):
 
     @retrygrpc
     @autoreconnect
-    def delete_subscription(
-        self, group_name: str, timeout: Optional[float] = None
+    def replay_parked_events(
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> None:
-        """
-        Creates a persistent subscription on all streams.
-        """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._connection.persistent_subscriptions.delete(
+        self._connection.persistent_subscriptions.replay_parked(
             group_name=group_name,
+            stream_name=stream_name,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=self._call_credentials,
@@ -1032,11 +1033,14 @@ class ESDBClient(BaseESDBClient):
 
     @retrygrpc
     @autoreconnect
-    def delete_stream_subscription(
-        self, group_name: str, stream_name: str, timeout: Optional[float] = None
+    def delete_persistent_subscription(
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> None:
         """
-        Creates a persistent subscription on all streams.
+        Deletes a persistent subscription.
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
