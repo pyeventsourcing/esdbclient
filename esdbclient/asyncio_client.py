@@ -251,14 +251,14 @@ class _AsyncioESDBClient(BaseESDBClient):
     async def append_events(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
     ) -> int:
         timeout = timeout if timeout is not None else self._default_deadline
         result = await self._connection.streams.batch_append(
             stream_name=stream_name,
-            expected_position=expected_position,
+            current_version=current_version,
             events=events,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -364,14 +364,14 @@ class _AsyncioESDBClient(BaseESDBClient):
     async def delete_stream(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         timeout: Optional[float] = None,
     ) -> None:
-        # Todo: Reconsider using expected_position=None to indicate "stream exists"?
+        # Todo: Reconsider using current_version=None to indicate "stream exists"?
         timeout = timeout if timeout is not None else self._default_deadline
         await self._connection.streams.delete(
             stream_name=stream_name,
-            expected_position=expected_position,
+            current_version=current_version,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=self._call_credentials,
@@ -382,13 +382,13 @@ class _AsyncioESDBClient(BaseESDBClient):
     async def tombstone_stream(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         timeout: Optional[float] = None,
     ) -> None:
         timeout = timeout if timeout is not None else self._default_deadline
         await self._connection.streams.tombstone(
             stream_name=stream_name,
-            expected_position=expected_position,
+            current_version=current_version,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=self._call_credentials,

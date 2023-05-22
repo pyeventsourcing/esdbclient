@@ -32,7 +32,7 @@ from esdbclient.exceptions import (
     SubscriptionConfirmationError,
     TimeoutError,
     UnknownError,
-    WrongExpectedPosition,
+    WrongCurrentVersion,
 )
 from esdbclient.protos.Grpc import shared_pb2, status_pb2, streams_pb2, streams_pb2_grpc
 
@@ -229,7 +229,7 @@ DEFAULT_BATCH_APPEND_REQUEST_DEADLINE = 315576000000
 # @dataclass
 # class BatchAppendRequest:
 #     stream_name: str
-#     expected_position: Optional[int]
+#     current_version: Optional[int]
 #     events: Iterable[NewEvent]
 #     correlation_id: UUID = field(default_factory=uuid4)
 #     deadline: int = DEFAULT_BATCH_APPEND_REQUEST_DEADLINE
@@ -402,7 +402,7 @@ class BaseStreamsService(ESDBService):
     @staticmethod
     def _construct_batch_append_req(
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         events: Iterable[NewEvent],
         deadline: int,
         correlation_id: UUID,
@@ -418,10 +418,10 @@ class BaseStreamsService(ESDBService):
             ),
         )
         # Decide options 'expected_stream_revision'.
-        if isinstance(expected_position, int):
-            if expected_position >= 0:
+        if isinstance(current_version, int):
+            if current_version >= 0:
                 # Stream is expected to exist.
-                options.stream_position = expected_position
+                options.stream_position = current_version
             else:
                 # Disable optimistic concurrency control.
                 options.any.CopyFrom(empty_pb2.Empty())
@@ -474,7 +474,7 @@ class BaseStreamsService(ESDBService):
                 else:
                     assert csro_oneof == "current_stream_revision"
                     psn = wrong_version.current_stream_revision
-                    result = WrongExpectedPosition(f"Current position is {psn}")
+                    result = WrongCurrentVersion(f"Current position is {psn}")
 
             # Todo: Write tests to cover all of this:
             elif error_details.Is(
@@ -513,7 +513,7 @@ class BaseStreamsService(ESDBService):
 
     @staticmethod
     def _construct_delete_req(
-        stream_name: str, expected_position: Optional[int]
+        stream_name: str, current_version: Optional[int]
     ) -> streams_pb2.DeleteReq:
         options = streams_pb2.DeleteReq.Options(
             stream_identifier=shared_pb2.StreamIdentifier(
@@ -521,10 +521,10 @@ class BaseStreamsService(ESDBService):
             )
         )
         # Decide 'expected_stream_revision'.
-        if isinstance(expected_position, int):
-            if expected_position >= 0:
+        if isinstance(current_version, int):
+            if current_version >= 0:
                 # Stream position is expected to be a certain value.
-                options.revision = expected_position
+                options.revision = current_version
             else:
                 # Disable optimistic concurrency control.
                 options.any.CopyFrom(shared_pb2.Empty())
@@ -535,7 +535,7 @@ class BaseStreamsService(ESDBService):
 
     @staticmethod
     def _construct_tombstone_req(
-        stream_name: str, expected_position: Optional[int]
+        stream_name: str, current_version: Optional[int]
     ) -> streams_pb2.TombstoneReq:
         options = streams_pb2.TombstoneReq.Options(
             stream_identifier=shared_pb2.StreamIdentifier(
@@ -543,10 +543,10 @@ class BaseStreamsService(ESDBService):
             )
         )
         # Decide 'expected_stream_revision'.
-        if isinstance(expected_position, int):
-            if expected_position >= 0:
+        if isinstance(current_version, int):
+            if current_version >= 0:
                 # Stream position is expected to be a certain value.
-                options.revision = expected_position
+                options.revision = current_version
             else:
                 # Disable optimistic concurrency control.
                 options.any.CopyFrom(shared_pb2.Empty())
@@ -560,7 +560,7 @@ class AsyncioStreamsService(BaseStreamsService):
     async def batch_append(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -570,7 +570,7 @@ class AsyncioStreamsService(BaseStreamsService):
         try:
             req = self._construct_batch_append_req(
                 stream_name=stream_name,
-                expected_position=expected_position,
+                current_version=current_version,
                 events=events,
                 deadline=DEFAULT_BATCH_APPEND_REQUEST_DEADLINE,
                 correlation_id=uuid4(),
@@ -712,12 +712,12 @@ class AsyncioStreamsService(BaseStreamsService):
     async def delete(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
-        delete_req = self._construct_delete_req(stream_name, expected_position)
+        delete_req = self._construct_delete_req(stream_name, current_version)
 
         try:
             delete_resp = await self._stub.Delete(
@@ -733,7 +733,7 @@ class AsyncioStreamsService(BaseStreamsService):
                     if "Actual version: -1" in details:
                         raise NotFound() from e
                     else:
-                        raise WrongExpectedPosition() from e
+                        raise WrongCurrentVersion() from e
                 elif "is deleted" in details:
                     raise StreamIsDeleted() from e
                 else:  # pragma: no cover
@@ -746,12 +746,12 @@ class AsyncioStreamsService(BaseStreamsService):
     async def tombstone(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
-        tombstone_req = self._construct_tombstone_req(stream_name, expected_position)
+        tombstone_req = self._construct_tombstone_req(stream_name, current_version)
 
         try:
             tombstone_resp = await self._stub.Tombstone(
@@ -767,7 +767,7 @@ class AsyncioStreamsService(BaseStreamsService):
                     if "Actual version: -1" in details:
                         raise NotFound() from e
                     else:
-                        raise WrongExpectedPosition() from e
+                        raise WrongCurrentVersion() from e
                 elif "is deleted" in details:
                     raise StreamIsDeleted() from e
                 else:  # pragma: no cover
@@ -901,7 +901,7 @@ class StreamsService(BaseStreamsService):
     def append(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -916,7 +916,7 @@ class StreamsService(BaseStreamsService):
             response = self._stub.Append(
                 self._generate_append_requests(
                     stream_name=stream_name,
-                    expected_position=expected_position,
+                    current_version=current_version,
                     events=events,
                 ),
                 timeout=timeout,
@@ -936,19 +936,17 @@ class StreamsService(BaseStreamsService):
                 wev = response.wrong_expected_version
                 cro_oneof = wev.WhichOneof("current_revision_option")
                 if cro_oneof == "current_revision":
-                    raise WrongExpectedPosition(
+                    raise WrongCurrentVersion(
                         f"Current position is {wev.current_revision}"
                     )
                 else:
                     assert cro_oneof == "current_no_stream", cro_oneof
-                    raise WrongExpectedPosition(
-                        f"Stream {stream_name!r} does not exist"
-                    )
+                    raise WrongCurrentVersion(f"Stream {stream_name!r} does not exist")
 
     @staticmethod
     def _generate_append_requests(
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         events: Iterable[NewEvent],
     ) -> Iterator[streams_pb2.AppendReq]:
         # First, define append request that has 'content' as 'options'.
@@ -958,10 +956,10 @@ class StreamsService(BaseStreamsService):
             )
         )
         # Decide 'expected_stream_revision'.
-        if isinstance(expected_position, int):
-            if expected_position >= 0:
+        if isinstance(current_version, int):
+            if current_version >= 0:
                 # Stream is expected to exist.
-                options.revision = expected_position
+                options.revision = current_version
             else:
                 # Disable optimistic concurrency control.
                 options.any.CopyFrom(shared_pb2.Empty())
@@ -1040,7 +1038,7 @@ class StreamsService(BaseStreamsService):
     def batch_append(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1050,7 +1048,7 @@ class StreamsService(BaseStreamsService):
         try:
             req = self._construct_batch_append_req(
                 stream_name=stream_name,
-                expected_position=expected_position,
+                current_version=current_version,
                 events=events,
                 deadline=DEFAULT_BATCH_APPEND_REQUEST_DEADLINE,
                 correlation_id=uuid4(),
@@ -1077,12 +1075,12 @@ class StreamsService(BaseStreamsService):
     def delete(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
-        delete_req = self._construct_delete_req(stream_name, expected_position)
+        delete_req = self._construct_delete_req(stream_name, current_version)
 
         try:
             delete_resp = self._stub.Delete(
@@ -1098,7 +1096,7 @@ class StreamsService(BaseStreamsService):
                     if "Actual version: -1" in details:
                         raise NotFound() from e
                     else:
-                        raise WrongExpectedPosition() from e
+                        raise WrongCurrentVersion() from e
                 elif "is deleted" in details:
                     raise StreamIsDeleted() from e
                 else:  # pragma: no cover
@@ -1116,12 +1114,12 @@ class StreamsService(BaseStreamsService):
     def tombstone(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
-        tombstone_req = self._construct_tombstone_req(stream_name, expected_position)
+        tombstone_req = self._construct_tombstone_req(stream_name, current_version)
 
         try:
             tombstone_resp = self._stub.Tombstone(
@@ -1137,7 +1135,7 @@ class StreamsService(BaseStreamsService):
                     if "Actual version: -1" in details:
                         raise NotFound() from e
                     else:
-                        raise WrongExpectedPosition() from e
+                        raise WrongCurrentVersion() from e
                 elif "is deleted" in details:
                     raise StreamIsDeleted() from e
                 else:  # pragma: no cover

@@ -54,7 +54,7 @@ class SubscriptionConfirmationError(ESDBClientException):
     """
 
 
-class WrongExpectedPosition(ESDBClientException):
+class WrongCurrentVersion(ESDBClientException):
     """
     Raised when expected position does not match the
     actual position of the last event in a stream.

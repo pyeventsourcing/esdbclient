@@ -5,7 +5,7 @@ gRPC client for [EventStoreDB](https://www.eventstore.com/).
 
 This client has been developed in collaboration with the EventStoreDB
 team. Although not all the features of EventStoreDB are supported
-by this client, many of the most useful ones are presented
+by this client, many of the most useful features are presented
 in an easy-to-use interface.
 
 This client has been tested to work with EventStoreDB LTS versions 21.10,
@@ -18,10 +18,6 @@ publishing distributions to [PyPI](https://pypi.org/project/esdbclient/).
 ## Synopsis
 
 The `ESDBClient` class can be imported from the `esdbclient` package.
-
-To run the client, you will need a connection string URI. And, to
-connect to a "secure" EventStoreDB server, you will also need an
-SSL/TLS certificate.
 
 Probably the three most useful methods of `ESDBClient` are:
 
@@ -41,83 +37,125 @@ components, and supports processing events with "exactly-once" semantics (see be
 The example below uses an "insecure" EventStoreDB server running locally on port 2114.
 
 ```python
-import esdbclient, uuid
+import uuid
+
+from esdbclient import ESDBClient, NewEvent
 
 
 # Construct ESDBClient with an EventStoreDB URI.
 
-client = esdbclient.ESDBClient(uri="esdb://localhost:2114?Tls=false")
-
-
-# Append events to a new stream.
-
-stream_name = str(uuid.uuid4())
-
-event1 = esdbclient.NewEvent(type='OrderCreated', data=b'data1')
-
-client.append_events(
-    stream_name=stream_name,
-    expected_position=None,
-    events=[event1],
+client = ESDBClient(
+    uri="esdb://localhost:2114?Tls=false"
 )
 
 
-# Append more events to an existing stream.
+# Generate new events. Typically, domain events of different
+# types are generated in a domain model, and then serialized
+# into NewEvent objects. An aggregate ID may be used as the
+# name of a stream in EventStoreDB.
 
-event2 = esdbclient.NewEvent(type='OrderUpdated', data=b'data2')
-event3 = esdbclient.NewEvent(type='OrderDeleted', data=b'data3')
-
-client.append_events(
-    stream_name=stream_name,
-    expected_position=0,
-    events=[event2, event3],
+stream_name1 = str(uuid.uuid4())
+event1 = NewEvent(
+    type='OrderCreated',
+    data=b'{"order_number": "123456"}'
+)
+event2 = NewEvent(
+    type='OrderSubmitted',
+    data=b'{}'
 )
 
 
-# Read all events recorded in a stream.
+# Append new events to a stream. The stream does not exist so
+# the "current version" is None. The value returned from the
+# append_events() method is the overall position in the database
+# of the last new event recorded by this operation. The returned
+# "commit position" value may be used in a user interface to poll
+# a downstream event-processing component before it presents an
+# up-to-date eventually consistent materialized view.
+
+commit_position1 = client.append_events(
+    stream_name=stream_name1,
+    current_version=None,
+    events=[event1, event2],
+)
+
+# The "current version" is the "stream position" of the last
+# recorded event in a stream. Stream positions are zero-based.
+# We have recorded two new events, and so the "current version"
+# of this stream is 1. Concurrency is controlled in this way
+# to ensure the consistency of recorded events. An incorrect
+# value will cause a WrongCurrentVersion exception to be raised.
+
+event3 = NewEvent(
+    type='OrderCancelled',
+    data=b'{}'
+)
+
+commit_position2 = client.append_events(
+    stream_name=stream_name1,
+    current_version=1,
+    events=[event3],
+)
+
+
+# Read events from a stream. The recorded events may be
+# deserialized to domain events objects of different types,
+# then used to reconstruct an aggregate in a domain model.
 
 recorded = client.read_stream_events(
-    stream_name=stream_name
+    stream_name=stream_name1
 )
 
 assert len(recorded) == 3
-assert recorded[0].id == event1.id
-assert recorded[1].id == event2.id
-assert recorded[2].id == event3.id
+
+assert recorded[0].stream_name == stream_name1
+assert recorded[1].stream_name == stream_name1
+assert recorded[2].stream_name == stream_name1
+
+assert recorded[0].stream_position == 0
+assert recorded[1].stream_position == 1
+assert recorded[2].stream_position == 2
+
+assert recorded[0].type == "OrderCreated"
+assert recorded[1].type == "OrderSubmitted"
+assert recorded[2].type == "OrderCancelled"
+
+assert recorded[0].data == b'{"order_number": "123456"}'
 
 
-# In an event-processing component, use a catch-up subscription
-# to receive all events across all streams, including events that
-# have not yet been recorded, starting from the component's last
-# saved "commit position".
+# Start a catch-up subscription to receive all recorded
+# events across all streams. A catch-up subscription may
+# be used in a downstream event-processing component to
+# receive recorded events from a particular commit position.
+# The first "commit position" in an EventStoreDB database is 0.
 
 last_saved_commit_position = 0
 
-subscription = client.subscribe_all_events(
+catch_subscription = client.subscribe_all_events(
     commit_position=last_saved_commit_position
 )
 
-# To implement "exactly-once" semantics, iterate over the
-# catch-up subscription. Process each received event,
-# in turn, through an event-processing policy. Save the
-# value of the commit_position attribute of the processed
-# event with new state generated by the policy in the same
-# atomic transaction. Use the last saved "commit position"
-# when restarting the catch-up subscription.
+
+# Iterate over the catch-up subscription. Process each
+# recorded event in turn. In an atomic database transaction
+# save the event's "commit position" with any new state
+# generated by processing the event. Use the component's
+# last saved "commit position" when restarting the subscription.
+
 
 received = []
-for event in subscription:
+for event in catch_subscription:
+    last_saved_commit_position = event.commit_position
     received.append(event)
-    if event.id == event3.id:
-        subscription.stop()
 
-assert received[-3].id == event1.id
-assert received[-2].id == event2.id
-assert received[-1].id == event3.id
+    if last_saved_commit_position == commit_position2:
+        # Stop so we can continue with the example.
+        catch_subscription.stop()
 
-assert received[-3].commit_position > 0
-assert received[-2].commit_position > received[-3].commit_position
-assert received[-1].commit_position > received[-2].commit_position
+
+assert received[-3].type == "OrderCreated"
+assert received[-2].type == "OrderSubmitted"
+assert received[-1].type == "OrderCancelled"
 
 
 # Close the client after use.
@@ -142,12 +180,20 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 * [EventStoreDB client](#eventstoredb-client)
   * [Import class](#import-class)
   * [Construct client](#construct-client)
+* [Connection strings](#connection-strings)
+  * [Two schemes](#two-schemes)
+  * [User info string](#user-info-string)
+  * [Query string](#query-string)
+  * [Examples](#examples)
+* [Event objects](#event-objects)
+  * [The NewEvent class](#the-newevent-class)
+  * [The RecordedEvent class](#the-recordedevent-class)
 * [Streams](#streams)
   * [Append events](#append-events)
   * [Append event](#append-event)
   * [Idempotent append operations](#idempotent-append-operations)
   * [Read stream events](#read-stream-events)
-  * [Get stream position](#get-stream-position)
+  * [Get current version](#get-current-version)
   * [How to implement snapshotting with EventStoreDB](#how-to-implement-snapshotting-with-eventstoredb)
   * [Read all events](#read-all-events)
   * [Get commit position](#get-commit-position)
@@ -176,12 +222,10 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 * [Connection](#connection)
   * [Reconnect](#reconnect)
   * [Close](#close)
+* [Asyncio client](#asyncio-client)
+  * [Synopsis](#synopsis-1)
 * [Notes](#notes)
-  * [Connection strings](#connection-strings)
   * [Regular expression filters](#regular-expression-filters)
-  * [New event objects](#new-event-objects)
-  * [Recorded event objects](#recorded-event-objects)
-  * [Asyncio client](#asyncio-client)
 * [Contributors](#contributors)
   * [Install Poetry](#install-poetry)
   * [Setup for PyCharm users](#setup-for-pycharm-users)
@@ -216,25 +260,23 @@ For development, you can run a "secure" EventStoreDB server using the following 
 
     $ docker run -d --name eventstoredb-secure -it -p 2113:2113 --env "HOME=/tmp" eventstore/eventstore:21.10.9-buster-slim --dev
 
-As we will see, the client needs an EventStoreDB connection string URI as the value of
-its `uri` constructor argument. See the Notes section below for detailed information
-about EventStoreDB connection string URIs.
-
-The connection string for this "secure" EventStoreDB server would be:
+As we will see, your client will need an EventStoreDB connection string URI as the value
+of its `uri` constructor argument. The connection string for this "secure" EventStoreDB
+server would be:
 
     esdb://admin:changeit@localhost:2113
 
 To connect to a "secure" server, you will usually need to include a "username"
 and a "password" in the connection string, so that the server can authenticate the
-client. The default username is "admin" and the default password is "changeit".
+client. With EventStoreDB, the default username is "admin" and the default password
+is "changeit".
 
-When connecting to a "secure" server, the client also needs an SSL/TLS
-certificate as the value of its `root_certificates` constructor argument. To connect
-to a "secure" server you will need an SSL/TLS certificate so that the client can
-authenticate the server. For development, you can either use the SSL/TLS certificate
-of the certificate authority used to create the server's certificate, or when using a
-single-node cluster, you can use the server certificate itself. You can get the
-server certificate with the following Python code.
+When connecting to a "secure" server, your client will also need an SSL/TLS certificate
+as the value of its `root_certificates` constructor argument. The client uses the
+SSL/TLS certificate to authenticate the server. For development, you can either use the
+SSL/TLS certificate of the certificate authority used to create the server's certificate,
+or when using a single-node cluster, you can use the server certificate itself. You can
+get the server certificate with the following Python code.
 
 
 ```python
@@ -253,13 +295,10 @@ The connection string URI for this "insecure" server would be:
 
 As we will see, when connecting to an "insecure" server, there is no need to include
 a "username" and a "password" in the connection string. If you do, these values will
-be ignored by the client, so that they will not be sent to the server over an
-insecure channel.
+be ignored by the client, so that they are not sent over an insecure channel.
 
 Please note, the "insecure" connection string uses a query string with the field-value
-`Tls=false`. The value of this field is by default `true`. See the Notes section below
-for more information about EventStoreDB connection strings and the fields that can be
-used in the query string to specify connection options.
+`Tls=false`. The value of this field is by default `true`.
 
 ### Stop container
 
@@ -289,14 +328,11 @@ from esdbclient import ESDBClient
 
 ### Construct client
 
-The `ESDBClient` class can be constructed with a `uri` argument, which is required.
-And, to connect to a "secure" EventStoreDB server, the optional `root_certificates`
-argument is also required.
+The `ESDBClient` class has one required constructor argument, `uri`, and one
+optional constructor argument, `root_certificates`.
 
 The `uri` argument is expected to be an EventStoreDB connection string URI that
-conforms with the standard EventStoreDB "esdb" or "esdb+discover" URI schemes. The
-syntax and semantics of EventStoreDB connection strings are explained in the Notes
-section below.
+conforms with the standard EventStoreDB "esdb" or "esdb+discover" URI schemes.
 
 For example, the following connection string specifies that the client should
 attempt to create a "secure" connection to port 2113 on "localhost", and use the
@@ -344,84 +380,366 @@ client = ESDBClient(
 )
 ```
 
-See the Notes section below for detailed information about EventStoreDB connection
-strings and the fields that can be used in the query string to specify connection
-options.
+## Connection strings
+
+An EventStoreDB connection string is a URI that conforms with one of two possible
+schemes: either the "esdb" scheme, or the "esdb+discover" scheme.
+
+The syntax and semantics of the EventStoreDB URI schemes are described below. The
+syntax is defined using [EBNF](https://en.wikipedia.org/wiki/Extended_Backus–Naur_form).
+
+### Two schemes
+
+The "esdb" URI scheme can be defined in the following way.
+
+    esdb-uri = "esdb://" , [ user-info , "@" ] , grpc-target, { "," , grpc-target } , [ "?" , query-string ] ;
+
+In the "esdb" URI scheme, after the optional user info string, there must be at least
+one gRPC target. If there are several gRPC targets, they must be separated from each
+other with the "," character. Each gRPC target should indicate an EventStoreDB gRPC
+server socket, by specifying a host and a port number separated with the ":" character.
+The host may be a hostname that can be resolved to an IP address, or an IP address.
+
+    grpc-target = ( hostname | ip-address ) , ":" , port-number ;
+
+
+The "esdb+discover" URI scheme can be defined in the following way.
+
+    esdb-discover-uri = "esdb+discover://" , [ user-info, "@" ] , cluster-domainname , [ "?" , query-string ] ;
+
+In the "esdb+discover" URI scheme, after the optional user info string, there must be a
+domain name which should identify a cluster of EventStoreDB servers. The client will use
+a DNS server to resolve the domain name to a list of addresses of EventStoreDB servers,
+by querying for 'A' records. In this case, the port number "2113" will be used to
+construct gRPC targets from the addresses obtained from 'A' records provided by the
+DNS server. Therefore, if you want to use the "esdb+discover" URI scheme, you will
+need to configure DNS when setting up your EventStoreDB cluster.
+
+With both the "esdb" and "esdb+discover" URI schemes, the client firstly obtains
+a list of gRPC targets: either directly from "esdb" connection strings; or indirectly
+from "esdb+discover" connection strings via DNS. This list of targets is known as the
+"gossip seed". The client will then attempt to connect to each gRPC target in turn,
+attempting to call the EventStoreDB Gossip API to obtain information about the
+EventStoreDB cluster. A member of the cluster is selected by the client, according
+to the "node preference" option. The client may then need to close its
+connection and reconnect to the selected server.
+
+### User info string
+
+In both the "esdb" and "esdb+discover" schemes, the URI may include a user info string.
+If it exists in the URI, the user info string must be separated from the rest of the URI
+with the "@" character. The user info string must include a username and a password,
+separated with the ":" character.
+
+    user-info = username , ":" , password ;
+
+The user info is sent by the client as "call credentials" in each call to a "secure"
+server, in a "basic auth" authorization header. This authorization header is used by
+the server to authenticate the client. The authorization header is not sent to
+"insecure" servers.
+
+### Query string
+
+In both the "esdb" and "esdb+discover" schemes, the optional query string must be one
+or many field-value arguments, separated from each other with the "&" character.
+
+    query-string = field-value, { "&", field-value } ;
+
+Each field-value argument must be one of the supported fields, and an
+appropriate value, separated with the "=" character.
+
+    field-value = ( "Tls", "=" , "true" | "false" )
+                | ( "TlsVerifyCert", "=" , "true" | "false" )
+                | ( "ConnectionName", "=" , string )
+                | ( "NodePreference", "=" , "leader" | "follower" | "readonlyreplica" | "random" )
+                | ( "DefaultDeadline", "=" , integer )
+                | ( "GossipTimeout", "=" , integer )
+                | ( "MaxDiscoverAttempts", "=" , integer )
+                | ( "DiscoveryInterval", "=" , integer )
+                | ( "MaxDiscoverAttempts", "=" , integer )
+                | ( "KeepAliveInterval", "=" , integer )
+                | ( "KeepAliveInterval", "=" , integer ) ;
+
+The table below describes the query field-values supported by this client.
+
+| Field               | Value                                                                 | Description                                                                                                                                                       |
+|---------------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Tls                 | "true", "false" (default: "true")                                     | If "true" the client will create a "secure" gRPC channel. If "false" the client will create an "insecure" gRPC channel. This must match the server configuration. |
+| TlsVerifyCert       | "true", "false" (default: "true")                                     | This value is currently ignored.                                                                                                                                  |
+| ConnectionName      | string (default: auto-generated version-4 UUID)                       | Sent in call metadata for every call, to identify the client to the cluster.                                                                                      |
+| NodePreference      | "leader", "follower", "readonlyreplica", "random" (default: "leader") | The node state preferred by the client. The client will select a node from the cluster info received from the Gossip API according to this preference.            |
+| DefaultDeadline     | integer (default: `None`)                                             | The default value (in seconds) of the `timeout` argument of client "write" methods such as `append_events()`.                                                     |
+| GossipTimeout       | integer (default: 5)                                                  | The default value (in seconds) of the `timeout` argument of gossip read methods, such as `read_gossip()`.                                                         |
+| MaxDiscoverAttempts | integer (default: 10)                                                 | The number of attempts to read gossip when connecting or reconnecting to a cluster member.                                                                        |
+| DiscoveryInterval   | integer (default: 100)                                                | How long to wait (in milliseconds) between gossip retries.                                                                                                        |
+| KeepAliveInterval   | integer (default: `None`)                                             | The value of the "grpc.keepalive_ms" gRPC channel option.                                                                                                         |
+| KeepAliveTimeout    | integer (default: `None`)                                             | The value of the "grpc.keepalive_timeout_ms" gRPC channel option.                                                                                                 |
+
+
+### Examples
+
+Here are some examples of EventStoreDB connection string URIs.
+
+The following URI will cause the client to connect to, and get
+cluster info, from "secure" server socket `localhost:2113`. And
+then to connect to a "leader" node. And also to use "admin" and
+"changeit" as the username and password when making calls to
+EventStoreDB API methods.
+
+    esdb://admin:changeit@localhost:2113
+
+
+The following URI will cause the client to get cluster info from
+"insecure" server socket 127.0.0.1:2114.  And then to connect to
+a "leader" node.
+
+    esdb://127.0.0.1:2114?Tls=false
+
+
+The following URI will cause the client to get cluster info from
+addresses in DNS 'A' records for cluster1.example.com. And then
+to connect to a "leader" node. And use a default deadline of 5
+seconds when making calls to EventStore API "write" methods.
+
+    esdb+discover://admin:changeit@cluster1.example.com?DefaultDeadline=5
+
+
+The following URI will cause the client to get cluster info from either
+localhost:2111, or localhost:2112, or localhost:2113. And then to connect
+to a "follower" node.
+
+    esdb://admin:changeit@localhost:2111,localhost:2112,localhost:2113?NodePreference=follower
+
+
+The following URI will cause the client to get cluster info from addresses in
+DNS 'A' records for cluster1.example.com. And to configure "keep alive" timeout
+and interval in the gRPC channel.
+
+    esdb+discover://admin:changeit@cluster1.example.com?KeepAliveInterval=10000&KeepAliveTimeout=10000
+
+
+Please note, the client is insensitive to the case of fields and values. If fields are
+repeated in the query string, the query string will be parsed without error. However,
+the connection options used by the client will use the value of the first field. All
+the other field-values in the query string with the same field name will be ignored.
+Fields without values will also be ignored.
+
+If the client's node preference is "leader" and the node becomes a
+"follower", the client will attempt to reconnect to the current leader when a method
+is called that expects to call a leader. Methods which mutate the state of the database
+expect to call a leader. For such methods, the HTTP header "requires-leader" is set to
+"true", and this header is observed by the server, and so a node which is not a leader
+that receives such a request will return an error. This error is detected by the client,
+which will then close the current gRPC connection and create a new connection to the
+leader. The request will then be retried with the leader.
+
+If the client's node preference is "follower" and there are no follower
+nodes in the cluster, then the client will raise an exception. Similarly, if the
+client's node preference is "readonlyreplica" and there are no read-only replica
+nodes in the cluster, then the client will also raise an exception.
+
+The gRPC channel option "grpc.max_receive_message_length" is automatically
+configured to the value `17 * 1024 * 1024`. This value cannot be changed.
+
+
+## Event objects
+
+This package defines a `NewEvent` class and a `RecordedEvent` class. The
+`NewEvent` class should be used when writing events to the database. The
+`RecordedEvent` class is used when reading events from the database.
+
+### New events
+
+The `NewEvent` class should be used when writing events to an EventStoreDB database.
+You will need to construct new event objects before calling the `append_events()`
+and `append_event()` methods.
+
+The `NewEvent` class is a frozen Python database. It has two required constructor
+arguments (`type` and `data`) and three optional constructor arguments (`metadata`,
+`content_type` and `id`).
+
+The required `type` argument is a Python `str`, used to describe the type of
+domain event that is being recorded.
+
+The required `data` argument is a Python `bytes` object, used to state the
+serialized data of the domain event that is being recorded.
+
+The optional `metadata` argument is a Python `bytes` object, used to indicate any
+metadata of the event that will be recorded. The default value is an empty `bytes`
+object.
+
+The optional `content_type` argument is a Python `str`, used to indicate the
+kind of data that is being recorded. The default value is `'application/json'`,
+which indicates that the `data` was serialised using JSON. An alternative value
+for this argument is the more general indication `'application/octet-stream'`.
+
+The optional `id` argument is a Python `UUID` object, used to specify the unique ID
+of the event that will be recorded. If no value is provided, a new version-4 UUID
+will be generated.
+
+```python
+new_event1 = NewEvent(
+    type='OrderCreated',
+    data=b'{"name": "Greg"}',
+)
+assert new_event1.type == 'OrderCreated'
+assert new_event1.data == b'{"name": "Greg"}'
+assert new_event1.metadata == b''
+assert new_event1.content_type == 'application/json'
+assert isinstance(new_event1.id, uuid.UUID)
+
+event_id = uuid.uuid4()
+new_event2 = NewEvent(
+    type='ImageCreated',
+    data=b'01010101010101',
+    metadata=b'{"a": 1}',
+    content_type='application/octet-stream',
+    id=event_id,
+)
+assert new_event2.type == 'ImageCreated'
+assert new_event2.data == b'01010101010101'
+assert new_event2.metadata == b'{"a": 1}'
+assert new_event2.content_type == 'application/octet-stream'
+assert new_event2.id == event_id
+```
+
+### Recorded events
+
+The `RecordedEvent` class is used when reading events from an EventStoreDB
+database. The client will return event objects of this type from all methods
+that return recorded events, such as `read_stream_events()`, `subscribe_all_events()`,
+and `read_subscription()`. You do not need to construct recorded event objects.
+
+Like `NewEvent`, the `RecordedEvent` class is also a frozen Python database. It has
+all the attributes that `NewEvent` has (`type`, `data`, `metadata`, `content_type`, `id`)
+and some additional attributes that follow from the fact that an event was recorded
+(`stream_name`, `stream_position`, `commit_position`).
+
+The `type` attribute is a Python `str`, used to indicate the type of an event
+that was recorded.
+
+The `data` attribute is a Python `bytes` object, used to indicate the data of an
+event that was recorded.
+
+The `metadata` attribute is a Python `bytes` object, used to indicate the metadata of
+an event that was recorded.
+
+The `content_type` attribute is a Python `str`, used to indicate the type of
+data that was recorded for an event. It is usually `application/json`, indicating
+that the data can be parsed as JSON. Alternatively, it is `application/octet-stream`.
+
+The `id` attribute is a Python `UUID` object, used to indicate the unique ID of an
+event that was recorded.
+
+The `stream_name` attribute is a Python `str`, used to indicate the name of a
+stream in which an event was recorded.
+
+The `stream_position` attribute is a Python `int`, used to indicate the position in a
+stream at which an event was recorded.
+
+In EventStoreDB, a "stream position" is an integer representing the position of a
+recorded event in a stream. Each recorded event is recorded at a position in a stream.
+Each stream position is occupied by only one recorded event. New events are recorded at the
+next unoccupied position. All sequences of stream positions are zero-based and gapless.
+
+The `commit_position` attribute is a Python `int`, used to indicate the position in the
+database at which an event was recorded.
+
+In EventStoreDB, a "commit position" is an integer representing the position of a
+recorded event in the database. Each recorded event is recorded at a position in the
+database. Each commit position is occupied by only one recorded event. Commit positions
+are zero-based and increase monotonically as new events are recorded. But, unlike stream
+positions, the sequence of successive commit positions is not gapless. Indeed, there are
+usually large differences between the commit positions of successively recorded events.
+
+
+```python
+from esdbclient.events import RecordedEvent
+
+recorded_event = RecordedEvent(
+    type='OrderCreated',
+    data=b'{}',
+    metadata=b'',
+    content_type='application/json',
+    id=uuid.uuid4(),
+    stream_name='stream1',
+    stream_position=0,
+    commit_position=512,
+)
+```
+
 
 ## Streams
 
 In EventStoreDB, a "stream" is a sequence of recorded events that all have
-the same "stream name". There will normally be many streams in a database.
-Each recorded event has a "stream position" in its stream, and a "commit position"
-in the database. The stream positions of the recorded events in a stream is a gapless
-sequence starting from zero. The commit positions of the recorded events in the database
-form a sequence that is not gapless.
+the same "stream name". There will normally be many streams in a database,
+each with many recorded events. Each recorded event has a position in its stream
+(the "stream position"), and a position in the database (the "commit position").
+Stream positions are zero-based and gapless. Commit positions are also zero-based,
+but are not gapless.
 
 The methods `append_events()`, `read_stream_events()` and `read_all_events()` can
-be used to record and read events in the database.
+be used to read and record in the database.
 
 ### Append events
 
 *requires leader*
 
-The `append_events()` method can be used to write a sequence of new events atomically
-to a "stream". It returns the "commit position" of the last new event that was
-recorded.
+The `append_events()` method can be used atomically to record a sequence of new events.
+If the operation is successful, it returns the commit position of the last event in the
+sequence that has been recorded.
 
-This method has three required arguments, `stream_name`, `expected_position`
+This method has three required arguments, `stream_name`, `current_version`
 and `events`.
 
 The required `stream_name` argument is a Python `str` that uniquely identifies a
-stream to which events will be appended.
+stream to which a sequence of events will be appended.
 
-The required `expected_position` argument is expected to be either a Python `int`
-that indicates the "stream position" of the last recorded event in the stream, or
+The required `current_version` argument is expected to be either a Python `int`
+that indicates the stream position of the last recorded event in the stream, or
 `None` if the stream does not yet exist or has been deleted. The stream positions
-are zero-based and gapless, so that if a stream has two events, the `expected_position`
+are zero-based and gapless, so that if a stream has two events, the `current_version`
 should be 1. If an incorrect value is given, this method will raise a
-`WrongExpectedPosition` exception. This behavior is designed to provide concurrency
-control when recording events. The correct value of `expected_position` for any stream
-can be obtained by calling `get_stream_position()`. However, the more typical approach
-when using a stream to record aggregate events is to use the stream position of the
-last recorded event in the stream as the version number of the reconstructed aggregate,
-and to use that value as the `expected_position` when appending new aggregate events.
-This ensures the consistency of the recorded state of the aggregate, and forces
-operations that generate new aggregate events to be retried with a freshly
-reconstructed aggregate when a `WrongExpectedPosition` exception is encountered.
+`WrongCurrentVersion` exception. This behavior is designed to provide concurrency
+control when recording new events. The correct value of `current_version` for any stream
+can be obtained by calling `get_current_version()`. However, the typical approach is to
+use the stream position of the recorded events as the version number of a reconstructed
+aggregate, and to use the current version of the aggregate as the `current_version` when
+appending new aggregate events. This ensures the consistency of the recorded state of
+the aggregate, and forces operations that generate new aggregate events to be retried with a freshly
+reconstructed aggregate when a `WrongCurrentVersion` exception is encountered.
 This controlling behavior can be disabled by setting the value of the
-`expected_position` argument to `-1`.
+`current_version` argument to `-1`.
 
 The required `events` argument is expected to be a sequence of new event objects. The
-`NewEvent` class should be used to construct new event objects. See the Notes section
-below for details of the `NewEvent` class. The `append_events()` operation is atomic,
-so that either all or none of the new events will be recorded. It is not possible with
-EventStoreDB atomically to record new events in more than one stream.
+`NewEvent` class should be used to construct new event objects. The `append_events()`
+operation is atomic, so that either all or none of the new events will be recorded. It
+is not possible with EventStoreDB atomically to record new events in more than one stream.
 
 This method also has an optional `timeout` argument, which is a Python `float`
 that sets a deadline for the completion of the gRPC operation.
 
 In the example below, a new event, `event1`, is appended to a new stream. The
-stream does not yet exist, so `expected_position` is `None`.
+stream does not yet exist, so `current_version` is `None`.
 
 ```python
-from esdbclient import NewEvent
-
-# Construct new event object.
+# Construct a new event object.
 event1 = NewEvent(type='OrderCreated', data=b'data1')
 
-# Define stream name.
+# Define a new stream name.
 stream_name1 = str(uuid.uuid4())
 
-# Append list of events to new stream.
+# Append the new events to the new stream.
 commit_position1 = client.append_events(
     stream_name=stream_name1,
-    expected_position=None,
+    current_version=None,
     events=[event1],
 )
 ```
 
 In the example below, two subsequent events are appended to an existing
-stream. The stream, so far, has one recorded event so `expected_position` is `0`.
+stream. The stream, `stream_name1`, so far has one recorded event, and so
+the correct value of `current_version` is `0`.
 
 ```python
 event2 = NewEvent(type='OrderUpdated', data=b'data2')
@@ -429,81 +747,81 @@ event3 = NewEvent(type='OrderDeleted', data=b'data3')
 
 commit_position2 = client.append_events(
     stream_name=stream_name1,
-    expected_position=0,
+    current_version=0,
     events=[event2, event3],
 )
 ```
 
 The returned values, `commit_position1` and `commit_position2`, are the
-"commit positions" in the database of the last event in the recorded sequences.
+commit positions in the database of the last events in the recorded sequences.
 That is, `commit_position1` is the commit position of `event1` and
 `commit_position2` is the commit position of `event3`.
 
-A "commit position" is an integer representing the position of the recorded event in
-a "total order" of all recorded events in the database across all streams. The sequence
-of commit positions increased monotonically as events are recorded, but, unlike stream
-positions, it is not a gapless sequence. Indeed, there are usually large differences
-between the commit positions of successive recorded events.
-
-The "commit position" returned in this way can be used to poll a downstream component
-until it has processed all the newly recorded events. For example, consider a user
-interface command that results in the recording of new events and an eventually
-consistent materialized view in a downstream component that is updated from these
-events. If the new events have not yet been processed, the view would be stale. The
-user interface can poll the downstream component until it has processed the newly
-recorded events, and then display the view to the user.
+Commit positions that are returned in this way can be used by a user interface to poll
+a downstream component until it has processed all the newly recorded events. For example,
+consider a user interface command that results in the recording of new events, and an
+eventually consistent materialized view in a downstream component that is updated from
+these events. If the new events have not yet been processed, the view might be stale,
+or out-of-date. Instead of displaying a stale view, the user interface can poll the
+downstream component until it has processed the newly recorded events, and then display
+an up-to-date view to the user.
 
 
 ### Append event
 
 *requires leader*
 
-The `append_event()` method can be used to write a single new event to a stream.
-If the operation is successful, this method also returns an integer
-representing the database "commit position" of the newly recorded event.
+The `append_event()` method is like `append_events()` but can be used only to write a
+single new event to a stream. If the operation is successful, it returns the commit
+position of the newly recorded event.
 
-This method has three required arguments, `stream_name`, `expected_position` and `event`.
+This method has three required arguments, `stream_name`, `current_version` and `event`.
 
-This method works in the same way as `append_events()`, however `event` is expected
-to be a single new event object, rather than a sequence of events. The event object
-is expected to be an instance of the `NewEvent` class.
+The required `stream_name` argument is a Python `str` that uniquely identifies a
+stream to which a sequence of events will be appended.
+
+The required `current_version` argument is expected to be either a Python `int`
+that indicates the stream position of the last recorded event in the stream.
+
+The required `event` argument is expected to be a single new event object. The event
+object is expected to be an instance of the `NewEvent` class.
 
 This method also has an optional `timeout` argument, which is a Python `float`
 that sets a deadline for the completion of the gRPC operation.
-
-Please note, if a command generates more than one new event, you should use make one
-call to `append_events()` rather than several calls the `append_event()`, so that
-either all or none of the new events are recorded.
 
 
 ### Idempotent append operations
 
 The `append_event()` and `append_events()` and methods are "idempotent", in that
 if the methods are called with new events whose `id` attribute values equal those
-of recorded events in the named stream at the given expected position, then the
-methods will return the commit position of the last event, without making any
-changes to the database.
+of recorded events in the named stream immediately after the stream position specified
+by the value of the `current_version` argument, then these methods will return the
+commit position of the last new event, without making any changes to the database.
 
 Sometimes it may happen, when calling `append_event()` or `append_events()`, that
 the new events are successfully recorded but somehow a connection issue occurs before
-the successful call can return successfully to the client. The user cannot be sure if
-the events were recorded or not, and so may wish to retry. If the event was in fact
-successfully recorded, it is convenient for the retried operation to return successfully
-without raising an exception. If those new events were in fact not recorded, and in the
-meantime no other new events were recorded, then it makes sense that the new events will
-be recorded when the append operation is retried. Of course, if the
-`WrongExpectedPosition` exception is raised when retrying the operation, the entire
-operation that generated the new events may need to be retried.
+the successful call can return successfully to the client. We cannot be sure if
+the events were recorded or not, and so we may wish to retry. If the events were in
+fact successfully recorded, it is convenient for the retried operation to return
+successfully without raising an exception. If those new events were in fact not recorded,
+and in the meantime no other new events were recorded in that stream, then it makes sense
+that the new events will be recorded when the append operation is retried. Of course,
+if a `WrongCurrentVersion` exception is raised when retrying the operation, then an
+application command which generated the new events in the context of already recorded
+events may need to be executed again. Alternatively, a suitable error might be displayed
+by the application, with an up-to-date view of the recorded data, giving a user of the
+application an opportunity to decide if they still wish to proceed with their original
+intention.
 
 The example below shows the `append_events()` method being called again with
-`event3` and `expected_position=2`. We can see that repeating the call to
+`event3` and `current_version=0`. We can see that repeating the call to
 `append_events()` returns successfully.
 
 ```python
 # Retry appending event3.
 commit_position_retry = client.append_events(
     stream_name=stream_name1,
-    expected_position=0,
+    current_version=0,
     events=[event2, event3],
 )
 ```
@@ -529,16 +847,14 @@ assert len(events) == 3
 This idempotent behaviour depends on the `id` attribute of the `NewEvent` class.
 This attribute, by default, is assigned a new and unique version-4 UUID when an
 instance of `NewEvent` is constructed. The `id` argument can be used when
-constructing `NewEvent` objects to set the value of this attribute. See the Notes
-section for more information about the `NewEvent` class.
+constructing `NewEvent` objects to set the value of this attribute.
 
 
 ### Read stream events
 
 The `read_stream_events()` method can be used to get events that have been appended
 to a stream. This method returns a Python `tuple` of recorded event objects. The
-recorded event objects are instances of the `RecordedEvent` class. See the Notes
-section below for details of the `RecordedEvent` class.
+recorded event objects are instances of the `RecordedEvent` class.
 
 This method has one required argument, `stream_name`.
 
@@ -644,26 +960,27 @@ else:
     raise Exception("Shouldn't get here")
 ```
 
-Please note, this method fetches the recorded events from the server, and then
+Please note, this method streams recorded events from the server and then
 constructs and returns a Python `tuple`. In case you don't want the client to
-fetch all the events that will be returned before you start iterating over them,
-you can instead use the `iter_stream_events()` method, which returns a
-"read response" object. A "read response" is an iterator, and not a sequence.
-Recorded events can be obtained by iterating over the "read response" object.
-It streams recorded events from the server as the iteration proceeds. The iteration
-will automatically stop when there are no more recorded events to be returned. The
-streaming of events, and hence the iterator, can also be stopped by calling the `stop()`
+finish streaming events from the database before it returns, you can instead
+use the `iter_stream_events()` method, which returns an iterable "read response"
+object. A "read response" is an iterator, and not a sequence. Recorded events can
+be obtained by iterating over the "read response" object. It streams recorded events
+from the server as the iteration proceeds. The iteration will automatically stop
+when there are no more recorded events to be returned. The streaming of events,
+and hence the iterator, can also be stopped prematurely by calling the `stop()`
 method on the "read response" object.
 
 In fact, the `read_stream_events()` method calls `iter_stream_events()` and passes
-the "read response" into a new Python `tuple`. The `read_stream_events()` method is
-decorated with retry and reconnect decorators, whilst the `iter_stream_events()` method
-is not. This means that all errors due to connection issues will be caught by the retry
-and reconnect decorators when calling the `read_stream_events()` method, but not when
-calling `iter_stream_events()`. The `iter_stream_events()` method has no such
-decorators because the streaming only starts when iterating over the "read response"
-starts, which means that the method returns before the streaming starts, and so there
-is no chance for any decorators to catch any connection issues.
+the "read response" iterator into the Python `tuple` constructor. However, the
+`read_stream_events()` method is decorated with retry and reconnect decorators,
+whilst the `iter_stream_events()` method is not. This means that all errors due to
+connection issues will be caught by the retry and reconnect decorators when calling
+the `read_stream_events()` method, but not when calling `iter_stream_events()`. The
+`iter_stream_events()` method has no such decorators because the streaming only starts
+when iterating over the "read response" starts, which means that the method returns
+before the streaming starts, and so there is no chance for any decorators to catch
+any connection issues.
 
 Nevertheless, if you are reading a very large stream, then you might prefer to call
 `iter_stream_events()`, and to begin iterating through the recorded events whilst
@@ -673,13 +990,13 @@ the streaming of recorded events from the server, you will need to care about
 connection issues when iterating over the "read response" object returned from
 `iter_stream_events()`.
 
-### Get stream position
+### Get current version
 
-The `get_stream_position()` method is a convenience method that essentially calls
+The `get_current_version()` method is a convenience method that essentially calls
 `read_stream_events()` with `backwards=True` and `limit=1`. This method returns
 the value of the `stream_position` attribute of the last recorded event in a
 stream. If a stream does not exist, the returned value is `None`. The returned
-value is the correct value of `expected_position` when appending new events to
+value is the correct value of `current_version` when appending new events to
 a stream.
 
 This method has one required argument, `stream_name`.
@@ -693,27 +1010,27 @@ for the completion of the gRPC operation.
 
 In the example below, the last stream position of `stream_name1` is obtained.
 Since three events have been appended to `stream_name1`, and because positions
-in a stream are zero-based and gapless, so the current stream position is `2`.
+in a stream are zero-based and gapless, so the current version is `2`.
 
 ```python
-stream_position = client.get_stream_position(
+current_version = client.get_current_version(
     stream_name=stream_name1
 )
 
-assert stream_position == 2
+assert current_version == 2
 ```
 
-If a stream has never existed or has been deleted, the returned stream position value
-is `None`, which matches the required expected position both when appending the first
-event of a new stream, and also when appending events to a stream that has been
-deleted.
+If a stream has never existed or has been deleted, the returned value is `None`,
+which matches the required value of the `current_version` argument both when
+appending the first event of a new stream, and also when appending events to
+a stream that has been deleted.
 
 ```python
-stream_position = client.get_stream_position(
+current_version = client.get_current_version(
     stream_name='does-not-exist'
 )
 
-assert stream_position is None
+assert current_version is None
 ```
 
 ### How to implement snapshotting with EventStoreDB
@@ -783,10 +1100,12 @@ def remove_snapshot_stream_prefix(snapshot_stream_name):
 
 Now, let's redefine the `get_aggregate()` function, so that it looks for a snapshot event,
 then selects subsequent aggregate events, and then calls a mutator function for each
-recorded event. We will use JSON to serialize and deserialize Python `dict` objects.
+recorded event.
 
-Notice that the aggregate events are read from a stream for aggregate
-events, whilst the snapshot is read from a separate stream for aggregate snapshots.
+Notice that the aggregate events are read from a stream for serialized aggregate
+events, whilst the snapshot is read from a separate stream for serialized aggregate
+snapshots. We will use JSON to serialize and deserialize event data.
+
 
 ```python
 import json
@@ -838,10 +1157,10 @@ def deserialize(s):
     return json.loads(s.decode('utf8'))
 ```
 
-To show how this can be used, let's define a `Dog` aggregate class, with attributes
-`name` and `tricks`. The attributes `id` and `version` will indicate an aggregate
-object's ID and version number. The attribute `is_from_snapshot` is added here
-merely to demonstrate below when an aggregate object has been reconstructed using
+To show how `get_aggregate()` can be used, let's define a `Dog` aggregate class, with
+attributes `name` and `tricks`. The attributes `id` and `version` will indicate an
+aggregate object's ID and version number. The attribute `is_from_snapshot` is added
+here merely to demonstrate below when an aggregate object has been reconstructed using
 a snapshot.
 
 ```python
@@ -928,7 +1247,7 @@ def register_dog(name):
     )
     client.append_event(
         stream_name=dog_id,
-        expected_position=None,
+        current_version=None,
         event=event,
     )
     return dog_id
@@ -942,7 +1261,7 @@ def record_trick_learned(dog_id, trick):
     )
     client.append_event(
         stream_name=dog_id,
-        expected_position=dog.version,
+        current_version=dog.version,
         event=event,
     )
 
@@ -956,12 +1275,12 @@ def snapshot_dog(dog_id):
     )
     client.append_event(
         stream_name=make_snapshot_stream_name(dog_id),
-        expected_position=-1,
+        current_version=-1,
         event=event,
     )
 ```
 
-Now we can register a new dog, and record that some tricks have been learned.
+We can call `register_dog()` to register a new dog.
 
 ```python
 # Register a new dog.
@@ -973,6 +1292,11 @@ assert dog.tricks == []
 assert dog.version == 0
 assert dog.is_from_snapshot is False
 
+```
+
+We can call `record_trick_learned()` to record that some tricks have been learned.
+
+```python
 
 # Record that 'Fido' learned a new trick.
 record_trick_learned(dog_id, trick='roll over')
@@ -994,7 +1318,8 @@ assert dog.version == 2
 assert dog.is_from_snapshot is False
 ```
 
-After we call `snapshot_dog()`, the `get_dog()` function will return a `Dog`
+We can call `snapshot_dog()` to record a snapshot of the current state of the `Dog`
+aggregate. After we call `snapshot_dog()`, the `get_dog()` function will return a `Dog`
 object that has been constructed using the `Snapshot` event.
 
 ```python
@@ -1044,14 +1369,13 @@ and hence the iterator, can also be stopped by calling the `stop()` method on th
 "read response" object.
 
 Just like `read_stream_events()` and `iter_stream_events()`, the received event objects
-are instances of the `RecordedEvent` class. See the Notes section below for details
-of the `RecordedEvent` class.
+are instances of the `RecordedEvent` class.
 
 This method has seven optional arguments, `commit_position`, `backwards`,
 `filter_exclude`, `filter_include`, `filter_by_stream_name`, `limit`, and `timeout`.
 
 The optional `commit_position` argument is a Python `int` that can be used to
-specify the commit position from which to start reading. The default value of
+specify a commit position from which to start reading. The default value of
 `commit_position` is `None`. Please note, if a commit position is specified,
 it must be an actually existing commit position in the database.
 
@@ -1060,9 +1384,9 @@ The optional `backwards` argument is a Python `bool`. The default of `backwards`
 `backwards` is `True`, then events are returned in reverse order.
 
 If `backwards` is `False` and `commit_position` is `None`, the database's events will
-be returned in the order they were recorded starting from the first recorded event.
+be returned in the order they were recorded, starting from the first recorded event.
 This is the default behavior of `read_all_events()`. If `backwards` is `True` and
-`commit_position` is `None`, the database's events will be returned in reverse order
+`commit_position` is `None`, the database's events will be returned in reverse order,
 starting from the last recorded event.
 
 The optional `filter_exclude` argument is a sequence of regular expressions that
@@ -1187,6 +1511,12 @@ assert events[0].type == 'DogLearnedTrick'
 assert deserialize(events[0].data)['trick'] == 'sit'
 ```
 
+Please note, like the `iter_stream_events()` method, the `read_all_events()` method
+is not decorated with retry and reconnect decorators, because the streaming of recorded
+events from the server only starts when iterating over the "read response" starts, which
+means that the method returns before the streaming starts, and so there is no chance for
+any decorators to catch any connection issues.
+
 ### Get commit position
 
 The `get_commit_position()` method can be used to get the commit position of the
@@ -1242,11 +1572,11 @@ metadata["foo"] = "bar"
 client.set_stream_metadata(
     stream_name=stream_name1,
     metadata=metadata,
-    expected_position=metadata_version,
+    current_version=metadata_version,
 )
 ```
 
-The `expected_position` argument should be the current version of the stream metadata
+The `current_version` argument should be the current version of the stream metadata
 obtained from `get_stream_metadata()`.
 
 Please refer to the EventStoreDB documentation for more information about stream
@@ -1259,7 +1589,7 @@ metadata.
 The method `delete_stream()` can be used to "delete" a stream.
 
 ```python
-commit_position = client.delete_stream(stream_name=stream_name1, expected_position=2)
+commit_position = client.delete_stream(stream_name=stream_name1, current_version=2)
 ```
 
 After deleting a stream, it's still possible to append new events. Reading from a
@@ -1273,7 +1603,7 @@ deleted.
 The method `tombstone_stream()` can be used to "tombstone" a stream.
 
 ```python
-commit_position = client.tombstone_stream(stream_name=stream_name1, expected_position=2)
+commit_position = client.tombstone_stream(stream_name=stream_name1, current_version=2)
 ```
 
 After tombstoning a stream, it's not possible to append new events.
@@ -1300,7 +1630,6 @@ a `stop()` method which will cancel the streaming gRPC operation and cause the
 
 Like with `read_stream_events()` and `read_all_events()`, the recorded event objects
 received from a catch-up subscription are instances of the `RecordedEvent` class.
-See the Notes section below for details of the `RecordedEvent` class.
 
 ### Subscribe all events
 
@@ -1365,7 +1694,7 @@ stream_name2 = str(uuid.uuid4())
 event4 = NewEvent(type='OrderCreated', data=b'data4')
 client.append_events(
     stream_name=stream_name2,
-    expected_position=None,
+    current_version=None,
     events=[event4],
 )
 
@@ -1417,7 +1746,7 @@ mark = datetime.now()
 event5 = NewEvent(type='OrderUpdated', data=b'data5')
 client.append_events(
     stream_name=stream_name2,
-    expected_position=0,
+    current_version=0,
     events=[event5],
 )
 
@@ -1446,7 +1775,7 @@ All the recorded events are received exactly once.
 event6 = NewEvent(type='OrderDeleted', data=b'data6')
 client.append_events(
     stream_name=stream_name2,
-    expected_position=1,
+    current_version=1,
     events=[event6],
 )
 
@@ -1476,7 +1805,7 @@ event9 = NewEvent(type='OrderDeleted', data=b'data9')
 
 client.append_events(
     stream_name=stream_name3,
-    expected_position=None,
+    current_version=None,
     events=[event7, event8, event9],
 )
 
@@ -2262,300 +2591,26 @@ The `close()` method can be used to cleanly close the client's gRPC connection.
 client.close()
 ```
 
-## Notes
 
-### Connection strings
-
-The EventStoreDB connection string is a URI that conforms with one of two possible
-schemes, either the "esdb" scheme or the "esdb+discover" scheme. The syntax and
-semantics of the EventStoreDB URI schemes are explained below. The syntax is
-defined using [EBNF](https://en.wikipedia.org/wiki/Extended_Backus–Naur_form).
-
-The "esdb" URI scheme can be defined in the following way.
-
-    esdb-uri = "esdb://" , [ user-info , "@" ] , grpc-target, { "," , grpc-target } , [ "?" , query-string ] ;
-
-In the "esdb" URI scheme, after the optional user info string, there must be at least
-one gRPC target. If there are several gRPC targets, they must be separated from each
-other with the "," character. Each gRPC target should indicate an EventStoreDB gRPC
-server socket, by specifying a host and a port number separated with the ":" character.
-The host may be a hostname that can be resolved to an IP address, or an IP address.
-
-    grpc-target = ( hostname | ip-address ) , ":" , port-number ;
-
-
-The "esdb+discover" URI scheme can be defined in the following way.
-
-    esdb-discover-uri = "esdb+discover://" , [ user-info, "@" ] , cluster-domainname , [ "?" , query-string ] ;
-
-In the "esdb+discover" URI scheme, after the optional user info string, there must be a
-domain name which should identify a cluster of EventStoreDB servers. The client will use
-a DNS server to resolve the domain name to a list of addresses of EventStoreDB servers,
-by querying for 'A' records. In this case, the port number "2113" will be used to
-construct gRPC targets from the addresses obtained from 'A' records provided by the
-DNS server. Therefore, if you want to use the "esdb+discover" URI scheme, you will
-need to configure DNS when setting up your EventStoreDB cluster.
-
-With both the "esdb" and "esdb+discover" URI schemes, the client firstly obtains
-a list of gRPC targets: either directly from "esdb" connection strings; or indirectly
-from "esdb+discover" connection strings via DNS. This list of targets is known as the
-"gossip seed". The client will then attempt to connect to each gRPC target in turn,
-attempting to call the EventStoreDB Gossip API to obtain information about the
-EventStoreDB cluster. A member of the cluster is selected by the client, according
-to the "node preference" option. The client may then need to close its
-connection and reconnect to the selected server.
-
-In both the "esdb" and "esdb+discover" schemes, the URI may include a user info string.
-If it exists in the URI, the user info string must be separated from the rest of the URI
-with the "@" character. The user info string must include a username and a password,
-separated with the ":" character.
-
-    user-info = username , ":" , password ;
-
-The user info is sent by the client as "call credentials" in each call to a "secure"
-server, in a "basic auth" authorization header. This authorization header is used by
-the server to authenticate the client. The authorization header is not sent to
-"insecure" servers.
-
-In both the "esdb" and "esdb+discover" schemes, the optional query string must be one
-or many field-value arguments, separated from each other with the "&" character.
-
-    query-string = field-value, { "&", field-value } ;
-
-Each field-value argument must be one of the supported fields, and an
-appropriate value, separated with the "=" character.
-
-    field-value = ( "Tls", "=" , "true" | "false" )
-                | ( "TlsVerifyCert", "=" , "true" | "false" )
-                | ( "ConnectionName", "=" , string )
-                | ( "NodePreference", "=" , "leader" | "follower" | "readonlyreplica" | "random" )
-                | ( "DefaultDeadline", "=" , integer )
-                | ( "GossipTimeout", "=" , integer )
-                | ( "MaxDiscoverAttempts", "=" , integer )
-                | ( "DiscoveryInterval", "=" , integer )
-                | ( "MaxDiscoverAttempts", "=" , integer )
-                | ( "KeepAliveInterval", "=" , integer )
-                | ( "KeepAliveInterval", "=" , integer ) ;
-
-The table below describes the query field-values supported by this client.
-
-| Field               | Value                                                                 | Description                                                                                                                                                       |
-|---------------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Tls                 | "true", "false" (default: "true")                                     | If "true" the client will create a "secure" gRPC channel. If "false" the client will create an "insecure" gRPC channel. This must match the server configuration. |
-| TlsVerifyCert       | "true", "false" (default: "true")                                     | This value is currently ignored.                                                                                                                                  |
-| ConnectionName      | string (default: auto-generated version-4 UUID)                       | Sent in call metadata for every call, to identify the client to the cluster.                                                                                      |
-| NodePreference      | "leader", "follower", "readonlyreplica", "random" (default: "leader") | The node state preferred by the client. The client will select a node from the cluster info received from the Gossip API according to this preference.            |
-| DefaultDeadline     | integer (default: `None`)                                             | The default value (in seconds) of the `timeout` argument of client "write" methods such as `append_events()`.                                                     |
-| GossipTimeout       | integer (default: 5)                                                  | The default value (in seconds) of the `timeout` argument of gossip read methods, such as `read_gossip()`.                                                         |
-| MaxDiscoverAttempts | integer (default: 10)                                                 | The number of attempts to read gossip when connecting or reconnecting to a cluster member.                                                                        |
-| DiscoveryInterval   | integer (default: 100)                                                | How long to wait (in milliseconds) between gossip retries.                                                                                                        |
-| KeepAliveInterval   | integer (default: `None`)                                             | The value of the "grpc.keepalive_ms" gRPC channel option.                                                                                                         |
-| KeepAliveTimeout    | integer (default: `None`)                                             | The value of the "grpc.keepalive_timeout_ms" gRPC channel option.                                                                                                 |
-
-
-Here are some examples of EventStoreDB connection string URIs.
-
-    # Get cluster info from secure server socket localhost:2113,
-    # and use "admin" and "changeit" as username and password
-    # when making calls to EventStoreDB API methods.
-
-    esdb://admin:changeit@localhost:2113
-
-
-    # Get cluster info from insecure server socket 127.0.0.1:2114
-
-    esdb://127.0.0.1:2114?Tls=false
-
-
-    # Get cluster info from addresses in 'A' records for cluster1.example.com,
-    # and use a default deadline for making calls to EventStore API method.
-
-    esdb+discover://admin:changeit@cluster1.example.com?DefaultDeadline=5
-
-
-    # Get cluster info from either localhost:2111 or localhost:2112 or
-    # localhost:2113, and then connect to a follower node in the cluster.
-
-    esdb://admin:changeit@localhost:2111,localhost:2112,localhost:2113?NodePreference=follower
-
-
-    # Get cluster info from addresses in 'A' records for cluster1.example.com,
-    # and configure "keep alive" timeout and interval in the gRPC channel.
-
-    esdb+discover://admin:changeit@cluster1.example.com?KeepAliveInterval=10000&KeepAliveTimeout=10000
-
-
-Please note, the client is insensitive to the case of fields and values. If fields are
-repeated in the query string, the query string will be parsed without error. However,
-the connection options used by the client will use the value of the first field. All
-the other field-values in the query string with the same field name will be ignored.
-Fields without values will also be ignored.
-
-If the client's node preference is "leader" and the node becomes a
-"follower", the client will attempt to reconnect to the current leader when a method
-is called that expects to call a leader. Methods which mutate the state of the database
-expect to call a leader. For such methods, the HTTP header"requires-leader" is set to
-"true", and this header is observed by the server, and so a node which is not a leader
-that receives such a request will return an error. This error is detected by the client,
-which will then close the current gRPC connection and create a new connection to the
-leader. The request will then be retried with the leader.
-
-If the client's node preference is "follower" and there are no follower
-nodes in the cluster, then the client will raise an exception. Similarly, if the
-client's node preference is "readonlyreplica" and there are no read-only replica
-nodes in the cluster, then the client will also raise an exception.
-
-The gRPC channel option "grpc.max_receive_message_length" is automatically
-configured to the value `17 * 1024 * 1024`. This value cannot be changed.
-
-
-### Regular expression filters
-
-The filter arguments in `read_all_events()`, `subscribe_all_events()`,
-`create_subscription()` and `get_commit_position()` are applied to the `type`
-attribute of recorded events.
-
-The default value of the `filter_exclude` arguments is designed to exclude
-EventStoreDB "system" and "persistence subscription config" events, which
-otherwise would be included. System events generated by EventStoreDB all
-have `type` strings that start with the `$` sign. Persistence subscription
-events generated when manipulating persistence subscriptions all have `type`
-strings that start with `PersistentConfig`.
-
-For example, to match the type of EventStoreDB system events, use the regular
-expression `r'\$.+'`. Please note, the constant `ESDB_SYSTEM_EVENTS_REGEX` is
-set to `r'\$.+'`. You can import this value
-(`from esdbclient import ESDB_SYSTEM_EVENTS_REGEX`) and use
-it when building longer sequences of regular expressions.
-
-Similarly, to match the type of EventStoreDB persistence subscription events, use the
-regular expression `r'PersistentConfig\d+'`. The constant `ESDB_PERSISTENT_CONFIG_EVENTS_REGEX`
-is set to `r'PersistentConfig\d+'`. You can also import this value
-(`from esdbclient import ESDB_PERSISTENT_CONFIG_EVENTS_REGEX`) and use it when building
-longer sequences of regular expressions.
-
-The constant `DEFAULT_EXCLUDE_FILTER` is a sequence of regular expressions that match
-the events that EventStoreDB generates internally, events that are extraneous to those
-which you append using the `append_events()` method.
-
-
-### New event objects
-
-The `NewEvent` class is used when appending events.
-
-The required argument `type` is a Python `str`, used to indicate the type of
-the event that will be recorded.
-
-The required argument `data` is a Python `bytes` object, used to indicate the data of
-the event that will be recorded.
-
-The optional argument `metadata` is a Python `bytes` object, used to indicate any
-metadata of the event that will be recorded. The default value is an empty `bytes`
-object.
-
-The optional argument `content_type` is a Python `str`, used to indicate the
-type of the data that will be recorded for this event. The default value is
-`application/json`, which indicates that the `data` was serialised using JSON.
-An alternative value for this argument is `application/octet-stream`.
-
-The optional argument `id` is a Python `UUID` object, used to specify the unique ID
-of the event that will be recorded. This value will default to a new version-4 UUID.
-
-```python
-new_event1 = NewEvent(
-    type='OrderCreated',
-    data=b'{"name": "Greg"}',
-)
-assert new_event1.type == 'OrderCreated'
-assert new_event1.data == b'{"name": "Greg"}'
-assert new_event1.metadata == b''
-assert new_event1.content_type == 'application/json'
-assert isinstance(new_event1.id, uuid.UUID)
-
-event_id = uuid.uuid4()
-new_event2 = NewEvent(
-    type='ImageCreated',
-    data=b'01010101010101',
-    metadata=b'{"a": 1}',
-    content_type='application/octet-stream',
-    id=event_id,
-)
-assert new_event2.type == 'ImageCreated'
-assert new_event2.data == b'01010101010101'
-assert new_event2.metadata == b'{"a": 1}'
-assert new_event2.content_type == 'application/octet-stream'
-assert new_event2.id == event_id
-```
-
-### Recorded event objects
-
-The `RecordedEvent` class is used when reading events.
-
-The attribute `type` is a Python `str`, used to indicate the type of event
-that was recorded.
-
-The attribute `data` is a Python `bytes` object, used to indicate the data of the
-event that was recorded.
-
-The attribute `metadata` is a Python `bytes` object, used to indicate the metadata of
-the event that was recorded.
-
-The attribute `content_type` is a Python `str`, used to indicate the type of
-data that was recorded for this event (usually `application/json` to indicate that
-this data can be parsed as JSON, but alternatively `application/octet-stream` to
-indicate that it is something else).
-
-The attribute `id` is a Python `UUID` object, used to indicate the unique ID of the
-event that was recorded. Please note, when recorded events are returned from a call
-to `read_stream_events()` in EventStoreDB v21.10, the commit position is not actually
-set in the response. This attribute is typed as an optional value (`Optional[UUID]`),
-and in the case of using EventStoreDB v21.10 the value of this attribute will be `None`
-when reading recorded events from a stream. Recorded events will however have this
-values set when reading recorded events from `read_all_events()` and from both
-catch-up and persistent subscriptions.
-
-The attribute `stream_name` is a Python `str`, used to indicate the name of the
-stream in which the event was recorded.
-
-The attribute `stream_position` is a Python `int`, used to indicate the position in the
-stream at which the event was recorded.
-
-The attribute `commit_position` is a Python `int`, used to indicate the commit position
-at which the event was recorded.
-
-```python
-from esdbclient.events import RecordedEvent
-
-recorded_event = RecordedEvent(
-    type='OrderCreated',
-    data=b'{}',
-    metadata=b'',
-    content_type='application/json',
-    id=uuid.uuid4(),
-    stream_name='stream1',
-    stream_position=0,
-    commit_position=512,
-)
-```
-
-### Asyncio client
+## Asyncio client
 
 The `esdbclient` package also includes an early version of an asynchronous I/O
 gRPC Python client. It follows exactly the same behaviors as the multithreaded
 `ESDBClient`, but uses the `grpc.aio` package and the `asyncio` module, instead of
 `grpc` and `threading`.
 
-The `async` function `AsyncioESDBClient` constructs the client, and connects to
+The async function `AsyncioESDBClient` constructs the client, and connects to
 a server. It can be imported from `esdbclient`, and can be called with the same
 arguments as `ESDBClient`. It supports both the "esdb" and the "esdb+discover"
-connection string URI schemes, and reconnects and retries methods when connection
-issues are encountered, just like `ESDBClient`.
+connection string URI schemes, and can connect to both "secure" and "insecure"
+EventStoreDB servers. It reconnects or retries when connection issues or server
+errors are encountered.
 
 ```python
 from esdbclient import AsyncioESDBClient
 ```
 
-The asynchronous I/O client has `async` methods `append_events()`,
+The asynchronous I/O client has the following methods: `append_events()`,
 `read_stream_events()`, `read_all_events()`, `subscribe_all_events()`,
 `delete_stream()`, `tombstone_stream()`, and `reconnect()`.
 
@@ -2563,6 +2618,8 @@ These methods are equivalent to the methods on `ESDBClient`. They have the same
 method signatures, and can be called with the same arguments, to the same effect.
 The methods which appear on `ESDBClient` but not on `AsyncioESDBClient` will be
 added soon.
+
+### Synopsis
 
 The example below demonstrates the `append_events()`, `read_stream_events()` and
 `subscribe_all_events()` methods. These are the most useful methods for writing
@@ -2588,9 +2645,9 @@ async def demonstrate_asyncio_client():
     event2 = NewEvent("OrderUpdated", data=b'{}')
     event3 = NewEvent("OrderDeleted", data=b'{}')
 
-    await client.append_events(
+    commit_position = await client.append_events(
         stream_name=stream_name,
-        expected_position=None,
+        current_version=None,
         events=[event1, event2, event3]
     )
 
@@ -2606,7 +2663,7 @@ async def demonstrate_asyncio_client():
     received = []
     async for event in await client.subscribe_all_events():
         received.append(event)
-        if event.id == event3.id:
+        if event.commit_position == commit_position:
             break
     assert received[-3].id == event1.id
     assert received[-2].id == event2.id
@@ -2622,6 +2679,44 @@ asyncio.get_event_loop().run_until_complete(
     demonstrate_asyncio_client()
 )
 ```
+
+## Notes
+
+### Regular expression filters
+
+The `read_all_events()`, `subscribe_all_events()`, `create_subscription()`
+and `get_commit_position()` methods have `filter_exclude` and `filter_include`
+arguments. This section provides some more details about the values of these
+arguments.
+
+The default value of the `filter_exclude` arguments is designed to exclude
+EventStoreDB "system" and "persistence subscription config" events, which
+otherwise would be included.
+
+System events generated by EventStoreDB have `type` strings that start with
+the `$` sign. Persistence subscription events generated when manipulating
+persistence subscriptions have `type` strings that start with `PersistentConfig`.
+
+For example, to match the type of EventStoreDB system events, use the regular
+expression string `r'\$.+'`. Please note, the constant `ESDB_SYSTEM_EVENTS_REGEX` is
+set to this value. You can import this constant from `esdbclient` and use it when
+building longer sequences of regular expressions.
+
+Similarly, to match the type of EventStoreDB persistence subscription events, use the
+regular expression `r'PersistentConfig\d+'`. The constant `ESDB_PERSISTENT_CONFIG_EVENTS_REGEX`
+is set to this value. You can import this constant from `esdbclient`  and use it when
+building longer sequences of regular expressions.
+
+The constant `DEFAULT_EXCLUDE_FILTER` is a sequence of regular expressions that includes
+both `ESDB_SYSTEM_EVENTS_REGEX` and `ESDB_PERSISTENT_CONFIG_EVENTS_REGEX`. It is used
+as the default value of `filter_exclude` so that the events that EventStoreDB generates
+internally are excluded by default, events other than to those which you record using
+the `append_events()` method.
+
+If you want to exclude, for example, snapshots from the recorded events returned when
+reading events from the database, then you may wish to use a appropriately extended
+copy of `DEFAULT_EXCLUDE_FILTER` as the value of the `filter_exclude` arguments.
+
 
 ## Contributors
 

@@ -340,13 +340,13 @@ class ESDBClient(BaseESDBClient):
     # def append_events_multiplexed(
     #     self,
     #     stream_name: str,
-    #     expected_position: Optional[int],
+    #     current_version: Optional[int],
     #     events: Iterable[NewEvent],
     #     timeout: Optional[float] = None,
     # ) -> int:
     #     timeout = timeout if timeout is not None else self._default_deadline
     #     batch_append_request = BatchAppendRequest(
-    #         stream_name=stream_name, expected_position=expected_position, events=events
+    #         stream_name=stream_name, current_version=current_version, events=events
     #     )
     #     future = BatchAppendFuture(batch_append_request=batch_append_request)
     #     with self._batch_append_futures_lock:
@@ -360,14 +360,14 @@ class ESDBClient(BaseESDBClient):
     def append_events(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
     ) -> int:
         timeout = timeout if timeout is not None else self._default_deadline
         return self._connection.streams.batch_append(
             stream_name=stream_name,
-            expected_position=expected_position,
+            current_version=current_version,
             events=events,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -379,7 +379,7 @@ class ESDBClient(BaseESDBClient):
     def append_event(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         event: NewEvent,
         timeout: Optional[float] = None,
     ) -> int:
@@ -389,7 +389,7 @@ class ESDBClient(BaseESDBClient):
         timeout = timeout if timeout is not None else self._default_deadline
         return self._connection.streams.append(
             stream_name=stream_name,
-            expected_position=expected_position,
+            current_version=current_version,
             events=[event],
             timeout=timeout,
             metadata=self._call_metadata,
@@ -401,14 +401,14 @@ class ESDBClient(BaseESDBClient):
     def delete_stream(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         timeout: Optional[float] = None,
     ) -> None:
-        # Todo: Reconsider using expected_position=None to indicate "stream exists"?
+        # Todo: Reconsider using current_version=None to indicate "stream exists"?
         timeout = timeout if timeout is not None else self._default_deadline
         self._connection.streams.delete(
             stream_name=stream_name,
-            expected_position=expected_position,
+            current_version=current_version,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=self._call_credentials,
@@ -419,13 +419,13 @@ class ESDBClient(BaseESDBClient):
     def tombstone_stream(
         self,
         stream_name: str,
-        expected_position: Optional[int],
+        current_version: Optional[int],
         timeout: Optional[float] = None,
     ) -> None:
         timeout = timeout if timeout is not None else self._default_deadline
         self._connection.streams.tombstone(
             stream_name=stream_name,
-            expected_position=expected_position,
+            current_version=current_version,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=self._call_credentials,
@@ -502,7 +502,7 @@ class ESDBClient(BaseESDBClient):
 
     @retrygrpc
     @autoreconnect
-    def get_stream_position(
+    def get_current_version(
         self,
         stream_name: str,
         timeout: Optional[float] = None,
@@ -583,7 +583,7 @@ class ESDBClient(BaseESDBClient):
         self,
         stream_name: str,
         metadata: Dict[str, Any],
-        expected_position: Optional[int] = -1,
+        current_version: Optional[int] = -1,
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -598,7 +598,7 @@ class ESDBClient(BaseESDBClient):
         )
         self.append_event(
             stream_name=metadata_stream_name,
-            expected_position=expected_position,
+            current_version=current_version,
             event=metadata_event,
             timeout=timeout,
         )

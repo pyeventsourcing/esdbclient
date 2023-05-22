@@ -4,6 +4,8 @@
   * As I understand it, these values only differ when using TCP/IP client transaction?
     * So probably only used by a small number of people, if any?
 
+* Something about causation and correlation IDs?
+
 * Doc
   * Exception classes: describe which methods might raise which exceptions and why?
   * Is the README file sufficient for v1.0? or do I need to use Sphinx?
