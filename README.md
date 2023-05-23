@@ -554,7 +554,7 @@ The `NewEvent` class should be used when writing events to an EventStoreDB datab
 You will need to construct new event objects before calling the `append_events()`
 and `append_event()` methods.
 
-The `NewEvent` class is a frozen Python database. It has two required constructor
+The `NewEvent` class is a frozen Python dataclass. It has two required constructor
 arguments (`type` and `data`) and three optional constructor arguments (`metadata`,
 `content_type` and `id`).
 
@@ -610,7 +610,7 @@ database. The client will return event objects of this type from all methods
 that return recorded events, such as `read_stream_events()`, `subscribe_all_events()`,
 and `read_subscription()`. You do not need to construct recorded event objects.
 
-Like `NewEvent`, the `RecordedEvent` class is also a frozen Python database. It has
+Like `NewEvent`, the `RecordedEvent` class is also a frozen Python dataclass. It has
 all the attributes that `NewEvent` has (`type`, `data`, `metadata`, `content_type`, `id`)
 and some additional attributes that follow from the fact that an event was recorded
 (`stream_name`, `stream_position`, `commit_position`).
