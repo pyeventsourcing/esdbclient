@@ -63,10 +63,13 @@ event2 = NewEvent(
     type='OrderSubmitted',
     data=b'{}'
 )
+event3 = NewEvent(
+    type='OrderCancelled',
+    data=b'{}'
+)
 
 
-# Append new events to a stream. The stream does not exist so
-# the "current version" is None. The value returned from the
+# Append events to a new stream. The value returned from the
 # append_events() method is the overall position in the database
 # of the last new event recorded by this operation. The returned
 # "commit position" value may be used in a user interface to poll
@@ -79,17 +82,10 @@ commit_position1 = client.append_events(
     events=[event1, event2],
 )
 
-# The "current version" is the "stream position" of the last
-# recorded event in a stream. Stream positions are zero-based.
-# We have recorded two new events, and so the "current version"
-# of this stream is 1. Concurrency is controlled in this way
-# to ensure the consistency of recorded events. An incorrect
-# value will cause a WrongCurrentVersion exception to be raised.
-
-event3 = NewEvent(
-    type='OrderCancelled',
-    data=b'{}'
-)
+# Append events to an existing stream. The "current version" is the
+# "stream position" of the last recorded event in a stream. We have
+# recorded two new events, so the "current version" is 1. Incorrect
+# value will cause 'WrongCurrentVersion' to be raised.
 
 commit_position2 = client.append_events(
     stream_name=stream_name1,
@@ -106,21 +102,29 @@ recorded = client.read_stream_events(
     stream_name=stream_name1
 )
 
+# Stream 'stream_name1' has three events.
 assert len(recorded) == 3
 
-assert recorded[0].stream_name == stream_name1
-assert recorded[1].stream_name == stream_name1
-assert recorded[2].stream_name == stream_name1
-
+# Allocated stream positions are zero-based and gapless.
 assert recorded[0].stream_position == 0
 assert recorded[1].stream_position == 1
 assert recorded[2].stream_position == 2
 
-assert recorded[0].type == "OrderCreated"
-assert recorded[1].type == "OrderSubmitted"
-assert recorded[2].type == "OrderCancelled"
+# Allocated commit positions increase monotonically.
+assert commit_position2 > commit_position1
 
+# The 'type', 'data' and 'id' values are recorded faithfully.
+assert recorded[0].type == "OrderCreated"
 assert recorded[0].data == b'{"order_number": "123456"}'
+assert recorded[0].id == event1.id
+
+assert recorded[1].type == "OrderSubmitted"
+assert recorded[1].data == b'{}'
+assert recorded[1].id == event2.id
+
+assert recorded[2].type == "OrderCancelled"
+assert recorded[2].data == b'{}'
+assert recorded[2].id == event3.id
 
 
 # Start a catch-up subscription to receive all recorded
@@ -651,6 +655,13 @@ database. Each commit position is occupied by only one recorded event. Commit po
 are zero-based and increase monotonically as new events are recorded. But, unlike stream
 positions, the sequence of successive commit positions is not gapless. Indeed, there are
 usually large differences between the commit positions of successively recorded events.
+
+Please note, in EventStoreDB 21.10, the `commit_position` of all `RecordedEvent` objects
+obtained from `read_stream_events()` is `None`, whereas events objects obtained from
+`read_all_events()` have the actual commit position. This was changed in version 22.10,
+so that event objects obtained from both `read_stream_events()` and `read_all_events()`
+have the actual commit position. The `commit_position` attribute of the `RecordedEvent`
+class is annotated with the type `Optional[int]` for this reason only.
 
 
 ```python
