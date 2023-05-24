@@ -14,6 +14,7 @@ from typing import (
     Sequence,
     Tuple,
     TypeVar,
+    Union,
     cast,
     overload,
 )
@@ -21,6 +22,7 @@ from typing import (
 import dns.exception
 import dns.resolver
 import grpc
+from typing_extensions import Literal
 
 from esdbclient.connection import (
     NODE_PREFERENCE_FOLLOWER,
@@ -57,7 +59,7 @@ from esdbclient.persistent import (
     PersistentSubscription,
     SubscriptionInfo,
 )
-from esdbclient.streams import CatchupSubscription, ReadResponse
+from esdbclient.streams import CatchupSubscription, ReadResponse, StreamState
 
 # Matches the 'type' of "system" events.
 ESDB_SYSTEM_EVENTS_REGEX = r"\$.+"
@@ -71,7 +73,9 @@ _TCallable = TypeVar("_TCallable", bound=Callable[..., Any])
 
 def autoreconnect(f: _TCallable) -> _TCallable:
     @wraps(f)
-    def autoreconnect_decorator(client: "ESDBClient", *args: Any, **kwargs: Any) -> Any:
+    def autoreconnect_decorator(
+        client: "EventStoreDBClient", *args: Any, **kwargs: Any
+    ) -> Any:
         try:
             return f(client, *args, **kwargs)
 
@@ -111,7 +115,7 @@ def retrygrpc(f: _TCallable) -> _TCallable:
     return cast(_TCallable, retrygrpc_decorator)
 
 
-class BaseESDBClient:
+class BaseEventStoreDBClient:
     def __init__(
         self,
         uri: Optional[str] = None,
@@ -157,7 +161,7 @@ class BaseESDBClient:
             return None
 
 
-class ESDBClient(BaseESDBClient):
+class EventStoreDBClient(BaseEventStoreDBClient):
     """
     Encapsulates the EventStoreDB gRPC API.
     """
@@ -320,15 +324,15 @@ class ESDBClient(BaseESDBClient):
     #             metadata=self._call_metadata,
     #             credentials=self._call_credentials,
     #         )
-    #     except ESDBClientException as e:
+    #     except EventStoreDBClientException as e:
     #         self._clear_batch_append_futures_queue(e)
     #     else:
     #         self._clear_batch_append_futures_queue(  # pragma: no cover
-    #             ESDBClientException("Request not sent")
+    #             EventStoreDBClientException("Request not sent")
     #         )
     #     # print("Looping on call to batch_append_multiplexed()....")
     #
-    # def _clear_batch_append_futures_queue(self, error: ESDBClientException) -> None:
+    # def _clear_batch_append_futures_queue(self, error: EventStoreDBClientException) -> None:
     #     with self._batch_append_futures_lock:
     #         try:
     #             while True:
@@ -360,7 +364,7 @@ class ESDBClient(BaseESDBClient):
     def append_events(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
     ) -> int:
@@ -379,7 +383,7 @@ class ESDBClient(BaseESDBClient):
     def append_event(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         event: NewEvent,
         timeout: Optional[float] = None,
     ) -> int:
@@ -396,12 +400,34 @@ class ESDBClient(BaseESDBClient):
             credentials=self._call_credentials,
         )
 
+    def append_to_stream(
+        self,
+        stream_name: str,
+        current_version: Union[int, StreamState],
+        event_or_events: Union[NewEvent, Sequence[NewEvent]],
+        timeout: Optional[float] = None,
+    ) -> int:
+        if isinstance(event_or_events, NewEvent):
+            return self.append_event(
+                stream_name=stream_name,
+                current_version=current_version,
+                event=event_or_events,
+                timeout=timeout,
+            )
+        else:
+            return self.append_events(
+                stream_name=stream_name,
+                current_version=current_version,
+                events=event_or_events,
+                timeout=timeout,
+            )
+
     @retrygrpc
     @autoreconnect
     def delete_stream(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
     ) -> None:
         # Todo: Reconsider using current_version=None to indicate "stream exists"?
@@ -419,7 +445,7 @@ class ESDBClient(BaseESDBClient):
     def tombstone_stream(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
     ) -> None:
         timeout = timeout if timeout is not None else self._default_deadline
@@ -433,7 +459,7 @@ class ESDBClient(BaseESDBClient):
 
     @retrygrpc
     @autoreconnect
-    def read_stream_events(
+    def get_stream_events(
         self,
         stream_name: str,
         stream_position: Optional[int] = None,
@@ -442,7 +468,7 @@ class ESDBClient(BaseESDBClient):
         timeout: Optional[float] = None,
     ) -> Sequence[RecordedEvent]:
         """
-        Lists recorded events from the named stream.
+        Returns a sequence of recorded events from the named stream.
         """
         return tuple(
             self.iter_stream_events(
@@ -475,7 +501,7 @@ class ESDBClient(BaseESDBClient):
             credentials=self._call_credentials,
         )
 
-    def read_all_events(
+    def iter_all_events(
         self,
         commit_position: Optional[int] = None,
         backwards: bool = False,
@@ -506,7 +532,7 @@ class ESDBClient(BaseESDBClient):
         self,
         stream_name: str,
         timeout: Optional[float] = None,
-    ) -> Optional[int]:
+    ) -> Union[int, Literal[StreamState.NO_STREAM]]:
         """
         Returns the current position of the end of a stream.
         """
@@ -522,10 +548,11 @@ class ESDBClient(BaseESDBClient):
                 )
             )[0]
         except NotFound:
-            # None is the correct expected position when appending both to a stream that
-            # never existed, and for appending to a stream that has been deleted (in
-            # this case the old "stream position" int is also correct, but None works).
-            return None
+            # StreamState.NO_STREAM is the correct "current version" both when appending
+            # to a stream that never existed and when appending to a stream that has
+            # been deleted (in this case of a deleted stream, the "current version"
+            # before deletion is also correct).
+            return StreamState.NO_STREAM
         else:
             return last_event.stream_position
 
@@ -541,7 +568,7 @@ class ESDBClient(BaseESDBClient):
         """
         Returns the current commit position of the database.
         """
-        recorded_events = self.read_all_events(
+        recorded_events = self.iter_all_events(
             backwards=True,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
@@ -559,14 +586,14 @@ class ESDBClient(BaseESDBClient):
     @autoreconnect
     def get_stream_metadata(
         self, stream_name: str, timeout: Optional[float] = None
-    ) -> Tuple[Dict[str, Any], Optional[int]]:
+    ) -> Tuple[Dict[str, Any], Union[int, Literal[StreamState.NO_STREAM]]]:
         """
         Gets the stream metadata.
         """
         metadata_stream_name = f"$${stream_name}"
         try:
             metadata_events = list(
-                self.read_stream_events(
+                self.get_stream_events(
                     stream_name=metadata_stream_name,
                     backwards=True,
                     limit=1,
@@ -574,7 +601,7 @@ class ESDBClient(BaseESDBClient):
                 )
             )
         except NotFound:
-            return {}, None
+            return {}, StreamState.NO_STREAM
         else:
             metadata_event = metadata_events[0]
             return json.loads(metadata_event.data), metadata_event.stream_position
@@ -583,7 +610,7 @@ class ESDBClient(BaseESDBClient):
         self,
         stream_name: str,
         metadata: Dict[str, Any],
-        current_version: Optional[int] = -1,
+        current_version: Union[int, StreamState] = StreamState.ANY,
         timeout: Optional[float] = None,
     ) -> None:
         """
@@ -605,7 +632,7 @@ class ESDBClient(BaseESDBClient):
 
     @retrygrpc
     @autoreconnect
-    def subscribe_all_events(
+    def subscribe_to_all(
         self,
         commit_position: Optional[int] = None,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
@@ -630,7 +657,7 @@ class ESDBClient(BaseESDBClient):
 
     @retrygrpc
     @autoreconnect
-    def subscribe_stream_events(
+    def subscribe_to_stream(
         self,
         stream_name: str,
         stream_position: Optional[int] = None,

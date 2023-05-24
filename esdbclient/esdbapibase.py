@@ -6,9 +6,11 @@ import grpc
 import grpc.aio
 
 from esdbclient.exceptions import (
+    AbortedByServer,
     CancelledByClient,
+    ConsumerTooSlow,
     DeadlineExceeded,
-    ESDBClientException,
+    EventStoreDBClientException,
     ExceptionThrownByHandler,
     GrpcError,
     NodeIsNotLeader,
@@ -38,7 +40,7 @@ class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
         callback(self._metadata, None)
 
 
-def handle_rpc_error(e: grpc.RpcError) -> ESDBClientException:
+def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
     """
     Converts gRPC errors to client exceptions.
     """
@@ -48,6 +50,12 @@ def handle_rpc_error(e: grpc.RpcError) -> ESDBClientException:
             and "Exception was thrown by handler" in str(e.details())
         ):
             return ExceptionThrownByHandler(e)
+        elif e.code() == grpc.StatusCode.ABORTED:
+            details = e.details()
+            if isinstance(details, str) and "Consumer too slow" in details:
+                return ConsumerTooSlow()
+            else:
+                return AbortedByServer()
         elif (
             e.code() == grpc.StatusCode.CANCELLED
             and e.details() == "Locally cancelled by application!"

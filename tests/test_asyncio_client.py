@@ -2,7 +2,8 @@
 import sys
 from typing import Optional
 
-from tests.test_client import get_ca_certificate
+from esdbclient.streams import AsyncioCatchupSubscription
+from tests.test_client import get_ca_certificate, random_data
 
 if sys.version_info[0:2] > (3, 7):
     from unittest import IsolatedAsyncioTestCase
@@ -11,8 +12,11 @@ else:
 
 from uuid import uuid4
 
-from esdbclient import NewEvent
-from esdbclient.asyncio_client import AsyncioESDBClient, _AsyncioESDBClient
+from esdbclient import NewEvent, StreamState
+from esdbclient.asyncio_client import (
+    AsyncioEventStoreDBClient,
+    _AsyncioEventStoreDBClient,
+)
 from esdbclient.exceptions import (
     DeadlineExceeded,
     DiscoveryFailed,
@@ -27,30 +31,30 @@ from esdbclient.exceptions import (
 )
 
 
-class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
+class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.client = await AsyncioESDBClient("esdb://localhost:2114?Tls=False")
-        self._reader: Optional[_AsyncioESDBClient] = None
-        self._writer: Optional[_AsyncioESDBClient] = None
+        self.client = await AsyncioEventStoreDBClient("esdb://localhost:2114?Tls=False")
+        self._reader: Optional[_AsyncioEventStoreDBClient] = None
+        self._writer: Optional[_AsyncioEventStoreDBClient] = None
 
     @property
-    def reader(self) -> _AsyncioESDBClient:
+    def reader(self) -> _AsyncioEventStoreDBClient:
         assert self._reader is not None
         return self._reader
 
     @property
-    def writer(self) -> _AsyncioESDBClient:
+    def writer(self) -> _AsyncioEventStoreDBClient:
         assert self._writer is not None
         return self._writer
 
     async def setup_reader(self) -> None:
-        self._reader = await AsyncioESDBClient(
+        self._reader = await AsyncioEventStoreDBClient(
             uri="esdb://admin:changeit@localhost:2111?NodePreference=follower",
             root_certificates=get_ca_certificate(),
         )
 
     async def setup_writer(self) -> None:
-        self._writer = await AsyncioESDBClient(
+        self._writer = await AsyncioEventStoreDBClient(
             uri="esdb://admin:changeit@localhost:2111?NodePreference=leader",
             root_certificates=get_ca_certificate(),
         )
@@ -64,107 +68,119 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
 
     async def test_raises_dns_error(self) -> None:
         with self.assertRaises(DNSError):
-            await AsyncioESDBClient("esdb+discover://xxxxxxxxxxxxxx?Tls=false")
+            await AsyncioEventStoreDBClient("esdb+discover://xxxxxxxxxxxxxx?Tls=false")
 
     async def test_calls_dns(self) -> None:
         with self.assertRaises(DiscoveryFailed):
-            await AsyncioESDBClient(
+            await AsyncioEventStoreDBClient(
                 "esdb+discover://example.com?Tls=False"
                 "&GossipTimeout=0&MaxDiscoverAttempts=1&DiscoveryInterval=0"
             )
 
     async def test_raises_gossip_seed_error(self) -> None:
         with self.assertRaises(GossipSeedError):
-            await AsyncioESDBClient("esdb://")
+            await AsyncioEventStoreDBClient("esdb://")
 
     async def test_sometimes_reconnnects_to_selected_node_after_discovery(self) -> None:
         root_certificates = get_ca_certificate()
-        await AsyncioESDBClient(
+        await AsyncioEventStoreDBClient(
             "esdb://admin:changeit@127.0.0.1:2111?NodePreference=leader",
             root_certificates=root_certificates,
         )
-        await AsyncioESDBClient(
+        await AsyncioEventStoreDBClient(
             "esdb://admin:changeit@127.0.0.1:2112?NodePreference=leader",
             root_certificates=root_certificates,
         )
-        await AsyncioESDBClient(
+        await AsyncioEventStoreDBClient(
             "esdb://admin:changeit@127.0.0.1:2113?NodePreference=leader",
             root_certificates=root_certificates,
         )
 
     async def test_node_preference_random(self) -> None:
-        await AsyncioESDBClient("esdb://localhost:2114?Tls=False&NodePreference=random")
+        await AsyncioEventStoreDBClient(
+            "esdb://localhost:2114?Tls=False&NodePreference=random"
+        )
 
     async def test_raises_follower_not_found(self) -> None:
         with self.assertRaises(FollowerNotFound):
-            await AsyncioESDBClient(
+            await AsyncioEventStoreDBClient(
                 "esdb://localhost:2114?Tls=False&NodePreference=follower"
             )
 
     async def test_raises_read_only_replica_not_found(self) -> None:
         with self.assertRaises(ReadOnlyReplicaNotFound):
-            await AsyncioESDBClient(
+            await AsyncioEventStoreDBClient(
                 "esdb://localhost:2114?Tls=False&NodePreference=readonlyreplica"
             )
 
     async def test_root_certificates_required_for_secure_connection(self) -> None:
         with self.assertRaises(ValueError) as cm:
-            await AsyncioESDBClient("esdb://localhost:2115")
+            await AsyncioEventStoreDBClient("esdb://localhost:2115")
         self.assertIn(
             "root_certificates is required for secure connection", cm.exception.args[0]
         )
 
-    async def test_append_events_and_read_stream_events(self) -> None:
+    async def test_append_events_and_get_stream_events(self) -> None:
         # Append events.
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         event2 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
-            stream_name=stream_name1, events=[event1, event2], current_version=None
+            stream_name=stream_name1,
+            events=[event1, event2],
+            current_version=StreamState.NO_STREAM,
         )
 
         # Read stream events.
-        events = await self.client.read_stream_events(stream_name1)
+        events = await self.client.get_stream_events(stream_name1)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
 
-    async def test_append_events_and_read_all_events(self) -> None:
+    async def test_append_events_and_iter_all_events(self) -> None:
         # Append events.
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
-            stream_name=stream_name1, events=[event1], current_version=None
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
         )
 
         stream_name2 = str(uuid4())
         event2 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
-            stream_name=stream_name2, events=[event2], current_version=None
+            stream_name=stream_name2,
+            events=[event2],
+            current_version=StreamState.NO_STREAM,
         )
 
         # Read all events.
-        events_iter = await self.client.read_all_events()
+        events_iter = await self.client.iter_all_events()
         event_ids = [e.id async for e in events_iter]
         self.assertIn(event1.id, event_ids)
         self.assertIn(event2.id, event_ids)
 
-    async def test_append_events_and_subscribe_all_events(self) -> None:
+    async def test_append_events_and_subscribe_to_all(self) -> None:
         # Append events.
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
-            stream_name=stream_name1, events=[event1], current_version=None
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
         )
 
         stream_name2 = str(uuid4())
         event2 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
-            stream_name=stream_name2, events=[event2], current_version=None
+            stream_name=stream_name2,
+            events=[event2],
+            current_version=StreamState.NO_STREAM,
         )
 
         # Subscribe all events.
-        events_iter = await self.client.subscribe_all_events()
+        events_iter = await self.client.subscribe_to_all()
         events = []
         async for event in events_iter:
             events.append(event)
@@ -185,7 +201,9 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
-            stream_name=stream_name1, events=[event1], current_version=None
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
         )
 
         event2 = NewEvent(type="OrderUpdated", data=b"{}")
@@ -200,7 +218,9 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
-            stream_name=stream_name1, events=[event1], current_version=None
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
         )
 
     async def test_append_events_raises_discovery_failed(self) -> None:
@@ -210,7 +230,9 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         with self.assertRaises(DiscoveryFailed):
             await self.client.append_events(
-                stream_name=stream_name1, events=[event1], current_version=None
+                stream_name=stream_name1,
+                events=[event1],
+                current_version=StreamState.NO_STREAM,
             )
 
     async def test_append_events_raises_node_is_not_leader(self) -> None:
@@ -219,14 +241,18 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         with self.assertRaises(NodeIsNotLeader):
             await self.reader.append_events(
-                stream_name=stream_name1, events=[event1], current_version=None
+                stream_name=stream_name1,
+                events=[event1],
+                current_version=StreamState.NO_STREAM,
             )
 
     async def test_append_events_raises_stream_is_deleted(self) -> None:
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
-            stream_name=stream_name1, events=[event1], current_version=None
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
         )
         await self.client.delete_stream(stream_name1, current_version=0)
 
@@ -235,21 +261,58 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
         event2 = NewEvent(type="OrderCreated", data=b"{}")
         with self.assertRaises(StreamIsDeleted):
             await self.client.append_events(
-                stream_name=stream_name1, events=[event2], current_version=None
+                stream_name=stream_name1,
+                events=[event2],
+                current_version=StreamState.NO_STREAM,
             )
 
-    async def test_read_stream_events_raises_stream_is_deleted(self) -> None:
+    async def test_stream_append_to_stream(self) -> None:
+        # This method exists to match other language clients.
+        stream_name = str(uuid4())
+
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+
+        # Append single event.
+        commit_position1 = await self.client.append_to_stream(
+            stream_name=stream_name,
+            current_version=StreamState.NO_STREAM,
+            event_or_events=event1,
+        )
+
+        # Append sequence of events.
+        commit_position2 = await self.client.append_to_stream(
+            stream_name=stream_name,
+            current_version=0,
+            event_or_events=[event2, event3],
+        )
+
+        # Check commit positions are returned.
+        events = [
+            e
+            async for e in await self.client.iter_all_events(
+                commit_position=commit_position1
+            )
+        ]
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].commit_position, commit_position1)
+        self.assertEqual(events[2].commit_position, commit_position2)
+
+    async def test_get_stream_events_raises_stream_is_deleted(self) -> None:
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
-            stream_name=stream_name1, events=[event1], current_version=None
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
         )
         await self.client.delete_stream(stream_name1, current_version=0)
 
         await self.client.tombstone_stream(stream_name1, current_version=0)
 
         with self.assertRaises(StreamIsDeleted):
-            await self.client.read_stream_events(stream_name=stream_name1)
+            await self.client.get_stream_events(stream_name=stream_name1)
 
     async def test_append_events_reconnects_to_leader(self) -> None:
         await self.setup_reader()
@@ -258,7 +321,9 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.reader.append_events(
-            stream_name=stream_name1, events=[event1], current_version=None
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
         )
 
     async def test_append_events_raises_deadline_exceeded(self) -> None:
@@ -271,40 +336,46 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
             await self.reader.append_events(
                 stream_name=stream_name1,
                 events=events,
-                current_version=None,
+                current_version=StreamState.NO_STREAM,
                 timeout=0,
             )
 
-    async def test_read_stream_events_raises_not_found(self) -> None:
+    async def test_get_stream_events_raises_not_found(self) -> None:
         with self.assertRaises(NotFound):
-            await self.client.read_stream_events(str(uuid4()))
+            await self.client.get_stream_events(str(uuid4()))
 
-    async def test_read_stream_events_reconnects(self) -> None:
+    async def test_get_stream_events_reconnects(self) -> None:
         await self.client._connection.close()
         with self.assertRaises(NotFound):
-            await self.client.read_stream_events(str(uuid4()))
+            await self.client.get_stream_events(str(uuid4()))
 
-    async def test_read_stream_events_raises_discovery_failed(self) -> None:
+    async def test_get_stream_events_raises_discovery_failed(self) -> None:
         await self.client._connection.close()
         self.client.connection_spec._targets = ["localhost:2222"]
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         with self.assertRaises(DiscoveryFailed):
             await self.client.append_events(
-                stream_name=stream_name1, events=[event1], current_version=None
+                stream_name=stream_name1,
+                events=[event1],
+                current_version=StreamState.NO_STREAM,
             )
 
     async def test_delete_stream_raises_stream_not_found(self) -> None:
         stream_name1 = str(uuid4())
 
         with self.assertRaises(NotFound):
-            await self.client.delete_stream(stream_name1, current_version=None)
+            await self.client.delete_stream(
+                stream_name1, current_version=StreamState.EXISTS
+            )
 
     async def test_delete_stream_raises_wrong_current_version(self) -> None:
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
-            stream_name=stream_name1, events=[event1], current_version=None
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
         )
 
         with self.assertRaises(WrongCurrentVersion):
@@ -314,7 +385,9 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
-            stream_name=stream_name1, events=[event1], current_version=None
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
         )
         await self.client.tombstone_stream(stream_name1, current_version=0)
 
@@ -327,7 +400,9 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.writer.append_events(
-            stream_name=stream_name1, events=[event1], current_version=None
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
         )
 
         await self.setup_reader()
@@ -339,13 +414,17 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
         stream_name1 = str(uuid4())
 
         with self.assertRaises(NotFound):
-            await self.client.tombstone_stream(stream_name1, current_version=None)
+            await self.client.tombstone_stream(
+                stream_name1, current_version=StreamState.EXISTS
+            )
 
     async def test_tombstone_stream_raises_wrong_current_version(self) -> None:
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
-            stream_name=stream_name1, events=[event1], current_version=None
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
         )
 
         with self.assertRaises(WrongCurrentVersion):
@@ -355,7 +434,9 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
-            stream_name=stream_name1, events=[event1], current_version=None
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
         )
         await self.client.tombstone_stream(stream_name1, current_version=0)
 
@@ -368,7 +449,9 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.writer.append_events(
-            stream_name=stream_name1, events=[event1], current_version=None
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
         )
 
         await self.setup_reader()
@@ -376,11 +459,19 @@ class TestAsyncioESDBClient(IsolatedAsyncioTestCase):
 
         await self.reader.tombstone_stream(stream_name1, current_version=0)
 
-    async def test_subscribe_all_events_raises_service_unavailable(self) -> None:
+    async def test_subscribe_to_all_reconnects(self) -> None:
+        # Reconstruct connection with wrong port (to inspire ServiceUnavailble).
+        await self.client._connection.close()
+        self.client._connection = self.client._construct_connection("localhost:2222")
+
+        catchup_subscription = await self.client.subscribe_to_all()
+        self.assertIsInstance(catchup_subscription, AsyncioCatchupSubscription)
+
+    async def test_subscribe_to_all_raises_discovery_failed(self) -> None:
         await self.client._connection.close()
         # Reconstruct connection with wrong port (to inspire ServiceUnavailble).
         await self.client._connection.close()
         self.client._connection = self.client._construct_connection("localhost:2222")
 
-        with self.assertRaises(NotFound):
-            await self.client.read_stream_events(str(uuid4()))
+        await self.client.subscribe_to_all()
+        # with self.assertRaises(ServiceUnavailable):

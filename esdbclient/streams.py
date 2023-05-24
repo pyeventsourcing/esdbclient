@@ -2,8 +2,10 @@
 import sys
 from abc import abstractmethod
 from dataclasses import dataclass
+from enum import Enum
 from typing import (
     AsyncIterable,
+    AsyncIterator,
     Iterable,
     Iterator,
     Optional,
@@ -24,7 +26,7 @@ from esdbclient.exceptions import (
     AccessDeniedError,
     BadRequestError,
     CancelledByClient,
-    ESDBClientException,
+    EventStoreDBClientException,
     InvalidTransactionError,
     MaximumAppendSizeExceededError,
     NotFound,
@@ -44,17 +46,20 @@ class _ReadResps(Iterator[streams_pb2.ReadResp], Protocol):
         ...  # pragma: no cover
 
 
-class AsyncioReadResponse:
+class StreamState(Enum):
+    ANY = "ANY"
+    NO_STREAM = "NO_STREAM"
+    EXISTS = "EXISTS"
+
+
+class AsyncioReadResponse(AsyncIterator[RecordedEvent]):
     def __init__(
         self,
         read_resp_iter: AsyncIterable[streams_pb2.ReadResp],
         stream_name: Optional[str],
-        is_subscription: bool,
     ):
         self.read_resp_iter = read_resp_iter.__aiter__()
         self.stream_name = stream_name
-        self.subscription_id: Optional[UUID] = None
-        self.is_subscription = is_subscription
 
     async def _get_next_read_resp(self) -> streams_pb2.ReadResp:
         try:
@@ -71,16 +76,7 @@ class AsyncioReadResponse:
         assert isinstance(read_resp, streams_pb2.ReadResp)
         return read_resp
 
-    async def check_confirmation(self) -> None:
-        if self.is_subscription:
-            read_resp = await self._get_next_read_resp()
-            content_oneof = read_resp.WhichOneof("content")
-            if content_oneof != "confirmation":  # pragma: no cover
-                raise SubscriptionConfirmationError(
-                    f"Expected subscription confirmation, got: {read_resp}"
-                )
-
-    def __aiter__(self) -> "AsyncioReadResponse":
+    def __aiter__(self) -> AsyncIterator[RecordedEvent]:
         return self
 
     async def __anext__(self) -> RecordedEvent:
@@ -124,6 +120,16 @@ class AsyncioReadResponse:
                 #
                 # Todo: Not sure how to request to get first_stream_position,
                 #   last_stream_position, first_all_stream_position.
+
+
+class AsyncioCatchupSubscription(AsyncioReadResponse):
+    async def check_confirmation(self) -> None:
+        read_resp = await self._get_next_read_resp()
+        content_oneof = read_resp.WhichOneof("content")
+        if content_oneof != "confirmation":  # pragma: no cover
+            raise SubscriptionConfirmationError(
+                f"Expected subscription confirmation, got: {read_resp}"
+            )
 
 
 class ReadResponse(Iterator[RecordedEvent]):
@@ -229,7 +235,7 @@ DEFAULT_BATCH_APPEND_REQUEST_DEADLINE = 315576000000
 # @dataclass
 # class BatchAppendRequest:
 #     stream_name: str
-#     current_version: Optional[int]
+#     current_version: Union[int, StreamState]
 #     events: Iterable[NewEvent]
 #     correlation_id: UUID = field(default_factory=uuid4)
 #     deadline: int = DEFAULT_BATCH_APPEND_REQUEST_DEADLINE
@@ -281,6 +287,159 @@ class BatchAppendResponse:
 class BaseStreamsService(ESDBService):
     def __init__(self, channel: Union[grpc.Channel, grpc.aio.Channel]):
         self._stub = streams_pb2_grpc.StreamsStub(channel)
+
+    @staticmethod
+    def _generate_append_reqs(
+        stream_name: str,
+        current_version: Union[int, StreamState],
+        events: Iterable[NewEvent],
+    ) -> Iterator[streams_pb2.AppendReq]:
+        # First, define append request that has 'content' as 'options'.
+        options = streams_pb2.AppendReq.Options(
+            stream_identifier=shared_pb2.StreamIdentifier(
+                stream_name=stream_name.encode("utf8")
+            )
+        )
+        # Decide 'expected_stream_revision'.
+        if isinstance(current_version, int):
+            assert current_version >= 0
+            options.revision = current_version
+        else:
+            assert isinstance(current_version, StreamState)
+            if current_version is StreamState.EXISTS:
+                options.stream_exists.CopyFrom(shared_pb2.Empty())
+            elif current_version is StreamState.ANY:
+                options.any.CopyFrom(shared_pb2.Empty())
+            else:
+                assert current_version is StreamState.NO_STREAM
+                options.no_stream.CopyFrom(shared_pb2.Empty())
+
+        yield streams_pb2.AppendReq(options=options)
+
+        # Secondly, define append requests that has 'content' as 'proposed_message'.
+        for event in events:
+            proposed_message = streams_pb2.AppendReq.ProposedMessage(
+                id=shared_pb2.UUID(string=str(event.id)),
+                metadata={"type": event.type, "content-type": event.content_type},
+                custom_metadata=event.metadata,
+                data=event.data,
+            )
+            yield streams_pb2.AppendReq(proposed_message=proposed_message)
+
+    @staticmethod
+    def _construct_batch_append_req(
+        stream_name: str,
+        current_version: Union[int, StreamState],
+        events: Iterable[NewEvent],
+        deadline: int,
+        correlation_id: UUID,
+    ) -> streams_pb2.BatchAppendReq:
+        # Construct batch request 'options'.
+        options = streams_pb2.BatchAppendReq.Options(
+            stream_identifier=shared_pb2.StreamIdentifier(
+                stream_name=stream_name.encode("utf8")
+            ),
+            deadline=duration_pb2.Duration(
+                seconds=deadline,
+                nanos=0,
+            ),
+        )
+        # Decide options 'expected_stream_revision'.
+        if isinstance(current_version, int):
+            assert current_version >= 0
+            options.stream_position = current_version
+        else:
+            assert isinstance(current_version, StreamState)
+            if current_version is StreamState.EXISTS:
+                options.stream_exists.CopyFrom(empty_pb2.Empty())
+            elif current_version is StreamState.ANY:
+                options.any.CopyFrom(empty_pb2.Empty())
+            else:
+                assert current_version is StreamState.NO_STREAM
+                options.no_stream.CopyFrom(empty_pb2.Empty())
+
+        # Construct batch request 'proposed_messages'.
+        # Todo: Split batch.events into chunks of 20?
+        proposed_messages = []
+        for event in events:
+            proposed_message = streams_pb2.BatchAppendReq.ProposedMessage(
+                id=shared_pb2.UUID(string=str(event.id)),
+                metadata={"type": event.type, "content-type": event.content_type},
+                custom_metadata=event.metadata,
+                data=event.data,
+            )
+            proposed_messages.append(proposed_message)
+        return streams_pb2.BatchAppendReq(
+            correlation_id=shared_pb2.UUID(string=str(correlation_id)),
+            options=options,
+            proposed_messages=proposed_messages,
+            is_final=True,  # This specifies the end of an atomic transaction.
+        )
+
+    @staticmethod
+    def _convert_batch_append_resp(
+        response: streams_pb2.BatchAppendResp, stream_name: str
+    ) -> Union[BatchAppendResponse, EventStoreDBClientException]:
+        result: Union[BatchAppendResponse, EventStoreDBClientException]
+        # Response 'result' is either 'success' or 'error'.
+        result_oneof = response.WhichOneof("result")
+        if result_oneof == "success":
+            # Construct response object.
+            result = BatchAppendResponse(
+                commit_position=response.success.position.commit_position,
+            )
+        else:
+            # Construct exception object.
+            assert result_oneof == "error"
+            assert isinstance(response.error, status_pb2.Status)
+
+            error_details = response.error.details
+            if error_details.Is(shared_pb2.WrongExpectedVersion.DESCRIPTOR):
+                wrong_version = shared_pb2.WrongExpectedVersion()
+                error_details.Unpack(wrong_version)
+
+                csro_oneof = wrong_version.WhichOneof("current_stream_revision_option")
+                if csro_oneof == "current_no_stream":
+                    result = NotFound(f"Stream {stream_name !r} not found")
+                else:
+                    assert csro_oneof == "current_stream_revision"
+                    psn = wrong_version.current_stream_revision
+                    result = WrongCurrentVersion(f"Current position is {psn}")
+
+            # Todo: Write tests to cover all of this:
+            elif error_details.Is(
+                shared_pb2.AccessDenied.DESCRIPTOR
+            ):  # pragma: no cover
+                result = AccessDeniedError()
+            elif error_details.Is(shared_pb2.StreamDeleted.DESCRIPTOR):
+                stream_deleted = shared_pb2.StreamDeleted()
+                error_details.Unpack(stream_deleted)
+                # Todo: Ask ESDB team if this is ever different from request value.
+                # stream_name = stream_deleted.stream_identifier.stream_name
+                result = StreamIsDeleted(f"Stream {stream_name !r} is deleted")
+            elif error_details.Is(shared_pb2.Timeout.DESCRIPTOR):  # pragma: no cover
+                result = TimeoutError()
+            elif error_details.Is(shared_pb2.Unknown.DESCRIPTOR):  # pragma: no cover
+                result = UnknownError()
+            elif error_details.Is(
+                shared_pb2.InvalidTransaction.DESCRIPTOR
+            ):  # pragma: no cover
+                result = InvalidTransactionError()
+            elif error_details.Is(
+                shared_pb2.MaximumAppendSizeExceeded.DESCRIPTOR
+            ):  # pragma: no cover
+                size_exceeded = shared_pb2.MaximumAppendSizeExceeded()
+                error_details.Unpack(size_exceeded)
+                size = size_exceeded.maxAppendSize
+                result = MaximumAppendSizeExceededError(f"Max size is {size}")
+            elif error_details.Is(shared_pb2.BadRequest.DESCRIPTOR):  # pragma: no cover
+                bad_request = shared_pb2.BadRequest()
+                error_details.Unpack(bad_request)
+                result = BadRequestError(f"Bad request: {bad_request.message}")
+            else:
+                # Unexpected error details type.
+                result = EventStoreDBClientException(error_details)  # pragma: no cover
+        return result
 
     @staticmethod
     def _construct_read_request(
@@ -397,123 +556,14 @@ class BaseStreamsService(ESDBService):
             streams_pb2.ReadReq.Options.UUIDOption(string=shared_pb2.Empty())
         )
 
+        # Decide 'control_option'.
+        # Todo: What does this do, and what value should it have?
+
         return streams_pb2.ReadReq(options=options)
 
     @staticmethod
-    def _construct_batch_append_req(
-        stream_name: str,
-        current_version: Optional[int],
-        events: Iterable[NewEvent],
-        deadline: int,
-        correlation_id: UUID,
-    ) -> streams_pb2.BatchAppendReq:
-        # Construct batch request 'options'.
-        options = streams_pb2.BatchAppendReq.Options(
-            stream_identifier=shared_pb2.StreamIdentifier(
-                stream_name=stream_name.encode("utf8")
-            ),
-            deadline=duration_pb2.Duration(
-                seconds=deadline,
-                nanos=0,
-            ),
-        )
-        # Decide options 'expected_stream_revision'.
-        if isinstance(current_version, int):
-            if current_version >= 0:
-                # Stream is expected to exist.
-                options.stream_position = current_version
-            else:
-                # Disable optimistic concurrency control.
-                options.any.CopyFrom(empty_pb2.Empty())
-        else:
-            # Stream is expected not to exist.
-            options.no_stream.CopyFrom(empty_pb2.Empty())
-        # Construct batch request 'proposed_messages'.
-        # Todo: Split batch.events into chunks of 20?
-        proposed_messages = []
-        for event in events:
-            proposed_message = streams_pb2.BatchAppendReq.ProposedMessage(
-                id=shared_pb2.UUID(string=str(event.id)),
-                metadata={"type": event.type, "content-type": event.content_type},
-                custom_metadata=event.metadata,
-                data=event.data,
-            )
-            proposed_messages.append(proposed_message)
-        return streams_pb2.BatchAppendReq(
-            correlation_id=shared_pb2.UUID(string=str(correlation_id)),
-            options=options,
-            proposed_messages=proposed_messages,
-            is_final=True,  # This specifies the end of an atomic transaction.
-        )
-
-    @staticmethod
-    def _convert_batch_append_resp(
-        response: streams_pb2.BatchAppendResp, stream_name: str
-    ) -> Union[BatchAppendResponse, ESDBClientException]:
-        result: Union[BatchAppendResponse, ESDBClientException]
-        # Response 'result' is either 'success' or 'error'.
-        result_oneof = response.WhichOneof("result")
-        if result_oneof == "success":
-            # Construct response object.
-            result = BatchAppendResponse(
-                commit_position=response.success.position.commit_position,
-            )
-        else:
-            # Construct exception object.
-            assert result_oneof == "error"
-            assert isinstance(response.error, status_pb2.Status)
-
-            error_details = response.error.details
-            if error_details.Is(shared_pb2.WrongExpectedVersion.DESCRIPTOR):
-                wrong_version = shared_pb2.WrongExpectedVersion()
-                error_details.Unpack(wrong_version)
-
-                csro_oneof = wrong_version.WhichOneof("current_stream_revision_option")
-                if csro_oneof == "current_no_stream":
-                    result = NotFound(f"Stream {stream_name !r} not found")
-                else:
-                    assert csro_oneof == "current_stream_revision"
-                    psn = wrong_version.current_stream_revision
-                    result = WrongCurrentVersion(f"Current position is {psn}")
-
-            # Todo: Write tests to cover all of this:
-            elif error_details.Is(
-                shared_pb2.AccessDenied.DESCRIPTOR
-            ):  # pragma: no cover
-                result = AccessDeniedError()
-            elif error_details.Is(shared_pb2.StreamDeleted.DESCRIPTOR):
-                stream_deleted = shared_pb2.StreamDeleted()
-                error_details.Unpack(stream_deleted)
-                # Todo: Ask ESDB team if this is ever different from request value.
-                # stream_name = stream_deleted.stream_identifier.stream_name
-                result = StreamIsDeleted(f"Stream {stream_name !r} is deleted")
-            elif error_details.Is(shared_pb2.Timeout.DESCRIPTOR):  # pragma: no cover
-                result = TimeoutError()
-            elif error_details.Is(shared_pb2.Unknown.DESCRIPTOR):  # pragma: no cover
-                result = UnknownError()
-            elif error_details.Is(
-                shared_pb2.InvalidTransaction.DESCRIPTOR
-            ):  # pragma: no cover
-                result = InvalidTransactionError()
-            elif error_details.Is(
-                shared_pb2.MaximumAppendSizeExceeded.DESCRIPTOR
-            ):  # pragma: no cover
-                size_exceeded = shared_pb2.MaximumAppendSizeExceeded()
-                error_details.Unpack(size_exceeded)
-                size = size_exceeded.maxAppendSize
-                result = MaximumAppendSizeExceededError(f"Max size is {size}")
-            elif error_details.Is(shared_pb2.BadRequest.DESCRIPTOR):  # pragma: no cover
-                bad_request = shared_pb2.BadRequest()
-                error_details.Unpack(bad_request)
-                result = BadRequestError(f"Bad request: {bad_request.message}")
-            else:
-                # Unexpected error details type.
-                result = ESDBClientException(error_details)  # pragma: no cover
-        return result
-
-    @staticmethod
     def _construct_delete_req(
-        stream_name: str, current_version: Optional[int]
+        stream_name: str, current_version: Union[int, StreamState]
     ) -> streams_pb2.DeleteReq:
         options = streams_pb2.DeleteReq.Options(
             stream_identifier=shared_pb2.StreamIdentifier(
@@ -522,20 +572,23 @@ class BaseStreamsService(ESDBService):
         )
         # Decide 'expected_stream_revision'.
         if isinstance(current_version, int):
-            if current_version >= 0:
-                # Stream position is expected to be a certain value.
-                options.revision = current_version
-            else:
-                # Disable optimistic concurrency control.
-                options.any.CopyFrom(shared_pb2.Empty())
+            assert current_version >= 0
+            options.revision = current_version
         else:
-            # Stream is expected to exist.
-            options.stream_exists.CopyFrom(shared_pb2.Empty())
+            assert isinstance(current_version, StreamState)
+            if current_version is StreamState.EXISTS:
+                options.stream_exists.CopyFrom(shared_pb2.Empty())
+            elif current_version is StreamState.ANY:
+                options.any.CopyFrom(shared_pb2.Empty())
+            else:
+                assert current_version is StreamState.NO_STREAM
+                options.no_stream.CopyFrom(shared_pb2.Empty())
+
         return streams_pb2.DeleteReq(options=options)
 
     @staticmethod
     def _construct_tombstone_req(
-        stream_name: str, current_version: Optional[int]
+        stream_name: str, current_version: Union[int, StreamState]
     ) -> streams_pb2.TombstoneReq:
         options = streams_pb2.TombstoneReq.Options(
             stream_identifier=shared_pb2.StreamIdentifier(
@@ -544,15 +597,18 @@ class BaseStreamsService(ESDBService):
         )
         # Decide 'expected_stream_revision'.
         if isinstance(current_version, int):
-            if current_version >= 0:
-                # Stream position is expected to be a certain value.
-                options.revision = current_version
-            else:
-                # Disable optimistic concurrency control.
-                options.any.CopyFrom(shared_pb2.Empty())
+            assert current_version >= 0
+            # Stream position is expected to be a certain value.
+            options.revision = current_version
         else:
-            # Stream is expected to exist.
-            options.stream_exists.CopyFrom(shared_pb2.Empty())
+            assert isinstance(current_version, StreamState)
+            if current_version is StreamState.EXISTS:
+                options.stream_exists.CopyFrom(shared_pb2.Empty())
+            elif current_version is StreamState.ANY:
+                options.any.CopyFrom(shared_pb2.Empty())
+            else:
+                assert current_version is StreamState.NO_STREAM
+                options.no_stream.CopyFrom(shared_pb2.Empty())
         return streams_pb2.TombstoneReq(options=options)
 
 
@@ -560,7 +616,7 @@ class AsyncioStreamsService(BaseStreamsService):
     async def batch_append(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -586,10 +642,10 @@ class AsyncioStreamsService(BaseStreamsService):
                 if isinstance(result, BatchAppendResponse):
                     return result
                 else:
-                    assert isinstance(result, ESDBClientException)
+                    assert isinstance(result, EventStoreDBClientException)
                     raise result
             else:  # pragma: no cover
-                raise ESDBClientException("Batch append response not received")
+                raise EventStoreDBClientException("Batch append response not received")
 
         except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
@@ -605,7 +661,7 @@ class AsyncioStreamsService(BaseStreamsService):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncIterable[RecordedEvent]:
+    ) -> AsyncioReadResponse:
         """
         Signature for reading events from a stream.
         """
@@ -620,7 +676,7 @@ class AsyncioStreamsService(BaseStreamsService):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncIterable[RecordedEvent]:
+    ) -> AsyncioCatchupSubscription:
         """
         Signature for reading events from a stream with a catch-up subscription.
         """
@@ -638,7 +694,7 @@ class AsyncioStreamsService(BaseStreamsService):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncIterable[RecordedEvent]:
+    ) -> AsyncioReadResponse:
         """
         Signature for reading all events.
         """
@@ -655,7 +711,7 @@ class AsyncioStreamsService(BaseStreamsService):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncIterable[RecordedEvent]:
+    ) -> AsyncioCatchupSubscription:
         """
         Signature for reading all events with a catch-up subscription.
         """
@@ -675,7 +731,7 @@ class AsyncioStreamsService(BaseStreamsService):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncIterable[RecordedEvent]:
+    ) -> Union[AsyncioReadResponse, AsyncioCatchupSubscription]:
         """
         Constructs and sends a gRPC 'ReadReq' to the 'Read' rpc.
 
@@ -703,16 +759,21 @@ class AsyncioStreamsService(BaseStreamsService):
             credentials=credentials,
         )
 
-        response = AsyncioReadResponse(
-            unary_stream_call, stream_name=stream_name, is_subscription=subscribe
-        )
-        await response.check_confirmation()
+        if not subscribe:
+            response = AsyncioReadResponse(
+                read_resp_iter=unary_stream_call, stream_name=stream_name
+            )
+        else:
+            response = AsyncioCatchupSubscription(
+                read_resp_iter=unary_stream_call, stream_name=stream_name
+            )
+            await response.check_confirmation()
         return response
 
     async def delete(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -746,7 +807,7 @@ class AsyncioStreamsService(BaseStreamsService):
     async def tombstone(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -901,7 +962,7 @@ class StreamsService(BaseStreamsService):
     def append(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -913,12 +974,13 @@ class StreamsService(BaseStreamsService):
         Returns the commit position of the last appended event.
         """
         try:
-            response = self._stub.Append(
-                self._generate_append_requests(
-                    stream_name=stream_name,
-                    current_version=current_version,
-                    events=events,
-                ),
+            append_reqs = self._generate_append_reqs(
+                stream_name=stream_name,
+                current_version=current_version,
+                events=events,
+            )
+            append_resp = self._stub.Append(
+                append_reqs,
                 timeout=timeout,
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
@@ -926,58 +988,22 @@ class StreamsService(BaseStreamsService):
         except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
         else:
-            assert isinstance(response, streams_pb2.AppendResp)
+            assert isinstance(append_resp, streams_pb2.AppendResp)
             # Response 'result' is either 'success' or 'wrong_expected_version'.
-            result_oneof = response.WhichOneof("result")
+            result_oneof = append_resp.WhichOneof("result")
             if result_oneof == "success":
-                return response.success.position.commit_position
+                return append_resp.success.position.commit_position
             else:
                 assert result_oneof == "wrong_expected_version", result_oneof
-                wev = response.wrong_expected_version
+                wev = append_resp.wrong_expected_version
                 cro_oneof = wev.WhichOneof("current_revision_option")
                 if cro_oneof == "current_revision":
                     raise WrongCurrentVersion(
-                        f"Current position is {wev.current_revision}"
+                        f"Current version is {wev.current_revision}"
                     )
                 else:
                     assert cro_oneof == "current_no_stream", cro_oneof
                     raise WrongCurrentVersion(f"Stream {stream_name!r} does not exist")
-
-    @staticmethod
-    def _generate_append_requests(
-        stream_name: str,
-        current_version: Optional[int],
-        events: Iterable[NewEvent],
-    ) -> Iterator[streams_pb2.AppendReq]:
-        # First, define append request that has 'content' as 'options'.
-        options = streams_pb2.AppendReq.Options(
-            stream_identifier=shared_pb2.StreamIdentifier(
-                stream_name=stream_name.encode("utf8")
-            )
-        )
-        # Decide 'expected_stream_revision'.
-        if isinstance(current_version, int):
-            if current_version >= 0:
-                # Stream is expected to exist.
-                options.revision = current_version
-            else:
-                # Disable optimistic concurrency control.
-                options.any.CopyFrom(shared_pb2.Empty())
-        else:
-            # Stream is expected not to exist.
-            options.no_stream.CopyFrom(shared_pb2.Empty())
-
-        yield streams_pb2.AppendReq(options=options)
-
-        # Secondly, define append requests that has 'content' as 'proposed_message'.
-        for event in events:
-            proposed_message = streams_pb2.AppendReq.ProposedMessage(
-                id=shared_pb2.UUID(string=str(event.id)),
-                metadata={"type": event.type, "content-type": event.content_type},
-                custom_metadata=event.metadata,
-                data=event.data,
-            )
-            yield streams_pb2.AppendReq(proposed_message=proposed_message)
 
     # def batch_append_multiplexed(
     #     self,
@@ -1010,7 +1036,7 @@ class StreamsService(BaseStreamsService):
     #             if isinstance(result, BatchAppendResponse):
     #                 future.set_result(result)
     #             else:
-    #                 assert isinstance(result, ESDBClientException)
+    #                 assert isinstance(result, EventStoreDBClientException)
     #                 future.set_exception(result)
     #
     #         else:
@@ -1020,7 +1046,7 @@ class StreamsService(BaseStreamsService):
     #             ) in requests.futures_by_correlation_id:  # pragma: no cover
     #                 future = requests.pop_future(correlation_id)
     #                 future.set_exception(
-    #                     ESDBClientException("Batch append response not received")
+    #                     EventStoreDBClientException("Batch append response not received")
     #                 )
     #
     #     except grpc.RpcError as rpc_error:
@@ -1038,7 +1064,7 @@ class StreamsService(BaseStreamsService):
     def batch_append(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1064,10 +1090,10 @@ class StreamsService(BaseStreamsService):
                 if isinstance(result, BatchAppendResponse):
                     return result
                 else:
-                    assert isinstance(result, ESDBClientException)
+                    assert isinstance(result, EventStoreDBClientException)
                     raise result
             else:  # pragma: no cover
-                raise ESDBClientException("Batch append response not received")
+                raise EventStoreDBClientException("Batch append response not received")
 
         except grpc.RpcError as e:
             raise handle_rpc_error(e) from e
@@ -1075,7 +1101,7 @@ class StreamsService(BaseStreamsService):
     def delete(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1114,7 +1140,7 @@ class StreamsService(BaseStreamsService):
     def tombstone(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,

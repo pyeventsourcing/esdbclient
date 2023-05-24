@@ -12,7 +12,7 @@ from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
 from esdbclient.events import RecordedEvent
 from esdbclient.exceptions import (
     CancelledByClient,
-    ESDBClientException,
+    EventStoreDBClientException,
     NodeIsNotLeader,
     SubscriptionConfirmationError,
 )
@@ -518,7 +518,7 @@ class PersistentSubscription(Iterator[RecordedEvent], BasePersistentSubscription
             ):  # pragma: no cover
                 raise SubscriptionConfirmationError()
         else:  # pragma: no cover
-            raise ESDBClientException(
+            raise EventStoreDBClientException(
                 f"Expected subscription confirmation, got: {first_read_resp}"
             )
 

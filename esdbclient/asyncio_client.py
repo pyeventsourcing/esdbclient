@@ -6,13 +6,13 @@ from asyncio import Event, Lock
 from functools import wraps
 from typing import (
     Any,
-    AsyncIterable,
     Callable,
     Iterable,
     Optional,
     Sequence,
     Tuple,
     TypeVar,
+    Union,
     cast,
 )
 
@@ -20,7 +20,7 @@ import dns
 import dns.asyncresolver
 import grpc.aio
 
-from esdbclient.client import DEFAULT_EXCLUDE_FILTER, BaseESDBClient
+from esdbclient.client import DEFAULT_EXCLUDE_FILTER, BaseEventStoreDBClient
 from esdbclient.connection import (
     NODE_PREFERENCE_FOLLOWER,
     NODE_PREFERENCE_LEADER,
@@ -48,6 +48,11 @@ from esdbclient.gossip import (
     NODE_STATE_REPLICA,
     ClusterMember,
 )
+from esdbclient.streams import (
+    AsyncioCatchupSubscription,
+    AsyncioReadResponse,
+    StreamState,
+)
 
 _TCallable = TypeVar("_TCallable", bound=Callable[..., Any])
 
@@ -55,7 +60,7 @@ _TCallable = TypeVar("_TCallable", bound=Callable[..., Any])
 def autoreconnect(f: _TCallable) -> _TCallable:
     @wraps(f)
     async def autoreconnect_decorator(
-        client: "_AsyncioESDBClient", *args: Any, **kwargs: Any
+        client: "_AsyncioEventStoreDBClient", *args: Any, **kwargs: Any
     ) -> Any:
         try:
             return await f(client, *args, **kwargs)
@@ -96,15 +101,15 @@ def retrygrpc(f: _TCallable) -> _TCallable:
     return cast(_TCallable, retrygrpc_decorator)
 
 
-async def AsyncioESDBClient(
+async def AsyncioEventStoreDBClient(
     uri: str, root_certificates: Optional[str] = None
-) -> "_AsyncioESDBClient":
-    client = _AsyncioESDBClient(uri=uri, root_certificates=root_certificates)
+) -> "_AsyncioEventStoreDBClient":
+    client = _AsyncioEventStoreDBClient(uri=uri, root_certificates=root_certificates)
     await client.connect()
     return client
 
 
-class _AsyncioESDBClient(BaseESDBClient):
+class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
     def __init__(self, uri: str, root_certificates: Optional[str] = None):
         super().__init__(uri=uri, root_certificates=root_certificates)
         self._is_reconnection_required = Event()
@@ -251,7 +256,7 @@ class _AsyncioESDBClient(BaseESDBClient):
     async def append_events(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
     ) -> int:
@@ -266,9 +271,25 @@ class _AsyncioESDBClient(BaseESDBClient):
         )
         return result.commit_position
 
+    async def append_to_stream(
+        self,
+        stream_name: str,
+        current_version: Union[int, StreamState],
+        event_or_events: Union[NewEvent, Iterable[NewEvent]],
+        timeout: Optional[float] = None,
+    ) -> int:
+        if isinstance(event_or_events, NewEvent):
+            event_or_events = [event_or_events]
+        return await self.append_events(
+            stream_name=stream_name,
+            current_version=current_version,
+            events=event_or_events,
+            timeout=timeout,
+        )
+
     @retrygrpc
     @autoreconnect
-    async def read_all_events(
+    async def iter_all_events(
         self,
         commit_position: Optional[int] = None,
         backwards: bool = False,
@@ -277,7 +298,7 @@ class _AsyncioESDBClient(BaseESDBClient):
         filter_by_stream_name: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
-    ) -> AsyncIterable[RecordedEvent]:
+    ) -> AsyncioReadResponse:
         """
         Reads recorded events in "all streams" in the database.
         """
@@ -295,7 +316,7 @@ class _AsyncioESDBClient(BaseESDBClient):
 
     @retrygrpc
     @autoreconnect
-    async def read_stream_events(
+    async def get_stream_events(
         self,
         stream_name: str,
         stream_position: Optional[int] = None,
@@ -322,7 +343,7 @@ class _AsyncioESDBClient(BaseESDBClient):
         backwards: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
-    ) -> AsyncIterable[RecordedEvent]:
+    ) -> AsyncioReadResponse:
         """
         Reads recorded events from the named stream.
         """
@@ -336,14 +357,16 @@ class _AsyncioESDBClient(BaseESDBClient):
             credentials=self._call_credentials,
         )
 
-    async def subscribe_all_events(
+    @retrygrpc
+    @autoreconnect
+    async def subscribe_to_all(
         self,
         commit_position: Optional[int] = None,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
         timeout: Optional[float] = None,
-    ) -> AsyncIterable[RecordedEvent]:
+    ) -> AsyncioCatchupSubscription:
         """
         Starts a catch-up subscription, from which all
         recorded events in the database can be received.
@@ -364,7 +387,7 @@ class _AsyncioESDBClient(BaseESDBClient):
     async def delete_stream(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
     ) -> None:
         # Todo: Reconsider using current_version=None to indicate "stream exists"?
@@ -382,7 +405,7 @@ class _AsyncioESDBClient(BaseESDBClient):
     async def tombstone_stream(
         self,
         stream_name: str,
-        current_version: Optional[int],
+        current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
     ) -> None:
         timeout = timeout if timeout is not None else self._default_deadline

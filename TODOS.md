@@ -6,6 +6,15 @@
 
 * Something about causation and correlation IDs?
 
+* User credentials as method argument
+  * pass in:
+    * username: str, password: str
+    * credentials: grpc.CallCredentials
+    * user_info: str
+    * a "Credentials" dataclass that has username and password
+
+* Change methods to use one "options" argument instead of several arguments?
+
 * Doc
   * Exception classes: describe which methods might raise which exceptions and why?
   * Is the README file sufficient for v1.0? or do I need to use Sphinx?
@@ -22,6 +31,12 @@
   * 22.10.0 seems a little buggy (see tests)?
     * Actually, occasionally getting "Exception was thrown by handler" from 21.10.9...
 
+* I noticed the issue raised about "consumer too slow" - does the server close subscriptions?
+  * what actually does the server do in this case? end the call? send a ReadResp?
+    * "Bear in mind that a subscription can also drop because it is slow. The server tried to push all the live events to the subscription when it is in the live processing mode. If the subscription gets the reading buffer overflow and won't be able to acknowledge the buffer, it will break."
+      * from https://developers.eventstore.com/clients/grpc/subscriptions.html#dropped-subscriptions
+
+
 -----
 Issues:
 
@@ -34,8 +49,6 @@ Issues:
 * Update persistent subscription
   * very similar to Create (just without filter options)
     * Qn: Why is named_consumer_strategy deprecated in CreateReq but not UpdateReq?
-
-* I noticed the issue raised about "consumer too slow" - does the server close subscriptions?
 
 * Connection field 'TlsVerifyCert' - what to verify? and how?
   * design intention: if "false" configure client to avoid checking server certificate

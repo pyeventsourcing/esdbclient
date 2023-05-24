@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-class ESDBClientException(Exception):
+class EventStoreDBClientException(Exception):
     """
     Base class for exceptions raised by the client.
     """
 
 
-class GrpcError(ESDBClientException):
+class GrpcError(EventStoreDBClientException):
     """
     Base class for exceptions raised by gRPC.
     """
@@ -36,38 +36,50 @@ class CancelledByClient(GrpcError):
     """
 
 
-class NodeIsNotLeader(ESDBClientException):
+class AbortedByServer(GrpcError):
+    """
+    Raised when gRPC operation is aborted.
+    """
+
+
+class ConsumerTooSlow(AbortedByServer):
+    """
+    Raised when buffer is overloaded.
+    """
+
+
+class NodeIsNotLeader(EventStoreDBClientException):
     """
     Raised when client attempts to write to a node that is not a leader.
     """
 
 
-class NotFound(ESDBClientException):
+class NotFound(EventStoreDBClientException):
     """
     Raised when stream or subscription is not found.
     """
 
 
-class SubscriptionConfirmationError(ESDBClientException):
+class SubscriptionConfirmationError(EventStoreDBClientException):
     """
     Raised when subscription confirmation fails.
     """
 
 
-class WrongCurrentVersion(ESDBClientException):
+class WrongCurrentVersion(EventStoreDBClientException):
     """
     Raised when expected position does not match the
     actual position of the last event in a stream.
     """
 
 
-class AccessDeniedError(ESDBClientException):
+class AccessDeniedError(EventStoreDBClientException):
     """
     Raised when access is denied by the server.
     """
 
 
-class StreamIsDeleted(ESDBClientException):
+class StreamIsDeleted(EventStoreDBClientException):
     """
     Raised when reading from or appending to a stream that has been
     tombstoned, and when deleting a stream that has been deleted
@@ -78,37 +90,37 @@ class StreamIsDeleted(ESDBClientException):
     """
 
 
-class TimeoutError(ESDBClientException):
+class TimeoutError(EventStoreDBClientException):
     """
     Raised when append operation is timed out by the server.
     """
 
 
-class UnknownError(ESDBClientException):
+class UnknownError(EventStoreDBClientException):
     """
     Raised when append operation fails with an "unknown" error.
     """
 
 
-class InvalidTransactionError(ESDBClientException):
+class InvalidTransactionError(EventStoreDBClientException):
     """
     Raised when append operation fails with an "invalid transaction" error.
     """
 
 
-class MaximumAppendSizeExceededError(ESDBClientException):
+class MaximumAppendSizeExceededError(EventStoreDBClientException):
     """
     Raised when append operation fails with a "maximum append size exceeded" error.
     """
 
 
-class BadRequestError(ESDBClientException):
+class BadRequestError(EventStoreDBClientException):
     """
     Raised when append operation fails with a "bad request" error.
     """
 
 
-class DiscoveryFailed(ESDBClientException):
+class DiscoveryFailed(EventStoreDBClientException):
     """
     Raised when client fails to satisfy node preference using gossip cluster info.
     """
