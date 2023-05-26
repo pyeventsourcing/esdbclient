@@ -120,7 +120,7 @@ class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
             "root_certificates is required for secure connection", cm.exception.args[0]
         )
 
-    async def test_append_events_and_get_stream_events(self) -> None:
+    async def test_append_events_and_get_stream(self) -> None:
         # Append events.
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
@@ -132,12 +132,12 @@ class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
         )
 
         # Read stream events.
-        events = await self.client.get_stream_events(stream_name1)
+        events = await self.client.get_stream(stream_name1)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
 
-    async def test_append_events_and_iter_all_events(self) -> None:
+    async def test_append_events_and_read_all(self) -> None:
         # Append events.
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
@@ -156,7 +156,7 @@ class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
         )
 
         # Read all events.
-        events_iter = await self.client.iter_all_events()
+        events_iter = await self.client.read_all()
         event_ids = [e.id async for e in events_iter]
         self.assertIn(event1.id, event_ids)
         self.assertIn(event2.id, event_ids)
@@ -278,28 +278,26 @@ class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
         commit_position1 = await self.client.append_to_stream(
             stream_name=stream_name,
             current_version=StreamState.NO_STREAM,
-            event_or_events=event1,
+            events=event1,
         )
 
         # Append sequence of events.
         commit_position2 = await self.client.append_to_stream(
             stream_name=stream_name,
             current_version=0,
-            event_or_events=[event2, event3],
+            events=[event2, event3],
         )
 
         # Check commit positions are returned.
         events = [
             e
-            async for e in await self.client.iter_all_events(
-                commit_position=commit_position1
-            )
+            async for e in await self.client.read_all(commit_position=commit_position1)
         ]
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].commit_position, commit_position1)
         self.assertEqual(events[2].commit_position, commit_position2)
 
-    async def test_get_stream_events_raises_stream_is_deleted(self) -> None:
+    async def test_get_stream_raises_stream_is_deleted(self) -> None:
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
@@ -312,7 +310,7 @@ class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
         await self.client.tombstone_stream(stream_name1, current_version=0)
 
         with self.assertRaises(StreamIsDeleted):
-            await self.client.get_stream_events(stream_name=stream_name1)
+            await self.client.get_stream(stream_name=stream_name1)
 
     async def test_append_events_reconnects_to_leader(self) -> None:
         await self.setup_reader()
@@ -340,16 +338,16 @@ class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
                 timeout=0,
             )
 
-    async def test_get_stream_events_raises_not_found(self) -> None:
+    async def test_get_stream_raises_not_found(self) -> None:
         with self.assertRaises(NotFound):
-            await self.client.get_stream_events(str(uuid4()))
+            await self.client.get_stream(str(uuid4()))
 
-    async def test_get_stream_events_reconnects(self) -> None:
+    async def test_get_stream_reconnects(self) -> None:
         await self.client._connection.close()
         with self.assertRaises(NotFound):
-            await self.client.get_stream_events(str(uuid4()))
+            await self.client.get_stream(str(uuid4()))
 
-    async def test_get_stream_events_raises_discovery_failed(self) -> None:
+    async def test_get_stream_raises_discovery_failed(self) -> None:
         await self.client._connection.close()
         self.client.connection_spec._targets = ["localhost:2222"]
         stream_name1 = str(uuid4())

@@ -404,21 +404,24 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         stream_name: str,
         current_version: Union[int, StreamState],
-        event_or_events: Union[NewEvent, Sequence[NewEvent]],
+        events: Union[NewEvent, Sequence[NewEvent]],
         timeout: Optional[float] = None,
     ) -> int:
-        if isinstance(event_or_events, NewEvent):
+        """
+        Appends a new event or a sequence of new events to the named stream.
+        """
+        if isinstance(events, NewEvent):
             return self.append_event(
                 stream_name=stream_name,
                 current_version=current_version,
-                event=event_or_events,
+                event=events,
                 timeout=timeout,
             )
         else:
             return self.append_events(
                 stream_name=stream_name,
                 current_version=current_version,
-                events=event_or_events,
+                events=events,
                 timeout=timeout,
             )
 
@@ -459,7 +462,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
     @retrygrpc
     @autoreconnect
-    def get_stream_events(
+    def get_stream(
         self,
         stream_name: str,
         stream_position: Optional[int] = None,
@@ -471,7 +474,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         Returns a sequence of recorded events from the named stream.
         """
         return tuple(
-            self.iter_stream_events(
+            self.read_stream(
                 stream_name=stream_name,
                 stream_position=stream_position,
                 backwards=backwards,
@@ -480,7 +483,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             )
         )
 
-    def iter_stream_events(
+    def read_stream(
         self,
         stream_name: str,
         stream_position: Optional[int] = None,
@@ -501,7 +504,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             credentials=self._call_credentials,
         )
 
-    def iter_all_events(
+    def read_all(
         self,
         commit_position: Optional[int] = None,
         backwards: bool = False,
@@ -568,7 +571,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Returns the current commit position of the database.
         """
-        recorded_events = self.iter_all_events(
+        recorded_events = self.read_all(
             backwards=True,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
@@ -593,7 +596,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         metadata_stream_name = f"$${stream_name}"
         try:
             metadata_events = list(
-                self.get_stream_events(
+                self.get_stream(
                     stream_name=metadata_stream_name,
                     backwards=True,
                     limit=1,

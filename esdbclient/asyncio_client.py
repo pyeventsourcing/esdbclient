@@ -275,21 +275,21 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         self,
         stream_name: str,
         current_version: Union[int, StreamState],
-        event_or_events: Union[NewEvent, Iterable[NewEvent]],
+        events: Union[NewEvent, Iterable[NewEvent]],
         timeout: Optional[float] = None,
     ) -> int:
-        if isinstance(event_or_events, NewEvent):
-            event_or_events = [event_or_events]
+        if isinstance(events, NewEvent):
+            events = [events]
         return await self.append_events(
             stream_name=stream_name,
             current_version=current_version,
-            events=event_or_events,
+            events=events,
             timeout=timeout,
         )
 
     @retrygrpc
     @autoreconnect
-    async def iter_all_events(
+    async def read_all(
         self,
         commit_position: Optional[int] = None,
         backwards: bool = False,
@@ -316,7 +316,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
 
     @retrygrpc
     @autoreconnect
-    async def get_stream_events(
+    async def get_stream(
         self,
         stream_name: str,
         stream_position: Optional[int] = None,
@@ -327,7 +327,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         """
         Lists recorded events from the named stream.
         """
-        events = await self.iter_stream_events(
+        events = await self.read_stream(
             stream_name=stream_name,
             stream_position=stream_position,
             backwards=backwards,
@@ -336,7 +336,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         )
         return tuple([e async for e in events])
 
-    async def iter_stream_events(
+    async def read_stream(
         self,
         stream_name: str,
         stream_position: Optional[int] = None,

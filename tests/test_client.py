@@ -339,7 +339,7 @@ class TestEventStoreDBClient(TestCase):
         cm: _AssertRaisesContext[Any]
 
         with self.assertRaises(DiscoveryFailed):
-            self.client.get_stream_events(str(uuid4()))
+            self.client.get_stream(str(uuid4()))
 
         # Todo: Maybe other methods here...?
 
@@ -375,55 +375,41 @@ class TestEventStoreDBClient(TestCase):
         else:
             client.close()
 
-    def test_raises_service_unavailable_exception(self) -> None:
-        self.construct_esdb_client()
-
-        # Reconstruct connection with wrong port.
-        self.client._connection.close()
-        self.client._connection = self.client._construct_connection("localhost:2222")
-        self.client.connection_spec._targets = ["localhost:2222"]
-
-        read_response = self.client.iter_stream_events(str(uuid4()))
-        with self.assertRaises(ServiceUnavailable):
-            list(read_response)
-
-        read_response = self.client.iter_all_events()
-        with self.assertRaises(ServiceUnavailable):
-            list(read_response)
-
     def test_stream_read_raises_not_found(self) -> None:
         # Note, we never get a NotFound from subscribe_to_stream(), which is
         # logical because the stream might be written after the subscription. So here
-        # we just test get_stream_events().
+        # we just test get_stream().
 
         self.construct_esdb_client()
         stream_name = str(uuid4())
 
+        read_response = self.client.read_stream(stream_name)
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            tuple(read_response)
 
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name, backwards=True)
+            self.client.get_stream(stream_name)
 
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name, stream_position=1)
+            self.client.get_stream(stream_name, backwards=True)
 
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(
-                stream_name, stream_position=1, backwards=True
-            )
+            self.client.get_stream(stream_name, stream_position=1)
 
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name, limit=10)
+            self.client.get_stream(stream_name, stream_position=1, backwards=True)
 
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name, backwards=True, limit=10)
+            self.client.get_stream(stream_name, limit=10)
 
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name, stream_position=1, limit=10)
+            self.client.get_stream(stream_name, backwards=True, limit=10)
 
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(
+            self.client.get_stream(stream_name, stream_position=1, limit=10)
+
+        with self.assertRaises(NotFound):
+            self.client.get_stream(
                 stream_name, stream_position=1, backwards=True, limit=10
             )
 
@@ -440,18 +426,18 @@ class TestEventStoreDBClient(TestCase):
         commit_position1 = self.client.append_to_stream(
             stream_name=stream_name,
             current_version=StreamState.NO_STREAM,
-            event_or_events=event1,
+            events=event1,
         )
 
         # Append sequence of events.
         commit_position2 = self.client.append_to_stream(
             stream_name=stream_name,
             current_version=0,
-            event_or_events=[event2, event3],
+            events=[event2, event3],
         )
 
         # Check commit positions are returned.
-        events = list(self.client.iter_all_events(commit_position=commit_position1))
+        events = list(self.client.read_all(commit_position=commit_position1))
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].commit_position, commit_position1)
         self.assertEqual(events[2].commit_position, commit_position2)
@@ -462,7 +448,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Check stream not found.
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
 
         # Check stream position is None.
         self.assertEqual(
@@ -483,7 +469,7 @@ class TestEventStoreDBClient(TestCase):
 
         # # Check stream still not found.
         # with self.assertRaises(NotFound):
-        #     self.client.get_stream_events(stream_name)
+        #     self.client.get_stream(stream_name)
 
         # # Check stream position is None.
         # self.assertEqual(self.client.get_current_version(stream_name), None)
@@ -517,7 +503,7 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(self.client.get_current_version(stream_name), 0)
 
         # Read the stream forwards from the start (expect one event).
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 1)
 
         # Check the attributes of the recorded event.
@@ -551,36 +537,34 @@ class TestEventStoreDBClient(TestCase):
         self.assertGreater(commit_position2, commit_position1)
 
         # Read the stream (expect two events in 'forwards' order).
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
 
         # Read the stream backwards from the end.
-        events = self.client.get_stream_events(stream_name, backwards=True)
+        events = self.client.get_stream(stream_name, backwards=True)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event2.id)
         self.assertEqual(events[1].id, event1.id)
 
         # Read the stream forwards from position 1.
-        events = self.client.get_stream_events(stream_name, stream_position=1)
+        events = self.client.get_stream(stream_name, stream_position=1)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)
 
         # Read the stream backwards from position 0.
-        events = self.client.get_stream_events(
-            stream_name, stream_position=0, backwards=True
-        )
+        events = self.client.get_stream(stream_name, stream_position=0, backwards=True)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event1.id)
 
         # Read the stream forwards from start with limit.
-        events = self.client.get_stream_events(stream_name, limit=1)
+        events = self.client.get_stream(stream_name, limit=1)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event1.id)
 
         # Read the stream backwards from end with limit.
-        events = self.client.get_stream_events(stream_name, backwards=True, limit=1)
+        events = self.client.get_stream(stream_name, backwards=True, limit=1)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)
 
@@ -601,26 +585,26 @@ class TestEventStoreDBClient(TestCase):
         self.assertGreater(commit_position3, commit_position2)
 
         # Read the stream forwards from start (expect three events).
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
         self.assertEqual(events[2].id, event3.id)
 
         # Read the stream backwards from end (expect three events).
-        events = self.client.get_stream_events(stream_name, backwards=True)
+        events = self.client.get_stream(stream_name, backwards=True)
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].id, event3.id)
         self.assertEqual(events[1].id, event2.id)
         self.assertEqual(events[2].id, event1.id)
 
         # Read the stream forwards from position 1 with limit 1.
-        events = self.client.get_stream_events(stream_name, stream_position=1, limit=1)
+        events = self.client.get_stream(stream_name, stream_position=1, limit=1)
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)
 
         # Read the stream backwards from position 1 with limit 1.
-        events = self.client.get_stream_events(
+        events = self.client.get_stream(
             stream_name, stream_position=1, backwards=True, limit=1
         )
         self.assertEqual(len(events), 1)
@@ -632,7 +616,7 @@ class TestEventStoreDBClient(TestCase):
         )
         self.assertEqual(commit_position2_1, commit_position2)
 
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -656,7 +640,7 @@ class TestEventStoreDBClient(TestCase):
 
         self.assertGreater(commit_position2, commit_position1)
 
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -686,7 +670,7 @@ class TestEventStoreDBClient(TestCase):
 
         self.assertGreater(commit_position2, commit_position1)
 
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -706,7 +690,7 @@ class TestEventStoreDBClient(TestCase):
     #     )
     #
     #     # Read stream and check recorded events.
-    #     events = self.client.get_stream_events(stream_name)
+    #     events = self.client.get_stream(stream_name)
     #     self.assertEqual(len(events), 2)
     #     self.assertEqual(events[0].id, event1.id)
     #     self.assertEqual(events[1].id, event2.id)
@@ -727,7 +711,7 @@ class TestEventStoreDBClient(TestCase):
     #     )
     #
     #     # Read stream and check recorded events.
-    #     events = self.client.get_stream_events(stream_name)
+    #     events = self.client.get_stream(stream_name)
     #     self.assertEqual(len(events), 4)
     #     self.assertEqual(events[0].id, event1.id)
     #     self.assertEqual(events[1].id, event2.id)
@@ -764,7 +748,7 @@ class TestEventStoreDBClient(TestCase):
     #     )
     #
     #     # Read stream and check recorded events.
-    #     events = self.client.get_stream_events(stream_name)
+    #     events = self.client.get_stream(stream_name)
     #     self.assertEqual(len(events), 2)
     #     self.assertEqual(events[0].id, event1.id)
     #     self.assertEqual(events[1].id, event2.id)
@@ -792,7 +776,7 @@ class TestEventStoreDBClient(TestCase):
     #         )
     #
     #     # Read stream and check recorded events.
-    #     events = self.client.get_stream_events(stream_name)
+    #     events = self.client.get_stream(stream_name)
     #     self.assertEqual(len(events), 2)
     #     self.assertEqual(events[0].id, event1.id)
     #     self.assertEqual(events[1].id, event2.id)
@@ -818,7 +802,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read stream and check recorded events.
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -848,7 +832,7 @@ class TestEventStoreDBClient(TestCase):
             )
 
         # Read stream and check recorded events.
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -868,7 +852,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read stream and check recorded events.
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -889,7 +873,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read stream and check recorded events.
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 4)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -925,7 +909,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read stream and check recorded events.
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -946,7 +930,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read stream and check recorded events.
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 4)
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
@@ -1005,7 +989,7 @@ class TestEventStoreDBClient(TestCase):
             )
 
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name1)
+            self.client.get_stream(stream_name1)
 
         # # Timeout appending new event.
         # with self.assertRaises(DeadlineExceeded):
@@ -1015,12 +999,12 @@ class TestEventStoreDBClient(TestCase):
         #
         # # Timeout reading stream.
         # with self.assertRaises(DeadlineExceeded):
-        #     self.client.get_stream_events(stream_name1, timeout=0)
+        #     self.client.get_stream(stream_name1, timeout=0)
 
-    def test_iter_all_events_filter_default(self) -> None:
+    def test_read_all_filter_default(self) -> None:
         self.construct_esdb_client()
 
-        num_old_events = len(list(self.client.iter_all_events()))
+        num_old_events = len(list(self.client.read_all()))
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
@@ -1045,7 +1029,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Check we can read forwards from the start.
-        events = list(self.client.iter_all_events())
+        events = list(self.client.read_all())
         self.assertEqual(len(events) - num_old_events, 6)
         self.assertEqual(events[-1].stream_name, stream_name2)
         self.assertEqual(events[-1].type, "OrderDeleted")
@@ -1057,7 +1041,7 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(events[-4].type, "OrderDeleted")
 
         # Check we can read backwards from the end.
-        events = list(self.client.iter_all_events(backwards=True))
+        events = list(self.client.read_all(backwards=True))
         self.assertEqual(len(events) - num_old_events, 6)
         self.assertEqual(events[0].stream_name, stream_name2)
         self.assertEqual(events[0].type, "OrderDeleted")
@@ -1069,7 +1053,7 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(events[3].type, "OrderDeleted")
 
         # Check we can read forwards from commit position 1.
-        events = list(self.client.iter_all_events(commit_position=commit_position1))
+        events = list(self.client.read_all(commit_position=commit_position1))
         self.assertEqual(len(events), 4)
         self.assertEqual(events[0].id, event3.id)
         self.assertEqual(events[1].id, event4.id)
@@ -1085,7 +1069,7 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(events[3].type, "OrderDeleted")
 
         # Check we can read forwards from commit position 2.
-        events = list(self.client.iter_all_events(commit_position=commit_position2))
+        events = list(self.client.read_all(commit_position=commit_position2))
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event6.id)
         self.assertEqual(events[0].stream_name, stream_name2)
@@ -1095,9 +1079,7 @@ class TestEventStoreDBClient(TestCase):
         # NB backwards here doesn't include event at commit position, otherwise
         # first event would an OrderDeleted event, and we get an OrderUpdated.
         events = list(
-            self.client.iter_all_events(
-                commit_position=commit_position1, backwards=True
-            )
+            self.client.read_all(commit_position=commit_position1, backwards=True)
         )
         self.assertEqual(len(events) - num_old_events, 2)
         self.assertEqual(events[0].id, event2.id)
@@ -1110,9 +1092,7 @@ class TestEventStoreDBClient(TestCase):
         # Check we can read backwards from commit position 2.
         # NB backwards here doesn't include event at commit position.
         events = list(
-            self.client.iter_all_events(
-                commit_position=commit_position2, backwards=True
-            )
+            self.client.read_all(commit_position=commit_position2, backwards=True)
         )
         self.assertEqual(len(events) - num_old_events, 5)
         self.assertEqual(events[0].id, event5.id)
@@ -1128,11 +1108,11 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(events[2].type, "OrderDeleted")
 
         # Check we can read forwards from the start with limit.
-        events = list(self.client.iter_all_events(limit=3))
+        events = list(self.client.read_all(limit=3))
         self.assertEqual(len(events), 3)
 
         # Check we can read backwards from the end with limit.
-        events = list(self.client.iter_all_events(backwards=True, limit=3))
+        events = list(self.client.read_all(backwards=True, limit=3))
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].stream_name, stream_name2)
         self.assertEqual(events[0].type, "OrderDeleted")
@@ -1142,9 +1122,7 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(events[2].type, "OrderCreated")
 
         # Check we can read forwards from commit position 1 with limit.
-        events = list(
-            self.client.iter_all_events(commit_position=commit_position1, limit=3)
-        )
+        events = list(self.client.read_all(commit_position=commit_position1, limit=3))
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].stream_name, stream_name1)
         self.assertEqual(events[0].type, "OrderDeleted")
@@ -1155,7 +1133,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Check we can read backwards from commit position 2 with limit.
         events = list(
-            self.client.iter_all_events(
+            self.client.read_all(
                 commit_position=commit_position2, backwards=True, limit=3
             )
         )
@@ -1167,7 +1145,7 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(events[2].stream_name, stream_name1)
         self.assertEqual(events[2].type, "OrderDeleted")
 
-    def test_iter_all_events_filter_include_event_types(self) -> None:
+    def test_read_all_filter_include_event_types(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -1183,18 +1161,18 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read only OrderCreated.
-        events = list(self.client.iter_all_events(filter_include=("OrderCreated",)))
+        events = list(self.client.read_all(filter_include=("OrderCreated",)))
         types = set([e.type for e in events])
         self.assertEqual(types, {"OrderCreated"})
 
         # Read only OrderCreated and OrderDeleted.
         events = list(
-            self.client.iter_all_events(filter_include=("OrderCreated", "OrderDeleted"))
+            self.client.read_all(filter_include=("OrderCreated", "OrderDeleted"))
         )
         types = set([e.type for e in events])
         self.assertEqual(types, {"OrderCreated", "OrderDeleted"})
 
-    def test_iter_all_events_filter_include_stream_identifiers(self) -> None:
+    def test_read_all_filter_include_stream_identifiers(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -1219,7 +1197,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Read only stream1 and stream2.
         events = list(
-            self.client.iter_all_events(
+            self.client.read_all(
                 filter_include=(stream_name1, stream_name2), filter_by_stream_name=True
             )
         )
@@ -1228,7 +1206,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Read only stream2 and stream3.
         events = list(
-            self.client.iter_all_events(
+            self.client.read_all(
                 filter_include=(stream_name2, stream_name3), filter_by_stream_name=True
             )
         )
@@ -1237,7 +1215,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Read only prefix1.
         events = list(
-            self.client.iter_all_events(
+            self.client.read_all(
                 filter_include=(prefix1 + ".*",), filter_by_stream_name=True
             )
         )
@@ -1246,14 +1224,14 @@ class TestEventStoreDBClient(TestCase):
 
         # Read only prefix2.
         events = list(
-            self.client.iter_all_events(
+            self.client.read_all(
                 filter_include=(prefix2 + ".*",), filter_by_stream_name=True
             )
         )
         event_ids = set([e.id for e in events])
         self.assertEqual(event_ids, {event3.id})
 
-    def test_iter_all_events_filter_exclude_event_types(self) -> None:
+    def test_read_all_filter_exclude_event_types(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -1269,7 +1247,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Exclude OrderCreated.
-        events = list(self.client.iter_all_events(filter_exclude=("OrderCreated",)))
+        events = list(self.client.read_all(filter_exclude=("OrderCreated",)))
         types = set([e.type for e in events])
         self.assertNotIn("OrderCreated", types)
         self.assertIn("OrderUpdated", types)
@@ -1277,14 +1255,14 @@ class TestEventStoreDBClient(TestCase):
 
         # Exclude OrderCreated and OrderDeleted.
         events = list(
-            self.client.iter_all_events(filter_exclude=("OrderCreated", "OrderDeleted"))
+            self.client.read_all(filter_exclude=("OrderCreated", "OrderDeleted"))
         )
         types = set([e.type for e in events])
         self.assertNotIn("OrderCreated", types)
         self.assertIn("OrderUpdated", types)
         self.assertNotIn("OrderDeleted", types)
 
-    def test_iter_all_events_filter_exclude_stream_identifiers(self) -> None:
+    def test_read_all_filter_exclude_stream_identifiers(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -1309,7 +1287,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Read everything except stream1 and stream2.
         events = list(
-            self.client.iter_all_events(
+            self.client.read_all(
                 filter_exclude=(stream_name1, stream_name2), filter_by_stream_name=True
             )
         )
@@ -1318,7 +1296,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Read everything except stream2 and stream3.
         events = list(
-            self.client.iter_all_events(
+            self.client.read_all(
                 filter_exclude=(stream_name2, stream_name3), filter_by_stream_name=True
             )
         )
@@ -1327,7 +1305,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Read everything except prefix1.
         events = list(
-            self.client.iter_all_events(
+            self.client.read_all(
                 filter_exclude=(prefix1 + ".*",), filter_by_stream_name=True
             )
         )
@@ -1336,14 +1314,14 @@ class TestEventStoreDBClient(TestCase):
 
         # Read everything except prefix2.
         events = list(
-            self.client.iter_all_events(
+            self.client.read_all(
                 filter_exclude=(prefix2 + ".*",), filter_by_stream_name=True
             )
         )
         event_ids = set([e.id for e in events])
         self.assertEqual(event_ids.intersection({event3.id}), set())
 
-    def test_iter_all_events_filter_include_ignores_filter_exclude(self) -> None:
+    def test_read_all_filter_include_ignores_filter_exclude(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -1360,7 +1338,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Both include and exclude.
         events = list(
-            self.client.iter_all_events(
+            self.client.read_all(
                 filter_include=("OrderCreated",), filter_exclude=("OrderCreated",)
             )
         )
@@ -1375,7 +1353,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Check stream not found.
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
 
         # Construct three events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -1390,7 +1368,7 @@ class TestEventStoreDBClient(TestCase):
         self.client.append_events(stream_name, current_version=0, events=[event2])
 
         # Read stream, expect two events.
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 2)
 
         # Expect stream position is an int.
@@ -1412,7 +1390,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Expect "stream not found" when reading deleted stream.
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
 
         # Expect stream position is None.
         self.assertEqual(
@@ -1438,7 +1416,7 @@ class TestEventStoreDBClient(TestCase):
         # Can read from deleted stream if new events have been appended.
         # Todo: This behaviour is a little bit flakey? Sometimes we get NotFound.
         sleep(0.1)
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         # Expect only to get events appended after stream was deleted.
         self.assertEqual(len(events), 2)
         self.assertEqual(events[0].id, event3.id)
@@ -1450,7 +1428,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Can still read the events.
         self.assertEqual(3, self.client.get_current_version(stream_name))
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 2)
 
         # Can delete the stream again, using correct expected position.
@@ -1458,7 +1436,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Stream is now "not found".
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
         self.assertEqual(
             StreamState.NO_STREAM, self.client.get_current_version(stream_name)
         )
@@ -1470,7 +1448,7 @@ class TestEventStoreDBClient(TestCase):
         # Can delete again without error.
         self.client.delete_stream(stream_name, current_version=3)
 
-    def test_iter_all_events_raises_deadline_exceeded(self) -> None:
+    def test_read_all_raises_deadline_exceeded(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -1493,12 +1471,12 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Timeout reading all events.
-        read_response = self.client.iter_all_events(timeout=0.001)
+        read_response = self.client.read_all(timeout=0.001)
         sleep(0.5)
         with self.assertRaises(DeadlineExceeded):
             list(read_response)
 
-    def test_iter_all_events_can_be_stopped(self) -> None:
+    def test_read_all_can_be_stopped(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -1521,12 +1499,12 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Check we do get events when reading all events.
-        read_response = self.client.iter_all_events()
+        read_response = self.client.read_all()
         events = list(read_response)
         self.assertNotEqual(0, len(events))
 
         # Check we don't get events when we stop.
-        read_response = self.client.iter_all_events()
+        read_response = self.client.read_all()
         read_response.stop()
         events = list(read_response)
         self.assertEqual(0, len(events))
@@ -1537,7 +1515,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Check stream not found.
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
 
         # Can't delete stream that doesn't exist, while expecting "any" version.
         # Todo: I don't fully understand why this should cause an error.
@@ -1556,7 +1534,7 @@ class TestEventStoreDBClient(TestCase):
         self.client.append_events(stream_name, current_version=0, events=[event2])
 
         # Read stream, expect two events.
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 2)
 
         # Expect stream position is an int.
@@ -1570,7 +1548,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Expect "stream not found" when reading deleted stream.
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
 
         # Expect stream position is None.
         self.assertEqual(
@@ -1585,7 +1563,7 @@ class TestEventStoreDBClient(TestCase):
         # Can read from deleted stream if new events have been appended.
         # Todo: This behaviour is a little bit flakey? Sometimes we get NotFound.
         sleep(0.1)
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         # Expect only to get events appended after stream was deleted.
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event3.id)
@@ -1593,7 +1571,7 @@ class TestEventStoreDBClient(TestCase):
         # Delete the stream again, specifying "any" expected position.
         self.client.delete_stream(stream_name, current_version=StreamState.ANY)
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
         self.assertEqual(
             StreamState.NO_STREAM, self.client.get_current_version(stream_name)
         )
@@ -1607,7 +1585,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Check stream not found.
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
 
         # Can't delete stream, expecting stream exists, because stream never existed.
         with self.assertRaises(NotFound):
@@ -1627,7 +1605,7 @@ class TestEventStoreDBClient(TestCase):
         self.client.append_events(stream_name, current_version=0, events=[event2])
 
         # Read stream, expect two events.
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 2)
 
         # Expect stream position is an int.
@@ -1642,7 +1620,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Expect "stream not found" when reading deleted stream.
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
 
         # Expect stream position is None.
         self.assertEqual(
@@ -1661,7 +1639,7 @@ class TestEventStoreDBClient(TestCase):
         # Can read from deleted stream if new events have been appended.
         # Todo: This behaviour is a little bit flakey? Sometimes we get NotFound.
         sleep(0.1)
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         # Expect only to get events appended after stream was deleted.
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event3.id)
@@ -1669,7 +1647,7 @@ class TestEventStoreDBClient(TestCase):
         # Can delete the appended stream, whilst expecting stream exists.
         self.client.delete_stream(stream_name, current_version=StreamState.EXISTS)
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
         self.assertEqual(
             StreamState.NO_STREAM, self.client.get_current_version(stream_name)
         )
@@ -1684,7 +1662,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Check stream not found.
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
 
         # Construct three events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -1698,7 +1676,7 @@ class TestEventStoreDBClient(TestCase):
         self.client.append_events(stream_name, current_version=0, events=[event2])
 
         # Read stream, expect two events.
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 2)
 
         # Expect stream position is an int.
@@ -1720,7 +1698,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Can't read from stream, because stream is deleted.
         with self.assertRaises(StreamIsDeleted):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
 
         # Can't get stream position, because stream is deleted.
         with self.assertRaises(StreamIsDeleted):
@@ -1757,7 +1735,7 @@ class TestEventStoreDBClient(TestCase):
         self.client.append_events(stream_name2, current_version=0, events=[event2])
 
         # Read stream, expect two events.
-        events = self.client.get_stream_events(stream_name2)
+        events = self.client.get_stream(stream_name2)
         self.assertEqual(len(events), 2)
 
         # Expect stream position is an int.
@@ -1771,7 +1749,7 @@ class TestEventStoreDBClient(TestCase):
             self.client.tombstone_stream(stream_name2, current_version=StreamState.ANY)
 
         with self.assertRaises(StreamIsDeleted):
-            self.client.get_stream_events(stream_name2)
+            self.client.get_stream(stream_name2)
 
         with self.assertRaises(StreamIsDeleted):
             self.client.get_current_version(stream_name2)
@@ -1782,7 +1760,7 @@ class TestEventStoreDBClient(TestCase):
 
         # Check stream not found.
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
 
         # Can't tombstone stream that doesn't exist, while expecting "stream exists".
         with self.assertRaises(NotFound):
@@ -1801,7 +1779,7 @@ class TestEventStoreDBClient(TestCase):
         self.client.append_events(stream_name, current_version=0, events=[event2])
 
         # Read stream, expect two events.
-        events = self.client.get_stream_events(stream_name)
+        events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 2)
 
         # Expect stream position is an int.
@@ -1817,7 +1795,7 @@ class TestEventStoreDBClient(TestCase):
             )
 
         with self.assertRaises(StreamIsDeleted):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
 
         with self.assertRaises(StreamIsDeleted):
             self.client.get_current_version(stream_name)
@@ -3595,7 +3573,7 @@ class TestEventStoreDBClient(TestCase):
         self.client.append_events(
             stream_name, current_version=StreamState.NO_STREAM, events=[event1, event2]
         )
-        self.assertEqual(2, len(self.client.get_stream_events(stream_name)))
+        self.assertEqual(2, len(self.client.get_stream(stream_name)))
 
         # Get stream metadata (should be empty).
         stream_metadata, position = self.client.get_stream_metadata(stream_name)
@@ -3604,7 +3582,7 @@ class TestEventStoreDBClient(TestCase):
         # Delete stream.
         self.client.delete_stream(stream_name, current_version=StreamState.EXISTS)
         with self.assertRaises(NotFound):
-            self.client.get_stream_events(stream_name)
+            self.client.get_stream(stream_name)
 
         # Get stream metadata (should have "$tb").
         stream_metadata, position = self.client.get_stream_metadata(stream_name)
@@ -4112,10 +4090,10 @@ class TestAutoReconnectClosedConnection(TestCase):
             stream_name, current_version=StreamState.NO_STREAM, events=[event1]
         )
 
-    def test_get_stream_events(self) -> None:
+    def test_get_stream(self) -> None:
         # Read all events - should reconnect.
         with self.assertRaises(NotFound):
-            self.writer.get_stream_events(str(uuid4()))
+            self.writer.get_stream(str(uuid4()))
 
     def test_read_subscription(self) -> None:
         # Read subscription - should reconnect.
@@ -4142,6 +4120,24 @@ class TestAutoReconnectAfterServiceUnavailable(TestCase):
             current_version=StreamState.NO_STREAM,
             events=[NewEvent(type="X", data=b"")],
         )
+
+    def test_get_stream(self) -> None:
+        with self.assertRaises(NotFound):
+            self.client.get_stream(
+                str(uuid4()),
+            )
+
+    def test_read_stream(self) -> None:
+        read_response = self.client.read_stream(
+            str(uuid4()),
+        )
+        with self.assertRaises(ServiceUnavailable):
+            tuple(read_response)
+
+    def test_read_all(self) -> None:
+        read_response = self.client.read_all()
+        with self.assertRaises(ServiceUnavailable):
+            tuple(read_response)
 
     def test_append_event(self) -> None:
         self.client.append_event(

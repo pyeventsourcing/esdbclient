@@ -23,18 +23,19 @@ The `EventStoreDBClient` class can be imported from the `esdbclient` package.
 
 Probably the three most useful methods of `EventStoreDBClient` are:
 
-* `append_events()` This method can be used to record new events in a particular
-"stream". This is useful for example when executing a command in an application
+* `append_to_stream()` This method can be used to record new events in a particular
+"stream". This is useful, for example, when executing a command in an application
 that mutates an aggregate. This method is "atomic" in that either all or none of
 the events will be recorded.
 
-* `get_stream_events()` This method can be used to retrieve all the recorded
-events in a "stream". This is useful for example when reconstructing an aggregate
-before executing a command in an application.
+* `read_stream()` This method can be used to retrieve all the recorded
+events in a "stream". This is useful, for example, when reconstructing
+an aggregate from recorded events before executing a command in an
+application that creates new events.
 
 * `subscribe_to_all()` This method can be used to receive all recorded events in
-the database. This is useful in downstream event-processing components, and supports
-processing events with "exactly-once" semantics (see below).
+the database. This is useful, for example, in event-processing components because
+it supports processing events with "exactly-once" semantics.
 
 The example below uses an "insecure" EventStoreDB server running locally on port 2114.
 
@@ -72,7 +73,7 @@ event3 = NewEvent(
 
 
 # Append new events to a new stream. The "commit position" value
-# returned from the append_events() method is the overall position
+# returned from the append_to_stream() method is the overall position
 # in the database of the last new event recorded by this operation.
 # The returned "commit position" may be used in a user interface to
 # poll an eventually consistent event-processing component until it
@@ -80,7 +81,7 @@ event3 = NewEvent(
 # allocated a "stream position", which is the next available position
 # in the stream, starting from 0.
 
-commit_position1 = client.append_events(
+commit_position1 = client.append_to_stream(
     stream_name=stream_name1,
     current_version=StreamState.NO_STREAM,
     events=[event1, event2],
@@ -91,7 +92,7 @@ commit_position1 = client.append_events(
 # recorded two new events, so the "current version" is 1. Incorrect
 # value will cause 'WrongCurrentVersion' to be raised.
 
-commit_position2 = client.append_events(
+commit_position2 = client.append_to_stream(
     stream_name=stream_name1,
     current_version=1,
     events=[event3],
@@ -101,44 +102,50 @@ commit_position2 = client.append_events(
 assert commit_position2 > commit_position1
 
 
-# Read events from a stream. The recorded events may be
-# deserialized to domain events objects of different types,
-# then used to reconstruct an aggregate in a domain model.
+# Read events from a stream. This method returns a
+# "read response" iterator, which returns recorded
+# events. The iterator will stop when there are no
+# more events to be returned.
 
-recorded = client.get_stream_events(
+read_response = client.read_stream(
     stream_name=stream_name1
 )
 
+# Iterate over "read response" to get recorded events.
+# The recorded events may be deserialized to domain events
+# objects of different types, then used to reconstruct an
+# aggregate in a domain model.
+recorded_events = tuple(read_response)
+
 # - stream 'stream_name1' now has three events
-assert len(recorded) == 3
+assert len(recorded_events) == 3
 
 # - allocated stream positions are zero-based and gapless
-assert recorded[0].stream_position == 0
-assert recorded[1].stream_position == 1
-assert recorded[2].stream_position == 2
+assert recorded_events[0].stream_position == 0
+assert recorded_events[1].stream_position == 1
+assert recorded_events[2].stream_position == 2
 
 # - event attribute values are recorded faithfully
-assert recorded[0].type == "OrderCreated"
-assert recorded[0].data == b'{"order_number": "123456"}'
-assert recorded[0].id == event1.id
+assert recorded_events[0].type == "OrderCreated"
+assert recorded_events[0].data == b'{"order_number": "123456"}'
+assert recorded_events[0].id == event1.id
 
-assert recorded[1].type == "OrderSubmitted"
-assert recorded[1].data == b'{}'
-assert recorded[1].id == event2.id
+assert recorded_events[1].type == "OrderSubmitted"
+assert recorded_events[1].data == b'{}'
+assert recorded_events[1].id == event2.id
 
-assert recorded[2].type == "OrderCancelled"
-assert recorded[2].data == b'{}'
-assert recorded[2].id == event3.id
+assert recorded_events[2].type == "OrderCancelled"
+assert recorded_events[2].data == b'{}'
+assert recorded_events[2].id == event3.id
 
 
-# Start a catch-up subscription to receive all recorded
-# events across all streams. An event-processing component
-# might use a catch-up subscription to receive events
-# recorded after a particular commit position.
+# Start a catch-up subscription from last recorded position.
+# This method returns a "catch-up subscription" iterator,
+# which returns recorded events. The iterator will not stop
+# when there are no more recorded events to be returned, but
+# will block, and continue when further events are recorded.
 
-catchup_subscription = client.subscribe_to_all(
-    commit_position=None
-)
+catchup_subscription = client.subscribe_to_all()
 
 
 # Iterate over the catch-up subscription. Process each recorded
@@ -147,27 +154,27 @@ catchup_subscription = client.subscribe_to_all(
 # by processing the event. Use the component's last recorded commit
 # position when restarting the catch-up subscription.
 
-received = []
+received_events = []
 for event in catchup_subscription:
-    received.append(event)
+    received_events.append(event)
 
     if event.commit_position == commit_position2:
         # Break so we can continue with the example.
         break
 
 
-# - events are obtained in the order they were recorded
-assert recorded[-3].type == "OrderCreated"
-assert recorded[-3].data == b'{"order_number": "123456"}'
-assert recorded[-3].id == event1.id
+# - events are received in the order they were recorded
+assert received_events[-3].type == "OrderCreated"
+assert received_events[-3].data == b'{"order_number": "123456"}'
+assert received_events[-3].id == event1.id
 
-assert recorded[-2].type == "OrderSubmitted"
-assert recorded[-2].data == b'{}'
-assert recorded[-2].id == event2.id
+assert received_events[-2].type == "OrderSubmitted"
+assert received_events[-2].data == b'{}'
+assert received_events[-2].id == event2.id
 
-assert recorded[-1].type == "OrderCancelled"
-assert recorded[-1].data == b'{}'
-assert recorded[-1].id == event3.id
+assert received_events[-1].type == "OrderCancelled"
+assert received_events[-1].data == b'{}'
+assert received_events[-1].id == event3.id
 
 
 # Stop the catch-up subscription iterator.
@@ -486,7 +493,7 @@ The table below describes the query field-values supported by this client.
 | TlsVerifyCert       | "true", "false" (default: "true")                                     | This value is currently ignored.                                                                                                                                  |
 | ConnectionName      | string (default: auto-generated version-4 UUID)                       | Sent in call metadata for every call, to identify the client to the cluster.                                                                                      |
 | NodePreference      | "leader", "follower", "readonlyreplica", "random" (default: "leader") | The node state preferred by the client. The client will select a node from the cluster info received from the Gossip API according to this preference.            |
-| DefaultDeadline     | integer (default: `None`)                                             | The default value (in seconds) of the `timeout` argument of client "write" methods such as `append_events()`.                                                     |
+| DefaultDeadline     | integer (default: `None`)                                             | The default value (in seconds) of the `timeout` argument of client "write" methods such as `append_to_stream()`.                                                  |
 | GossipTimeout       | integer (default: 5)                                                  | The default value (in seconds) of the `timeout` argument of gossip read methods, such as `read_gossip()`.                                                         |
 | MaxDiscoverAttempts | integer (default: 10)                                                 | The number of attempts to read gossip when connecting or reconnecting to a cluster member.                                                                        |
 | DiscoveryInterval   | integer (default: 100)                                                | How long to wait (in milliseconds) between gossip retries.                                                                                                        |
@@ -569,8 +576,7 @@ This package defines a `NewEvent` class and a `RecordedEvent` class. The
 ### New events
 
 The `NewEvent` class should be used when writing events to an EventStoreDB database.
-You will need to construct new event objects before calling the `append_events()`
-and `append_event()` methods.
+You will need to construct new event objects before calling `append_to_stream()`.
 
 The `NewEvent` class is a frozen Python dataclass. It has two required constructor
 arguments (`type` and `data`) and three optional constructor arguments (`metadata`,
@@ -625,7 +631,7 @@ assert new_event2.id == event_id
 
 The `RecordedEvent` class is used when reading events from an EventStoreDB
 database. The client will return event objects of this type from all methods
-that return recorded events, such as `get_stream_events()`, `subscribe_to_all()`,
+that return recorded events, such as `get_stream()`, `subscribe_to_all()`,
 and `read_subscription()`. You do not need to construct recorded event objects.
 
 Like `NewEvent`, the `RecordedEvent` class is also a frozen Python dataclass. It has
@@ -643,8 +649,8 @@ The `metadata` attribute is a Python `bytes` object, used to indicate the metada
 an event that was recorded.
 
 The `content_type` attribute is a Python `str`, used to indicate the type of
-data that was recorded for an event. It is usually `application/json`, indicating
-that the data can be parsed as JSON. Alternatively, it is `application/octet-stream`.
+data that was recorded for an event. It is usually `'application/json'`, indicating
+that the data can be parsed as JSON. Alternatively, it is `'application/octet-stream'`.
 
 The `id` attribute is a Python `UUID` object, used to indicate the unique ID of an
 event that was recorded.
@@ -671,11 +677,11 @@ positions, the sequence of successive commit positions is not gapless. Indeed, t
 usually large differences between the commit positions of successively recorded events.
 
 Please note, in EventStoreDB 21.10, the `commit_position` of all `RecordedEvent` objects
-obtained from `get_stream_events()` is `None`, whereas events objects obtained from
-`iter_all_events()` have the actual commit position. This was changed in version 22.10,
-so that event objects obtained from both `get_stream_events()` and `iter_all_events()`
-have the actual commit position. The `commit_position` attribute of the `RecordedEvent`
-class is annotated with the type `Optional[int]` for this reason only.
+obtained from `read_stream()` is `None`, whereas those obtained from `read_all()` have
+the actual commit position of the recorded event. This was changed in version 22.10, so
+that event objects obtained from both `get_stream()` and `read_all()` have the actual
+commit position. The `commit_position` attribute of the `RecordedEvent` class is
+annotated with the type `Optional[int]` for this reason only.
 
 
 ```python
@@ -703,14 +709,14 @@ each with many recorded events. Each recorded event has a position in its stream
 Stream positions are zero-based and gapless. Commit positions are also zero-based,
 but are not gapless.
 
-The methods `append_events()`, `get_stream_events()` and `iter_all_events()` can
+The methods `append_to_stream()`, `get_stream()` and `read_all()` can
 be used to read and record in the database.
 
 ### Append events
 
 *requires leader*
 
-The `append_events()` method can be used atomically to record a sequence of new events.
+The `append_to_stream()` method can be used atomically to record a sequence of new events.
 If the operation is successful, it returns the commit position of the last event in the
 sequence that has been recorded.
 
@@ -728,16 +734,18 @@ stream positions are zero-based and gapless, so that if a stream has two events,
 `WrongCurrentVersion` exception. This behavior is designed to provide concurrency
 control when recording new events. The correct value of `current_version` for any stream
 can be obtained by calling `get_current_version()`. However, the typical approach is to
-use the stream position of the recorded events as the version number of a reconstructed
-aggregate, and to use the current version of the aggregate as the `current_version` when
-appending new aggregate events. This ensures the consistency of the recorded state of
-the aggregate, and forces operations that generate new aggregate events to be retried with a freshly
-reconstructed aggregate when a `WrongCurrentVersion` exception is encountered.
-This controlling behavior can be disabled by setting the value of the `current_version`
+reconstruct an aggregate from the recorded events, so that the version of the aggregate
+is the stream position of the last recorded event, then have the aggregate generate new
+events, and then use the current version of the aggregate as the value of the
+`current_version` argument when appending the new aggregate events. This ensures
+the consistency of the recorded aggregate events, because operations that generate
+new aggregate events can be retried with a freshly reconstructed aggregate if
+a `WrongCurrentVersion` exception is encountered when recording new events. This
+controlling behavior can be disabled by setting the value of the `current_version`
 argument to the constant `StreamState.ANY`.
 
 The required `events` argument is expected to be a sequence of new event objects. The
-`NewEvent` class should be used to construct new event objects. The `append_events()`
+`NewEvent` class should be used to construct new event objects. The `append_to_stream()`
 operation is atomic, so that either all or none of the new events will be recorded. It
 is not possible with EventStoreDB atomically to record new events in more than one stream.
 
@@ -745,8 +753,7 @@ This method also has an optional `timeout` argument, which is a Python `float`
 that sets a deadline for the completion of the gRPC operation.
 
 In the example below, a new event, `event1`, is appended to a new stream. The stream
-does not yet exist, so `current_version` is `StreamState.NO_STREAM`. You can use the
-constant `StreamState.NO_STREAM` if you prefer.
+does not yet exist, so `current_version` is `StreamState.NO_STREAM`.
 
 ```python
 # Construct a new event object.
@@ -756,7 +763,7 @@ event1 = NewEvent(type='OrderCreated', data=b'data1')
 stream_name1 = str(uuid.uuid4())
 
 # Append the new events to the new stream.
-commit_position1 = client.append_events(
+commit_position1 = client.append_to_stream(
     stream_name=stream_name1,
     current_version=StreamState.NO_STREAM,
     events=[event1],
@@ -764,14 +771,13 @@ commit_position1 = client.append_events(
 ```
 
 In the example below, two subsequent events are appended to an existing
-stream. The stream, `stream_name1`, so far has one recorded event, and so
-the correct value of `current_version` is `0`.
+stream. The stream has one recorded event, so `current_version` is `0`.
 
 ```python
 event2 = NewEvent(type='OrderUpdated', data=b'data2')
 event3 = NewEvent(type='OrderDeleted', data=b'data3')
 
-commit_position2 = client.append_events(
+commit_position2 = client.append_to_stream(
     stream_name=stream_name1,
     current_version=0,
     events=[event2, event3],
@@ -793,59 +799,35 @@ downstream component until it has processed the newly recorded events, and then 
 an up-to-date view to the user.
 
 
-### Append event
-
-*requires leader*
-
-The `append_event()` method is like `append_events()` but can be used only to write a
-single new event to a stream. If the operation is successful, it returns the commit
-position of the newly recorded event.
-
-This method has three required arguments, `stream_name`, `current_version` and `event`.
-
-The required `stream_name` argument is a Python `str` that uniquely identifies a
-stream to which a sequence of events will be appended.
-
-The required `current_version` argument is expected to be either a Python `int`
-that indicates the stream position of the last recorded event in the stream.
-
-The required `event` argument is expected to be a single new event object. The event
-object is expected to be an instance of the `NewEvent` class.
-
-This method also has an optional `timeout` argument, which is a Python `float`
-that sets a deadline for the completion of the gRPC operation.
-
-
 ### Idempotent append operations
 
-The `append_event()` and `append_events()` and methods are "idempotent", in that
-if the methods are called with new events whose `id` attribute values equal those
-of recorded events in the named stream immediately after the stream position specified
-by the value of the `current_version` argument, then these methods will return the
-commit position of the last new event, without making any changes to the database.
+The `append_to_stream()` method is "idempotent", in that if called with new events whose
+`id` attribute values equal those of recorded events in the named stream immediately
+after the stream position specified by the value of the `current_version` argument, then
+it will return the commit position of the last new event, without making any changes to
+the database.
 
-Sometimes it may happen, when calling `append_event()` or `append_events()`, that
-the new events are successfully recorded but somehow a connection issue occurs before
-the successful call can return successfully to the client. We cannot be sure if
-the events were recorded or not, and so we may wish to retry. If the events were in
-fact successfully recorded, it is convenient for the retried operation to return
-successfully without raising an exception. If those new events were in fact not recorded,
-and in the meantime no other new events were recorded in that stream, then it makes sense
-that the new events will be recorded when the append operation is retried. Of course,
-if a `WrongCurrentVersion` exception is raised when retrying the operation, then an
-application command which generated the new events in the context of already recorded
-events may need to be executed again. Alternatively, a suitable error might be displayed
-by the application, with an up-to-date view of the recorded data, giving a user of the
-application an opportunity to decide if they still wish to proceed with their original
-intention.
+Sometimes it may happen, when calling `append_to_stream()`, that the new events are
+successfully recorded but somehow a connection issue occurs before the successful call
+can return successfully to the client. We cannot be sure if the events were recorded
+or not, and so we may wish to retry. If the events were in fact successfully recorded,
+it is convenient for the retried operation to return successfully without raising an
+exception. If those new events were in fact not recorded, and in the meantime no other
+new events were recorded in that stream, then it makes sense that the new events will
+be recorded when the append operation is retried. Of course, if a `WrongCurrentVersion`
+exception is raised when retrying the operation, then an application command which
+generated the new events in the context of already recorded events may need to be
+executed again. Alternatively, a suitable error might be displayed by the application,
+with an up-to-date view of the recorded data, giving a user of the application an
+opportunity to decide if they still wish to proceed with their original intention.
 
-The example below shows the `append_events()` method being called again with
+The example below shows the `append_to_stream()` method being called again with
 `event3` and `current_version=0`. We can see that repeating the call to
-`append_events()` returns successfully.
+`append_to_stream()` returns successfully.
 
 ```python
 # Retry appending event3.
-commit_position_retry = client.append_events(
+commit_position_retry = client.append_to_stream(
     stream_name=stream_name1,
     current_version=0,
     events=[event2, event3],
@@ -858,12 +840,12 @@ We can see that the same commit position is returned as above.
 assert commit_position_retry == commit_position2
 ```
 
-By calling `get_stream_events()`, we can also see the stream has been unchanged
-despite the `append_events()` method having been called twice with the same arguments.
+By calling `get_stream()`, we can also see the stream has been unchanged
+despite the `append_to_stream()` method having been called twice with the same arguments.
 That is, there are still only three events in the stream.
 
 ```python
-events = client.get_stream_events(
+events = client.get_stream(
     stream_name=stream_name1
 )
 
@@ -878,16 +860,28 @@ constructing `NewEvent` objects to set the value of this attribute.
 
 ### Read stream events
 
-The `get_stream_events()` method can be used to get events that have been appended
-to a stream. This method returns a Python `tuple` of recorded event objects. The
-recorded event objects are instances of the `RecordedEvent` class.
+The `read_stream()` method can be used to get events that have been appended
+to a stream. This method returns a "read response" object.
 
-This method has one required argument, `stream_name`.
+A "read response" object is a Python iterator. Recorded events can be
+obtained by iterating over the "read response" object. Recorded events are
+streamed from the server to the client as the iteration proceeds. The iteration
+will automatically stop when there are no more recorded events to be returned.
+The streaming of events, and hence the iterator, can also be stopped by calling
+the `stop()` method on the "read response" object.
+
+The `get_stream()` method can be used to get events that have been appended
+to a stream. This method returns a Python `tuple` of recorded event objects.
+The recorded event objects are instances of the `RecordedEvent` class. It
+calls `read_stream()` and passes the "read response" iterator into a Python
+`tuple`, so that the streaming will complete before the method returns.
+
+The `read_stream()` and `get_stream()` methods have one required argument, `stream_name`.
 
 The required `stream_name` argument is a Python `str` that uniquely identifies a
 stream from which recorded events will be returned.
 
-The `get_stream_events()` method also has four optional arguments,
+The `read_stream()` and `get_stream()` methods also have four optional arguments,
 `stream_position`, `backwards`, `limit`, and `timeout`.
 
 The optional `stream_position` argument is a Python `int` that can be used to
@@ -902,10 +896,9 @@ in the order they were recorded. If `backwards` is `True`, the events are return
 reverse order.
 
 If `backwards` is `False` and `stream_position` is `None`, the stream's events will be
-returned in the order they were recorded, starting from the first recorded event. This
-is the default behavior of `get_stream_events()`. If `backwards` is `True` and
-`stream_position` is `None`, the stream's events will be returned in reverse order,
-starting from the last recorded event.
+returned in the order they were recorded, starting from the first recorded event. If
+`backwards` is `True` and `stream_position` is `None`, the stream's events will be
+returned in reverse order, starting from the last recorded event.
 
 The optional `limit` argument is a Python `int` which restricts the number of events
 that will be returned. The default value of `limit` is `sys.maxint`.
@@ -913,11 +906,11 @@ that will be returned. The default value of `limit` is `sys.maxint`.
 The optional `timeout` argument is a Python `float` which sets a deadline for
 the completion of the gRPC operation.
 
-The example below shows the default behavior of this method, which is to return all
-the recorded events of a stream forwards from the first recorded events to the last.
+The example below shows the default behavior, which is to return all the recorded
+events of a stream forwards from the first recorded events to the last.
 
 ```python
-events = client.get_stream_events(
+events = client.get_stream(
     stream_name=stream_name1
 )
 
@@ -933,7 +926,7 @@ zero-based, and so `stream_position=1` corresponds to the second event that was
 recorded in the stream, in this case `event2`.
 
 ```python
-events = client.get_stream_events(
+events = client.get_stream(
     stream_name=stream_name1,
     stream_position=1,
 )
@@ -946,7 +939,7 @@ assert events[1].id == event3.id
 The example below shows how to use the `backwards` argument to read a stream backwards.
 
 ```python
-events = client.get_stream_events(
+events = client.get_stream(
     stream_name=stream_name1,
     backwards=True,
 )
@@ -961,7 +954,7 @@ The example below shows how to use the `limit` argument to read a limited number
 events.
 
 ```python
-events = client.get_stream_events(
+events = client.get_stream(
     stream_name=stream_name1,
     limit=2,
 )
@@ -971,55 +964,41 @@ assert events[0].id == event1.id
 assert events[1].id == event2.id
 ```
 
-The `get_stream_events()` method will raise a `NotFound` exception if the named stream
-has never existed or has been deleted.
+The `read_stream()` and `get_stream()` methods will raise a `NotFound` exception if the
+named stream has never existed or has been deleted.
 
 ```python
 from esdbclient.exceptions import NotFound
 
 
 try:
-    client.get_stream_events('does-not-exist')
+    client.get_stream('does-not-exist')
 except NotFound:
     pass  # The stream does not exist.
 else:
     raise Exception("Shouldn't get here")
 ```
 
-Please note, this method streams recorded events from the server and then
-constructs and returns a Python `tuple`. In case you don't want the client to
-finish streaming events from the database before it returns, you can instead
-use the `iter_stream_events()` method, which returns an iterable "read response"
-object. A "read response" is an iterator, and not a sequence. Recorded events can
-be obtained by iterating over the "read response" object. It streams recorded events
-from the server as the iteration proceeds. The iteration will automatically stop
-when there are no more recorded events to be returned. The streaming of events,
-and hence the iterator, can also be stopped prematurely by calling the `stop()`
-method on the "read response" object.
-
-In fact, the `get_stream_events()` method calls `iter_stream_events()` and passes
-the "read response" iterator into the Python `tuple` constructor. However, the
-`get_stream_events()` method is decorated with retry and reconnect decorators,
-whilst the `iter_stream_events()` method is not. This means that all errors due to
-connection issues will be caught by the retry and reconnect decorators when calling
-the `get_stream_events()` method, but not when calling `iter_stream_events()`. The
-`iter_stream_events()` method has no such decorators because the streaming only starts
+Please note, the `get_stream()` method is decorated with the `@autoreconnect` and
+`@retrygrpc` decorators, whilst the `read_stream()` method is not. This means that
+all errors due to connection issues will be caught by the retry and reconnect decorators
+when calling the `get_stream()` method, but not when calling `read_stream()`. The
+`read_stream()` method has no such decorators because the streaming only starts
 when iterating over the "read response" starts, which means that the method returns
 before the streaming starts, and so there is no chance for any decorators to catch
 any connection issues.
 
-Nevertheless, if you are reading a very large stream, then you might prefer to call
-`iter_stream_events()`, and to begin iterating through the recorded events whilst
-they are being streamed from the server, rather than both waiting and having them
-all accumulate in memory. Because of the risk of connection issues arising during
-the streaming of recorded events from the server, you will need to care about
-connection issues when iterating over the "read response" object returned from
-`iter_stream_events()`.
+For the same reason, `read_stream()` will not raise a `NotFound` exception when
+the stream does not exist, until iterating over the "read response" object begins.
+
+If you are reading a very large stream, then you might prefer to call `read_stream()`,
+and begin iterating through the recorded events whilst they are being streamed from
+the server, rather than both waiting and having them all accumulate in memory.
 
 ### Get current version
 
 The `get_current_version()` method is a convenience method that essentially calls
-`get_stream_events()` with `backwards=True` and `limit=1`. This method returns
+`get_stream()` with `backwards=True` and `limit=1`. This method returns
 the value of the `stream_position` attribute of the last recorded event in a
 stream. If a stream does not exist, the returned value is `StreamState.NO_STREAM`.
 The returned value is the correct value of `current_version` when appending events
@@ -1084,7 +1063,7 @@ def get_aggregate(aggregate_id, mutator_func):
 
     # Get recorded events.
     try:
-        events = client.get_stream_events(
+        events = client.get_stream(
             stream_name=stream_name,
             stream_position=None
         )
@@ -1143,7 +1122,7 @@ def get_aggregate(aggregate_id, mutator_func):
 
     # Look for a snapshot.
     try:
-        snapshots = client.get_stream_events(
+        snapshots = client.get_stream(
             stream_name=make_snapshot_stream_name(stream_name),
             backwards=True,
             limit=1
@@ -1158,7 +1137,7 @@ def get_aggregate(aggregate_id, mutator_func):
 
     # Get subsequent events.
     try:
-        events = client.get_stream_events(
+        events = client.get_stream(
             stream_name=stream_name,
             stream_position=stream_position
         )
@@ -1206,7 +1185,7 @@ class Dog(Aggregate):
     tricks: list
 ```
 
-Let's also define a mutator function `mutate_dog()` that can evolve the state of a
+Let's also define a mutator function `mutate_dog()` that evolves the state of a
 `Dog` aggregate given various different types of events, `'DogRegistered'`,
 `'DogLearnedTrick'`, and `'Snapshot'`.
 
@@ -1271,10 +1250,10 @@ def register_dog(name):
         type='DogRegistered',
         data=serialize({'name': name}),
     )
-    client.append_event(
+    client.append_to_stream(
         stream_name=dog_id,
         current_version=StreamState.NO_STREAM,
-        event=event,
+        events=event,
     )
     return dog_id
 
@@ -1285,10 +1264,10 @@ def record_trick_learned(dog_id, trick):
         type='DogLearnedTrick',
         data=serialize({'trick': trick}),
     )
-    client.append_event(
+    client.append_to_stream(
         stream_name=dog_id,
         current_version=dog.version,
-        event=event,
+        events=event,
     )
 
 
@@ -1299,10 +1278,10 @@ def snapshot_dog(dog_id):
         data=serialize({'name': dog.name, 'tricks': dog.tricks}),
         metadata=serialize({'version': dog.version}),
     )
-    client.append_event(
+    client.append_to_stream(
         stream_name=make_snapshot_stream_name(dog_id),
         current_version=StreamState.ANY,
-        event=event,
+        events=event,
     )
 ```
 
@@ -1383,9 +1362,9 @@ appended, or as a background process.
 
 ### Read all events
 
-The `iter_all_events()` method can be used to get all recorded events
+The `read_all()` method can be used to get all recorded events
 in the database in the order they were recorded. This method returns
-a "read response" object, just like `iter_stream_events()`.
+a "read response" object, just like `read_stream()`.
 
 A "read response" is an iterator, and not a sequence. Recorded events can be
 obtained by iterating over the "read response" object. Recorded events are
@@ -1394,7 +1373,7 @@ will automatically stop when there are no more recorded events to be returned.
 The streaming of events, and hence the iterator, can also be stopped by calling
 the `stop()` method on the "read response" object.
 
-Just like `get_stream_events()` and `iter_stream_events()`, the recorded event objects
+Just like `get_stream()` and `read_stream()`, the recorded event objects
 are instances of the `RecordedEvent` class.
 
 This method has seven optional arguments, `commit_position`, `backwards`,
@@ -1411,7 +1390,7 @@ The optional `backwards` argument is a Python `bool`. The default of `backwards`
 
 If `backwards` is `False` and `commit_position` is `None`, the database's events will
 be returned in the order they were recorded, starting from the first recorded event.
-This is the default behavior of `iter_all_events()`. If `backwards` is `True` and
+This is the default behavior of `read_all()`. If `backwards` is `True` and
 `commit_position` is `None`, the database's events will be returned in reverse order,
 starting from the last recorded event.
 
@@ -1447,7 +1426,7 @@ so far, in the order they were recorded. We can see the three events of `stream_
 
 ```python
 # Read all events (creates a streaming gRPC call).
-read_response = client.iter_all_events()
+read_response = client.read_all()
 
 # Convert the iterator into a sequence of recorded events.
 events = tuple(read_response)
@@ -1469,7 +1448,7 @@ receive, `event2` is the second, and `event3` is the third.
 
 ```python
 # Read all events forwards from a commit position.
-read_response = client.iter_all_events(
+read_response = client.read_all(
     commit_position=commit_position1
 )
 
@@ -1489,7 +1468,7 @@ and the snapshot.
 
 ```python
 # Read all events backwards from the end.
-read_response = client.iter_all_events(
+read_response = client.read_all(
     backwards=True
 )
 
@@ -1509,7 +1488,7 @@ forwards from a specific commit position.
 
 ```python
 events = tuple(
-    client.iter_all_events(
+    client.read_all(
         commit_position=commit_position1,
         limit=1,
     )
@@ -1525,7 +1504,7 @@ so we receive the last recorded event.
 
 ```python
 events = tuple(
-    client.iter_all_events(
+    client.read_all(
         backwards=True,
         limit=1,
     )
@@ -1537,7 +1516,7 @@ assert events[0].type == 'DogLearnedTrick'
 assert deserialize(events[0].data)['trick'] == 'sit'
 ```
 
-Please note, like the `iter_stream_events()` method, the `iter_all_events()` method
+Please note, like the `read_stream()` method, the `read_all()` method
 is not decorated with retry and reconnect decorators, because the streaming of recorded
 events from the server only starts when iterating over the "read response" starts, which
 means that the method returns before the streaming starts, and so there is no chance for
@@ -1546,7 +1525,7 @@ any decorators to catch any connection issues.
 ### Get commit position
 
 The `get_commit_position()` method can be used to get the commit position of the
-last recorded event in the database. It simply calls `iter_all_events()` with
+last recorded event in the database. It simply calls `read_all()` with
 `backwards=True` and `limit=1`, and returns the value of the `commit_position`
 attribute of the last recorded event.
 
@@ -1555,10 +1534,10 @@ commit_position = client.get_commit_position()
 ```
 
 This method has four optional arguments, `filter_exclude`, `filter_include`,
-`filter_by_stream_name` and `timeout`. These values are passed to `iter_all_events()`.
+`filter_by_stream_name` and `timeout`. These values are passed to `read_all()`.
 
 The optional `filter_exclude`, `filter_include` and `filter_by_stream_name` arguments
-work in the same way as they do in the `iter_all_events()` method.
+work in the same way as they do in the `read_all()` method.
 
 This optional `timeout` argument is a Python `float` that sets
 a deadline for the completion of the gRPC operation.
@@ -1649,13 +1628,6 @@ subscription that can receive events from a specific stream. Both methods return
 obtained by iteration. Recorded event objects obtained in this way are instances
 of the `RecordedEvent` class.
 
-A "catch-up subscription" iterator will not automatically stop when there are no more
-events to be returned, but instead the iteration will block until new events are
-subsequently recorded in the database. Any subsequently recorded events will then be
-immediately streamed to the client, and the iteration will then continue. The streaming
-of events, and hence the iteration, can be stopped by calling the `stop()` method on the
-"catch-up subscription" object.
-
 Before the "catch-up subscription" object is returned to the caller, the client will
 firstly obtain a "confirmation" response from the server, which allows the client to
 detect that both the gRPC connection and the streaming gRPC call is operational. For
@@ -1664,6 +1636,13 @@ usefully decorated with the reconnect and retry decorators. However, once the me
 has returned, the decorators will have exited, and any exceptions that are raised
 due to connection issues whilst iterating over the subscription object will have to
 be handled by your code.
+
+A "catch-up subscription" iterator will not automatically stop when there are no more
+events to be returned, but instead the iteration will block until new events are
+subsequently recorded in the database. Any subsequently recorded events will then be
+immediately streamed to the client, and the iteration will then continue. The streaming
+of events, and hence the iteration, can be stopped by calling the `stop()` method on the
+"catch-up subscription" object.
 
 ### Subscribe to all events
 
@@ -1716,7 +1695,7 @@ received, and then continues when subsequent events are recorded.
 # Append a new event to a new stream.
 stream_name2 = str(uuid.uuid4())
 event4 = NewEvent(type='OrderCreated', data=b'data4')
-client.append_events(
+client.append_to_stream(
     stream_name=stream_name2,
     current_version=StreamState.NO_STREAM,
     events=[event4],
@@ -1768,7 +1747,7 @@ assert received_events[-2].type == "DogLearnedTrick"
 # Append another event whilst the subscription is running.
 mark = datetime.now()
 event5 = NewEvent(type='OrderUpdated', data=b'data5')
-client.append_events(
+client.append_to_stream(
     stream_name=stream_name2,
     current_version=0,
     events=[event5],
@@ -1797,7 +1776,7 @@ are received exactly once.
 
 # Append another event.
 event6 = NewEvent(type='OrderDeleted', data=b'data6')
-client.append_events(
+client.append_to_stream(
     stream_name=stream_name2,
     current_version=1,
     events=[event6],
@@ -1827,7 +1806,7 @@ event7 = NewEvent(type='OrderCreated', data=b'data7')
 event8 = NewEvent(type='OrderUpdated', data=b'data8')
 event9 = NewEvent(type='OrderDeleted', data=b'data9')
 
-client.append_events(
+client.append_to_stream(
     stream_name=stream_name3,
     current_version=StreamState.NO_STREAM,
     events=[event7, event8, event9],
@@ -2596,8 +2575,8 @@ errors are encountered.
 from esdbclient import AsyncioEventStoreDBClient
 ```
 
-The asynchronous I/O client has the following methods: `append_events()`,
-`get_stream_events()`, `iter_all_events()`, `subscribe_to_all()`,
+The asynchronous I/O client has the following methods: `append_to_stream()`,
+`get_stream()`, `read_all()`, `subscribe_to_all()`,
 `delete_stream()`, `tombstone_stream()`, and `reconnect()`.
 
 These methods are equivalent to the methods on `EventStoreDBClient`. They have the same
@@ -2607,7 +2586,7 @@ added soon.
 
 ### Synopsis
 
-The example below demonstrates the `append_events()`, `get_stream_events()` and
+The example below demonstrates the `append_to_stream()`, `get_stream()` and
 `subscribe_to_all()` methods. These are the most useful methods for writing
 an event-sourced application, allowing new aggregate events to be recorded, the
 recorded events of an aggregate to be obtained so aggregates can be reconstructed,
@@ -2631,14 +2610,14 @@ async def demonstrate_asyncio_client():
     event2 = NewEvent("OrderUpdated", data=b'{}')
     event3 = NewEvent("OrderDeleted", data=b'{}')
 
-    commit_position = await client.append_events(
+    commit_position = await client.append_to_stream(
         stream_name=stream_name,
         current_version=StreamState.NO_STREAM,
         events=[event1, event2, event3]
     )
 
     # Read stream events.
-    recorded = await client.get_stream_events(stream_name)
+    recorded = await client.get_stream(stream_name)
     assert len(recorded) == 3
     assert recorded[0].id == event1.id
     assert recorded[1].id == event2.id
@@ -2670,7 +2649,7 @@ asyncio.get_event_loop().run_until_complete(
 
 ### Regular expression filters
 
-The `iter_all_events()`, `subscribe_to_all()`, `create_subscription()`
+The `read_all()`, `subscribe_to_all()`, `create_subscription()`
 and `get_commit_position()` methods have `filter_exclude` and `filter_include`
 arguments. This section provides some more details about the values of these
 arguments.
@@ -2730,11 +2709,11 @@ when handling a client request.
 
 Please also note, the aspects not covered by the reconnect and retry decorator
 behaviours have to do with methods that return iterators. For example, consider
-the "read response" iterator returned from the `iter_all_events()` method. The
-`iter_all_events()` method will have returned, and the method decorators will therefore
+the "read response" iterator returned from the `read_all()` method. The
+`read_all()` method will have returned, and the method decorators will therefore
 have exited, before iterating over the "read response" begins. Therefore, if a
 connection issues occurs whilst iterating over the "read response", it isn't possible
-for any decorator on the `iter_all_events()` method to trigger a reconnection.
+for any decorator on the `read_all()` method to trigger a reconnection.
 
 With the "catch-up subscription" objects, there is an initial "confirmation" response
 from the server which is received and checked by the client. And so, when a call is
