@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import sys
 from abc import abstractmethod
+from asyncio import CancelledError
 from dataclasses import dataclass
 from enum import Enum
 from typing import (
-    AsyncIterable,
     AsyncIterator,
     Iterable,
     Iterator,
@@ -21,7 +21,7 @@ from google.protobuf import duration_pb2, empty_pb2
 from typing_extensions import Literal, Protocol, runtime_checkable
 
 from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
-from esdbclient.events import NewEvent, RecordedEvent
+from esdbclient.events import Checkpoint, NewEvent, RecordedEvent
 from esdbclient.exceptions import (
     AccessDeniedError,
     BadRequestError,
@@ -38,6 +38,10 @@ from esdbclient.exceptions import (
 )
 from esdbclient.protos.Grpc import shared_pb2, status_pb2, streams_pb2, streams_pb2_grpc
 
+DEFAULT_WINDOW_SIZE = 30
+DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER = 5
+DEFAULT_BATCH_APPEND_REQUEST_DEADLINE = 315576000000
+
 
 @runtime_checkable
 class _ReadResps(Iterator[streams_pb2.ReadResp], Protocol):
@@ -52,74 +56,114 @@ class StreamState(Enum):
     EXISTS = "EXISTS"
 
 
-class AsyncioReadResponse(AsyncIterator[RecordedEvent]):
+class BaseReadResponse:
     def __init__(
         self,
-        read_resp_iter: AsyncIterable[streams_pb2.ReadResp],
         stream_name: Optional[str],
     ):
-        self.read_resp_iter = read_resp_iter.__aiter__()
         self.stream_name = stream_name
 
-    async def _get_next_read_resp(self) -> streams_pb2.ReadResp:
-        try:
-            read_resp = await self.read_resp_iter.__anext__()
-        except grpc.RpcError as e:
-            if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
-                details = e.details() or ""
-                if self.stream_name and details and "is deleted" in details:
-                    raise StreamIsDeleted() from e
-                else:  # pragma: no cover
-                    raise handle_rpc_error(e) from e
-            else:
-                raise handle_rpc_error(e) from e
-        assert isinstance(read_resp, streams_pb2.ReadResp)
-        return read_resp
+    def handle_stream_read_rpc_error(
+        self, e: grpc.RpcError
+    ) -> EventStoreDBClientException:
+        if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
+            details = e.details() or ""
+            if self.stream_name and details and "is deleted" in details:
+                return StreamIsDeleted()
+            else:  # pragma: no cover
+                return handle_rpc_error(e)
+        else:
+            return handle_rpc_error(e)
+
+    def _convert_read_resp(
+        self, read_resp: streams_pb2.ReadResp
+    ) -> Optional[RecordedEvent]:
+        content_oneof = read_resp.WhichOneof("content")
+        if content_oneof == "stream_not_found":
+            raise NotFound(f"Stream {self.stream_name!r} not found")
+        elif content_oneof == "event":
+            read_event = read_resp.event
+            assert isinstance(read_event, streams_pb2.ReadResp.ReadEvent)
+            recorded_event = read_event.event
+            assert isinstance(
+                recorded_event, streams_pb2.ReadResp.ReadEvent.RecordedEvent
+            )
+            # There's also read_event.link...
+            position_oneof = read_event.WhichOneof("position")
+            if position_oneof == "commit_position":
+                commit_position = read_event.commit_position
+            else:  # pragma: no cover
+                # We only get here with EventStoreDB < 22.10.
+                assert position_oneof == "no_position", position_oneof
+                commit_position = None
+
+            # print("Recorded event commit position:", commit_position)
+            return RecordedEvent(
+                id=UUID(read_event.event.id.string),
+                type=recorded_event.metadata["type"],
+                data=recorded_event.data,
+                content_type=recorded_event.metadata["content-type"],
+                metadata=recorded_event.custom_metadata,
+                stream_name=recorded_event.stream_identifier.stream_name.decode("utf8"),
+                stream_position=recorded_event.stream_revision,
+                commit_position=commit_position,
+            )
+        elif content_oneof == "checkpoint":
+            checkpoint = read_resp.checkpoint
+            # print("Checkpoint commit position:", checkpoint.commit_position)
+            return Checkpoint(
+                commit_position=checkpoint.commit_position,
+            )
+        else:  # pragma: no cover
+            return None
+            # Todo: Maybe support other content_oneof values:
+            # 		uint64 first_stream_position = 5;
+            # 		uint64 last_stream_position = 6;
+            # 		AllStreamPosition last_all_stream_position = 7;
+            #
+            # Todo: Not sure how to request to get first_stream_position,
+            #   last_stream_position, first_all_stream_position.
+
+
+class AsyncioReadResponse(AsyncIterator[RecordedEvent], BaseReadResponse):
+    def __init__(
+        self,
+        aio_call: grpc.aio.UnaryStreamCall[streams_pb2.ReadReq, streams_pb2.ReadResp],
+        stream_name: Optional[str],
+    ):
+        super().__init__(stream_name=stream_name)
+        self.aio_call = aio_call
+        self.read_resp_iter = aio_call.__aiter__()
 
     def __aiter__(self) -> AsyncIterator[RecordedEvent]:
         return self
 
     async def __anext__(self) -> RecordedEvent:
         while True:
-            read_resp = await self._get_next_read_resp()
-            content_oneof = read_resp.WhichOneof("content")
-            if content_oneof == "event":
-                event = read_resp.event.event
-                position_oneof = read_resp.event.WhichOneof("position")
-                if position_oneof == "commit_position":
-                    commit_position = read_resp.event.commit_position
-                else:  # pragma: no cover
-                    # We only get here with EventStoreDB < 22.10.
-                    assert position_oneof == "no_position", position_oneof
-                    commit_position = None
-
-                return RecordedEvent(
-                    id=UUID(event.id.string),
-                    type=event.metadata["type"],
-                    data=event.data,
-                    content_type=event.metadata["content-type"],
-                    metadata=event.custom_metadata,
-                    stream_name=event.stream_identifier.stream_name.decode("utf8"),
-                    stream_position=event.stream_revision,
-                    commit_position=commit_position,
-                )
-            elif content_oneof == "stream_not_found":
-                raise NotFound(f"Stream {self.stream_name!r} not found")
+            try:
+                read_resp = await self._get_next_read_resp()
+            except CancelledByClient as e:
+                raise StopAsyncIteration() from e
             else:
-                pass  # pragma: no cover
-                # Todo: Maybe support other content_oneof values:
-                #   oneof content {
-                # 		ReadEvent event = 1;
-                # 		SubscriptionConfirmation confirmation = 2;
-                # 		Checkpoint checkpoint = 3;
-                # 		StreamNotFound stream_not_found = 4;
-                # 		uint64 first_stream_position = 5;
-                # 		uint64 last_stream_position = 6;
-                # 		AllStreamPosition last_all_stream_position = 7;
-                # 	}
-                #
-                # Todo: Not sure how to request to get first_stream_position,
-                #   last_stream_position, first_all_stream_position.
+                recorded_event = self._convert_read_resp(read_resp)
+                if recorded_event is not None:
+                    return recorded_event
+                else:  # pragma: no cover
+                    pass
+
+    async def _get_next_read_resp(self) -> streams_pb2.ReadResp:
+        try:
+            read_resp = await self.read_resp_iter.__anext__()
+        except grpc.RpcError as e:
+            raise self.handle_stream_read_rpc_error(e) from e
+        except CancelledError as e:
+            raise CancelledByClient() from e
+        else:
+            assert isinstance(read_resp, streams_pb2.ReadResp)
+            return read_resp
+
+    def stop(self) -> None:
+        self.aio_call.cancel()
 
 
 class AsyncioCatchupSubscription(AsyncioReadResponse):
@@ -132,14 +176,14 @@ class AsyncioCatchupSubscription(AsyncioReadResponse):
             )
 
 
-class ReadResponse(Iterator[RecordedEvent]):
+class ReadResponse(Iterator[RecordedEvent], BaseReadResponse):
     def __init__(
         self,
         read_resps: _ReadResps,
         stream_name: Optional[str],
     ):
+        super().__init__(stream_name=stream_name)
         self.read_resps = read_resps
-        self.stream_name = stream_name
 
     def __iter__(self) -> "ReadResponse":
         return self
@@ -150,65 +194,28 @@ class ReadResponse(Iterator[RecordedEvent]):
                 read_resp = self._get_next_read_resp()
             except CancelledByClient as e:
                 raise StopIteration() from e
-            content_oneof = read_resp.WhichOneof("content")
-            if content_oneof == "event":
-                event = read_resp.event.event
-                position_oneof = read_resp.event.WhichOneof("position")
-                if position_oneof == "commit_position":
-                    commit_position = read_resp.event.commit_position
-                else:  # pragma: no cover
-                    # We only get here with EventStoreDB < 22.10.
-                    assert position_oneof == "no_position", position_oneof
-                    commit_position = None
-
-                return RecordedEvent(
-                    id=UUID(event.id.string),
-                    type=event.metadata["type"],
-                    data=event.data,
-                    content_type=event.metadata["content-type"],
-                    metadata=event.custom_metadata,
-                    stream_name=event.stream_identifier.stream_name.decode("utf8"),
-                    stream_position=event.stream_revision,
-                    commit_position=commit_position,
-                )
-            elif content_oneof == "stream_not_found":
-                raise NotFound(f"Stream {self.stream_name!r} not found")
             else:
-                pass  # pragma: no cover
-                # Todo: Maybe support other content_oneof values:
-                #   oneof content {
-                # 		ReadEvent event = 1;
-                # 		SubscriptionConfirmation confirmation = 2;
-                # 		Checkpoint checkpoint = 3;
-                # 		StreamNotFound stream_not_found = 4;
-                # 		uint64 first_stream_position = 5;
-                # 		uint64 last_stream_position = 6;
-                # 		AllStreamPosition last_all_stream_position = 7;
-                # 	}
-                #
-                # Todo: Not sure how to request to get first_stream_position,
-                #   last_stream_position, first_all_stream_position.
+                recorded_event = self._convert_read_resp(read_resp)
+                if recorded_event is not None:
+                    return recorded_event
+                else:  # pragma: no cover
+                    pass
 
     def _get_next_read_resp(self) -> streams_pb2.ReadResp:
         try:
             read_resp = next(self.read_resps)
         except grpc.RpcError as e:
-            if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
-                details = e.details() or ""
-                if self.stream_name and details and "is deleted" in details:
-                    raise StreamIsDeleted() from e
-                else:  # pragma: no cover
-                    raise handle_rpc_error(e) from e
-            else:
-                raise handle_rpc_error(e) from e
-        assert isinstance(read_resp, streams_pb2.ReadResp)
-        return read_resp
+            raise self.handle_stream_read_rpc_error(e) from e
+        else:
+            assert isinstance(read_resp, streams_pb2.ReadResp)
+            return read_resp
 
     def stop(self) -> None:
         self.read_resps.cancel()
 
     def __del__(self) -> None:
         self.stop()
+        del self
 
 
 class CatchupSubscription(ReadResponse):
@@ -216,9 +223,11 @@ class CatchupSubscription(ReadResponse):
         self,
         read_resps: _ReadResps,
         stream_name: Optional[str],
+        include_checkpoints: bool = False,
     ):
         super().__init__(read_resps=read_resps, stream_name=stream_name)
         self.subscription_id: Optional[UUID] = None
+        self.include_checkpoints = include_checkpoints
         first_read_resp = self._get_next_read_resp()
         content_oneof = first_read_resp.WhichOneof("content")
         if content_oneof == "confirmation":
@@ -229,8 +238,14 @@ class CatchupSubscription(ReadResponse):
                 f"Expected subscription confirmation, got: {first_read_resp}"
             )
 
+    def __next__(self) -> RecordedEvent:
+        while True:
+            recorded_event = super().__next__()
+            if self.include_checkpoints:
+                return recorded_event
+            elif not isinstance(recorded_event, Checkpoint):
+                return recorded_event
 
-DEFAULT_BATCH_APPEND_REQUEST_DEADLINE = 315576000000
 
 # @dataclass
 # class BatchAppendRequest:
@@ -452,6 +467,8 @@ class BaseStreamsService(ESDBService):
         filter_by_stream_name: bool = False,
         limit: int = sys.maxsize,
         subscribe: bool = False,
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
     ) -> streams_pb2.ReadReq:
         # Construct ReadReq.Options.
         options = streams_pb2.ReadReq.Options()
@@ -513,6 +530,11 @@ class BaseStreamsService(ESDBService):
 
         # Decide 'filter_option'.
         if filter_exclude or filter_include:
+            filter_options = streams_pb2.ReadReq.Options.FilterOptions(
+                checkpointIntervalMultiplier=checkpoint_interval_multiplier,
+            )
+
+            # Decide 'filter'
             if filter_include:
                 filter_include = (
                     [filter_include]
@@ -531,22 +553,18 @@ class BaseStreamsService(ESDBService):
             filter_expression = streams_pb2.ReadReq.Options.FilterOptions.Expression(
                 regex=filter_regex
             )
-            if filter_by_stream_name:
-                stream_identifier_filter = filter_expression
-                event_type_filter = None
-            else:
-                stream_identifier_filter = None
-                event_type_filter = filter_expression
 
-            filter_options = streams_pb2.ReadReq.Options.FilterOptions(
-                stream_identifier=stream_identifier_filter,
-                event_type=event_type_filter,
-                # Todo: What does 'window' mean?
-                # max=shared_pb2.Empty(),
-                count=shared_pb2.Empty(),
-                # Todo: What does 'checkpointIntervalMultiplier' mean?
-                checkpointIntervalMultiplier=5,
-            )
+            if filter_by_stream_name:
+                filter_options.stream_identifier.CopyFrom(filter_expression)
+            else:
+                filter_options.event_type.CopyFrom(filter_expression)
+
+            # Decide 'window'.
+            # filter_options.count.CopyFrom(shared_pb2.Empty())
+            assert isinstance(window_size, int)
+            assert window_size > 0
+            filter_options.max = window_size
+
             options.filter.CopyFrom(filter_options)
         else:
             options.no_filter.CopyFrom(shared_pb2.Empty())
@@ -708,6 +726,8 @@ class AsyncioStreamsService(BaseStreamsService):
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
         subscribe: Literal[True],
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -728,6 +748,8 @@ class AsyncioStreamsService(BaseStreamsService):
         filter_by_stream_name: bool = False,
         limit: int = sys.maxsize,
         subscribe: bool = False,
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -749,10 +771,14 @@ class AsyncioStreamsService(BaseStreamsService):
             filter_by_stream_name=filter_by_stream_name,
             limit=limit,
             subscribe=subscribe,
+            window_size=window_size,
+            checkpoint_interval_multiplier=checkpoint_interval_multiplier,
         )
 
         # Send the read request, and iterate over the response.
-        unary_stream_call: AsyncIterable[streams_pb2.ReadResp] = self._stub.Read(
+        unary_stream_call: grpc.aio.UnaryStreamCall[
+            streams_pb2.ReadReq, streams_pb2.ReadResp
+        ] = self._stub.Read(
             read_req,
             timeout=timeout,
             metadata=self._metadata(metadata),
@@ -761,11 +787,11 @@ class AsyncioStreamsService(BaseStreamsService):
 
         if not subscribe:
             response = AsyncioReadResponse(
-                read_resp_iter=unary_stream_call, stream_name=stream_name
+                aio_call=unary_stream_call, stream_name=stream_name
             )
         else:
             response = AsyncioCatchupSubscription(
-                read_resp_iter=unary_stream_call, stream_name=stream_name
+                aio_call=unary_stream_call, stream_name=stream_name
             )
             await response.check_confirmation()
         return response
@@ -902,6 +928,9 @@ class StreamsService(BaseStreamsService):
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
         subscribe: Literal[True],
+        include_checkpoints: bool = False,
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -922,6 +951,9 @@ class StreamsService(BaseStreamsService):
         filter_by_stream_name: bool = False,
         limit: int = sys.maxsize,
         subscribe: bool = False,
+        include_checkpoints: bool = False,
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -943,6 +975,8 @@ class StreamsService(BaseStreamsService):
             filter_by_stream_name=filter_by_stream_name,
             limit=limit,
             subscribe=subscribe,
+            window_size=window_size,
+            checkpoint_interval_multiplier=checkpoint_interval_multiplier,
         )
 
         # Send the read request, and iterate over the response.
@@ -957,7 +991,11 @@ class StreamsService(BaseStreamsService):
         if subscribe is False:
             return ReadResponse(read_resps, stream_name=stream_name)
         else:
-            return CatchupSubscription(read_resps, stream_name=stream_name)
+            return CatchupSubscription(
+                read_resps,
+                stream_name=stream_name,
+                include_checkpoints=include_checkpoints,
+            )
 
     def append(
         self,

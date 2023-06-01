@@ -161,34 +161,6 @@ class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
         self.assertIn(event1.id, event_ids)
         self.assertIn(event2.id, event_ids)
 
-    async def test_append_events_and_subscribe_to_all(self) -> None:
-        # Append events.
-        stream_name1 = str(uuid4())
-        event1 = NewEvent(type="OrderCreated", data=b"{}")
-        await self.client.append_events(
-            stream_name=stream_name1,
-            events=[event1],
-            current_version=StreamState.NO_STREAM,
-        )
-
-        stream_name2 = str(uuid4())
-        event2 = NewEvent(type="OrderCreated", data=b"{}")
-        await self.client.append_events(
-            stream_name=stream_name2,
-            events=[event2],
-            current_version=StreamState.NO_STREAM,
-        )
-
-        # Subscribe all events.
-        events_iter = await self.client.subscribe_to_all()
-        events = []
-        async for event in events_iter:
-            events.append(event)
-            if event.id == event2.id:
-                break
-        self.assertEqual(events[-2].id, event1.id)
-        self.assertEqual(events[-1].id, event2.id)
-
     async def test_append_events_raises_not_found(self) -> None:
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
@@ -456,6 +428,34 @@ class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
         self.reader.connection_spec.options._NodePreference = "leader"
 
         await self.reader.tombstone_stream(stream_name1, current_version=0)
+
+    async def test_subscribe_to_all(self) -> None:
+        # Append events.
+        stream_name1 = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=b"{}")
+        await self.client.append_events(
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        stream_name2 = str(uuid4())
+        event2 = NewEvent(type="OrderCreated", data=b"{}")
+        await self.client.append_events(
+            stream_name=stream_name2,
+            events=[event2],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        # Subscribe all events.
+        catchup_subscription = await self.client.subscribe_to_all()
+        events = []
+        async for event in catchup_subscription:
+            events.append(event)
+            if event.id == event2.id:
+                catchup_subscription.stop()
+        self.assertEqual(events[-2].id, event1.id)
+        self.assertEqual(events[-1].id, event2.id)
 
     async def test_subscribe_to_all_reconnects(self) -> None:
         # Reconstruct connection with wrong port (to inspire ServiceUnavailble).

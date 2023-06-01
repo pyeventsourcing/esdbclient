@@ -12,7 +12,7 @@ from grpc._channel import _MultiThreadedRendezvous, _RPCState
 from grpc._cython.cygrpc import IntegratedCall
 
 import esdbclient.protos.Grpc.persistent_pb2 as grpc_persistent
-from esdbclient import StreamState
+from esdbclient import RecordedEvent, StreamState
 from esdbclient.client import EventStoreDBClient
 from esdbclient.connection import (
     NODE_PREFERENCE_FOLLOWER,
@@ -20,7 +20,7 @@ from esdbclient.connection import (
     ConnectionSpec,
 )
 from esdbclient.esdbapibase import handle_rpc_error
-from esdbclient.events import NewEvent
+from esdbclient.events import Checkpoint, NewEvent
 from esdbclient.exceptions import (
     AbortedByServer,
     ConsumerTooSlow,
@@ -1800,7 +1800,7 @@ class TestEventStoreDBClient(TestCase):
         with self.assertRaises(StreamIsDeleted):
             self.client.get_current_version(stream_name)
 
-    def test_subscribe_to_all_default_filter(self) -> None:
+    def test_subscribe_to_all_filter_exclude_system_events(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -1846,145 +1846,7 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(events[1].id, event5.id)
         self.assertEqual(events[2].id, event6.id)
 
-    def test_subscribe_to_stream_default_filter(self) -> None:
-        self.construct_esdb_client()
-
-        event1 = NewEvent(type="OrderCreated", data=random_data())
-        event2 = NewEvent(type="OrderUpdated", data=random_data())
-        event3 = NewEvent(type="OrderDeleted", data=random_data())
-
-        # Append new events.
-        stream_name1 = str(uuid4())
-        self.client.append_events(
-            stream_name1,
-            current_version=StreamState.NO_STREAM,
-            events=[event1, event2, event3],
-        )
-
-        # Subscribe to stream events, from the start.
-        subscription = self.client.subscribe_to_stream(stream_name=stream_name1)
-        events = []
-        for event in subscription:
-            events.append(event)
-            if event.id == event3.id:
-                break
-
-        # Append three events to stream2.
-        event4 = NewEvent(type="OrderCreated", data=random_data())
-        event5 = NewEvent(type="OrderUpdated", data=random_data())
-        event6 = NewEvent(type="OrderDeleted", data=random_data())
-        stream_name2 = str(uuid4())
-        self.client.append_events(
-            stream_name2,
-            current_version=StreamState.NO_STREAM,
-            events=[event4, event5, event6],
-        )
-
-        # Append three more events to stream1.
-        event7 = NewEvent(type="OrderCreated", data=random_data())
-        event8 = NewEvent(type="OrderUpdated", data=random_data())
-        event9 = NewEvent(type="OrderDeleted", data=random_data())
-        self.client.append_events(
-            stream_name1, current_version=2, events=[event7, event8, event9]
-        )
-
-        # Continue reading from the subscription.
-        events = []
-        for event in subscription:
-            events.append(event)
-            if event.id == event9.id:
-                break
-
-        # Check we got events only from stream1.
-        self.assertEqual(len(events), 3)
-        self.assertEqual(events[0].id, event7.id)
-        self.assertEqual(events[1].id, event8.id)
-        self.assertEqual(events[2].id, event9.id)
-
-    def test_subscribe_to_stream_from_stream_position(self) -> None:
-        self.construct_esdb_client()
-
-        event1 = NewEvent(type="OrderCreated", data=random_data())
-        event2 = NewEvent(type="OrderUpdated", data=random_data())
-        event3 = NewEvent(type="OrderDeleted", data=random_data())
-
-        # Append new events.
-        stream_name1 = str(uuid4())
-        self.client.append_events(
-            stream_name1,
-            current_version=StreamState.NO_STREAM,
-            events=[event1, event2, event3],
-        )
-
-        # Subscribe to stream events, from the current stream position.
-        subscription = self.client.subscribe_to_stream(
-            stream_name=stream_name1, stream_position=1
-        )
-        events = []
-        for event in subscription:
-            events.append(event)
-            if event.id == event3.id:
-                break
-
-        self.assertEqual(len(events), 1)
-        self.assertEqual(events[0].id, event3.id)
-
-        # Append three events to stream2.
-        event4 = NewEvent(type="OrderCreated", data=random_data())
-        event5 = NewEvent(type="OrderUpdated", data=random_data())
-        event6 = NewEvent(type="OrderDeleted", data=random_data())
-        stream_name2 = str(uuid4())
-        self.client.append_events(
-            stream_name2,
-            current_version=StreamState.NO_STREAM,
-            events=[event4, event5, event6],
-        )
-
-        # Append three more events to stream1.
-        event7 = NewEvent(type="OrderCreated", data=random_data())
-        event8 = NewEvent(type="OrderUpdated", data=random_data())
-        event9 = NewEvent(type="OrderDeleted", data=random_data())
-        self.client.append_events(
-            stream_name1, current_version=2, events=[event7, event8, event9]
-        )
-
-        # Continue reading from the subscription.
-        for event in subscription:
-            events.append(event)
-            if event.id == event9.id:
-                break
-
-        # Check we got events only from stream1.
-        self.assertEqual(len(events), 4)
-        self.assertEqual(events[0].id, event3.id)
-        self.assertEqual(events[1].id, event7.id)
-        self.assertEqual(events[2].id, event8.id)
-        self.assertEqual(events[3].id, event9.id)
-
-    def test_subscribe_to_stream_can_be_stopped(self) -> None:
-        self.construct_esdb_client()
-
-        # Subscribe to a stream.
-        stream_name1 = str(uuid4())
-        subscription = self.client.subscribe_to_stream(stream_name=stream_name1)
-
-        # Append new events.
-        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
-        self.client.append_events(
-            stream_name1,
-            current_version=StreamState.NO_STREAM,
-            events=[event1, event2, event3],
-        )
-
-        # Stop subscription.
-        subscription.stop()
-
-        # Iterating should stop.
-        list(subscription)
-
-    def test_subscribe_to_all_filter_nothing(self) -> None:
+    def test_subscribe_to_all_filter_exclude_nothing(self) -> None:
         self.construct_esdb_client()
 
         # Append new events.
@@ -1998,18 +1860,17 @@ class TestEventStoreDBClient(TestCase):
             events=[event1, event2, event3],
         )
 
-        # Subscribe from the current commit position.
+        # Subscribe and exclude nothing.
         subscription = self.client.subscribe_to_all(
             filter_exclude=[],
-            filter_include=[],
         )
 
         # Expect to get system events.
         for event in subscription:
             if event.type.startswith("$"):
                 break
-        else:
-            self.fail("Didn't get a system event")
+            else:
+                self.fail("Didn't get the $metadata event")
 
     def test_subscribe_to_all_filter_include_event_types(self) -> None:
         self.construct_esdb_client()
@@ -2065,35 +1926,148 @@ class TestEventStoreDBClient(TestCase):
             stream_name3, current_version=StreamState.NO_STREAM, events=[event3]
         )
 
-        # Expect to only get stream_name1 events.
+        # Subscribe to all, filtering by stream name for stream_name1.
         subscription = self.client.subscribe_to_all(
             filter_include=stream_name1, filter_by_stream_name=True
         )
+
+        # Expect to only get stream_name1 events.
         for event in subscription:
             if event.stream_name != stream_name1:
                 self.fail("Filtering included other stream names")
             if event.id == event1.id:
                 break
 
-        # Expect to only get stream_name2 events.
+        # Subscribe to all, filtering by stream name for stream_name2.
         subscription = self.client.subscribe_to_all(
             filter_include=stream_name2, filter_by_stream_name=True
         )
+
+        # Expect to only get stream_name2 events.
         for event in subscription:
             if event.stream_name != stream_name2:
                 self.fail("Filtering included other stream names")
             if event.id == event2.id:
                 break
 
-        # Expect to only get stream_name3 events.
+        # Subscribe to all, filtering by stream name for stream_name3.
         subscription = self.client.subscribe_to_all(
             filter_include=stream_name3, filter_by_stream_name=True
         )
+
+        # Expect to only get stream_name3 events.
         for event in subscription:
             if event.stream_name != stream_name3:
                 self.fail("Filtering included other stream names")
             if event.id == event3.id:
                 break
+
+    def test_subscribe_to_all_returns_checkpoints(self) -> None:
+        self.construct_esdb_client()
+
+        # Append new events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+        stream_name1 = str(uuid4())
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        # Subscribe excluding all events, with small window.
+        subscription = self.client.subscribe_to_all(
+            filter_exclude=".*",
+            include_checkpoints=True,
+            window_size=1,
+            checkpoint_interval_multiplier=1,
+        )
+
+        # Expect to get system events.
+        for event in subscription:
+            if isinstance(event, Checkpoint):
+                break
+        else:
+            self.fail("Didn't get a checkpoint")
+
+    def test_checkpoint_commit_position(self) -> None:
+        self.construct_esdb_client()
+
+        # Append new events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+        stream_name1 = str(uuid4())
+        first_append_commit_position = self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        def get_event_at_commit_position(commit_position: int) -> RecordedEvent:
+            read_response = self.client.read_all(
+                commit_position=commit_position,
+                # backwards=True,
+                filter_exclude=[],
+                limit=1,
+            )
+            events = tuple(read_response)
+            assert len(events) == 1, len(events)
+            event = events[0]
+            assert event.commit_position == commit_position, event
+            return event
+
+        event = get_event_at_commit_position(first_append_commit_position)
+        self.assertEqual(event.id, event3.id)
+        self.assertEqual(event.commit_position, first_append_commit_position)
+        current_commit_position = self.client.get_commit_position(filter_exclude=[])
+        self.assertEqual(event.commit_position, current_commit_position)
+
+        # Subscribe excluding all events, with large window.
+        subscription = self.client.subscribe_to_all(
+            filter_exclude=[".*"],
+            include_checkpoints=True,
+            window_size=10000,
+            checkpoint_interval_multiplier=500,
+        )
+
+        # We always get a checkpoint at the end..... why?
+        for event in subscription:
+            if isinstance(event, Checkpoint):
+                last_checkpoint_commit_position = event.commit_position
+                break
+            else:
+                self.fail("Expected no recorded events")
+        else:
+            self.fail("Didn't get a checkpoint")
+
+        # Sadly, the checkpoint commit position doesn't correspond
+        # to an event that has been filtered out.
+        with self.assertRaises(AssertionError):
+            assert event.commit_position is not None
+            get_event_at_commit_position(event.commit_position)
+
+        # And the checkpoint commit position is greater than the current commit position.
+        assert last_checkpoint_commit_position is not None
+        self.assertLess(
+            self.client.get_commit_position(filter_exclude=[]),
+            last_checkpoint_commit_position,
+        )
+
+        # And the checkpoint commit position is allocated to the next appended new event.
+        event4 = NewEvent(type="OrderCreated", data=random_data())
+        stream_name2 = str(uuid4())
+        next_append_commit_position = self.client.append_events(
+            stream_name2,
+            current_version=StreamState.NO_STREAM,
+            events=[event4],
+        )
+        self.assertEqual(next_append_commit_position, last_checkpoint_commit_position)
+
+        # Which means that if a downstream event-processing component is going to
+        # restart a catch-up subscription from last_checkpoint_commit_position,
+        # it would not receive event4.
 
     def test_subscribe_to_all_from_commit_position_zero(self) -> None:
         self.construct_esdb_client()
@@ -2250,6 +2224,144 @@ class TestEventStoreDBClient(TestCase):
                 break
         else:
             self.fail("Didn't see 'ConsumerTooSlow' error")
+
+    def test_subscribe_to_stream_from_start(self) -> None:
+        self.construct_esdb_client()
+
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        # Subscribe to stream events, from the start.
+        subscription = self.client.subscribe_to_stream(stream_name=stream_name1)
+        events = []
+        for event in subscription:
+            events.append(event)
+            if event.id == event3.id:
+                break
+
+        # Append three events to stream2.
+        event4 = NewEvent(type="OrderCreated", data=random_data())
+        event5 = NewEvent(type="OrderUpdated", data=random_data())
+        event6 = NewEvent(type="OrderDeleted", data=random_data())
+        stream_name2 = str(uuid4())
+        self.client.append_events(
+            stream_name2,
+            current_version=StreamState.NO_STREAM,
+            events=[event4, event5, event6],
+        )
+
+        # Append three more events to stream1.
+        event7 = NewEvent(type="OrderCreated", data=random_data())
+        event8 = NewEvent(type="OrderUpdated", data=random_data())
+        event9 = NewEvent(type="OrderDeleted", data=random_data())
+        self.client.append_events(
+            stream_name1, current_version=2, events=[event7, event8, event9]
+        )
+
+        # Continue reading from the subscription.
+        events = []
+        for event in subscription:
+            events.append(event)
+            if event.id == event9.id:
+                break
+
+        # Check we got events only from stream1.
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event7.id)
+        self.assertEqual(events[1].id, event8.id)
+        self.assertEqual(events[2].id, event9.id)
+
+    def test_subscribe_to_stream_from_stream_position(self) -> None:
+        self.construct_esdb_client()
+
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        # Subscribe to stream events, from the current stream position.
+        subscription = self.client.subscribe_to_stream(
+            stream_name=stream_name1, stream_position=1
+        )
+        events = []
+        for event in subscription:
+            events.append(event)
+            if event.id == event3.id:
+                break
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event3.id)
+
+        # Append three events to stream2.
+        event4 = NewEvent(type="OrderCreated", data=random_data())
+        event5 = NewEvent(type="OrderUpdated", data=random_data())
+        event6 = NewEvent(type="OrderDeleted", data=random_data())
+        stream_name2 = str(uuid4())
+        self.client.append_events(
+            stream_name2,
+            current_version=StreamState.NO_STREAM,
+            events=[event4, event5, event6],
+        )
+
+        # Append three more events to stream1.
+        event7 = NewEvent(type="OrderCreated", data=random_data())
+        event8 = NewEvent(type="OrderUpdated", data=random_data())
+        event9 = NewEvent(type="OrderDeleted", data=random_data())
+        self.client.append_events(
+            stream_name1, current_version=2, events=[event7, event8, event9]
+        )
+
+        # Continue reading from the subscription.
+        for event in subscription:
+            events.append(event)
+            if event.id == event9.id:
+                break
+
+        # Check we got events only from stream1.
+        self.assertEqual(len(events), 4)
+        self.assertEqual(events[0].id, event3.id)
+        self.assertEqual(events[1].id, event7.id)
+        self.assertEqual(events[2].id, event8.id)
+        self.assertEqual(events[3].id, event9.id)
+
+    def test_subscribe_to_stream_can_be_stopped(self) -> None:
+        self.construct_esdb_client()
+
+        # Subscribe to a stream.
+        stream_name1 = str(uuid4())
+        subscription = self.client.subscribe_to_stream(stream_name=stream_name1)
+
+        # Append new events.
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        # Stop subscription.
+        subscription.stop()
+
+        # Iterating should stop.
+        list(subscription)
 
     def test_subscription_read_with_ack(self) -> None:
         self.construct_esdb_client()

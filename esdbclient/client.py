@@ -59,7 +59,13 @@ from esdbclient.persistent import (
     PersistentSubscription,
     SubscriptionInfo,
 )
-from esdbclient.streams import CatchupSubscription, ReadResponse, StreamState
+from esdbclient.streams import (
+    DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+    DEFAULT_WINDOW_SIZE,
+    CatchupSubscription,
+    ReadResponse,
+    StreamState,
+)
 
 # Matches the 'type' of "system" events.
 ESDB_SYSTEM_EVENTS_REGEX = r"\$.+"
@@ -641,6 +647,9 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        include_checkpoints: bool = False,
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         timeout: Optional[float] = None,
     ) -> CatchupSubscription:
         """
@@ -653,6 +662,9 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
             subscribe=True,
+            include_checkpoints=include_checkpoints,
+            window_size=window_size,
+            checkpoint_interval_multiplier=checkpoint_interval_multiplier,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=self._call_credentials,

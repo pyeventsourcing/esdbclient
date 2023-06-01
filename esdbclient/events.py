@@ -36,3 +36,19 @@ class RecordedEvent:
     stream_position: int
     commit_position: Optional[int]
     retry_count: Optional[int] = None
+
+
+class Checkpoint(RecordedEvent):
+    CHECKPOINT_ID = UUID("00000000-0000-0000-0000-000000000000")
+
+    def __init__(self, commit_position: int):
+        super().__init__(
+            id=self.CHECKPOINT_ID,
+            type="",
+            data=b"",
+            content_type="",
+            metadata=b"",
+            stream_name="",
+            stream_position=0,
+            commit_position=commit_position,
+        )

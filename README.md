@@ -72,14 +72,15 @@ event3 = NewEvent(
 )
 
 
-# Append new events to a new stream. The "commit position" value
-# returned from the append_to_stream() method is the overall position
-# in the database of the last new event recorded by this operation.
-# The returned "commit position" may be used in a user interface to
-# poll an eventually consistent event-processing component until it
-# can present an up-to-date materialized view. New events are each
-# allocated a "stream position", which is the next available position
-# in the stream, starting from 0.
+# Append new events to a new stream. The value returned
+# from the append_to_stream() method is the overall
+# "commit position" in the database of the last new event
+# recorded by this operation. The returned "commit position"
+# may be used in a user interface to poll an eventually
+# consistent event-processing component until it can
+# present an up-to-date materialized view. New events are
+# each allocated a "stream position", which is the next
+# available position in the stream, starting from 0.
 
 commit_position1 = client.append_to_stream(
     stream_name=stream_name1,
@@ -87,10 +88,11 @@ commit_position1 = client.append_to_stream(
     events=[event1, event2],
 )
 
-# Append events to an existing stream. The "current version" is the
-# "stream position" of the last recorded event in a stream. We have
-# recorded two new events, so the "current version" is 1. Incorrect
-# value will cause 'WrongCurrentVersion' to be raised.
+# Append events to an existing stream. The "current version"
+# is the "stream position" of the last recorded event in a
+# stream. We have recorded two new events, so the "current
+# version" is 1. The exception 'WrongCurrentVersion' will be
+# raised if an incorrect value is given.
 
 commit_position2 = client.append_to_stream(
     stream_name=stream_name1,
@@ -112,8 +114,8 @@ read_response = client.read_stream(
 )
 
 # Iterate over "read response" to get recorded events.
-# The recorded events may be deserialized to domain events
-# objects of different types, then used to reconstruct an
+# The recorded events may be deserialized to domain event
+# objects of different types and used to reconstruct an
 # aggregate in a domain model.
 recorded_events = tuple(read_response)
 
@@ -1371,9 +1373,7 @@ obtained by iterating over the "read response" object. Recorded events are
 streamed from the server to the client as the iteration proceeds. The iteration
 will automatically stop when there are no more recorded events to be returned.
 The streaming of events, and hence the iterator, can also be stopped by calling
-the `stop()` method on the "read response" object.
-
-Just like `get_stream()` and `read_stream()`, the recorded event objects
+the `stop()` method on the "read response" object. The recorded event objects
 are instances of the `RecordedEvent` class.
 
 This method has seven optional arguments, `commit_position`, `backwards`,
@@ -1382,7 +1382,10 @@ This method has seven optional arguments, `commit_position`, `backwards`,
 The optional `commit_position` argument is a Python `int` that can be used to
 specify a commit position from which to start reading. The default value of
 `commit_position` is `None`. Please note, if a commit position is specified,
-it must be an actually existing commit position in the database.
+it must be an actually existing commit position in the database. When reading
+forwards, the event at the commit position may be included, depending upon the
+filter. When reading backwards, the event at the commit position will not be
+included.
 
 The optional `backwards` argument is a Python `bool`. The default of `backwards` is
 `False`, which means events are returned in the order they were recorded, If
@@ -1626,7 +1629,10 @@ all events in the database. The `subscribe_to_stream()` method starts a catch-up
 subscription that can receive events from a specific stream. Both methods return a
 "catch-up subscription" object, which is a Python iterator. Recorded events can be
 obtained by iteration. Recorded event objects obtained in this way are instances
-of the `RecordedEvent` class.
+of the `RecordedEvent` class. Please note, the `subscribe_to_all()` method will
+occasionally return `Checkpoint` objects. These are a special type of `RecordedEvent`
+that have a `commit_position`, so that downstream event-processing components can
+record progress across a large number of events that have been filtered out.
 
 Before the "catch-up subscription" object is returned to the caller, the client will
 firstly obtain a "confirmation" response from the server, which allows the client to
@@ -1684,14 +1690,19 @@ from the first recorded event in the database.
 
 ```python
 # Subscribe from the first recorded event in the database.
-subscription = client.subscribe_to_all()
+catchup_subscription = client.subscribe_to_all()
 ```
 
-The example below is longer, and shows that the catch-up subscription
-does not stop automatically, but blocks when the last recorded event is
-received, and then continues when subsequent events are recorded.
+The example below shows that catch-up subscriptions do not stop
+automatically, but block when the last recorded event is received,
+and then continue when subsequent events are recorded.
 
 ```python
+from datetime import datetime
+from threading import Thread
+
+from esdbclient import Checkpoint
+
 # Append a new event to a new stream.
 stream_name2 = str(uuid.uuid4())
 event4 = NewEvent(type='OrderCreated', data=b'data4')
@@ -1701,22 +1712,16 @@ client.append_to_stream(
     events=[event4],
 )
 
-# Subscribe from the first recorded event in the database.
-subscription = client.subscribe_to_all()
-received_events = []
-
 
 # Receive events from the catch-up subscription in a different thread.
-from datetime import datetime
-from threading import Thread
-
+received_events = []
 mark = datetime.now()
 
 def receive_events():
-    for event in subscription:
-        received_events.append(event)
+    for event in catchup_subscription:
         global mark
         mark = datetime.now()
+        received_events.append(event)
 
 
 def wait_for_subscription_to_block():
@@ -1725,14 +1730,14 @@ def wait_for_subscription_to_block():
              break
 
 
-thread = Thread(target=receive_events)
+thread = Thread(target=receive_events, daemon=True)
 thread.start()
 
 # Wait for the subscription to block.
 wait_for_subscription_to_block()
 
 # Check the last received event is 'event4'.
-assert received_events[-1].id == event4.id
+assert received_events[-1].id == event4.id, received_events[-1].id
 
 # Check we also received the other events we have recorded.
 assert received_events[-9].id == event1.id
@@ -1761,11 +1766,11 @@ assert received_events[-2].id == event4.id
 assert received_events[-1].id == event5.id
 
 # Stop the subscription.
-subscription.stop()
+catchup_subscription.stop()
 thread.join()
 ```
 
-The example below shows how to start a catch-up subscription after a
+The example below shows how to subscribe to events recorded after a
 particular commit position, in this case from the commit position of
 the last recorded event that was received above. Another event is
 recorded before the subscription is restarted. Further events are
@@ -1782,13 +1787,14 @@ client.append_to_stream(
     events=[event6],
 )
 
-# Resume subscribing after the commit position of the last received event.
-subscription = client.subscribe_to_all(
+# Restart subscribing to all events after the
+# commit position of the last received event.
+catchup_subscription = client.subscribe_to_all(
     commit_position=received_events[-1].commit_position
 )
 
 mark = datetime.now()
-thread = Thread(target=receive_events)
+thread = Thread(target=receive_events, daemon=True)
 thread.start()
 
 # Wait for the subscription to block.
@@ -1825,7 +1831,7 @@ assert received_events[-2].id == event8.id
 assert received_events[-1].id == event9.id
 
 # Stop the subscription.
-subscription.stop()
+catchup_subscription.stop()
 thread.join()
 ```
 

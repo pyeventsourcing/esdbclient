@@ -36,6 +36,19 @@
     * "Bear in mind that a subscription can also drop because it is slow. The server tried to push all the live events to the subscription when it is in the live processing mode. If the subscription gets the reading buffer overflow and won't be able to acknowledge the buffer, it will break."
       * from https://developers.eventstore.com/clients/grpc/subscriptions.html#dropped-subscriptions
 
+* I noticed that when subscribing to all with a catch-up subscription, a checkpoint is
+    received when there are no more recorded events which has a commit position that
+    at which there is no recorded event. This commit position is allocated to the next
+    new event which is recorded. Catch-up subscriptions started with a specific commit
+    position do not return the event at that commit position. So if an event processing
+    component records progress using the checkpoint commit positions, and restarts
+    catch-up subscription using the recorded commit positions, and happens to record
+    the commit position of a checkpoint received because there are no more recorded
+    events, and then happens to crash and be restarted, and then a new event is appended,
+    it will never receive that new event.... And also if you screen out responses by
+    looking for repeat commit positions, then you will see the checkpoint first, and
+    then ignore the subsequent event that has the same commit position.
+  * See: test_checkpoint_commit_position()
 
 -----
 Issues:
