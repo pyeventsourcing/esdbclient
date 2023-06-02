@@ -1962,7 +1962,7 @@ class TestEventStoreDBClient(TestCase):
             if event.id == event3.id:
                 break
 
-    def test_subscribe_to_all_returns_checkpoints(self) -> None:
+    def test_subscribe_to_all_include_checkpoints(self) -> None:
         self.construct_esdb_client()
 
         # Append new events.
@@ -1984,14 +1984,14 @@ class TestEventStoreDBClient(TestCase):
             checkpoint_interval_multiplier=1,
         )
 
-        # Expect to get system events.
+        # Expect to get checkpoints.
         for event in subscription:
             if isinstance(event, Checkpoint):
                 break
         else:
             self.fail("Didn't get a checkpoint")
 
-    def test_checkpoint_commit_position(self) -> None:
+    def test_demonstrate_checkpoint_has_unused_commit_position(self) -> None:
         self.construct_esdb_client()
 
         # Append new events.
