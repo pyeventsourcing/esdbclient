@@ -50,6 +50,8 @@
     then ignore the subsequent event that has the same commit position.
   * See: test_checkpoint_commit_position()
 
+* How are checkpoints returned from a persistent subscription? ReadReq doesn't have the "checkpoint" one of.
+
 -----
 Issues:
 

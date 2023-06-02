@@ -8,7 +8,14 @@ from uuid import UUID
 import grpc
 from typing_extensions import Literal, Protocol, runtime_checkable
 
-from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
+from esdbclient.connection_spec import ConnectionSpec
+from esdbclient.esdbapibase import (
+    DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+    DEFAULT_WINDOW_SIZE,
+    ESDBService,
+    Metadata,
+    handle_rpc_error,
+)
 from esdbclient.events import RecordedEvent
 from esdbclient.exceptions import (
     CancelledByClient,
@@ -139,7 +146,12 @@ class SubscriptionInfo:
 
 
 class BasePersistentSubscriptionsService(ESDBService):
-    def __init__(self, channel: Union[grpc.Channel, grpc.aio.Channel]):
+    def __init__(
+        self,
+        channel: Union[grpc.Channel, grpc.aio.Channel],
+        connection_spec: ConnectionSpec,
+    ):
+        super().__init__(connection_spec=connection_spec)
         self._stub = persistent_pb2_grpc.PersistentSubscriptionsStub(channel)
 
     def _construct_create_req(
@@ -152,6 +164,8 @@ class BasePersistentSubscriptionsService(ESDBService):
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
     ) -> persistent_pb2.CreateReq:
         # Construct 'settings'.
@@ -239,11 +253,8 @@ class BasePersistentSubscriptionsService(ESDBService):
                 filter = persistent_pb2.CreateReq.AllOptions.FilterOptions(
                     stream_identifier=stream_identifier_filter,
                     event_type=event_type_filter,
-                    # Todo: What does 'window' mean?
-                    # max=shared_pb2.Empty(),
-                    count=shared_pb2.Empty(),
-                    # Todo: What does 'checkpointIntervalMultiplier' mean?
-                    checkpointIntervalMultiplier=5,
+                    max=window_size,
+                    checkpointIntervalMultiplier=checkpoint_interval_multiplier,
                 )
                 all_options.filter.CopyFrom(filter)
             else:
@@ -579,6 +590,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -614,6 +627,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -628,6 +643,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
+            window_size=window_size,
+            checkpoint_interval_multiplier=checkpoint_interval_multiplier,
             consumer_strategy=consumer_strategy,
         )
         # Call 'Create' RPC.

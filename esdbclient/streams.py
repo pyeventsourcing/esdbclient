@@ -20,7 +20,15 @@ import grpc.aio
 from google.protobuf import duration_pb2, empty_pb2
 from typing_extensions import Literal, Protocol, runtime_checkable
 
-from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
+from esdbclient.connection_spec import ConnectionSpec
+from esdbclient.esdbapibase import (
+    DEFAULT_BATCH_APPEND_REQUEST_DEADLINE,
+    DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+    DEFAULT_WINDOW_SIZE,
+    ESDBService,
+    Metadata,
+    handle_rpc_error,
+)
 from esdbclient.events import Checkpoint, NewEvent, RecordedEvent
 from esdbclient.exceptions import (
     AccessDeniedError,
@@ -37,10 +45,6 @@ from esdbclient.exceptions import (
     WrongCurrentVersion,
 )
 from esdbclient.protos.Grpc import shared_pb2, status_pb2, streams_pb2, streams_pb2_grpc
-
-DEFAULT_WINDOW_SIZE = 30
-DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER = 5
-DEFAULT_BATCH_APPEND_REQUEST_DEADLINE = 315576000000
 
 
 @runtime_checkable
@@ -167,6 +171,15 @@ class AsyncioReadResponse(AsyncIterator[RecordedEvent], BaseReadResponse):
 
 
 class AsyncioCatchupSubscription(AsyncioReadResponse):
+    def __init__(
+        self,
+        aio_call: grpc.aio.UnaryStreamCall[streams_pb2.ReadReq, streams_pb2.ReadResp],
+        stream_name: Optional[str],
+        include_checkpoints: bool = False,
+    ):
+        super().__init__(aio_call=aio_call, stream_name=stream_name)
+        self.include_checkpoints = include_checkpoints
+
     async def check_confirmation(self) -> None:
         read_resp = await self._get_next_read_resp()
         content_oneof = read_resp.WhichOneof("content")
@@ -174,6 +187,12 @@ class AsyncioCatchupSubscription(AsyncioReadResponse):
             raise SubscriptionConfirmationError(
                 f"Expected subscription confirmation, got: {read_resp}"
             )
+
+    async def __anext__(self) -> RecordedEvent:
+        while True:
+            recorded_event = await super().__anext__()
+            if self.include_checkpoints or not isinstance(recorded_event, Checkpoint):
+                return recorded_event
 
 
 class ReadResponse(Iterator[RecordedEvent], BaseReadResponse):
@@ -241,9 +260,7 @@ class CatchupSubscription(ReadResponse):
     def __next__(self) -> RecordedEvent:
         while True:
             recorded_event = super().__next__()
-            if self.include_checkpoints:
-                return recorded_event
-            elif not isinstance(recorded_event, Checkpoint):
+            if self.include_checkpoints or not isinstance(recorded_event, Checkpoint):
                 return recorded_event
 
 
@@ -300,7 +317,12 @@ class BatchAppendResponse:
 
 
 class BaseStreamsService(ESDBService):
-    def __init__(self, channel: Union[grpc.Channel, grpc.aio.Channel]):
+    def __init__(
+        self,
+        channel: Union[grpc.Channel, grpc.aio.Channel],
+        connection_spec: ConnectionSpec,
+    ):
+        super().__init__(connection_spec=connection_spec)
         self._stub = streams_pb2_grpc.StreamsStub(channel)
 
     @staticmethod
@@ -531,6 +553,7 @@ class BaseStreamsService(ESDBService):
         # Decide 'filter_option'.
         if filter_exclude or filter_include:
             filter_options = streams_pb2.ReadReq.Options.FilterOptions(
+                max=window_size,
                 checkpointIntervalMultiplier=checkpoint_interval_multiplier,
             )
 
@@ -558,12 +581,6 @@ class BaseStreamsService(ESDBService):
                 filter_options.stream_identifier.CopyFrom(filter_expression)
             else:
                 filter_options.event_type.CopyFrom(filter_expression)
-
-            # Decide 'window'.
-            # filter_options.count.CopyFrom(shared_pb2.Empty())
-            assert isinstance(window_size, int)
-            assert window_size > 0
-            filter_options.max = window_size
 
             options.filter.CopyFrom(filter_options)
         else:
@@ -726,6 +743,7 @@ class AsyncioStreamsService(BaseStreamsService):
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
         subscribe: Literal[True],
+        include_checkpoints: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         timeout: Optional[float] = None,
@@ -748,6 +766,7 @@ class AsyncioStreamsService(BaseStreamsService):
         filter_by_stream_name: bool = False,
         limit: int = sys.maxsize,
         subscribe: bool = False,
+        include_checkpoints: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         timeout: Optional[float] = None,
@@ -787,11 +806,14 @@ class AsyncioStreamsService(BaseStreamsService):
 
         if not subscribe:
             response = AsyncioReadResponse(
-                aio_call=unary_stream_call, stream_name=stream_name
+                aio_call=unary_stream_call,
+                stream_name=stream_name,
             )
         else:
             response = AsyncioCatchupSubscription(
-                aio_call=unary_stream_call, stream_name=stream_name
+                aio_call=unary_stream_call,
+                stream_name=stream_name,
+                include_checkpoints=include_checkpoints,
             )
             await response.check_confirmation()
         return response

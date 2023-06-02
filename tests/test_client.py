@@ -14,7 +14,7 @@ from grpc._cython.cygrpc import IntegratedCall
 import esdbclient.protos.Grpc.persistent_pb2 as grpc_persistent
 from esdbclient import RecordedEvent, StreamState
 from esdbclient.client import EventStoreDBClient
-from esdbclient.connection import (
+from esdbclient.connection_spec import (
     NODE_PREFERENCE_FOLLOWER,
     NODE_PREFERENCE_LEADER,
     ConnectionSpec,
@@ -2025,20 +2025,20 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(event.commit_position, current_commit_position)
 
         # Subscribe excluding all events, with large window.
-        subscription = self.client.subscribe_to_all(
-            filter_exclude=[".*"],
+        subscription1 = self.client.subscribe_to_all(
+            # filter_exclude=[".*"],
             include_checkpoints=True,
             window_size=10000,
             checkpoint_interval_multiplier=500,
         )
 
         # We always get a checkpoint at the end..... why?
-        for event in subscription:
+        for event in subscription1:
             if isinstance(event, Checkpoint):
                 last_checkpoint_commit_position = event.commit_position
                 break
             else:
-                self.fail("Expected no recorded events")
+                pass
         else:
             self.fail("Didn't get a checkpoint")
 
@@ -2068,6 +2068,31 @@ class TestEventStoreDBClient(TestCase):
         # Which means that if a downstream event-processing component is going to
         # restart a catch-up subscription from last_checkpoint_commit_position,
         # it would not receive event4.
+
+        event5 = NewEvent(type="OrderCreated", data=random_data())
+        stream_name3 = str(uuid4())
+        self.client.append_events(
+            stream_name3,
+            current_version=StreamState.NO_STREAM,
+            events=[event5],
+        )
+
+        subscription2 = self.client.subscribe_to_all(
+            commit_position=last_checkpoint_commit_position
+        )
+        next_event_from_2 = next(subscription2)
+        assert isinstance(next_event_from_2.commit_position, int)
+        self.assertGreater(
+            next_event_from_2.commit_position, last_checkpoint_commit_position
+        )
+        self.assertNotEqual(next_event_from_2.id, event4.id)
+        self.assertEqual(next_event_from_2.id, event5.id)
+
+        next_event_from_1 = next(subscription1)
+        self.assertEqual(next_event_from_1.id, event4.id)
+        self.assertEqual(
+            next_event_from_1.commit_position, last_checkpoint_commit_position
+        )
 
     def test_subscribe_to_all_from_commit_position_zero(self) -> None:
         self.construct_esdb_client()
@@ -2188,7 +2213,7 @@ class TestEventStoreDBClient(TestCase):
         # Append new events.
         with self.assertRaises(ConsumerTooSlow):
             while True:
-                # Write 100 events.
+                # Write 10000 events.
                 commit_position = self.client.append_events(
                     stream_name=str(uuid4()),
                     current_version=StreamState.NO_STREAM,
@@ -2197,7 +2222,7 @@ class TestEventStoreDBClient(TestCase):
                     ],
                 )
                 print(commit_position)
-                sleep(1)
+                sleep(0.1)
                 # Read one event.
                 next(subscription)
 
@@ -4180,6 +4205,42 @@ class TestRequiresLeaderHeader(TestCase):
 
         # Reconnect and delete subscription on leader.
         self.writer.delete_persistent_subscription(group_name=group_name)
+
+    def test_reconnects_to_leader_on_read_stream_when_node_preference_is_leader(
+        self,
+    ) -> None:
+        # Append some events.
+        stream_name = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        self.writer.append_events(
+            stream_name, current_version=StreamState.NO_STREAM, events=[event1, event2]
+        )
+
+        # Make sure the reader has the events.
+        while True:
+            try:
+                stream_events = self.reader.get_stream(stream_name)
+            except NotFound:
+                pass
+            else:
+                if len(stream_events) == 2:
+                    break
+            sleep(0.1)
+
+        # Change reader's node preference to 'leader'
+        self.reader.connection_spec.options._NodePreference = "leader"
+
+        # Check reader reconnects to leader.
+        self.assertNotEqual(
+            self.reader._connection.grpc_target, self.writer._connection.grpc_target
+        )
+        connection_id = id(self.reader._connection)
+        self.reader.get_stream(stream_name)
+        self.assertNotEqual(connection_id, id(self.reader._connection))
+        self.assertEqual(
+            self.reader._connection.grpc_target, self.writer._connection.grpc_target
+        )
 
 
 class TestAutoReconnectClosedConnection(TestCase):

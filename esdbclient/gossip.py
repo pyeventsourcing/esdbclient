@@ -5,6 +5,7 @@ from typing import Optional, Sequence, Union
 import grpc
 import grpc.aio
 
+from esdbclient.connection_spec import ConnectionSpec
 from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
 from esdbclient.protos.Grpc import (
     cluster_pb2,
@@ -34,7 +35,12 @@ GOSSIP_API_NODE_STATES_MAPPING = {
 
 
 class BaseGossipService(ESDBService):
-    def __init__(self, channel: Union[grpc.Channel, grpc.aio.Channel]):
+    def __init__(
+        self,
+        channel: Union[grpc.Channel, grpc.aio.Channel],
+        connection_spec: ConnectionSpec,
+    ):
+        super().__init__(connection_spec=connection_spec)
         self._stub = gossip_pb2_grpc.GossipStub(channel)
 
     @staticmethod
@@ -104,7 +110,12 @@ CLUSTER_GOSSIP_NODE_STATES_MAPPING = {
 
 
 class BaseClusterGossipService(ESDBService):
-    def __init__(self, channel: Union[grpc.Channel, grpc.aio.Channel]):
+    def __init__(
+        self,
+        channel: Union[grpc.Channel, grpc.aio.Channel],
+        connection_spec: ConnectionSpec,
+    ):
+        super().__init__(connection_spec=connection_spec)
         self._stub = cluster_pb2_grpc.GossipStub(channel)
 
 

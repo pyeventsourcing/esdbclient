@@ -21,14 +21,18 @@ import dns.asyncresolver
 import grpc.aio
 
 from esdbclient.client import DEFAULT_EXCLUDE_FILTER, BaseEventStoreDBClient
-from esdbclient.connection import (
+from esdbclient.connection import AsyncioESDBConnection
+from esdbclient.connection_spec import (
     NODE_PREFERENCE_FOLLOWER,
     NODE_PREFERENCE_LEADER,
     NODE_PREFERENCE_RANDOM,
     NODE_PREFERENCE_REPLICA,
     URI_SCHEME_ESDB,
     URI_SCHEME_ESDB_DISCOVER,
-    AsyncioESDBConnection,
+)
+from esdbclient.esdbapibase import (
+    DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+    DEFAULT_WINDOW_SIZE,
 )
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import (
@@ -49,8 +53,6 @@ from esdbclient.gossip import (
     ClusterMember,
 )
 from esdbclient.streams import (
-    DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
-    DEFAULT_WINDOW_SIZE,
     AsyncioCatchupSubscription,
     AsyncioReadResponse,
     StreamState,
@@ -251,7 +253,11 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
                 target=grpc_target, options=grpc_options
             )
 
-        return AsyncioESDBConnection(grpc_channel=grpc_channel, grpc_target=grpc_target)
+        return AsyncioESDBConnection(
+            grpc_channel=grpc_channel,
+            grpc_target=grpc_target,
+            connection_spec=self.connection_spec,
+        )
 
     @retrygrpc
     @autoreconnect
@@ -367,6 +373,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        include_checkpoints: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         timeout: Optional[float] = None,
@@ -381,6 +388,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
             subscribe=True,
+            include_checkpoints=include_checkpoints,
             window_size=window_size,
             checkpoint_interval_multiplier=checkpoint_interval_multiplier,
             timeout=timeout,

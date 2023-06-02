@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Optional, Tuple
 import grpc
 import grpc.aio
 
+from esdbclient.connection_spec import ConnectionSpec
 from esdbclient.exceptions import (
     AbortedByServer,
     CancelledByClient,
@@ -25,6 +26,11 @@ else:
     Metadata = Tuple[Tuple[str, str], ...]
 
 __all__ = ["handle_rpc_error", "BasicAuthCallCredentials", "ESDBService", "Metadata"]
+
+
+DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER = 5
+DEFAULT_BATCH_APPEND_REQUEST_DEADLINE = 315576000000
+DEFAULT_WINDOW_SIZE = 30
 
 
 class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
@@ -76,11 +82,19 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
 
 
 class ESDBService:
+    def __init__(self, connection_spec: ConnectionSpec):
+        self.connection_spec = connection_spec
+
     def _metadata(
         self, metadata: Optional[Metadata], requires_leader: bool = False
     ) -> Metadata:
+        default = (
+            "true"
+            if self.connection_spec.options.NodePreference == "leader"
+            else "false"
+        )
         requires_leader_metadata: Metadata = (
-            ("requires-leader", "true" if requires_leader else "false"),
+            ("requires-leader", "true" if requires_leader else default),
         )
         metadata = tuple() if metadata is None else metadata
         return metadata + requires_leader_metadata

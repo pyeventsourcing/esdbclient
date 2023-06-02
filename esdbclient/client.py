@@ -24,7 +24,8 @@ import dns.resolver
 import grpc
 from typing_extensions import Literal
 
-from esdbclient.connection import (
+from esdbclient.connection import ESDBConnection
+from esdbclient.connection_spec import (
     NODE_PREFERENCE_FOLLOWER,
     NODE_PREFERENCE_LEADER,
     NODE_PREFERENCE_RANDOM,
@@ -32,9 +33,12 @@ from esdbclient.connection import (
     URI_SCHEME_ESDB,
     URI_SCHEME_ESDB_DISCOVER,
     ConnectionSpec,
-    ESDBConnection,
 )
-from esdbclient.esdbapibase import BasicAuthCallCredentials
+from esdbclient.esdbapibase import (
+    DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+    DEFAULT_WINDOW_SIZE,
+    BasicAuthCallCredentials,
+)
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import (
     DiscoveryFailed,
@@ -59,13 +63,7 @@ from esdbclient.persistent import (
     PersistentSubscription,
     SubscriptionInfo,
 )
-from esdbclient.streams import (
-    DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
-    DEFAULT_WINDOW_SIZE,
-    CatchupSubscription,
-    ReadResponse,
-    StreamState,
-)
+from esdbclient.streams import CatchupSubscription, ReadResponse, StreamState
 
 # Matches the 'type' of "system" events.
 ESDB_SYSTEM_EVENTS_REGEX = r"\$.+"
@@ -319,7 +317,11 @@ class EventStoreDBClient(BaseEventStoreDBClient):
                 target=grpc_target, options=grpc_options
             )
 
-        return ESDBConnection(grpc_channel=grpc_channel, grpc_target=grpc_target)
+        return ESDBConnection(
+            grpc_channel=grpc_channel,
+            grpc_target=grpc_target,
+            connection_spec=self.connection_spec,
+        )
 
     # def _batch_append_future_result_loop(self) -> None:
     #     # while self._channel_connectivity_state is not ChannelConnectivity.SHUTDOWN:
@@ -731,6 +733,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
     ) -> None:
@@ -748,6 +752,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
     ) -> None:
@@ -764,6 +770,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
+            window_size=window_size,
+            checkpoint_interval_multiplier=checkpoint_interval_multiplier,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=self._call_credentials,
@@ -840,7 +848,10 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     @retrygrpc
     @autoreconnect
     def read_subscription(
-        self, group_name: str, buffer_size: int = 100, timeout: Optional[float] = None
+        self,
+        group_name: str,
+        buffer_size: int = 100,
+        timeout: Optional[float] = None,
     ) -> PersistentSubscription:
         """
         Reads a persistent subscription on all streams.
