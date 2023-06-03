@@ -45,7 +45,9 @@ import uuid
 from esdbclient import EventStoreDBClient, NewEvent, StreamState
 
 
-# Construct EventStoreDBClient with an EventStoreDB URI.
+# Construct EventStoreDBClient with an EventStoreDB URI. The
+# connection string URI specifies that the client should
+# connect to an "insecure" server running on port 2113.
 
 client = EventStoreDBClient(
     uri="esdb://localhost:2113?Tls=false"
@@ -312,7 +314,7 @@ import ssl
 server_certificate = ssl.get_server_certificate(addr=('localhost', 2113))
 ```
 
-Alternatively, can also start an "insecure" server using the following command.
+Alternatively, you can start an "insecure" server using the following command.
 
     $ docker run -d --name eventstoredb-insecure -it -p 2113:2113 eventstore/eventstore:21.10.9-buster-slim --insecure
 
