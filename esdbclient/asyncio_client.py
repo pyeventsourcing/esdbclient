@@ -143,7 +143,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
                 answers = await dns.asyncresolver.resolve(cluster_fqdn, "A")
             except dns.exception.DNSException as e:
                 raise DNSError() from e
-            gossip_seed: Sequence[str] = [f"{s.address}:2113" for s in answers]
+            gossip_seed: Sequence[str] = [f"{s.address}:2112" for s in answers]
         else:
             assert self.connection_spec.scheme == URI_SCHEME_ESDB
             gossip_seed = self.connection_spec.targets

@@ -37,7 +37,7 @@ application that creates new events.
 the database. This is useful, for example, in event-processing components because
 it supports processing events with "exactly-once" semantics.
 
-The example below uses an "insecure" EventStoreDB server running locally on port 2114.
+The example below uses an "insecure" EventStoreDB server running locally on port 2113.
 
 ```python
 import uuid
@@ -48,7 +48,7 @@ from esdbclient import EventStoreDBClient, NewEvent, StreamState
 # Construct EventStoreDBClient with an EventStoreDB URI.
 
 client = EventStoreDBClient(
-    uri="esdb://localhost:2114?Tls=false"
+    uri="esdb://localhost:2113?Tls=false"
 )
 
 
@@ -312,13 +312,13 @@ import ssl
 server_certificate = ssl.get_server_certificate(addr=('localhost', 2113))
 ```
 
-You can also start an "insecure" server using the following command.
+Alternatively, can also start an "insecure" server using the following command.
 
-    $ docker run -d --name eventstoredb-insecure -it -p 2114:2113 eventstore/eventstore:21.10.9-buster-slim --insecure
+    $ docker run -d --name eventstoredb-insecure -it -p 2113:2113 eventstore/eventstore:21.10.9-buster-slim --insecure
 
 The connection string URI for this "insecure" server would be:
 
-    esdb://localhost:2114?Tls=false
+    esdb://localhost:2113?Tls=false
 
 As we will see, when connecting to an "insecure" server, there is no need to include
 a "username" and a "password" in the connection string. If you do, these values will
@@ -374,12 +374,12 @@ client will attempt to create a "secure" connection. And so, when connecting to 
 to make an "insecure" connection.
 
 The following connection string specifies that the client should
-attempt to create an "insecure" connection to port 2114 on "localhost".
+attempt to create an "insecure" connection to port 2113 on "localhost".
 When connecting to an "insecure" server, the client will ignore any
 username and password information included in the connection string,
 so that usernames and passwords are not sent over an "insecure" connection.
 
-    esdb://localhost:2114?Tls=false
+    esdb://localhost:2113?Tls=false
 
 Please note, the "insecure" connection string uses a query string with the field-value
 `Tls=false`. The value of this field is by default `true`. Unless the connection string
@@ -517,10 +517,10 @@ EventStoreDB API methods.
 
 
 The following URI will cause the client to get cluster info from
-"insecure" server socket 127.0.0.1:2114.  And then to connect to
+"insecure" server socket 127.0.0.1:2113.  And then to connect to
 a "leader" node.
 
-    esdb://127.0.0.1:2114?Tls=false
+    esdb://127.0.0.1:2113?Tls=false
 
 
 The following URI will cause the client to get cluster info from

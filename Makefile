@@ -105,38 +105,38 @@ grpc-stubs:
 
 .PHONY: start-eventstoredb-21-10-insecure
 start-eventstoredb-21-10-insecure:
-	docker run -d -i -t -p 2114:2113 \
+	docker run -d -i -t -p 2113:2113 \
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
-    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
+    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2113" \
     --name my-eventstoredb-insecure \
     eventstore/eventstore:21.10.9-buster-slim \
     --insecure
 
 .PHONY: start-eventstoredb-21-10-secure
 start-eventstoredb-21-10-secure:
-	docker run -d -i -t -p 2115:2113 \
+	docker run -d -i -t -p 2114:2113 \
     --env "HOME=/tmp" \
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
-    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2115" \
+    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
     --name my-eventstoredb-secure \
     eventstore/eventstore:21.10.9-buster-slim \
     --dev
 
 .PHONY: start-eventstoredb-22-10-insecure
 start-eventstoredb-22-10-insecure:
-	docker run -d -i -t -p 2114:2113 \
+	docker run -d -i -t -p 2113:2113 \
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
-    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
+    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2113" \
     --name my-eventstoredb-insecure \
     eventstore/eventstore:22.10.0-buster-slim \
     --insecure
 
 .PHONY: start-eventstoredb-22-10-secure
 start-eventstoredb-22-10-secure:
-	docker run -d -i -t -p 2115:2113 \
+	docker run -d -i -t -p 2114:2113 \
     --env "HOME=/tmp" \
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
-    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2115" \
+    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
     --name my-eventstoredb-secure \
     eventstore/eventstore:22.10.0-buster-slim \
     --dev

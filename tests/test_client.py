@@ -45,45 +45,45 @@ from esdbclient.protos.Grpc import persistent_pb2
 
 class TestConnectionSpec(TestCase):
     def test_scheme_and_netloc(self) -> None:
-        spec = ConnectionSpec("esdb://host1:2111")
+        spec = ConnectionSpec("esdb://host1:2110")
         self.assertEqual(spec.scheme, "esdb")
-        self.assertEqual(spec.netloc, "host1:2111")
-        self.assertEqual(spec.targets, ["host1:2111"])
+        self.assertEqual(spec.netloc, "host1:2110")
+        self.assertEqual(spec.targets, ["host1:2110"])
         self.assertEqual(spec.username, None)
         self.assertEqual(spec.password, None)
 
-        spec = ConnectionSpec("esdb://admin:changeit@host1:2111")
+        spec = ConnectionSpec("esdb://admin:changeit@host1:2110")
         self.assertEqual(spec.scheme, "esdb")
-        self.assertEqual(spec.netloc, "admin:changeit@host1:2111")
-        self.assertEqual(spec.targets, ["host1:2111"])
+        self.assertEqual(spec.netloc, "admin:changeit@host1:2110")
+        self.assertEqual(spec.targets, ["host1:2110"])
         self.assertEqual(spec.username, "admin")
         self.assertEqual(spec.password, "changeit")
 
-        spec = ConnectionSpec("esdb://host1:2111,host2:2112,host3:2113")
+        spec = ConnectionSpec("esdb://host1:2110,host2:2111,host3:2112")
         self.assertEqual(spec.scheme, "esdb")
-        self.assertEqual(spec.netloc, "host1:2111,host2:2112,host3:2113")
-        self.assertEqual(spec.targets, ["host1:2111", "host2:2112", "host3:2113"])
+        self.assertEqual(spec.netloc, "host1:2110,host2:2111,host3:2112")
+        self.assertEqual(spec.targets, ["host1:2110", "host2:2111", "host3:2112"])
         self.assertEqual(spec.username, None)
         self.assertEqual(spec.password, None)
 
-        spec = ConnectionSpec("esdb://admin:changeit@host1:2111,host2:2112,host3:2113")
+        spec = ConnectionSpec("esdb://admin:changeit@host1:2110,host2:2111,host3:2112")
         self.assertEqual(spec.scheme, "esdb")
-        self.assertEqual(spec.netloc, "admin:changeit@host1:2111,host2:2112,host3:2113")
-        self.assertEqual(spec.targets, ["host1:2111", "host2:2112", "host3:2113"])
+        self.assertEqual(spec.netloc, "admin:changeit@host1:2110,host2:2111,host3:2112")
+        self.assertEqual(spec.targets, ["host1:2110", "host2:2111", "host3:2112"])
         self.assertEqual(spec.username, "admin")
         self.assertEqual(spec.password, "changeit")
 
-        spec = ConnectionSpec("esdb+discover://host1:2111")
+        spec = ConnectionSpec("esdb+discover://host1:2110")
         self.assertEqual(spec.scheme, "esdb+discover")
-        self.assertEqual(spec.netloc, "host1:2111")
-        self.assertEqual(spec.targets, ["host1:2111"])
+        self.assertEqual(spec.netloc, "host1:2110")
+        self.assertEqual(spec.targets, ["host1:2110"])
         self.assertEqual(spec.username, None)
         self.assertEqual(spec.password, None)
 
-        spec = ConnectionSpec("esdb+discover://admin:changeit@host1:2111")
+        spec = ConnectionSpec("esdb+discover://admin:changeit@host1:2110")
         self.assertEqual(spec.scheme, "esdb+discover")
-        self.assertEqual(spec.netloc, "admin:changeit@host1:2111")
-        self.assertEqual(spec.targets, ["host1:2111"])
+        self.assertEqual(spec.netloc, "admin:changeit@host1:2110")
+        self.assertEqual(spec.targets, ["host1:2110"])
         self.assertEqual(spec.username, "admin")
         self.assertEqual(spec.password, "changeit")
 
@@ -272,7 +272,7 @@ def get_server_certificate(grpc_target: str) -> str:
 class TestEventStoreDBClient(TestCase):
     client: EventStoreDBClient
 
-    ESDB_TARGET = "localhost:2115"
+    ESDB_TARGET = "localhost:2114"
     ESDB_TLS = True
     ESDB_CLUSTER_SIZE = 1
 
@@ -3851,7 +3851,7 @@ class TestEventStoreDBClient(TestCase):
 
 
 class TestEventStoreDBClientWithInsecureConnection(TestEventStoreDBClient):
-    ESDB_TARGET = "localhost:2114"
+    ESDB_TARGET = "localhost:2113"
     ESDB_TLS = False
 
     def test_raises_service_unavailable_exception(self) -> None:
@@ -3863,17 +3863,17 @@ class TestEventStoreDBClientWithInsecureConnection(TestEventStoreDBClient):
 
 
 class TestESDBClusterNode1(TestEventStoreDBClient):
-    ESDB_TARGET = "127.0.0.1:2111"
+    ESDB_TARGET = "127.0.0.1:2110"
     ESDB_CLUSTER_SIZE = 3
 
 
 class TestESDBClusterNode2(TestEventStoreDBClient):
-    ESDB_TARGET = "127.0.0.1:2112"
+    ESDB_TARGET = "127.0.0.1:2111"
     ESDB_CLUSTER_SIZE = 3
 
 
 class TestESDBClusterNode3(TestEventStoreDBClient):
-    ESDB_TARGET = "127.0.0.1:2113"
+    ESDB_TARGET = "127.0.0.1:2112"
     ESDB_CLUSTER_SIZE = 3
 
 
@@ -3894,7 +3894,7 @@ class TestESDBDiscoverScheme(TestCase):
 class TestGrpcOptions(TestCase):
     def setUp(self) -> None:
         uri = (
-            "esdb://localhost:2114"
+            "esdb://localhost:2113"
             "?Tls=false&KeepAliveInterval=1000&KeepAliveTimeout=1000"
         )
         self.client = EventStoreDBClient(uri)
@@ -3913,7 +3913,7 @@ class TestGrpcOptions(TestCase):
 
 class TestRequiresLeaderHeader(TestCase):
     def setUp(self) -> None:
-        self.uri = "esdb://admin:changeit@127.0.0.1:2111"
+        self.uri = "esdb://admin:changeit@127.0.0.1:2110"
         self.ca_cert = get_ca_certificate()
         self.writer = EventStoreDBClient(
             self.uri + "?NodePreference=leader", root_certificates=self.ca_cert
@@ -4245,7 +4245,7 @@ class TestRequiresLeaderHeader(TestCase):
 
 class TestAutoReconnectClosedConnection(TestCase):
     def setUp(self) -> None:
-        self.uri = "esdb://admin:changeit@127.0.0.1:2111"
+        self.uri = "esdb://admin:changeit@127.0.0.1:2110"
         self.ca_cert = get_ca_certificate()
         self.writer = EventStoreDBClient(
             self.uri + "?NodePreference=leader", root_certificates=self.ca_cert
@@ -4276,8 +4276,8 @@ class TestAutoReconnectClosedConnection(TestCase):
 
 class TestAutoReconnectAfterServiceUnavailable(TestCase):
     def setUp(self) -> None:
-        uri = "esdb://admin:changeit@localhost:2115?MaxDiscoverAttempts=1&DiscoveryInterval=0"
-        server_certificate = get_server_certificate("localhost:2115")
+        uri = "esdb://admin:changeit@localhost:2114?MaxDiscoverAttempts=1&DiscoveryInterval=0"
+        server_certificate = get_server_certificate("localhost:2114")
         self.client = EventStoreDBClient(uri=uri, root_certificates=server_certificate)
 
         # Reconstruct connection with wrong port (to inspire ServiceUnavailble).
@@ -4387,17 +4387,17 @@ class TestAutoReconnectAfterServiceUnavailable(TestCase):
 
 class TestConnectToPreferredNode(TestCase):
     def test_no_followers(self) -> None:
-        uri = "esdb://admin:changeit@127.0.0.1:2114?Tls=false&NodePreference=follower"
+        uri = "esdb://admin:changeit@127.0.0.1:2113?Tls=false&NodePreference=follower"
         with self.assertRaises(FollowerNotFound):
             EventStoreDBClient(uri)
 
     def test_no_read_only_replicas(self) -> None:
-        uri = "esdb://admin:changeit@127.0.0.1:2114?Tls=false&NodePreference=readonlyreplica"
+        uri = "esdb://admin:changeit@127.0.0.1:2113?Tls=false&NodePreference=readonlyreplica"
         with self.assertRaises(ReadOnlyReplicaNotFound):
             EventStoreDBClient(uri)
 
     def test_random(self) -> None:
-        uri = "esdb://admin:changeit@127.0.0.1:2114?Tls=false&NodePreference=random"
+        uri = "esdb://admin:changeit@127.0.0.1:2113?Tls=false&NodePreference=random"
         EventStoreDBClient(uri)
 
 

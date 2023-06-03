@@ -33,7 +33,7 @@ from esdbclient.exceptions import (
 
 class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.client = await AsyncioEventStoreDBClient("esdb://localhost:2114?Tls=False")
+        self.client = await AsyncioEventStoreDBClient("esdb://localhost:2113?Tls=False")
         self._reader: Optional[_AsyncioEventStoreDBClient] = None
         self._writer: Optional[_AsyncioEventStoreDBClient] = None
 
@@ -49,13 +49,13 @@ class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
 
     async def setup_reader(self) -> None:
         self._reader = await AsyncioEventStoreDBClient(
-            uri="esdb://admin:changeit@localhost:2111?NodePreference=follower",
+            uri="esdb://admin:changeit@localhost:2110?NodePreference=follower",
             root_certificates=get_ca_certificate(),
         )
 
     async def setup_writer(self) -> None:
         self._writer = await AsyncioEventStoreDBClient(
-            uri="esdb://admin:changeit@localhost:2111?NodePreference=leader",
+            uri="esdb://admin:changeit@localhost:2110?NodePreference=leader",
             root_certificates=get_ca_certificate(),
         )
 
@@ -84,6 +84,10 @@ class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
     async def test_sometimes_reconnnects_to_selected_node_after_discovery(self) -> None:
         root_certificates = get_ca_certificate()
         await AsyncioEventStoreDBClient(
+            "esdb://admin:changeit@127.0.0.1:2110?NodePreference=leader",
+            root_certificates=root_certificates,
+        )
+        await AsyncioEventStoreDBClient(
             "esdb://admin:changeit@127.0.0.1:2111?NodePreference=leader",
             root_certificates=root_certificates,
         )
@@ -91,31 +95,27 @@ class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
             "esdb://admin:changeit@127.0.0.1:2112?NodePreference=leader",
             root_certificates=root_certificates,
         )
-        await AsyncioEventStoreDBClient(
-            "esdb://admin:changeit@127.0.0.1:2113?NodePreference=leader",
-            root_certificates=root_certificates,
-        )
 
     async def test_node_preference_random(self) -> None:
         await AsyncioEventStoreDBClient(
-            "esdb://localhost:2114?Tls=False&NodePreference=random"
+            "esdb://localhost:2113?Tls=False&NodePreference=random"
         )
 
     async def test_raises_follower_not_found(self) -> None:
         with self.assertRaises(FollowerNotFound):
             await AsyncioEventStoreDBClient(
-                "esdb://localhost:2114?Tls=False&NodePreference=follower"
+                "esdb://localhost:2113?Tls=False&NodePreference=follower"
             )
 
     async def test_raises_read_only_replica_not_found(self) -> None:
         with self.assertRaises(ReadOnlyReplicaNotFound):
             await AsyncioEventStoreDBClient(
-                "esdb://localhost:2114?Tls=False&NodePreference=readonlyreplica"
+                "esdb://localhost:2113?Tls=False&NodePreference=readonlyreplica"
             )
 
     async def test_root_certificates_required_for_secure_connection(self) -> None:
         with self.assertRaises(ValueError) as cm:
-            await AsyncioEventStoreDBClient("esdb://localhost:2115")
+            await AsyncioEventStoreDBClient("esdb://localhost:2114")
         self.assertIn(
             "root_certificates is required for secure connection", cm.exception.args[0]
         )
