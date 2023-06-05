@@ -245,6 +245,8 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [List subscriptions](#list-subscriptions)
   * [List subscriptions to stream](#list-subscriptions-to-stream)
   * [Delete subscription](#delete-subscription)
+* [Call credentials](#call-credentials)
+  * [Construct call credentials](#construct-call-credentials)
 * [Connection](#connection)
   * [Reconnect](#reconnect)
   * [Close](#close)
@@ -754,6 +756,9 @@ is not possible with EventStoreDB atomically to record new events in more than o
 This method also has an optional `timeout` argument, which is a Python `float`
 that sets a deadline for the completion of the gRPC operation.
 
+This method also has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
+
 In the example below, a new event, `event1`, is appended to a new stream. The stream
 does not yet exist, so `current_version` is `StreamState.NO_STREAM`.
 
@@ -908,6 +913,9 @@ that will be returned. The default value of `limit` is `sys.maxint`.
 The optional `timeout` argument is a Python `float` which sets a deadline for
 the completion of the gRPC operation.
 
+This method also has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
+
 The example below shows the default behavior, which is to return all the recorded
 events of a stream forwards from the first recorded events to the last.
 
@@ -1014,6 +1022,9 @@ stream from which a stream position will be returned.
 This method also has an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
 for the completion of the gRPC operation.
+
+This method also has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
 
 In the example below, the last stream position of `stream_name1` is obtained.
 Since three events have been appended to `stream_name1`, and because positions
@@ -1376,8 +1387,9 @@ The streaming of events, and hence the iterator, can also be stopped by calling
 the `stop()` method on the "read response" object. The recorded event objects
 are instances of the `RecordedEvent` class.
 
-This method has seven optional arguments, `commit_position`, `backwards`,
-`filter_exclude`, `filter_include`, `filter_by_stream_name`, `limit`, and `timeout`.
+This method has eight optional arguments, `commit_position`, `backwards`,
+`filter_exclude`, `filter_include`, `filter_by_stream_name`, `limit`, `timeout`,
+and `credentials`.
 
 The optional `commit_position` argument is a Python `int` that can be used to
 specify a commit position from which to start reading. The default value of
@@ -1419,6 +1431,9 @@ will be returned. The default value is `sys.maxint`.
 
 The optional `timeout` argument is a Python `float` which sets a
 deadline for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
 
 The filtering of events is done on the EventStoreDB server. The
 `limit` argument is applied on the server after filtering.
@@ -1536,14 +1551,18 @@ attribute of the last recorded event.
 commit_position = client.get_commit_position()
 ```
 
-This method has four optional arguments, `filter_exclude`, `filter_include`,
-`filter_by_stream_name` and `timeout`. These values are passed to `read_all()`.
+This method has five optional arguments, `filter_exclude`, `filter_include`,
+`filter_by_stream_name`, `timeout` and `credentials`. These values are passed to
+`read_all()`.
 
 The optional `filter_exclude`, `filter_include` and `filter_by_stream_name` arguments
 work in the same way as they do in the `read_all()` method.
 
-This optional `timeout` argument is a Python `float` that sets
+The optional `timeout` argument is a Python `float` that sets
 a deadline for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to override call credentials
+derived from the connection string URI.
 
 This method might be used to measure progress of a downstream component
 that is processing all recorded events, by comparing the current commit
@@ -1558,21 +1577,44 @@ by the downstream component to obtain recorded events.
 The `get_stream_metadata()` method returns the metadata for a stream, along
 with the version of the stream metadata.
 
+This method has one required argument, `stream_name`, which is a Python `str` that
+uniquely identifies a stream for which a stream metadata will be obtained.
+
+This method has an optional `timeout` argument, which is a Python `float` that sets
+a deadline for the completion of the gRPC operation.
+
+This method has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
+
+In the example below, metadata for `stream_name1` is obtained.
+
 ```python
 metadata, metadata_version = client.get_stream_metadata(stream_name=stream_name1)
 ```
 
 The returned `metadata` value is a Python `dict`. The returned `metadata_version`
-value is either an `int` if the stream exists, or `None` if the stream does not exist
-and no metadata has been set. These values can be passed into `set_stream_metadata()`.
-
+value is either an `int` if the stream exists, or `StreamState.NO_STREAM` if the stream
+does not exist and no metadata has been set. These values can be used as the arguments
+of `set_stream_metadata()`.
 
 ### Set stream metadata
 
 *requires leader*
 
-The method `set_stream_metadata()` sets the metadata for a stream. Stream metadata
+The method `set_stream_metadata()` sets metadata for a stream. Stream metadata
 can be set before appending events to a stream.
+
+This method has one required argument, `stream_name`, which is a Python `str` that
+uniquely identifies a stream for which a stream metadata will be set.
+
+This method has an optional `timeout` argument, which is a Python `float` that sets
+a deadline for the completion of the gRPC operation.
+
+This method has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
+
+In the example below, metadata for `stream_name1` is set.
+
 
 ```python
 metadata["foo"] = "bar"
@@ -1596,6 +1638,22 @@ metadata.
 
 The method `delete_stream()` can be used to "delete" a stream.
 
+This method has two required arguments, `stream_name` and `current_version`.
+
+The required `stream_name` argument is a Python `str` that uniquely identifies a
+stream to which a sequence of events will be appended.
+
+The required `current_version` argument is expected to be either a Python `int`
+that indicates the stream position of the last recorded event in the stream.
+
+This method has an optional `timeout` argument, which is a Python `float` that sets
+a deadline for the completion of the gRPC operation.
+
+This method has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
+
+In the example below, `stream_name1` is deleted.
+
 ```python
 commit_position = client.delete_stream(stream_name=stream_name1, current_version=2)
 ```
@@ -1609,6 +1667,22 @@ deleted.
 *requires leader*
 
 The method `tombstone_stream()` can be used to "tombstone" a stream.
+
+This method has two required arguments, `stream_name` and `current_version`.
+
+The required `stream_name` argument is a Python `str` that uniquely identifies a
+stream to which a sequence of events will be appended.
+
+The required `current_version` argument is expected to be either a Python `int`
+that indicates the stream position of the last recorded event in the stream.
+
+This method has an optional `timeout` argument, which is a Python `float` that sets
+a deadline for the completion of the gRPC operation.
+
+This method has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
+
+In the example below, `stream_name1` is tombstoned.
 
 ```python
 commit_position = client.tombstone_stream(stream_name=stream_name1, current_version=2)
@@ -1656,8 +1730,8 @@ The`subscribe_to_all()` method can be used to start a catch-up subscription
 from which all events recorded in the database can be obtained in the order
 they were recorded. This method returns a "catch-up subscription" iterator.
 
-This method also has five optional arguments, `commit_position()`, `filter_exclude`,
-`filter_include`, `filter_by_stream_name`, and `timeout`.
+This method also has six optional arguments, `commit_position()`, `filter_exclude`,
+`filter_include`, `filter_by_stream_name`, `timeout` and `credentials`.
 
 The optional `commit_position` argument specifies a commit position. The default
 value of `commit_position` is `None`, which means the catch-up subscription will
@@ -1684,6 +1758,9 @@ recorded events.
 
 The optional `timeout` argument is a Python `float` which sets a
 deadline for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
 
 The example below shows how to start a catch-up subscription that starts
 from the first recorded event in the database.
@@ -1848,7 +1925,7 @@ returns a "catch-up subscription" iterator.
 This method has a required `stream_name` argument, which specifies the name of the
 stream from which recorded events will be received.
 
-This method also has two optional arguments, `stream_position`, and `timeout`.
+This method also has three optional arguments, `stream_position`, `timeout` and `credentials`.
 
 The optional `stream_position` argument specifies a position in the stream. The
 default value of `stream_position` is `None`, which means that all events
@@ -1858,6 +1935,9 @@ will be obtained.
 
 The optional `timeout` argument is a Python `float` that sets
 a deadline for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
 
 The example below shows how to start a catch-up subscription from
 the first recorded event in a stream.
@@ -1971,9 +2051,9 @@ to all the recorded events in the database across all streams.
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
 
-This method also has seven optional arguments, `from_end`, `commit_position`,
+This method also has eight optional arguments, `from_end`, `commit_position`,
 `filter_exclude`, `filter_include`, `filter_by_stream_name`, `consumer_strategy`,
-and `timeout`.
+`timeout` and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
@@ -2012,6 +2092,9 @@ default value is `'DispatchToSingle'`.
 The optional `timeout` argument is a Python `float` which sets a
 deadline for the completion of the gRPC operation.
 
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
+
 The method `create_subscription_to_all()` does not return a value. Recorded events are
 obtained by calling the `read_subscription_to_all()` method.
 
@@ -2036,9 +2119,12 @@ This method has a required `group_name` argument, which is
 the name of a "group" of consumers of the subscription specified
 when `create_subscription_to_all()` was called.
 
-This method also has an optional `timeout` argument, that
+This method has an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
 for the completion of the gRPC operation.
+
+This method also has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
 
 This method returns a `PersistentSubscription` object, which is an iterator
 giving `RecordedEvent` objects. It also has `ack()`, `nack()` and `stop()`
@@ -2197,8 +2283,8 @@ The `update_subscription_to_all()` method can be used to update a
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
 
-This method also has three optional arguments, `from_end`, `commit_position`,
-and `timeout`.
+This method also has three optional arguments, `from_end`, `commit_position`, `timeout`
+and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
@@ -2216,6 +2302,9 @@ Please note, the filter options and consumer strategy cannot be adjusted.
 
 The optional `timeout` argument is a Python `float` which sets a
 deadline for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
 
 The method `update_subscription_to_all()` does not return a value.
 
@@ -2240,14 +2329,14 @@ from this subscription. The `stream_name` argument specifies which stream
 the subscription will follow. The values of both these arguments are expected
 to be Python `str` objects.
 
-The method also has four optional arguments, `stream_position`, `from_end`,
-`consumer_strategy`, and `timeout`.
+This method also has five optional arguments, `stream_position`, `from_end`,
+`consumer_strategy`, `timeout` and `credentials`.
 
-This optional `stream_position` argument specifies a stream position from
+The optional `stream_position` argument specifies a stream position from
 which to subscribe. The recorded event at this stream
 position will be received when reading the subscription.
 
-This optional `from_end` argument is a Python `bool`.
+The optional `from_end` argument is a Python `bool`.
 By default, the value of this argument is `False`. If this argument is set
 to `True`, reading from the subscription will receive only events
 recorded after the subscription was created. That is, it is not inclusive
@@ -2258,9 +2347,11 @@ the consumer strategy for this persistent subscription. The value of this argume
 can be `'DispatchToSingle'`, `'RoundRobin'`, `'Pinned'`, or `'PinnedByCorrelation'`. The
 default value is `'DispatchToSingle'`.
 
-This method also takes an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
+The optional `timeout` argument is a Python `float` which sets a deadline
 for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
 
 This method does not return a value. Events can be received by calling
 `read_subscription_to_stream()`.
@@ -2286,9 +2377,12 @@ subscription to a stream.
 This method has two required arguments, `group_name` and `stream_name`, which
 should match the values of arguments used when calling `create_subscription_to_stream()`.
 
-This method also has an optional `timeout` argument, that
+This method has an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
 for the completion of the gRPC operation.
+
+This method also has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
 
 This method returns a `PersistentSubscription` object, which is an iterator
 giving `RecordedEvent` objects, that also has `ack()`, `nack()` and `stop()`
@@ -2342,8 +2436,8 @@ This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription, and a required
 `stream_name` argument, which is the name of a stream.
 
-This method also has three optional arguments, `from_end`, `stream_position`,
-and `timeout`.
+This method also has four optional arguments, `from_end`, `stream_position`,
+`timeout` and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
@@ -2361,6 +2455,9 @@ Please note, the consumer strategy cannot be adjusted.
 
 The optional `timeout` argument is a Python `float` which sets a
 deadline for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
 
 The `update_subscription_to_stream()` method does not return a value.
 
@@ -2389,9 +2486,12 @@ This method has a required `group_name` argument and an optional `stream_name`
 argument. The values of these arguments should match those used when calling
 `create_subscription_to_all()` or `create_subscription_to_stream()`.
 
-This method also has an optional `timeout` argument, that
+This method has an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
 for the completion of the gRPC operation.
+
+This method also has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
 
 The example below replays parked events for group `group_name1`.
 
@@ -2421,9 +2521,12 @@ This method has a required `group_name` argument and an optional `stream_name`
 argument, which should match the values of arguments used when calling either
 `create_subscription_to_all()` or `create_subscription_to_stream()`.
 
-This method also has an optional `timeout` argument, that
+This method has an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
 for the completion of the gRPC operation.
+
+This method also has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
 
 The example below gets information for the persistent subscription `group_name1` which
 was created by calling `create_subscription_to_all()`.
@@ -2458,6 +2561,11 @@ This method has an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
 for the completion of the gRPC operation.
 
+This method also has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
+
+The example below lists all the existing persistent subscriptions.
+
 ```python
 subscriptions = client.list_subscriptions()
 ```
@@ -2474,9 +2582,11 @@ the persistent subscriptions to a stream.
 
 This method has one required argument, `stream_name`.
 
-This method also has an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
+This method has an optional `timeout` argument, that is expected to be a
+Python `float`, which sets a deadline for the completion of the gRPC operation.
+
+This method also has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
 
 ```python
 subscriptions = client.list_subscriptions_to_stream(
@@ -2498,9 +2608,12 @@ This method has a required `group_name` argument and an optional `stream_name`
 argument, which should match the values of arguments used when calling either
 `create_subscription_to_all()` or `create_subscription_to_stream()`.
 
-This method also has an optional `timeout` argument, that
+This method has an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
 for the completion of the gRPC operation.
+
+This method also has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
 
 The example below deletes the persistent subscription `group_name1` which
 was created by calling `create_subscription_to_all()`.
@@ -2520,6 +2633,29 @@ client.delete_subscription(
     stream_name=stream_name2,
 )
 ```
+
+### Call credentials
+
+Default call credentials are derived by the client from the user info part of the
+connection string URI.
+
+Many of the client methods described above have an optional `credentials` argument,
+which can be used to set call credentials for an individual method call that override
+those derived from the connection string URI.
+
+### Construct call credentials
+
+The client method `construct_call_credentials()` can be used to construct a call
+credentials object from a username and password.
+
+```python
+call_credentials = client.construct_call_credentials(
+    username='admin', password='changeit'
+)
+```
+
+The call credentials object can be used as the value of the `credentials`
+argument in other client methods.
 
 ## Connection
 

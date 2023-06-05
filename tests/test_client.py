@@ -3722,8 +3722,8 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(2, len(self.client.get_stream(stream_name)))
 
         # Get stream metadata (should be empty).
-        stream_metadata, position = self.client.get_stream_metadata(stream_name)
-        self.assertEqual(stream_metadata, {})
+        metadata, version = self.client.get_stream_metadata(stream_name)
+        self.assertEqual(metadata, {})
 
         # Delete stream.
         self.client.delete_stream(stream_name, current_version=StreamState.EXISTS)
@@ -3731,40 +3731,42 @@ class TestEventStoreDBClient(TestCase):
             self.client.get_stream(stream_name)
 
         # Get stream metadata (should have "$tb").
-        stream_metadata, position = self.client.get_stream_metadata(stream_name)
-        self.assertIsInstance(stream_metadata, dict)
-        self.assertIn("$tb", stream_metadata)
+        metadata, version = self.client.get_stream_metadata(stream_name)
+        self.assertIsInstance(metadata, dict)
+        self.assertIn("$tb", metadata)
         max_long = 9223372036854775807
-        self.assertEqual(stream_metadata["$tb"], max_long)
+        self.assertEqual(metadata["$tb"], max_long)
 
         # Set stream metadata.
-        stream_metadata["foo"] = "bar"
+        metadata["foo"] = "bar"
         self.client.set_stream_metadata(
             stream_name=stream_name,
-            metadata=stream_metadata,
-            current_version=position,
+            metadata=metadata,
+            current_version=version,
         )
 
         # Check the metadata has "foo".
-        stream_metadata, position = self.client.get_stream_metadata(stream_name)
-        self.assertEqual(stream_metadata["foo"], "bar")
+        metadata, version = self.client.get_stream_metadata(stream_name)
+        self.assertEqual(metadata["foo"], "bar")
 
         # For some reason "$tb" is now (most often) 2 rather than max_long.
         # Todo: Why is this?
-        self.assertIn(stream_metadata["$tb"], [2, max_long])
+        self.assertIn(metadata["$tb"], [2, max_long])
 
         # Get and set metadata for a stream that does not exist.
         stream_name = str(uuid4())
-        stream_metadata, position = self.client.get_stream_metadata(stream_name)
-        self.assertEqual(stream_metadata, {})
+        metadata, version = self.client.get_stream_metadata(stream_name)
+        self.assertEqual(metadata, {})
 
-        stream_metadata["foo"] = "baz"
-        self.client.set_stream_metadata(stream_name, stream_metadata, position)
-        stream_metadata, position = self.client.get_stream_metadata(stream_name)
-        self.assertEqual(stream_metadata["foo"], "baz")
+        metadata["foo"] = "baz"
+        self.client.set_stream_metadata(
+            stream_name=stream_name, metadata=metadata, current_version=version
+        )
+        metadata, version = self.client.get_stream_metadata(stream_name)
+        self.assertEqual(metadata["foo"], "baz")
 
         # Set ACL.
-        self.assertNotIn("$acl", stream_metadata)
+        self.assertNotIn("$acl", metadata)
         acl = {
             "$w": "$admins",
             "$r": "$all",
@@ -3772,15 +3774,17 @@ class TestEventStoreDBClient(TestCase):
             "$mw": "$admins",
             "$mr": "$admins",
         }
-        stream_metadata["$acl"] = acl
-        self.client.set_stream_metadata(stream_name, stream_metadata, position)
-        stream_metadata, position = self.client.get_stream_metadata(stream_name)
-        self.assertEqual(stream_metadata["$acl"], acl)
+        metadata["$acl"] = acl
+        self.client.set_stream_metadata(
+            stream_name, metadata=metadata, current_version=version
+        )
+        metadata, version = self.client.get_stream_metadata(stream_name)
+        self.assertEqual(metadata["$acl"], acl)
 
         with self.assertRaises(WrongCurrentVersion):
             self.client.set_stream_metadata(
                 stream_name=stream_name,
-                metadata=stream_metadata,
+                metadata=metadata,
                 current_version=10,
             )
 
@@ -3795,13 +3799,13 @@ class TestEventStoreDBClient(TestCase):
         # Todo: Ask ESDB team why this is?
         self.client.set_stream_metadata(
             stream_name=stream_name,
-            metadata=stream_metadata,
+            metadata=metadata,
             current_version=1,
         )
 
         self.client.set_stream_metadata(
             stream_name=stream_name,
-            metadata=stream_metadata,
+            metadata=metadata,
             current_version=StreamState.ANY,
         )
 

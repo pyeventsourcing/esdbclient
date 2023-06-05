@@ -148,13 +148,13 @@ class BaseEventStoreDBClient:
         )
 
         if self.connection_spec.options.Tls:
-            self._call_credentials = self._construct_call_credentials(
+            self._call_credentials = self.construct_call_credentials(
                 self.connection_spec.username, self.connection_spec.password
             )
         else:
             self._call_credentials = None
 
-    def _construct_call_credentials(
+    def construct_call_credentials(
         self, username: Optional[str], password: Optional[str]
     ) -> Optional[grpc.CallCredentials]:
         if username and password:
@@ -330,7 +330,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     #             futures_queue=self._batch_append_futures_queue,
     #             timeout=None,
     #             metadata=self._call_metadata,
-    #             credentials=self._call_credentials,
+    #             credentials=credentials or self._call_credentials,
     #         )
     #     except EventStoreDBClientException as e:
     #         self._clear_batch_append_futures_queue(e)
@@ -372,9 +372,11 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def append_events(
         self,
         stream_name: str,
+        *,
         current_version: Union[int, StreamState],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> int:
         timeout = timeout if timeout is not None else self._default_deadline
         return self._connection.streams.batch_append(
@@ -383,7 +385,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             events=events,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         ).commit_position
 
     @retrygrpc
@@ -391,9 +393,11 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def append_event(
         self,
         stream_name: str,
+        *,
         current_version: Union[int, StreamState],
         event: NewEvent,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> int:
         """
         Appends a new event to the named stream.
@@ -405,15 +409,17 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             events=[event],
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     def append_to_stream(
         self,
         stream_name: str,
+        *,
         current_version: Union[int, StreamState],
         events: Union[NewEvent, Sequence[NewEvent]],
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> int:
         """
         Appends a new event or a sequence of new events to the named stream.
@@ -424,6 +430,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
                 current_version=current_version,
                 event=events,
                 timeout=timeout,
+                credentials=credentials,
             )
         else:
             return self.append_events(
@@ -431,6 +438,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
                 current_version=current_version,
                 events=events,
                 timeout=timeout,
+                credentials=credentials,
             )
 
     @retrygrpc
@@ -438,8 +446,10 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def delete_stream(
         self,
         stream_name: str,
+        *,
         current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         # Todo: Reconsider using current_version=None to indicate "stream exists"?
         timeout = timeout if timeout is not None else self._default_deadline
@@ -448,7 +458,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             current_version=current_version,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -456,8 +466,10 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def tombstone_stream(
         self,
         stream_name: str,
+        *,
         current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         timeout = timeout if timeout is not None else self._default_deadline
         self._connection.streams.tombstone(
@@ -465,7 +477,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             current_version=current_version,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -473,10 +485,12 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def get_stream(
         self,
         stream_name: str,
+        *,
         stream_position: Optional[int] = None,
         backwards: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> Sequence[RecordedEvent]:
         """
         Returns a sequence of recorded events from the named stream.
@@ -494,10 +508,12 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def read_stream(
         self,
         stream_name: str,
+        *,
         stream_position: Optional[int] = None,
         backwards: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> ReadResponse:
         """
         Reads recorded events from the named stream.
@@ -509,11 +525,12 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             limit=limit,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     def read_all(
         self,
+        *,
         commit_position: Optional[int] = None,
         backwards: bool = False,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
@@ -521,6 +538,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         filter_by_stream_name: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> ReadResponse:
         """
         Reads recorded events in "all streams" in the database.
@@ -534,7 +552,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             limit=limit,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -542,7 +560,9 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def get_current_version(
         self,
         stream_name: str,
+        *,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> Union[int, Literal[StreamState.NO_STREAM]]:
         """
         Returns the current position of the end of a stream.
@@ -555,7 +575,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
                     limit=1,
                     timeout=timeout,
                     metadata=self._call_metadata,
-                    credentials=self._call_credentials,
+                    credentials=credentials or self._call_credentials,
                 )
             )[0]
         except NotFound:
@@ -571,10 +591,12 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     @autoreconnect
     def get_commit_position(
         self,
-        timeout: Optional[float] = None,
+        *,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> int:
         """
         Returns the current commit position of the database.
@@ -586,6 +608,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             filter_by_stream_name=filter_by_stream_name,
             limit=1,
             timeout=timeout,
+            credentials=credentials,
         )
         commit_position = 0
         for ev in recorded_events:
@@ -596,7 +619,11 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     @retrygrpc
     @autoreconnect
     def get_stream_metadata(
-        self, stream_name: str, timeout: Optional[float] = None
+        self,
+        stream_name: str,
+        *,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> Tuple[Dict[str, Any], Union[int, Literal[StreamState.NO_STREAM]]]:
         """
         Gets the stream metadata.
@@ -609,6 +636,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
                     backwards=True,
                     limit=1,
                     timeout=timeout,
+                    credentials=credentials or self._call_credentials,
                 )
             )
         except NotFound:
@@ -620,9 +648,11 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def set_stream_metadata(
         self,
         stream_name: str,
+        *,
         metadata: Dict[str, Any],
         current_version: Union[int, StreamState] = StreamState.ANY,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Sets the stream metadata.
@@ -639,12 +669,14 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             current_version=current_version,
             event=metadata_event,
             timeout=timeout,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
     @autoreconnect
     def subscribe_to_all(
         self,
+        *,
         commit_position: Optional[int] = None,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
@@ -653,6 +685,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> CatchupSubscription:
         """
         Starts a catch-up subscription, from which all
@@ -669,7 +702,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             checkpoint_interval_multiplier=checkpoint_interval_multiplier,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -677,8 +710,10 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def subscribe_to_stream(
         self,
         stream_name: str,
+        *,
         stream_position: Optional[int] = None,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> CatchupSubscription:
         """
         Starts a catch-up subscription from which
@@ -690,7 +725,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             subscribe=True,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @overload
@@ -703,6 +738,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         filter_by_stream_name: bool = False,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for creating persistent subscription from start of database.
@@ -719,6 +755,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         filter_by_stream_name: bool = False,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for creating persistent subscription from a commit position.
@@ -737,6 +774,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for creating persistent subscription from end of database.
@@ -747,6 +785,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def create_subscription_to_all(
         self,
         group_name: str,
+        *,
         from_end: bool = False,
         commit_position: Optional[int] = None,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
@@ -756,6 +795,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Creates a persistent subscription on all streams.
@@ -774,7 +814,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             checkpoint_interval_multiplier=checkpoint_interval_multiplier,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @overload
@@ -785,6 +825,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for creating stream subscription from start of stream.
@@ -799,6 +840,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         stream_position: int,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for creating stream subscription from stream position.
@@ -813,6 +855,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         from_end: bool = True,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for creating stream subscription from end of stream.
@@ -824,10 +867,12 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         group_name: str,
         stream_name: str,
+        *,
         from_end: bool = False,
         stream_position: Optional[int] = None,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Creates a persistent subscription on one stream.
@@ -842,7 +887,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             consumer_strategy=consumer_strategy,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -850,8 +895,10 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def read_subscription_to_all(
         self,
         group_name: str,
+        *,
         buffer_size: int = 100,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> PersistentSubscription:
         """
         Reads a persistent subscription on all streams.
@@ -861,7 +908,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             buffer_size=buffer_size,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -870,8 +917,10 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         group_name: str,
         stream_name: str,
+        *,
         buffer_size: int = 100,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> PersistentSubscription:
         """
         Reads a persistent subscription on one stream.
@@ -882,7 +931,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             buffer_size=buffer_size,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -891,7 +940,9 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         group_name: str,
         stream_name: Optional[str] = None,
+        *,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> SubscriptionInfo:
         """
         Gets info for a persistent subscription.
@@ -901,13 +952,16 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             stream_name=stream_name,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
     @autoreconnect
     def list_subscriptions(
-        self, timeout: Optional[float] = None
+        self,
+        *,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> Sequence[SubscriptionInfo]:
         """
         Lists all persistent subscriptions.
@@ -915,13 +969,17 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         return self._connection.persistent_subscriptions.list(
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
     @autoreconnect
     def list_subscriptions_to_stream(
-        self, stream_name: str, timeout: Optional[float] = None
+        self,
+        stream_name: str,
+        *,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> Sequence[SubscriptionInfo]:
         """
         Lists persistent stream subscriptions.
@@ -930,7 +988,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             stream_name=stream_name,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @overload
@@ -939,6 +997,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         group_name: str,
         *,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for updating persistent subscription from start of database.
@@ -951,6 +1010,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         commit_position: int,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for updating persistent subscription from a commit position.
@@ -963,6 +1023,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         from_end: bool = True,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for updating persistent subscription from end of database.
@@ -976,6 +1037,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         from_end: bool = False,
         commit_position: Optional[int] = None,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Updates a persistent subscription on all streams.
@@ -988,7 +1050,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             commit_position=commit_position,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @overload
@@ -998,6 +1060,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         stream_name: str,
         *,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for updating stream subscription from start of stream.
@@ -1011,6 +1074,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         stream_position: int,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for updating stream subscription from stream position.
@@ -1024,6 +1088,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         from_end: bool = True,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Signature for updating stream subscription from end of stream.
@@ -1038,6 +1103,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         from_end: bool = False,
         stream_position: Optional[int] = None,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Updates a persistent subscription on one stream.
@@ -1051,7 +1117,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             stream_position=stream_position,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -1061,6 +1127,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         group_name: str,
         stream_name: Optional[str] = None,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         timeout = timeout if timeout is not None else self._default_deadline
 
@@ -1069,7 +1136,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             stream_name=stream_name,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -1079,6 +1146,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         group_name: str,
         stream_name: Optional[str] = None,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Deletes a persistent subscription.
@@ -1090,12 +1158,16 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             stream_name=stream_name,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
     @autoreconnect
-    def read_gossip(self, timeout: Optional[float] = None) -> Sequence[ClusterMember]:
+    def read_gossip(
+        self,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> Sequence[ClusterMember]:
         timeout = (
             timeout
             if timeout is not None
@@ -1104,13 +1176,15 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         return self._connection.gossip.read(
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
     @autoreconnect
     def read_cluster_gossip(
-        self, timeout: Optional[float] = None
+        self,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> Sequence[ClusterMember]:
         timeout = (
             timeout
@@ -1120,7 +1194,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         return self._connection.cluster_gossip.read(
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     def close(self) -> None:

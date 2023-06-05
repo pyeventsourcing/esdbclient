@@ -267,6 +267,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         current_version: Union[int, StreamState],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> int:
         timeout = timeout if timeout is not None else self._default_deadline
         result = await self._connection.streams.batch_append(
@@ -275,7 +276,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             events=events,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
         return result.commit_position
 
@@ -285,6 +286,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         current_version: Union[int, StreamState],
         events: Union[NewEvent, Iterable[NewEvent]],
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> int:
         if isinstance(events, NewEvent):
             events = [events]
@@ -293,6 +295,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             current_version=current_version,
             events=events,
             timeout=timeout,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -306,6 +309,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         filter_by_stream_name: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> AsyncioReadResponse:
         """
         Reads recorded events in "all streams" in the database.
@@ -319,7 +323,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             limit=limit,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -331,6 +335,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         backwards: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> Sequence[RecordedEvent]:
         """
         Lists recorded events from the named stream.
@@ -341,6 +346,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             backwards=backwards,
             limit=limit,
             timeout=timeout,
+            credentials=credentials or self._call_credentials,
         )
         return tuple([e async for e in events])
 
@@ -351,6 +357,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         backwards: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> AsyncioReadResponse:
         """
         Reads recorded events from the named stream.
@@ -362,7 +369,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             limit=limit,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -377,6 +384,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> AsyncioCatchupSubscription:
         """
         Starts a catch-up subscription, from which all
@@ -393,7 +401,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             checkpoint_interval_multiplier=checkpoint_interval_multiplier,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -403,6 +411,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         stream_name: str,
         current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         # Todo: Reconsider using current_version=None to indicate "stream exists"?
         timeout = timeout if timeout is not None else self._default_deadline
@@ -411,7 +420,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             current_version=current_version,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     @retrygrpc
@@ -421,6 +430,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         stream_name: str,
         current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         timeout = timeout if timeout is not None else self._default_deadline
         await self._connection.streams.tombstone(
@@ -428,7 +438,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             current_version=current_version,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=self._call_credentials,
+            credentials=credentials or self._call_credentials,
         )
 
     async def close(self) -> None:

@@ -1,19 +1,13 @@
 ## For version 1.0
 
+* Something about causation and correlation IDs?
+
 * Commit position vs prepare position?
   * As I understand it, these values only differ when using TCP/IP client transaction?
     * So probably only used by a small number of people, if any?
 
-* Something about causation and correlation IDs?
-
-* User credentials as method argument
-  * pass in:
-    * username: str, password: str
-    * credentials: grpc.CallCredentials
-    * user_info: str
-    * a "Credentials" dataclass that has username and password
-
-* Change methods to use one "options" argument instead of several arguments?
+* More persistent subscription options
+  * https://developers.eventstore.com/clients/grpc/persistent-subscriptions.html#persistent-subscription-settings
 
 * Doc
   * Exception classes: describe which methods might raise which exceptions and why?
@@ -49,8 +43,6 @@
     looking for repeat commit positions, then you will see the checkpoint first, and
     then ignore the subsequent event that has the same commit position.
   * See: test_checkpoint_commit_position()
-
-* How are checkpoints returned from a persistent subscription? ReadReq doesn't have the "checkpoint" one of.
 
 -----
 Issues:
