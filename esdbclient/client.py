@@ -694,7 +694,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         )
 
     @overload
-    def create_subscription(
+    def create_subscription_to_all(
         self,
         group_name: str,
         *,
@@ -709,7 +709,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
 
     @overload
-    def create_subscription(
+    def create_subscription_to_all(
         self,
         group_name: str,
         *,
@@ -725,7 +725,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
 
     @overload
-    def create_subscription(
+    def create_subscription_to_all(
         self,
         group_name: str,
         *,
@@ -744,7 +744,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
     @retrygrpc
     @autoreconnect
-    def create_subscription(
+    def create_subscription_to_all(
         self,
         group_name: str,
         from_end: bool = False,
@@ -778,7 +778,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         )
 
     @overload
-    def create_stream_subscription(
+    def create_subscription_to_stream(
         self,
         group_name: str,
         stream_name: str,
@@ -791,7 +791,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
 
     @overload
-    def create_stream_subscription(
+    def create_subscription_to_stream(
         self,
         group_name: str,
         stream_name: str,
@@ -805,7 +805,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
 
     @overload
-    def create_stream_subscription(
+    def create_subscription_to_stream(
         self,
         group_name: str,
         stream_name: str,
@@ -820,7 +820,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
     @retrygrpc
     @autoreconnect
-    def create_stream_subscription(
+    def create_subscription_to_stream(
         self,
         group_name: str,
         stream_name: str,
@@ -847,7 +847,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
     @retrygrpc
     @autoreconnect
-    def read_subscription(
+    def read_subscription_to_all(
         self,
         group_name: str,
         buffer_size: int = 100,
@@ -866,7 +866,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
     @retrygrpc
     @autoreconnect
-    def read_stream_subscription(
+    def read_subscription_to_stream(
         self,
         group_name: str,
         stream_name: str,
@@ -888,22 +888,10 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     @retrygrpc
     @autoreconnect
     def get_subscription_info(
-        self, group_name: str, timeout: Optional[float] = None
-    ) -> SubscriptionInfo:
-        """
-        Gets info for a persistent subscription.
-        """
-        return self._connection.persistent_subscriptions.get_info(
-            group_name=group_name,
-            timeout=timeout,
-            metadata=self._call_metadata,
-            credentials=self._call_credentials,
-        )
-
-    @retrygrpc
-    @autoreconnect
-    def get_stream_subscription_info(
-        self, group_name: str, stream_name: str, timeout: Optional[float] = None
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        timeout: Optional[float] = None,
     ) -> SubscriptionInfo:
         """
         Gets info for a persistent subscription.
@@ -932,7 +920,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
     @retrygrpc
     @autoreconnect
-    def list_stream_subscriptions(
+    def list_subscriptions_to_stream(
         self, stream_name: str, timeout: Optional[float] = None
     ) -> Sequence[SubscriptionInfo]:
         """
@@ -946,7 +934,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         )
 
     @overload
-    def update_subscription(
+    def update_subscription_to_all(
         self,
         group_name: str,
         *,
@@ -957,7 +945,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
 
     @overload
-    def update_subscription(
+    def update_subscription_to_all(
         self,
         group_name: str,
         *,
@@ -969,7 +957,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
 
     @overload
-    def update_subscription(
+    def update_subscription_to_all(
         self,
         group_name: str,
         *,
@@ -982,7 +970,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
     @retrygrpc
     @autoreconnect
-    def update_subscription(
+    def update_subscription_to_all(
         self,
         group_name: str,
         from_end: bool = False,
@@ -1004,7 +992,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         )
 
     @overload
-    def update_stream_subscription(
+    def update_subscription_to_stream(
         self,
         group_name: str,
         stream_name: str,
@@ -1016,7 +1004,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
 
     @overload
-    def update_stream_subscription(
+    def update_subscription_to_stream(
         self,
         group_name: str,
         stream_name: str,
@@ -1029,7 +1017,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
 
     @overload
-    def update_stream_subscription(
+    def update_subscription_to_stream(
         self,
         group_name: str,
         stream_name: str,
@@ -1043,7 +1031,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
     @retrygrpc
     @autoreconnect
-    def update_stream_subscription(
+    def update_subscription_to_stream(
         self,
         group_name: str,
         stream_name: str,
@@ -1086,7 +1074,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
     @retrygrpc
     @autoreconnect
-    def delete_persistent_subscription(
+    def delete_subscription(
         self,
         group_name: str,
         stream_name: Optional[str] = None,

@@ -218,7 +218,6 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Recorded events](#recorded-events)
 * [Streams](#streams)
   * [Append events](#append-events)
-  * [Append event](#append-event)
   * [Idempotent append operations](#idempotent-append-operations)
   * [Read stream events](#read-stream-events)
   * [Get current version](#get-current-version)
@@ -234,19 +233,18 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Subscribe to stream events](#subscribe-to-stream-events)
   * [How to implement exactly-once event processing](#how-to-implement-exactly-once-event-processing)
 * [Persistent subscriptions](#persistent-subscriptions)
-  * [Create subscription](#create-subscription)
-  * [Read subscription](#read-subscription)
+  * [Create subscription to all](#create-subscription-to-all)
+  * [Read subscription to all](#read-subscription-to-all)
   * [How to write a persistent subscription consumer](#how-to-write-a-persistent-subscription-consumer)
+  * [Update subscription to all](#update-subscription-to-all)
+  * [Create subscription to stream](#create-subscription-to-stream)
+  * [Read subscription to stream](#read-subscription-to-stream)
+  * [Update subscription to stream](#update-subscription-to-stream)
+  * [Replay parked events](#replay-parked-events)
   * [Get subscription info](#get-subscription-info)
   * [List subscriptions](#list-subscriptions)
-  * [Update subscription](#update-subscription)
-  * [Create stream subscription](#create-stream-subscription)
-  * [Read stream subscription](#read-stream-subscription)
-  * [Get stream subscription info](#get-stream-subscription-info)
-  * [List stream subscriptions](#list-stream-subscriptions)
-  * [Update stream subscription](#update-stream-subscription)
-  * [Replay parked events](#replay-parked-events)
-  * [Delete persistent subscription](#delete-persistent-subscription)
+  * [List subscriptions to stream](#list-subscriptions-to-stream)
+  * [Delete subscription](#delete-subscription)
 * [Connection](#connection)
   * [Reconnect](#reconnect)
   * [Close](#close)
@@ -636,7 +634,7 @@ assert new_event2.id == event_id
 The `RecordedEvent` class is used when reading events from an EventStoreDB
 database. The client will return event objects of this type from all methods
 that return recorded events, such as `get_stream()`, `subscribe_to_all()`,
-and `read_subscription()`. You do not need to construct recorded event objects.
+and `read_subscription_to_all()`. You do not need to construct recorded event objects.
 
 Like `NewEvent`, the `RecordedEvent` class is also a frozen Python dataclass. It has
 all the attributes that `NewEvent` has (`type`, `data`, `metadata`, `content_type`, `id`)
@@ -1963,11 +1961,11 @@ rely on their idempotent handling of duplicate messages, and their resilience to
 out-of-order delivery.
 
 
-### Create subscription
+### Create subscription to all
 
 *requires leader*
 
-The `create_subscription()` method can be used to create a "persistent subscription"
+The `create_subscription_to_all()` method can be used to create a "persistent subscription"
 to all the recorded events in the database across all streams.
 
 This method has a required `group_name` argument, which is the
@@ -2014,8 +2012,8 @@ default value is `'DispatchToSingle'`.
 The optional `timeout` argument is a Python `float` which sets a
 deadline for the completion of the gRPC operation.
 
-The method `create_subscription()` does not return a value. Recorded events are
-obtained by calling the `read_subscription()` method.
+The method `create_subscription_to_all()` does not return a value. Recorded events are
+obtained by calling the `read_subscription_to_all()` method.
 
 In the example below, a persistent subscription is created to operate from the
 first recorded non-system event in the database.
@@ -2023,20 +2021,20 @@ first recorded non-system event in the database.
 ```python
 # Create a persistent subscription.
 group_name1 = f"group-{uuid.uuid4()}"
-client.create_subscription(group_name=group_name1)
+client.create_subscription_to_all(group_name=group_name1)
 ```
 
-### Read subscription
+### Read subscription to all
 
 *requires leader*
 
-The `read_subscription()` method can be used by a group of consumers to receive
+The `read_subscription_to_all()` method can be used by a group of consumers to receive
 recorded events from a persistent subscription that has been created using
-the `create_subscription()` method.
+the `create_subscription_to_all()` method.
 
 This method has a required `group_name` argument, which is
 the name of a "group" of consumers of the subscription specified
-when `create_subscription()` was called.
+when `create_subscription_to_all()` was called.
 
 This method also has an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
@@ -2047,7 +2045,7 @@ giving `RecordedEvent` objects. It also has `ack()`, `nack()` and `stop()`
 methods.
 
 ```python
-subscription = client.read_subscription(group_name=group_name1)
+subscription = client.read_subscription_to_all(group_name=group_name1)
 ```
 
 The `ack()` method should be used by a consumer to indicate to the server that it
@@ -2165,10 +2163,10 @@ class ExampleConsumer:
 
 # Create subscription.
 group_name = f"group-{uuid.uuid4()}"
-client.create_subscription(group_name, commit_position=commit_position1)
+client.create_subscription_to_all(group_name, commit_position=commit_position1)
 
 # Read subscription.
-subscription = client.read_subscription(group_name)
+subscription = client.read_subscription_to_all(group_name)
 
 # Construct consumer.
 consumer = ExampleConsumer(
@@ -2189,50 +2187,11 @@ assert nacked_events[event5.id] == 5
 assert event5.id not in acked_events
 ```
 
-### Get subscription info
+### Update subscription to all
 
 *requires leader*
 
-The `get_subscription_info()` method can be used to get information for a
-persistent subscription.
-
-This method has one required argument, `group_name`, which
-should match the value of the argument used when calling `create_subscription()`.
-
-This method also has an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
-
-```python
-subscription_info = client.get_subscription_info(
-    group_name=group_name1,
-)
-```
-
-The returned value is a `SubscriptionInfo` object.
-
-### List subscriptions
-
-*requires leader*
-
-The `list_subscriptions()` method can be used to get information for all
-existing persistent subscriptions.
-
-This method has an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
-
-```python
-subscriptions = client.list_subscriptions()
-```
-
-The returned value is a list of `SubscriptionInfo` objects.
-
-### Update subscription
-
-*requires leader*
-
-The `update_subscription()` method can be used to update a
+The `update_subscription_to_all()` method can be used to update a
 "persistent subscription".
 
 This method has a required `group_name` argument, which is the
@@ -2258,22 +2217,22 @@ Please note, the filter options and consumer strategy cannot be adjusted.
 The optional `timeout` argument is a Python `float` which sets a
 deadline for the completion of the gRPC operation.
 
-The method `update_subscription()` does not return a value.
+The method `update_subscription_to_all()` does not return a value.
 
 In the example below, a persistent subscription is updated to run from the end of the
 database.
 
 ```python
 # Create a persistent subscription.
-client.update_subscription(group_name=group_name1, from_end=True)
+client.update_subscription_to_all(group_name=group_name1, from_end=True)
 ```
 
-### Create stream subscription
+### Create subscription to stream
 
 *requires leader*
 
-The `create_stream_subscription()` method can be used to create a persistent
-subscription for a stream.
+The `create_subscription_to_stream()` method can be used to create a persistent
+subscription to a stream.
 
 This method has two required arguments, `group_name` and `stream_name`. The
 `group_name` argument names the group of consumers that will receive events
@@ -2304,28 +2263,28 @@ is expected to be a Python `float`, which sets a deadline
 for the completion of the gRPC operation.
 
 This method does not return a value. Events can be received by calling
-`read_stream_subscription()`.
+`read_subscription_to_stream()`.
 
 The example below creates a persistent stream subscription from the start of the stream.
 
 ```python
 # Create a persistent stream subscription from start of the stream.
 group_name2 = f"group-{uuid.uuid4()}"
-client.create_stream_subscription(
+client.create_subscription_to_stream(
     group_name=group_name2,
     stream_name=stream_name2,
 )
 ```
 
-### Read stream subscription
+### Read subscription to stream
 
 *requires leader*
 
-The `read_stream_subscription()` method can be used to read a persistent
-stream subscription.
+The `read_subscription_to_stream()` method can be used to read a persistent
+subscription to a stream.
 
 This method has two required arguments, `group_name` and `stream_name`, which
-should match the values of arguments used when calling `create_stream_subscription()`.
+should match the values of arguments used when calling `create_subscription_to_stream()`.
 
 This method also has an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
@@ -2336,7 +2295,7 @@ giving `RecordedEvent` objects, that also has `ack()`, `nack()` and `stop()`
 methods.
 
 ```python
-subscription = client.read_stream_subscription(
+subscription = client.read_subscription_to_stream(
     group_name=group_name2,
     stream_name=stream_name2,
 )
@@ -2372,57 +2331,12 @@ assert events[2].stream_name == stream_name2
 assert events[2].id == event6.id
 ```
 
-### Get stream subscription info
+### Update subscription to stream
 
 *requires leader*
 
-The `get_stream_subscription_info()` method can be used to get information for a
-persistent subscription for a stream.
-
-This method has two required arguments, `group_name` and `stream_name`, which
-should match the values of arguments used when calling `create_stream_subscription()`.
-
-This method also has an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
-
-```python
-subscription_info = client.get_stream_subscription_info(
-    group_name=group_name2,
-    stream_name=stream_name2,
-)
-```
-
-The returned value is a `SubscriptionInfo` object.
-
-
-### List stream subscriptions
-
-*requires leader*
-
-The `list_stream_subscriptions()` method can be used to get information for all
-the persistent subscriptions for a stream.
-
-This method has one required argument, `stream_name`.
-
-This method also has an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
-
-```python
-subscriptions = client.list_stream_subscriptions(
-    stream_name=stream_name2,
-)
-```
-
-The returned value is a list of `SubscriptionInfo` objects.
-
-### Update stream subscription
-
-*requires leader*
-
-The `update_stream_subscription()` method can be used to update a
-persistent subscription for a stream.
+The `update_subscription_to_stream()` method can be used to update a
+persistent subscription to a stream.
 
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription, and a required
@@ -2448,14 +2362,14 @@ Please note, the consumer strategy cannot be adjusted.
 The optional `timeout` argument is a Python `float` which sets a
 deadline for the completion of the gRPC operation.
 
-The `update_stream_subscription()` method does not return a value.
+The `update_subscription_to_stream()` method does not return a value.
 
-In the example below, a persistent subscription for a stream is updated to run from the
+In the example below, a persistent subscription to a stream is updated to run from the
 end of the stream.
 
 ```python
 # Create a persistent subscription.
-client.update_stream_subscription(
+client.update_subscription_to_stream(
     group_name=group_name2,
     stream_name=stream_name2,
     from_end=True,
@@ -2468,12 +2382,12 @@ client.update_stream_subscription(
 
 The `replay_parked_events()` method can be used to "replay" events that have
 been "parked" (negatively acknowledged with the action `'park'`) when reading
-a persistent subscription. Parked events will then be received by the consumers
+a persistent subscription. Parked events will then be received again by consumers
 reading from the persistent subscription.
 
-This method has one required argument, `group_name`. It has one optional argument,
-`stream_name`. The values of these arguments should match those used when calling
-`create_subscription()` or `create_stream_subscription()`.
+This method has a required `group_name` argument and an optional `stream_name`
+argument. The values of these arguments should match those used when calling
+`create_subscription_to_all()` or `create_subscription_to_stream()`.
 
 This method also has an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
@@ -2496,35 +2410,112 @@ client.replay_parked_events(
 )
 ```
 
-### Delete persistent subscription
+### Get subscription info
 
 *requires leader*
 
-The `delete_persistent_subscription()` method can be used to delete a persistent
-subscription.
+The `get_subscription_info()` method can be used to get information for a
+persistent subscription.
 
-This method has one required argument, `group_name`. It has one optional argument,
-`stream_name`. The values of these arguments should match those used when calling
-`create_subscription()` or `create_stream_subscription()`.
+This method has a required `group_name` argument and an optional `stream_name`
+argument, which should match the values of arguments used when calling either
+`create_subscription_to_all()` or `create_subscription_to_stream()`.
 
 This method also has an optional `timeout` argument, that
 is expected to be a Python `float`, which sets a deadline
 for the completion of the gRPC operation.
 
-The example below deletes the subscription for group `group_name1` which was created
-by calling `create_subscription()`.
+The example below gets information for the persistent subscription `group_name1` which
+was created by calling `create_subscription_to_all()`.
 
 ```python
-client.delete_persistent_subscription(
+subscription_info = client.get_subscription_info(
     group_name=group_name1,
 )
 ```
 
-The example below deletes the subscription for group `group_name2` which was created
-by calling `create_stream_subscription()`.
+The example below gets information for the persistent subscription `group_name2` on
+`stream_name2` which was created by calling `create_subscription_to_stream()`.
 
 ```python
-client.delete_persistent_subscription(
+subscription_info = client.get_subscription_info(
+    group_name=group_name2,
+    stream_name=stream_name2,
+)
+```
+
+The returned value is a `SubscriptionInfo` object.
+
+### List subscriptions
+
+*requires leader*
+
+The `list_subscriptions()` method can be used to get information for all
+existing persistent subscriptions, both "subscriptions to all" and
+"subscriptions to stream".
+
+This method has an optional `timeout` argument, that
+is expected to be a Python `float`, which sets a deadline
+for the completion of the gRPC operation.
+
+```python
+subscriptions = client.list_subscriptions()
+```
+
+The returned value is a list of `SubscriptionInfo` objects.
+
+
+### List subscriptions to stream
+
+*requires leader*
+
+The `list_subscriptions_to_stream()` method can be used to get information for all
+the persistent subscriptions to a stream.
+
+This method has one required argument, `stream_name`.
+
+This method also has an optional `timeout` argument, that
+is expected to be a Python `float`, which sets a deadline
+for the completion of the gRPC operation.
+
+```python
+subscriptions = client.list_subscriptions_to_stream(
+    stream_name=stream_name2,
+)
+```
+
+The returned value is a list of `SubscriptionInfo` objects.
+
+
+### Delete subscription
+
+*requires leader*
+
+The `delete_subscription()` method can be used to delete a persistent
+subscription.
+
+This method has a required `group_name` argument and an optional `stream_name`
+argument, which should match the values of arguments used when calling either
+`create_subscription_to_all()` or `create_subscription_to_stream()`.
+
+This method also has an optional `timeout` argument, that
+is expected to be a Python `float`, which sets a deadline
+for the completion of the gRPC operation.
+
+The example below deletes the persistent subscription `group_name1` which
+was created by calling `create_subscription_to_all()`.
+
+```python
+client.delete_subscription(
+    group_name=group_name1,
+)
+```
+
+The example below deleted the persistent subscription `group_name2` on
+`stream_name2` which was created by calling `create_subscription_to_stream()`.
+
+```python
+client.delete_subscription(
     group_name=group_name2,
     stream_name=stream_name2,
 )
@@ -2657,7 +2648,7 @@ asyncio.get_event_loop().run_until_complete(
 
 ### Regular expression filters
 
-The `read_all()`, `subscribe_to_all()`, `create_subscription()`
+The `read_all()`, `subscribe_to_all()`, `create_subscription_to_all()`
 and `get_commit_position()` methods have `filter_exclude` and `filter_include`
 arguments. This section provides some more details about the values of these
 arguments.

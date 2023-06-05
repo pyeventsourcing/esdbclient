@@ -963,7 +963,7 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(self.client.get_commit_position(), commit_position)
 
         # Create persistent subscription.
-        self.client.create_subscription(f"group-{uuid4()}")
+        self.client.create_subscription_to_all(f"group-{uuid4()}")
 
         # Check commit_position() still returns expected value.
         self.assertEqual(self.client.get_commit_position(), commit_position)
@@ -2388,12 +2388,12 @@ class TestEventStoreDBClient(TestCase):
         # Iterating should stop.
         list(subscription)
 
-    def test_subscription_read_with_ack(self) -> None:
+    def test_subscription_to_all_read_with_ack(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(group_name=group_name, from_end=True)
+        self.client.create_subscription_to_all(group_name=group_name, from_end=True)
 
         # Append three events.
         stream_name1 = str(uuid4())
@@ -2409,7 +2409,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read subscription.
-        subscription = self.client.read_subscription(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         events = []
         for event in subscription:
@@ -2422,12 +2422,12 @@ class TestEventStoreDBClient(TestCase):
         assert events[-2].data == event2.data
         assert events[-1].data == event3.data
 
-    def test_subscription_read_with_nack_unknown(self) -> None:
+    def test_subscription_to_all_read_with_nack_unknown(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(group_name=group_name, from_end=True)
+        self.client.create_subscription_to_all(group_name=group_name, from_end=True)
 
         # Append three events.
         stream_name1 = str(uuid4())
@@ -2443,7 +2443,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read subscription.
-        subscription = self.client.read_subscription(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         events = []
         for event in subscription:
@@ -2456,12 +2456,12 @@ class TestEventStoreDBClient(TestCase):
         assert events[-2].data == event2.data
         assert events[-1].data == event3.data
 
-    def test_subscription_read_with_nack_park(self) -> None:
+    def test_subscription_to_all_read_with_nack_park(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(group_name=group_name, from_end=True)
+        self.client.create_subscription_to_all(group_name=group_name, from_end=True)
 
         # Append three events.
         stream_name1 = str(uuid4())
@@ -2477,7 +2477,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read subscription.
-        subscription = self.client.read_subscription(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         events = []
         for event in subscription:
@@ -2490,12 +2490,12 @@ class TestEventStoreDBClient(TestCase):
         assert events[-2].data == event2.data
         assert events[-1].data == event3.data
 
-    def test_subscription_replay_parked(self) -> None:
+    def test_subscription_to_all_replay_parked(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(group_name=group_name, from_end=True)
+        self.client.create_subscription_to_all(group_name=group_name, from_end=True)
 
         # Append three events.
         stream_name1 = str(uuid4())
@@ -2511,7 +2511,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read subscription.
-        subscription = self.client.read_subscription(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         # Park event.
         parked_events = []
@@ -2536,13 +2536,13 @@ class TestEventStoreDBClient(TestCase):
         assert replayed_events[-2].data == event2.data
         assert replayed_events[-1].data == event3.data
 
-    def test_stream_subscription_replay_parked(self) -> None:
+    def test_subscription_to_stream_replay_parked(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
         stream_name1 = str(uuid4())
-        self.client.create_stream_subscription(
+        self.client.create_subscription_to_stream(
             group_name=group_name, stream_name=stream_name1
         )
 
@@ -2558,7 +2558,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read subscription.
-        subscription = self.client.read_stream_subscription(
+        subscription = self.client.read_subscription_to_stream(
             group_name=group_name, stream_name=stream_name1
         )
 
@@ -2587,12 +2587,12 @@ class TestEventStoreDBClient(TestCase):
         assert replayed_events[-2].data == event2.data
         assert replayed_events[-1].data == event3.data
 
-    def test_subscription_read_with_nack_retry(self) -> None:
+    def test_subscription_to_all_read_with_nack_retry(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(
+        self.client.create_subscription_to_all(
             group_name=group_name,
             from_end=True,
         )
@@ -2611,7 +2611,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read subscription.
-        subscription = self.client.read_subscription(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         events = []
         for event in subscription:
@@ -2633,12 +2633,12 @@ class TestEventStoreDBClient(TestCase):
             if len(expected_event_ids) == 0:
                 break
 
-    def test_subscription_read_with_nack_skip(self) -> None:
+    def test_subscription_to_all_read_with_nack_skip(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(group_name=group_name, from_end=True)
+        self.client.create_subscription_to_all(group_name=group_name, from_end=True)
 
         # Append three events.
         stream_name1 = str(uuid4())
@@ -2654,7 +2654,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read all events.
-        subscription = self.client.read_subscription(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         events = []
         for event in subscription:
@@ -2667,12 +2667,12 @@ class TestEventStoreDBClient(TestCase):
         assert events[-2].data == event2.data
         assert events[-1].data == event3.data
 
-    def test_subscription_read_with_nack_stop(self) -> None:
+    def test_subscription_to_all_read_with_nack_stop(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(group_name=group_name, from_end=True)
+        self.client.create_subscription_to_all(group_name=group_name, from_end=True)
 
         # Append three events.
         stream_name1 = str(uuid4())
@@ -2688,7 +2688,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read all events.
-        subscription = self.client.read_subscription(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         events = []
         for event in subscription:
@@ -2701,12 +2701,12 @@ class TestEventStoreDBClient(TestCase):
         assert events[-2].data == event2.data
         assert events[-1].data == event3.data
 
-    def test_subscription_can_be_stopped(self) -> None:
+    def test_subscription_to_all_can_be_stopped(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(group_name=group_name, from_end=True)
+        self.client.create_subscription_to_all(group_name=group_name, from_end=True)
 
         # Append three events.
         stream_name1 = str(uuid4())
@@ -2722,7 +2722,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read subscription.
-        subscription = self.client.read_subscription(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         # Stop subscription.
         subscription.stop()
@@ -2731,7 +2731,7 @@ class TestEventStoreDBClient(TestCase):
         events = list(subscription)
         assert len(events) == 0
 
-    def test_subscription_from_commit_position(self) -> None:
+    def test_subscription_to_all_from_commit_position(self) -> None:
         self.construct_esdb_client()
 
         # Append one event.
@@ -2751,13 +2751,13 @@ class TestEventStoreDBClient(TestCase):
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
 
-        self.client.create_subscription(
+        self.client.create_subscription_to_all(
             group_name=group_name,
             commit_position=commit_position,
         )
 
         # Read events from subscription.
-        subscription = self.client.read_subscription(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         events = []
         for event in subscription:
@@ -2775,12 +2775,12 @@ class TestEventStoreDBClient(TestCase):
         assert events[1].id == event2.id
         assert events[2].id == event3.id
 
-    def test_subscription_from_end(self) -> None:
+    def test_subscription_to_all_from_end(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(
+        self.client.create_subscription_to_all(
             group_name=group_name,
             from_end=True,
             # filter_exclude=[],
@@ -2799,7 +2799,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read three events.
-        subscription = self.client.read_subscription(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         events = []
         for event in subscription:
@@ -2819,12 +2819,12 @@ class TestEventStoreDBClient(TestCase):
         assert events[1].data == event2.data
         assert events[2].data == event3.data
 
-    def test_subscription_filter_exclude_event_types(self) -> None:
+    def test_subscription_to_all_filter_exclude_event_types(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(
+        self.client.create_subscription_to_all(
             group_name=group_name,
             filter_exclude=["OrderCreated"],
             from_end=True,
@@ -2843,7 +2843,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read events from subscription.
-        subscription = self.client.read_subscription(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         # Check we don't receive any OrderCreated events.
         for event in subscription:
@@ -2852,7 +2852,7 @@ class TestEventStoreDBClient(TestCase):
             if event.data == event3.data:
                 break
 
-    def test_subscription_filter_exclude_stream_names(self) -> None:
+    def test_subscription_to_all_filter_exclude_stream_names(self) -> None:
         self.construct_esdb_client()
 
         stream_name1 = str(uuid4())
@@ -2863,14 +2863,14 @@ class TestEventStoreDBClient(TestCase):
 
         # Create persistent subscriptions.
         group_name1 = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(
+        self.client.create_subscription_to_all(
             group_name=group_name1,
             filter_exclude=stream_name1,
             filter_by_stream_name=True,
             from_end=True,
         )
         group_name2 = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(
+        self.client.create_subscription_to_all(
             group_name=group_name2,
             filter_exclude=prefix1 + ".*",
             filter_by_stream_name=True,
@@ -2897,7 +2897,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Check we don't receive any events from stream_name1.
-        subscription = self.client.read_subscription(group_name=group_name1)
+        subscription = self.client.read_subscription_to_all(group_name=group_name1)
 
         for event in subscription:
             if event.stream_name == stream_name1:
@@ -2907,7 +2907,7 @@ class TestEventStoreDBClient(TestCase):
                 break
 
         # Check we don't receive any events from stream names starting with prefix1.
-        subscription = self.client.read_subscription(group_name=group_name2)
+        subscription = self.client.read_subscription_to_all(group_name=group_name2)
 
         for event in subscription:
             if event.stream_name.startswith(prefix1):
@@ -2916,12 +2916,12 @@ class TestEventStoreDBClient(TestCase):
             if event.data == event4.data:
                 break
 
-    def test_subscription_filter_include_event_types(self) -> None:
+    def test_subscription_to_all_filter_include_event_types(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(
+        self.client.create_subscription_to_all(
             group_name=group_name,
             filter_include=["OrderCreated"],
             from_end=True,
@@ -2940,7 +2940,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Check we only receive any OrderCreated events.
-        subscription = self.client.read_subscription(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         for event in subscription:
             subscription.ack(event.id)
@@ -2948,7 +2948,7 @@ class TestEventStoreDBClient(TestCase):
             if event.data == event1.data:
                 break
 
-    def test_subscription_filter_include_stream_names(self) -> None:
+    def test_subscription_to_all_filter_include_stream_names(self) -> None:
         self.construct_esdb_client()
 
         stream_name1 = str(uuid4())
@@ -2959,14 +2959,14 @@ class TestEventStoreDBClient(TestCase):
 
         # Create persistent subscriptions.
         group_name1 = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(
+        self.client.create_subscription_to_all(
             group_name=group_name1,
             filter_include=stream_name4,
             filter_by_stream_name=True,
             from_end=True,
         )
         group_name2 = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(
+        self.client.create_subscription_to_all(
             group_name=group_name2,
             filter_include=prefix1 + ".*",
             filter_by_stream_name=True,
@@ -2993,7 +2993,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Check we only receive events from stream4.
-        subscription = self.client.read_subscription(group_name=group_name1)
+        subscription = self.client.read_subscription_to_all(group_name=group_name1)
 
         events = []
         for event in subscription:
@@ -3006,7 +3006,7 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(events[0].id, event4.id)
 
         # Check we only receive events with stream name starting with prefix1.
-        subscription = self.client.read_subscription(group_name=group_name2)
+        subscription = self.client.read_subscription_to_all(group_name=group_name2)
 
         events = []
         for event in subscription:
@@ -3019,12 +3019,12 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(events[0].id, event3.id)
         self.assertEqual(events[1].id, event4.id)
 
-    def test_subscription_filter_nothing(self) -> None:
+    def test_subscription_to_all_filter_nothing(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(
+        self.client.create_subscription_to_all(
             group_name=group_name,
             filter_exclude=[],
             filter_include=[],
@@ -3044,7 +3044,7 @@ class TestEventStoreDBClient(TestCase):
         )
 
         # Read events from subscription.
-        subscription = self.client.read_subscription(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         has_seen_system_event = False
         has_seen_persistent_config_event = False
@@ -3060,18 +3060,18 @@ class TestEventStoreDBClient(TestCase):
             elif event.data == event3.data:
                 self.fail("Expected a 'system' event and a 'PersistentConfig' event")
 
-    def test_subscription_with_consumer_strategy_round_robin(self) -> None:
+    def test_subscription_to_all_with_consumer_strategy_round_robin(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
         group_name1 = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(
+        self.client.create_subscription_to_all(
             group_name=group_name1, consumer_strategy="RoundRobin", from_end=True
         )
 
         # Multiple consumers.
-        subscription1 = self.client.read_subscription(group_name=group_name1)
-        subscription2 = self.client.read_subscription(group_name=group_name1)
+        subscription1 = self.client.read_subscription_to_all(group_name=group_name1)
+        subscription2 = self.client.read_subscription_to_all(group_name=group_name1)
 
         # Append three events.
         stream_name1 = str(uuid4())
@@ -3128,9 +3128,8 @@ class TestEventStoreDBClient(TestCase):
 
         with self.assertRaises(NotFound):
             self.client.get_subscription_info(group_name)
-
         # Create persistent subscription.
-        self.client.create_subscription(group_name=group_name)
+        self.client.create_subscription_to_all(group_name=group_name)
 
         info = self.client.get_subscription_info(group_name)
         self.assertEqual(info.group_name, group_name)
@@ -3140,56 +3139,68 @@ class TestEventStoreDBClient(TestCase):
 
         subscriptions_before = self.client.list_subscriptions()
 
-        # Create persistent subscription.
-        group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_subscription(
-            group_name=group_name,
+        # Create subscription to all.
+        group_name1 = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription_to_all(
+            group_name=group_name1,
             filter_exclude=[],
             filter_include=[],
         )
 
-        subscriptions_after = self.client.list_subscriptions()
-        self.assertEqual(len(subscriptions_before) + 1, len(subscriptions_after))
-        group_names = [s.group_name for s in subscriptions_after]
-        self.assertIn(group_name, group_names)
+        # Create subscription to stream.
+        group_name2 = f"my-subscription-{uuid4().hex}"
+        stream_name = str(uuid4())
+        self.client.create_subscription_to_stream(
+            group_name=group_name2,
+            stream_name=stream_name,
+        )
 
-    def test_subscription_update(self) -> None:
+        # List subscriptions.
+        subscriptions_after = self.client.list_subscriptions()
+
+        # List includes both the "subscription to all" and the "subscription to stream".
+        self.assertEqual(len(subscriptions_before) + 2, len(subscriptions_after))
+        group_names = [s.group_name for s in subscriptions_after]
+        self.assertIn(group_name1, group_names)
+        self.assertIn(group_name2, group_names)
+
+    def test_subscription_to_all_update(self) -> None:
         self.construct_esdb_client()
 
         group_name = f"my-subscription-{uuid4().hex}"
 
         # Can't update a subscription that doesn't exist.
         with self.assertRaises(NotFound):
-            self.client.update_subscription(group_name=group_name)
+            self.client.update_subscription_to_all(group_name=group_name)
 
         # Create persistent subscription.
-        self.client.create_subscription(
+        self.client.create_subscription_to_all(
             group_name=group_name,
             filter_exclude=[],
             filter_include=[],
         )
 
         # Can update a subscription that does exist.
-        self.client.update_subscription(group_name=group_name)
+        self.client.update_subscription_to_all(group_name=group_name)
 
         info = self.client.get_subscription_info(group_name=group_name)
         self.assertEqual(info.start_from, "C:0/P:0")
 
         # Update subscription to run from end.
-        self.client.update_subscription(group_name=group_name, from_end=True)
+        self.client.update_subscription_to_all(group_name=group_name, from_end=True)
         info = self.client.get_subscription_info(group_name=group_name)
         self.assertEqual(info.start_from, "C:-1/P:-1")
 
         # Update subscription to run from commit position.
         commit_position = self.client.get_commit_position()
-        self.client.update_subscription(
+        self.client.update_subscription_to_all(
             group_name=group_name, commit_position=commit_position
         )
         info = self.client.get_subscription_info(group_name=group_name)
         self.assertEqual(info.start_from, f"C:{commit_position}/P:{commit_position}")
 
         # Update subscription to run from start.
-        self.client.update_subscription(group_name=group_name)
+        self.client.update_subscription_to_all(group_name=group_name)
         info = self.client.get_subscription_info(group_name=group_name)
         self.assertEqual(info.start_from, "C:0/P:0")
 
@@ -3200,10 +3211,10 @@ class TestEventStoreDBClient(TestCase):
 
         # Can't delete a subscription that doesn't exist.
         with self.assertRaises(NotFound):
-            self.client.delete_persistent_subscription(group_name=group_name)
+            self.client.delete_subscription(group_name=group_name)
 
         # Create persistent subscription.
-        self.client.create_subscription(
+        self.client.create_subscription_to_all(
             group_name=group_name,
             filter_exclude=[],
             filter_include=[],
@@ -3213,7 +3224,7 @@ class TestEventStoreDBClient(TestCase):
         group_names = [s.group_name for s in subscriptions_before]
         self.assertIn(group_name, group_names)
 
-        self.client.delete_persistent_subscription(group_name=group_name)
+        self.client.delete_subscription(group_name=group_name)
 
         subscriptions_after = self.client.list_subscriptions()
         self.assertEqual(len(subscriptions_before) - 1, len(subscriptions_after))
@@ -3221,9 +3232,9 @@ class TestEventStoreDBClient(TestCase):
         self.assertNotIn(group_name, group_names)
 
         with self.assertRaises(NotFound):
-            self.client.delete_persistent_subscription(group_name=group_name)
+            self.client.delete_subscription(group_name=group_name)
 
-    def test_stream_subscription_from_start(self) -> None:
+    def test_subscription_to_stream_from_start(self) -> None:
         self.construct_esdb_client()
 
         # Append some events.
@@ -3249,13 +3260,13 @@ class TestEventStoreDBClient(TestCase):
 
         # Create persistent stream subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_stream_subscription(
+        self.client.create_subscription_to_stream(
             group_name=group_name,
             stream_name=stream_name2,
         )
 
         # Read events from subscription.
-        subscription = self.client.read_stream_subscription(
+        subscription = self.client.read_subscription_to_stream(
             group_name=group_name,
             stream_name=stream_name2,
         )
@@ -3304,7 +3315,7 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(events[4].id, event11.id)
         self.assertEqual(events[5].id, event12.id)
 
-    def test_stream_subscription_from_stream_position(self) -> None:
+    def test_subscription_to_stream_from_stream_position(self) -> None:
         self.construct_esdb_client()
 
         # Append some events.
@@ -3330,14 +3341,14 @@ class TestEventStoreDBClient(TestCase):
 
         # Create persistent stream subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_stream_subscription(
+        self.client.create_subscription_to_stream(
             group_name=group_name,
             stream_name=stream_name2,
             stream_position=1,
         )
 
         # Read events from subscription.
-        subscription = self.client.read_stream_subscription(
+        subscription = self.client.read_subscription_to_stream(
             group_name=group_name,
             stream_name=stream_name2,
         )
@@ -3384,7 +3395,7 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(events[3].id, event11.id)
         self.assertEqual(events[4].id, event12.id)
 
-    def test_stream_subscription_from_end(self) -> None:
+    def test_subscription_to_stream_from_end(self) -> None:
         self.construct_esdb_client()
 
         # Append some events.
@@ -3410,14 +3421,14 @@ class TestEventStoreDBClient(TestCase):
 
         # Create persistent stream subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_stream_subscription(
+        self.client.create_subscription_to_stream(
             group_name=group_name,
             stream_name=stream_name2,
             from_end=True,
         )
 
         # Read events from subscription.
-        subscription = self.client.read_stream_subscription(
+        subscription = self.client.read_subscription_to_stream(
             group_name=group_name,
             stream_name=stream_name2,
         )
@@ -3451,7 +3462,7 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(events[1].id, event11.id)
         self.assertEqual(events[2].id, event12.id)
 
-    def test_stream_subscription_with_consumer_strategy_round_robin(
+    def test_subscription_to_stream_with_consumer_strategy_round_robin(
         self,
     ) -> None:
         self.construct_esdb_client()
@@ -3460,17 +3471,17 @@ class TestEventStoreDBClient(TestCase):
 
         # Create persistent subscription.
         group_name1 = f"my-subscription-{uuid4().hex}"
-        self.client.create_stream_subscription(
+        self.client.create_subscription_to_stream(
             group_name=group_name1,
             stream_name=stream_name1,
             consumer_strategy="RoundRobin",
         )
 
         # Multiple consumers.
-        subscription1 = self.client.read_stream_subscription(
+        subscription1 = self.client.read_subscription_to_stream(
             group_name=group_name1, stream_name=stream_name1
         )
-        subscription2 = self.client.read_stream_subscription(
+        subscription2 = self.client.read_subscription_to_stream(
             group_name=group_name1, stream_name=stream_name1
         )
 
@@ -3514,7 +3525,7 @@ class TestEventStoreDBClient(TestCase):
         self.assertEqual(events2[0].id, event2.id)
         self.assertEqual(events2[1].id, event4.id)
 
-    def test_stream_subscription_can_be_stopped(self) -> None:
+    def test_subscription_to_stream_can_be_stopped(self) -> None:
         self.construct_esdb_client()
 
         # Append some events.
@@ -3540,13 +3551,13 @@ class TestEventStoreDBClient(TestCase):
 
         # Create persistent stream subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_stream_subscription(
+        self.client.create_subscription_to_stream(
             group_name=group_name,
             stream_name=stream_name2,
         )
 
         # Read subscription.
-        subscription = self.client.read_stream_subscription(
+        subscription = self.client.read_subscription_to_stream(
             group_name=group_name,
             stream_name=stream_name2,
         )
@@ -3558,25 +3569,25 @@ class TestEventStoreDBClient(TestCase):
         events = list(subscription)
         self.assertEqual(0, len(events))
 
-    def test_stream_subscription_get_info(self) -> None:
+    def test_subscription_to_stream_get_info(self) -> None:
         self.construct_esdb_client()
 
         stream_name = str(uuid4())
         group_name = f"my-subscription-{uuid4().hex}"
 
         with self.assertRaises(NotFound):
-            self.client.get_stream_subscription_info(
+            self.client.get_subscription_info(
                 group_name=group_name,
                 stream_name=stream_name,
             )
 
         # Create persistent stream subscription.
-        self.client.create_stream_subscription(
+        self.client.create_subscription_to_stream(
             group_name=group_name,
             stream_name=stream_name,
         )
 
-        info = self.client.get_stream_subscription_info(
+        info = self.client.get_subscription_info(
             group_name=group_name,
             stream_name=stream_name,
         )
@@ -3587,17 +3598,17 @@ class TestEventStoreDBClient(TestCase):
 
         stream_name = str(uuid4())
 
-        subscriptions_before = self.client.list_stream_subscriptions(stream_name)
+        subscriptions_before = self.client.list_subscriptions_to_stream(stream_name)
         self.assertEqual(subscriptions_before, [])
 
         # Create persistent stream subscription.
         group_name = f"my-subscription-{uuid4().hex}"
-        self.client.create_stream_subscription(
+        self.client.create_subscription_to_stream(
             group_name=group_name,
             stream_name=stream_name,
         )
 
-        subscriptions_after = self.client.list_stream_subscriptions(stream_name)
+        subscriptions_after = self.client.list_subscriptions_to_stream(stream_name)
         self.assertEqual(len(subscriptions_after), 1)
         self.assertEqual(subscriptions_after[0].group_name, group_name)
 
@@ -3606,7 +3617,7 @@ class TestEventStoreDBClient(TestCase):
         group_names = [s.group_name for s in all_subscriptions]
         self.assertIn(group_name, group_names)
 
-    def test_stream_subscription_update(self) -> None:
+    def test_subscription_to_stream_update(self) -> None:
         self.construct_esdb_client()
 
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3614,82 +3625,80 @@ class TestEventStoreDBClient(TestCase):
 
         # Can't update a subscription that doesn't exist.
         with self.assertRaises(NotFound):
-            self.client.update_stream_subscription(
+            self.client.update_subscription_to_stream(
                 group_name=group_name, stream_name=stream_name
             )
 
         # Create persistent subscription.
-        self.client.create_stream_subscription(
+        self.client.create_subscription_to_stream(
             group_name=group_name,
             stream_name=stream_name,
         )
 
         # Can update a subscription that does exist.
-        self.client.update_stream_subscription(
+        self.client.update_subscription_to_stream(
             group_name=group_name, stream_name=stream_name
         )
 
-        info = self.client.get_stream_subscription_info(
+        info = self.client.get_subscription_info(
             group_name=group_name, stream_name=stream_name
         )
         self.assertEqual(info.start_from, "0")
 
         # Update subscription to run from end.
-        self.client.update_stream_subscription(
+        self.client.update_subscription_to_stream(
             group_name=group_name, stream_name=stream_name, from_end=True
         )
-        info = self.client.get_stream_subscription_info(
+        info = self.client.get_subscription_info(
             group_name=group_name, stream_name=stream_name
         )
         self.assertEqual(info.start_from, "-1")
 
         # Update subscription to run from stream position.
-        self.client.update_stream_subscription(
+        self.client.update_subscription_to_stream(
             group_name=group_name, stream_name=stream_name, stream_position=10
         )
-        info = self.client.get_stream_subscription_info(
+        info = self.client.get_subscription_info(
             group_name=group_name, stream_name=stream_name
         )
         self.assertEqual(info.start_from, "10")
 
         # Update subscription to run from start.
-        self.client.update_stream_subscription(
+        self.client.update_subscription_to_stream(
             group_name=group_name, stream_name=stream_name
         )
-        info = self.client.get_stream_subscription_info(
+        info = self.client.get_subscription_info(
             group_name=group_name, stream_name=stream_name
         )
         self.assertEqual(info.start_from, "0")
 
-    def test_stream_subscription_delete(self) -> None:
+    def test_subscription_to_stream_delete(self) -> None:
         self.construct_esdb_client()
 
         stream_name = str(uuid4())
         group_name = f"my-subscription-{uuid4().hex}"
 
         with self.assertRaises(NotFound):
-            self.client.delete_persistent_subscription(
+            self.client.delete_subscription(
                 group_name=group_name, stream_name=stream_name
             )
 
         # Create persistent stream subscription.
-        self.client.create_stream_subscription(
+        self.client.create_subscription_to_stream(
             group_name=group_name,
             stream_name=stream_name,
         )
 
-        subscriptions_before = self.client.list_stream_subscriptions(stream_name)
+        subscriptions_before = self.client.list_subscriptions_to_stream(stream_name)
         self.assertEqual(len(subscriptions_before), 1)
 
-        self.client.delete_persistent_subscription(
-            group_name=group_name, stream_name=stream_name
-        )
+        self.client.delete_subscription(group_name=group_name, stream_name=stream_name)
 
-        subscriptions_after = self.client.list_stream_subscriptions(stream_name)
+        subscriptions_after = self.client.list_subscriptions_to_stream(stream_name)
         self.assertEqual(len(subscriptions_after), 0)
 
         with self.assertRaises(NotFound):
-            self.client.delete_persistent_subscription(
+            self.client.delete_subscription(
                 group_name=group_name, stream_name=stream_name
             )
 
@@ -4056,23 +4065,23 @@ class TestRequiresLeaderHeader(TestCase):
         # Tombstone stream on leader.
         self.writer.tombstone_stream(str(uuid4()), current_version=StreamState.ANY)
 
-    def test_reconnects_to_new_leader_on_create_subscription(self) -> None:
+    def test_reconnects_to_new_leader_on_create_subscription_to_all(self) -> None:
         # Fail to create subscription on follower.
         with self.assertRaises(NodeIsNotLeader):
-            self.reader.create_subscription(group_name=f"group{str(uuid4())}")
+            self.reader.create_subscription_to_all(group_name=f"group{str(uuid4())}")
 
         # Swap connection.
         self._set_reader_connection_on_writer()
 
         # Create subscription on leader.
-        self.writer.create_subscription(group_name=f"group{str(uuid4())}")
+        self.writer.create_subscription_to_all(group_name=f"group{str(uuid4())}")
 
-    def test_reconnects_to_new_leader_on_create_stream_subscription(self) -> None:
+    def test_reconnects_to_new_leader_on_create_subscription_to_stream(self) -> None:
         # Fail to create subscription on follower.
         group_name = f"group{str(uuid4())}"
         stream_name = str(uuid4())
         with self.assertRaises(NodeIsNotLeader):
-            self.reader.create_stream_subscription(
+            self.reader.create_subscription_to_stream(
                 group_name=group_name, stream_name=stream_name
             )
 
@@ -4080,36 +4089,36 @@ class TestRequiresLeaderHeader(TestCase):
         self._set_reader_connection_on_writer()
 
         # Create subscription on leader.
-        self.writer.create_stream_subscription(
+        self.writer.create_subscription_to_stream(
             group_name=group_name, stream_name=stream_name
         )
 
-    def test_reconnects_to_new_leader_on_read_subscription(self) -> None:
+    def test_reconnects_to_new_leader_on_read_subscription_to_all(self) -> None:
         # Create subscription on leader.
         group_name = f"group{str(uuid4())}"
-        self.writer.create_subscription(group_name=group_name)
+        self.writer.create_subscription_to_all(group_name=group_name)
 
         # Fail to read subscription on follower.
         with self.assertRaises(NodeIsNotLeader):
-            self.reader.read_subscription(group_name=group_name)
+            self.reader.read_subscription_to_all(group_name=group_name)
 
         # Swap connection.
         self._set_reader_connection_on_writer()
 
         # Reconnect and read subscription on leader.
-        self.writer.read_subscription(group_name=group_name)
+        self.writer.read_subscription_to_all(group_name=group_name)
 
-    def test_reconnects_to_new_leader_on_read_stream_subscription(self) -> None:
+    def test_reconnects_to_new_leader_on_read_subscription_to_stream(self) -> None:
         # Create stream subscription on leader.
         group_name = f"group{str(uuid4())}"
         stream_name = str(uuid4())
-        self.writer.create_stream_subscription(
+        self.writer.create_subscription_to_stream(
             group_name=group_name, stream_name=stream_name
         )
 
         # Fail to read stream subscription on follower.
         with self.assertRaises(NodeIsNotLeader):
-            self.reader.read_stream_subscription(
+            self.reader.read_subscription_to_stream(
                 group_name=group_name, stream_name=stream_name
             )
 
@@ -4117,14 +4126,14 @@ class TestRequiresLeaderHeader(TestCase):
         self._set_reader_connection_on_writer()
 
         # Reconnect and read stream subscription on leader.
-        self.writer.read_stream_subscription(
+        self.writer.read_subscription_to_stream(
             group_name=group_name, stream_name=stream_name
         )
 
     def test_reconnects_to_new_leader_on_list_subscriptions(self) -> None:
         # Create subscription on leader.
         group_name = f"group{str(uuid4())}"
-        self.writer.create_subscription(group_name=group_name)
+        self.writer.create_subscription_to_all(group_name=group_name)
 
         # Fail to list subscriptions on follower.
         with self.assertRaises(NodeIsNotLeader):
@@ -4136,28 +4145,28 @@ class TestRequiresLeaderHeader(TestCase):
         # Reconnect and list subscriptions on leader.
         self.writer.list_subscriptions()
 
-    def test_reconnects_to_new_leader_on_list_stream_subscriptions(self) -> None:
+    def test_reconnects_to_new_leader_on_list_subscriptions_to_stream(self) -> None:
         # Create stream subscription on leader.
         group_name = f"group{str(uuid4())}"
         stream_name = str(uuid4())
-        self.writer.create_stream_subscription(
+        self.writer.create_subscription_to_stream(
             group_name=group_name, stream_name=stream_name
         )
 
         # Fail to list stream subscriptions on follower.
         with self.assertRaises(NodeIsNotLeader):
-            self.reader.list_stream_subscriptions(stream_name=stream_name)
+            self.reader.list_subscriptions_to_stream(stream_name=stream_name)
 
         # Swap connection.
         self._set_reader_connection_on_writer()
 
         # Reconnect and list stream subscriptions on leader.
-        self.writer.list_stream_subscriptions(stream_name=stream_name)
+        self.writer.list_subscriptions_to_stream(stream_name=stream_name)
 
     def test_reconnects_to_new_leader_on_get_subscription_info(self) -> None:
         # Create subscription on leader.
         group_name = f"group{str(uuid4())}"
-        self.writer.create_subscription(group_name=group_name)
+        self.writer.create_subscription_to_all(group_name=group_name)
 
         # Fail to get subscription info on follower.
         with self.assertRaises(NodeIsNotLeader):
@@ -4169,42 +4178,20 @@ class TestRequiresLeaderHeader(TestCase):
         # Reconnect and get subscription info on leader.
         self.writer.get_subscription_info(group_name=group_name)
 
-    def test_reconnects_to_new_leader_on_get_stream_subscription_info(self) -> None:
+    def test_reconnects_to_new_leader_on_delete_subscription(self) -> None:
         # Create subscription on leader.
         group_name = f"group{str(uuid4())}"
-        stream_name = str(uuid4())
-        self.writer.create_stream_subscription(
-            group_name=group_name, stream_name=stream_name
-        )
-
-        # Fail to get subscription info on follower.
-        with self.assertRaises(NodeIsNotLeader):
-            self.reader.get_stream_subscription_info(
-                group_name=group_name, stream_name=stream_name
-            )
-
-        # Swap connection.
-        self._set_reader_connection_on_writer()
-
-        # Reconnect and get subscription info on leader.
-        self.writer.get_stream_subscription_info(
-            group_name=group_name, stream_name=stream_name
-        )
-
-    def test_reconnects_to_new_leader_on_delete_persistent_subscription(self) -> None:
-        # Create subscription on leader.
-        group_name = f"group{str(uuid4())}"
-        self.writer.create_subscription(group_name=group_name)
+        self.writer.create_subscription_to_all(group_name=group_name)
 
         # Fail to delete subscription on follower.
         with self.assertRaises(NodeIsNotLeader):
-            self.reader.delete_persistent_subscription(group_name=group_name)
+            self.reader.delete_subscription(group_name=group_name)
 
         # Swap connection.
         self._set_reader_connection_on_writer()
 
         # Reconnect and delete subscription on leader.
-        self.writer.delete_persistent_subscription(group_name=group_name)
+        self.writer.delete_subscription(group_name=group_name)
 
     def test_reconnects_to_leader_on_read_stream_when_node_preference_is_leader(
         self,
@@ -4268,10 +4255,10 @@ class TestAutoReconnectClosedConnection(TestCase):
         with self.assertRaises(NotFound):
             self.writer.get_stream(str(uuid4()))
 
-    def test_read_subscription(self) -> None:
+    def test_read_subscription_to_all(self) -> None:
         # Read subscription - should reconnect.
         with self.assertRaises(NotFound):
-            self.writer.read_subscription(str(uuid4()))
+            self.writer.read_subscription_to_all(str(uuid4()))
 
 
 class TestAutoReconnectAfterServiceUnavailable(TestCase):
@@ -4324,11 +4311,13 @@ class TestAutoReconnectAfterServiceUnavailable(TestCase):
             event=NewEvent(type="X", data=b""),
         )
 
-    def test_create_subscription(self) -> None:
-        self.client.create_subscription(group_name=f"my-subscription-{uuid4().hex}")
+    def test_create_subscription_to_all(self) -> None:
+        self.client.create_subscription_to_all(
+            group_name=f"my-subscription-{uuid4().hex}"
+        )
 
-    def test_create_stream_subscription(self) -> None:
-        self.client.create_stream_subscription(
+    def test_create_subscription_to_stream(self) -> None:
+        self.client.create_subscription_to_stream(
             group_name=f"my-subscription-{uuid4().hex}", stream_name=str(uuid4())
         )
 
@@ -4347,8 +4336,8 @@ class TestAutoReconnectAfterServiceUnavailable(TestCase):
     def test_list_subscriptions(self) -> None:
         self.client.list_subscriptions()
 
-    def test_list_stream_subscriptions(self) -> None:
-        self.client.list_stream_subscriptions(stream_name=str(uuid4()))
+    def test_list_subscriptions_to_stream(self) -> None:
+        self.client.list_subscriptions_to_stream(stream_name=str(uuid4()))
 
     def test_delete_stream(self) -> None:
         with self.assertRaises(NotFound):
@@ -4367,14 +4356,12 @@ class TestAutoReconnectAfterServiceUnavailable(TestCase):
                 group_name=f"my-subscription-{uuid4().hex}", stream_name=str(uuid4())
             )
 
-    def test_delete_persistent_subscription(self) -> None:
+    def test_delete_subscription(self) -> None:
         with self.assertRaises(NotFound):
-            self.client.delete_persistent_subscription(
-                group_name=f"my-subscription-{uuid4().hex}"
-            )
+            self.client.delete_subscription(group_name=f"my-subscription-{uuid4().hex}")
 
         with self.assertRaises(NotFound):
-            self.client.delete_persistent_subscription(
+            self.client.delete_subscription(
                 group_name=f"my-subscription-{uuid4().hex}", stream_name=str(uuid4())
             )
 
