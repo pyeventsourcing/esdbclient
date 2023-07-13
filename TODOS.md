@@ -47,6 +47,15 @@
 -----
 Issues:
 
+* Server errors:
+  * In README.md assert acked_events[event9.id] == 0, acked_events[event9.id]  # sometimes this isn't zero?
+  * In README.md, sometimes we don't receive event9 from persistent subscription, even though we received it from catchup subscription
+  * In README.md, sometimes catchup subscription gives unexpected results.
+  * In cluster info, sometimes get status UNKNOWN
+  * In various methods, occasionally get "Exception was thrown by handler" - do I need to get the logs?
+    * In test, test_reconnects_to_new_leader_on_append_events() especially often for some reason.
+
+
 * What is the "requires-leader" header actually for, since the server can decide if
   methods require leader? should this instead be something the client sets according to
   its node preference?

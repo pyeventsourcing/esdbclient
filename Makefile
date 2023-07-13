@@ -1,8 +1,10 @@
 .EXPORT_ALL_VARIABLES:
 
+# SHELL = bash
+EVENTSTORE_IMAGE_TAG ?= 21.10.9-buster-slim
 POETRY ?= poetry
 POETRY_INSTALLER_URL ?= https://install.python-poetry.org
-
+PYTHONUNBUFFERED: 1
 
 .PHONY: install-poetry
 install-poetry:
@@ -74,7 +76,11 @@ fmt: fmt-black fmt-isort
 
 .PHONY: test
 test:
-	$(POETRY) run python -m pytest -v $(opts) $(call tests,.)
+	timeout --preserve-status --kill-after=10s 5m $(POETRY) run coverage run -m unittest discover ./tests -v
+	$(POETRY) run coverage report --fail-under=100 --show-missing
+
+# 	$(POETRY) run python -m pytest -v $(opts) $(call tests,.) & read -t 1 ||
+
 # 	$(POETRY) run python -m pytest -v tests/test_docs.py
 # 	$(POETRY) run python -m unittest discover tests -v
 
@@ -103,42 +109,23 @@ grpc-stubs:
 	  protos/esdbclient/protos/Grpc/gossip.proto \
 	  protos/esdbclient/protos/Grpc/cluster.proto
 
-.PHONY: start-eventstoredb-21-10-insecure
-start-eventstoredb-21-10-insecure:
+.PHONY: start-eventstoredb-insecure
+start-eventstoredb-insecure:
 	docker run -d -i -t -p 2113:2113 \
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
     --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2113" \
     --name my-eventstoredb-insecure \
-    eventstore/eventstore:21.10.9-buster-slim \
+    eventstore/eventstore:$(EVENTSTORE_IMAGE_TAG) \
     --insecure
 
-.PHONY: start-eventstoredb-21-10-secure
-start-eventstoredb-21-10-secure:
+.PHONY: start-eventstoredb-secure
+start-eventstoredb-secure:
 	docker run -d -i -t -p 2114:2113 \
     --env "HOME=/tmp" \
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
     --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
     --name my-eventstoredb-secure \
-    eventstore/eventstore:21.10.9-buster-slim \
-    --dev
-
-.PHONY: start-eventstoredb-22-10-insecure
-start-eventstoredb-22-10-insecure:
-	docker run -d -i -t -p 2113:2113 \
-    --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
-    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2113" \
-    --name my-eventstoredb-insecure \
-    eventstore/eventstore:22.10.0-buster-slim \
-    --insecure
-
-.PHONY: start-eventstoredb-22-10-secure
-start-eventstoredb-22-10-secure:
-	docker run -d -i -t -p 2114:2113 \
-    --env "HOME=/tmp" \
-    --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
-    --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
-    --name my-eventstoredb-secure \
-    eventstore/eventstore:22.10.0-buster-slim \
+    eventstore/eventstore:$(EVENTSTORE_IMAGE_TAG) \
     --dev
 
 .PHONY: attach-eventstoredb-insecure
@@ -160,35 +147,38 @@ stop-eventstoredb-secure:
 	docker rm my-eventstoredb-secure
 
 .PHONY: start-eventstoredb
-start-eventstoredb: start-eventstoredb-21-10-insecure start-eventstoredb-21-10-secure docker-up
-# start-eventstoredb: start-eventstoredb-22-10-insecure start-eventstoredb-22-10-secure docker-up
+start-eventstoredb: start-eventstoredb-insecure start-eventstoredb-secure docker-up
 
 .PHONY: stop-eventstoredb
 stop-eventstoredb: stop-eventstoredb-insecure stop-eventstoredb-secure docker-down
 
 .PHONY: docker-pull
 docker-pull:
-	@docker-compose pull
+	docker compose pull
 
 .PHONY: docker-build
 docker-build:
-	@docker-compose build
+	docker compose build
 
 .PHONY: docker-up
 docker-up:
-	@docker-compose up -d
-	@docker-compose ps
+	@docker --version
+	docker compose up -d
+	@echo "Waiting for containers to be healthy"
+	@until docker compose ps | grep -in "healthy" | wc -l | grep -in 3 > /dev/null; do printf "." && sleep 1; done; echo ""
+	@docker compose ps
+	@sleep 5
 
 .PHONY: docker-stop
 docker-stop:
-	@docker-compose stop
+	docker compose stop
 
 .PHONY: docker-down
 docker-down:
-	@docker-compose down -v --remove-orphans
+	docker compose down -v --remove-orphans
 
 
 .PHONY: docker-logs
 docker-logs:
-	@docker-compose logs --follow --tail=1000
+	docker compose logs --follow --tail=1000
 

@@ -1,0 +1,6 @@
+[run]
+source = esdbclient
+branch = True
+relative_files = True
+omit =
+    esdbclient/protos/Grpc/*.py

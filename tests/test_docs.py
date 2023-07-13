@@ -48,6 +48,7 @@ class TestDocs(TestCase):
         # Extract lines of Python code from the README.md file.
 
         lines = []
+        # lines = ["import sys"]
         num_code_lines = 0
         num_code_lines_in_block = 0
         is_code = False
@@ -68,6 +69,10 @@ class TestDocs(TestCase):
                     is_code = True
                     is_md = True
                     line = ""
+                    # line = (
+                    #     f"sys.stderr.write('Block on line: {line_index}\\n') and"
+                    #     " sys.stderr.flush()"
+                    # )
                     num_code_lines_in_block = 0
                 elif is_code and is_md and line.startswith("```"):
                     # Finish markdown code block.

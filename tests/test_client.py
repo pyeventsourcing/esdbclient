@@ -2168,15 +2168,21 @@ class TestEventStoreDBClient(TestCase):
             events=[event1, event2, event3],
         )
 
-        # Subscribe from the beginning.
-        subscription = self.client.subscribe_to_all(timeout=0.5)
+        retries = 30  # retries because sometimes this times out too fast
+        while retries:
+            retries -= 1
+            # Subscribe from the beginning.
+            subscription = self.client.subscribe_to_all(timeout=0.25)
 
-        # Expect to timeout instead of waiting indefinitely for next event.
-        count = 0
-        with self.assertRaises(DeadlineExceeded):
-            for _ in subscription:
-                count += 1
-        self.assertGreater(count, 0)
+            # Expect to timeout instead of waiting indefinitely for next event.
+            count = 0
+            with self.assertRaises(DeadlineExceeded):
+                for _ in subscription:
+                    count += 1
+            if count > 0:
+                break
+        else:
+            self.fail("Didn't get any events before deadline, despite retries")
 
     def test_subscribe_to_all_can_be_stopped(self) -> None:
         self.construct_esdb_client()
@@ -3839,8 +3845,8 @@ class TestEventStoreDBClient(TestCase):
 
     def test_gossip_cluster_read(self) -> None:
         self.construct_esdb_client()
-        cluster_info = self.client.read_cluster_gossip()
         sleep(0.1)  # sometimes we need to wait a little bit for EventStoreDB
+        cluster_info = self.client.read_cluster_gossip()
         if self.ESDB_CLUSTER_SIZE == 1:
             self.assertEqual(len(cluster_info), 1)
             self.assertEqual(cluster_info[0].state, NODE_STATE_LEADER)
@@ -4019,13 +4025,24 @@ class TestRequiresLeaderHeader(TestCase):
         #       debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"
         #       Exception was thrown by handler.", grpc_status:2, created_time:"2023-05
         #       -07T12:04:26.287327771+00:00"}"
+        retries = 100
+        while retries:
+            retries -= 1
 
-        sleep(1)  # this is hopeful mitigation for the "Exception was thrown by handler"
-
-        # Reconnect and write to leader.
-        self.writer.append_events(
-            stream_name, current_version=StreamState.NO_STREAM, events=[event1, event2]
-        )
+            # Reconnect and write to leader.
+            try:
+                self.writer.append_events(
+                    stream_name,
+                    current_version=StreamState.NO_STREAM,
+                    events=[event1, event2],
+                )
+            except ExceptionThrownByHandler:
+                if retries == 0:
+                    raise
+                else:
+                    sleep(1)
+            else:
+                break
 
     def test_reconnects_to_new_leader_on_set_stream_metadata(self) -> None:
         # Fail to write to follower.

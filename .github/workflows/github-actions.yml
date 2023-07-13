@@ -1,78 +1,30 @@
 name: CI
 on: [push, pull_request]
 
-env:
-  POETRY_HOME: /home/runner/.local
-  POETRY_CACHE_DIR: /home/runner/.local/.cache
-
 jobs:
-  prepare:
+  test:
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
-        os: ["ubuntu-22.04"]
-    runs-on: ${{ matrix.os }}
+        eventstore-image-tag: ["21.10.9-buster-slim", "22.10.0-buster-slim"]
+    env:
+      EVENTSTORE_IMAGE_TAG: ${{ matrix.eventstore-image-tag }}
+    runs-on: "ubuntu-22.04"
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v2
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Set up cache
-        id: cached-dependencies
-        uses: actions/cache@v2
-        with:
-          path: /home/runner/.local
-          key: os-${{ matrix.os }}-python-${{ matrix.python-version}}-${{ hashFiles('**/poetry.lock') }}
       - name: Install Poetry
-        if: steps.cached-dependencies.outputs.cache-hit != 'true'
         run: make install-poetry
       - name: Install packages
-        if: steps.cached-dependencies.outputs.cache-hit != 'true'
         run: make install-packages
-
-  lint:
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
-        os: ["ubuntu-22.04"]
-    runs-on: ${{ matrix.os }}
-    needs: prepare
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Set up cache
-        uses: actions/cache@v2
-        with:
-          path: /home/runner/.local
-          key: os-${{ matrix.os }}-python-${{ matrix.python-version}}-${{ hashFiles('**/poetry.lock') }}
       - name: Lint
         run: make lint
-
-  tests:
-    needs: prepare
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
-        os: ["ubuntu-22.04"]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
-      - name: Set up cache
-        uses: actions/cache@v2
-        with:
-          path: /home/runner/.local
-          key: os-${{ matrix.os }}-python-${{ matrix.python-version}}-${{ hashFiles('**/poetry.lock') }}
       - name: Start EventStoreDB
-        run: |
-          make start-eventstoredb
-          sleep 60
+        run: make start-eventstoredb
       - name: Run tests
         run: make test
+      - name: Report memory
+        run: top -bn1

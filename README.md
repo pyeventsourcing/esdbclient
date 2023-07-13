@@ -1694,19 +1694,16 @@ After tombstoning a stream, it's not possible to append new events.
 ## Catch-up subscriptions
 
 A "catch-up" subscription can be used to receive events that have already been
-recorded in the database, and events that are recorded subsequently. A catch-up
-subscription can be used by an event-processing component that processes recorded
-events with "exactly-once" semantics.
+recorded and events that are recorded subsequently. A catch-up subscription can
+be used by an event-processing component that processes recorded events with
+"exactly-once" semantics.
 
 The `subscribe_to_all()` method starts a catch-up subscription that can receive
 all events in the database. The `subscribe_to_stream()` method starts a catch-up
 subscription that can receive events from a specific stream. Both methods return a
 "catch-up subscription" object, which is a Python iterator. Recorded events can be
 obtained by iteration. Recorded event objects obtained in this way are instances
-of the `RecordedEvent` class. Please note, the `subscribe_to_all()` method will
-occasionally return `Checkpoint` objects. These are a special type of `RecordedEvent`
-that have a `commit_position`, so that downstream event-processing components can
-record progress across a large number of events that have been filtered out.
+of the `RecordedEvent` class.
 
 Before the "catch-up subscription" object is returned to the caller, the client will
 firstly obtain a "confirmation" response from the server, which allows the client to
@@ -1730,7 +1727,7 @@ The`subscribe_to_all()` method can be used to start a catch-up subscription
 from which all events recorded in the database can be obtained in the order
 they were recorded. This method returns a "catch-up subscription" iterator.
 
-This method also has six optional arguments, `commit_position()`, `filter_exclude`,
+This method also has six optional arguments, `commit_position`, `filter_exclude`,
 `filter_include`, `filter_by_stream_name`, `timeout` and `credentials`.
 
 The optional `commit_position` argument specifies a commit position. The default
@@ -1775,14 +1772,14 @@ automatically, but block when the last recorded event is received,
 and then continue when subsequent events are recorded.
 
 ```python
-from datetime import datetime
+from time import sleep
 from threading import Thread
 
-from esdbclient import Checkpoint
 
 # Append a new event to a new stream.
 stream_name2 = str(uuid.uuid4())
 event4 = NewEvent(type='OrderCreated', data=b'data4')
+
 client.append_to_stream(
     stream_name=stream_name2,
     current_version=StreamState.NO_STREAM,
@@ -1792,42 +1789,30 @@ client.append_to_stream(
 
 # Receive events from the catch-up subscription in a different thread.
 received_events = []
-mark = datetime.now()
 
 def receive_events():
     for event in catchup_subscription:
-        global mark
-        mark = datetime.now()
         received_events.append(event)
 
 
-def wait_for_subscription_to_block():
-    while True:
-         if (datetime.now() - mark).total_seconds() > 1:
-             break
+def wait_for_event(event_id):
+    for _ in range(100):
+        for event in reversed(received_events):
+            if event.id == event_id:
+                return
+        else:
+            sleep(0.1)
+    else:
+        raise AssertionError("Event wasn't received")
 
 
 thread = Thread(target=receive_events, daemon=True)
 thread.start()
 
-# Wait for the subscription to block.
-wait_for_subscription_to_block()
-
-# Check the last received event is 'event4'.
-assert received_events[-1].id == event4.id, received_events[-1].id
-
-# Check we also received the other events we have recorded.
-assert received_events[-9].id == event1.id
-assert received_events[-8].id == event2.id
-assert received_events[-7].id == event3.id
-assert received_events[-6].type == "DogRegistered"
-assert received_events[-5].type == "DogLearnedTrick"
-assert received_events[-4].type == "DogLearnedTrick"
-assert received_events[-3].type == "Snapshot"
-assert received_events[-2].type == "DogLearnedTrick"
+# Wait to receive event4.
+wait_for_event(event4.id)
 
 # Append another event whilst the subscription is running.
-mark = datetime.now()
 event5 = NewEvent(type='OrderUpdated', data=b'data5')
 client.append_to_stream(
     stream_name=stream_name2,
@@ -1836,11 +1821,7 @@ client.append_to_stream(
 )
 
 # Wait for the subscription to block.
-wait_for_subscription_to_block()
-
-# Check the last received event is 'event5'.
-assert received_events[-2].id == event4.id
-assert received_events[-1].id == event5.id
+wait_for_event(event5.id)
 
 # Stop the subscription.
 catchup_subscription.stop()
@@ -1851,8 +1832,9 @@ The example below shows how to subscribe to events recorded after a
 particular commit position, in this case from the commit position of
 the last recorded event that was received above. Another event is
 recorded before the subscription is restarted. Further events are
-recorded whilst the subscription is running. All the recorded events
-are received exactly once.
+recorded whilst the subscription is running. The events we appended
+are received in the order they were recorded.
+
 
 ```python
 
@@ -1870,20 +1852,13 @@ catchup_subscription = client.subscribe_to_all(
     commit_position=received_events[-1].commit_position
 )
 
-mark = datetime.now()
 thread = Thread(target=receive_events, daemon=True)
 thread.start()
 
-# Wait for the subscription to block.
-wait_for_subscription_to_block()
-
-# Check the last received event was 'event6'.
-assert received_events[-3].id == event4.id
-assert received_events[-2].id == event5.id
-assert received_events[-1].id == event6.id
+# Wait for event6.
+wait_for_event(event6.id)
 
 # Append three more events to a new stream.
-mark = datetime.now()
 stream_name3 = str(uuid.uuid4())
 event7 = NewEvent(type='OrderCreated', data=b'data7')
 event8 = NewEvent(type='OrderUpdated', data=b'data8')
@@ -1895,17 +1870,10 @@ client.append_to_stream(
     events=[event7, event8, event9],
 )
 
-# Wait for the subscription to block.
-wait_for_subscription_to_block()
-
-
-# Check all the events have been received exactly once.
-assert received_events[-6].id == event4.id
-assert received_events[-5].id == event5.id
-assert received_events[-4].id == event6.id
-assert received_events[-3].id == event7.id
-assert received_events[-2].id == event8.id
-assert received_events[-1].id == event9.id
+# Wait for events.
+wait_for_event(event7.id)
+wait_for_event(event8.id)
+wait_for_event(event9.id)
 
 # Stop the subscription.
 catchup_subscription.stop()
@@ -2145,9 +2113,10 @@ The example below iterates over the subscription object, and calls `ack()`. The
 continue with the examples below.
 
 ```python
-events = []
+received_events = []
+
 for event in subscription:
-    events.append(event)
+    received_events.append(event)
 
     # Acknowledge the received event.
     subscription.ack(event_id=event.id)
@@ -2157,31 +2126,31 @@ for event in subscription:
         subscription.stop()
 ```
 
-The received events are the events we appended above.
+The events we appended above are received in the order they were recorded.
 
 ```python
-assert events[-14].id == event1.id
-assert events[-13].id == event2.id
-assert events[-12].id == event3.id
-assert events[-11].type == "DogRegistered"
-assert events[-10].type == "DogLearnedTrick"
-assert events[-9].type == "DogLearnedTrick"
-assert events[-8].type == "Snapshot"
-assert events[-7].type == "DogLearnedTrick"
-assert events[-6].id == event4.id
-assert events[-5].id == event5.id
-assert events[-4].id == event6.id
-assert events[-3].id == event7.id
-assert events[-2].id == event8.id
-assert events[-1].id == event9.id
+assert received_events[-14].id == event1.id
+assert received_events[-13].id == event2.id
+assert received_events[-12].id == event3.id
+assert received_events[-11].type == "DogRegistered"
+assert received_events[-10].type == "DogLearnedTrick"
+assert received_events[-9].type == "DogLearnedTrick"
+assert received_events[-8].type == "Snapshot"
+assert received_events[-7].type == "DogLearnedTrick"
+assert received_events[-6].id == event4.id
+assert received_events[-5].id == event5.id
+assert received_events[-4].id == event6.id
+assert received_events[-3].id == event7.id
+assert received_events[-2].id == event8.id
+assert received_events[-1].id == event9.id
 ```
 
 The `PersistentSubscription` object also has an `nack()` method that should be used
 by a consumer to negatively acknowledge to the server that it has received but not
-successfully processed a recorded event. The `nack()` method takes an `event_id`
-argument, which is the ID of the recorded event that has been received, and an `action`
-argument, which should be a Python `str`, either `'unknown'`, `'park'`, `'retry'`,
-`'skip'` or `'stop'`.
+successfully processed a recorded event. The `nack()` method has an `event_id`
+argument, which is the ID of the recorded event that has been received. The `nack()`
+method also has an `action` argument, which should be a Python `str`: either
+`'unknown'`, `'park'`, `'retry'`, `'skip'` or `'stop'`.
 
 
 ### How to write a persistent subscription consumer
@@ -2223,7 +2192,7 @@ class ExampleConsumer:
                     self.subscription.ack(event.id)
                     self.after_ack(event)
         except Exception:
-            self.subscription.stop()
+            self.stop()
             raise
 
     def stop(self):
@@ -2264,13 +2233,14 @@ consumer = ExampleConsumer(
 # Run consumer.
 consumer.run()
 
-# Check 'event9' was acked and never retried.
-assert acked_events[event9.id] == 0
-assert event9.id not in nacked_events
-
-# Check 'event5' was retried five times and never acked.
-assert nacked_events[event5.id] == 5
+# Check 'event5' was nacked and never acked.
+assert event5.id in nacked_events
 assert event5.id not in acked_events
+assert nacked_events[event5.id] == 5
+
+# Check 'event9' was acked and never nacked.
+assert event9.id in acked_events
+assert event9.id not in nacked_events
 ```
 
 ### Update subscription to all

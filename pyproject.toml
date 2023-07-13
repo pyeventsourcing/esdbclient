@@ -30,6 +30,7 @@ protobuf = ">=3.11.0"
 #protobuf = ">=3.11.0,<3.21.0"
 typing_extensions = "*"
 dnspython = "^2.3.0"
+coverage = "^7.2.7"
 
 [tool.poetry.dev-dependencies]
 black = { version = "*", allow-prereleases = true }
@@ -43,8 +44,6 @@ isort = "*"
 mypy = "*"
 #pre-commit = "*"
 #pre-commit-hooks = "*"
-pytest = "*"
-pytest-cov = "*"
 grpcio-tools = "*"
 grpc-stubs = "*"
 types-protobuf = "*"
