@@ -54,6 +54,7 @@ Issues:
   * In cluster info, sometimes get status UNKNOWN
   * In various methods, occasionally get "Exception was thrown by handler" - do I need to get the logs?
     * In test, test_reconnects_to_new_leader_on_append_events() especially often for some reason.
+  * In test_reconnects_to_new_leader_on_set_stream_metadata, occasionally get FollowerNotFound, despite previous and subsequent tests passing okay, as if gossip is a bit flaky.
 
 
 * What is the "requires-leader" header actually for, since the server can decide if

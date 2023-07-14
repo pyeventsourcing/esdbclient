@@ -22,9 +22,27 @@ jobs:
         run: make install-packages
       - name: Lint
         run: make lint
+      - name: Check asyncio test case
+        run: |
+          ! poetry run python -m unittest test_isolated_asyncio_test_case.TestAsyncSetupError
+          ! poetry run python -m unittest test_isolated_asyncio_test_case.TestAsyncTestError
+          ! poetry run python -m unittest test_isolated_asyncio_test_case.TestAsyncTeardownError
+          ! timeout --preserve-status --kill-after=10s 5m poetry run python -m unittest test_isolated_asyncio_test_case.TestAsyncSetupError
+          ! timeout --preserve-status --kill-after=10s 5m poetry run python -m unittest test_isolated_asyncio_test_case.TestAsyncTestError
+          ! timeout --preserve-status --kill-after=10s 5m poetry run python -m unittest test_isolated_asyncio_test_case.TestAsyncTeardownError
       - name: Start EventStoreDB
         run: make start-eventstoredb
       - name: Run tests
         run: make test
+      - name: Docker logs - secure cluster
+        if: success() || failure()
+        run: docker compose logs
+      - name: Docker logs - insecure server
+        if: success() || failure()
+        run: docker logs my-eventstoredb-insecure
+      - name: Docker logs - secure server
+        if: success() || failure()
+        run: docker logs my-eventstoredb-secure
       - name: Report memory
+        if: success() || failure()
         run: top -bn1
