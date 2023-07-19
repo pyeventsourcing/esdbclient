@@ -167,7 +167,7 @@ docker-up:
 	@echo "Waiting for containers to be healthy"
 	@until docker compose ps | grep -in "healthy" | wc -l | grep -in 3 > /dev/null; do printf "." && sleep 1; done; echo ""
 	@docker compose ps
-	@sleep 5
+	@sleep 15
 
 .PHONY: docker-stop
 docker-stop:
