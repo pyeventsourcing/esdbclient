@@ -47,8 +47,11 @@ class TestDocs(TestCase):
     def check_code_snippets_in_file(self, doc_path: Path) -> None:  # noqa: C901
         # Extract lines of Python code from the README.md file.
 
-        lines = []
-        # lines = ["import sys"]
+        PRINT_BLOCK_LINE_NUMBERS = True
+        if PRINT_BLOCK_LINE_NUMBERS:
+            lines = ["import sys"]
+        else:
+            lines = []
         num_code_lines = 0
         num_code_lines_in_block = 0
         is_code = False
@@ -57,7 +60,7 @@ class TestDocs(TestCase):
         last_line = ""
         is_literalinclude = False
         with doc_path.open() as doc_file:
-            for line_index, orig_line in enumerate(doc_file):
+            for line_index, orig_line in enumerate(doc_file, start=-len(lines)):
                 line = orig_line.strip("\n")
                 if line.startswith("```python"):
                     # Start markdown code block.
@@ -68,11 +71,13 @@ class TestDocs(TestCase):
                         )
                     is_code = True
                     is_md = True
-                    line = ""
-                    # line = (
-                    #     f"sys.stderr.write('Block on line: {line_index}\\n') and"
-                    #     " sys.stderr.flush()"
-                    # )
+                    if PRINT_BLOCK_LINE_NUMBERS:
+                        line = (
+                            f"sys.stderr.write('Block on line: {line_index}\\n') and"
+                            " sys.stderr.flush()"
+                        )
+                    else:
+                        line = ""
                     num_code_lines_in_block = 0
                 elif is_code and is_md and line.startswith("```"):
                     # Finish markdown code block.
