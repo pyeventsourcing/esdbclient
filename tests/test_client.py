@@ -4041,7 +4041,7 @@ class TestRequiresLeaderHeader(TestCase):
         #       debug_error_string = "UNKNOWN:Error received from peer  {grpc_message:"
         #       Exception was thrown by handler.", grpc_status:2, created_time:"2023-05
         #       -07T12:04:26.287327771+00:00"}"
-        retries = 100
+        retries = 1
         while retries:
             retries -= 1
 
