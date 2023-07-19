@@ -3,7 +3,7 @@ import sys
 from typing import Optional
 
 from esdbclient.streams import AsyncioCatchupSubscription
-from tests.test_client import get_ca_certificate, random_data, TimedTestCase
+from tests.test_client import TimedTestCase, get_ca_certificate, random_data
 
 if sys.version_info[0:2] > (3, 7):
     from unittest import IsolatedAsyncioTestCase
