@@ -3,7 +3,7 @@ import sys
 from typing import Optional
 
 from esdbclient.streams import AsyncioCatchupSubscription
-from tests.test_client import get_ca_certificate, random_data
+from tests.test_client import get_ca_certificate, random_data, TimedTestCase
 
 if sys.version_info[0:2] > (3, 7):
     from unittest import IsolatedAsyncioTestCase
@@ -31,7 +31,7 @@ from esdbclient.exceptions import (
 )
 
 
-class TestAsyncioEventStoreDBClient(IsolatedAsyncioTestCase):
+class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
         self.client = await AsyncioEventStoreDBClient("esdb://localhost:2113?Tls=False")
         self._reader: Optional[_AsyncioEventStoreDBClient] = None

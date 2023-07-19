@@ -73,11 +73,13 @@ def get_duration() -> str:
 class TimedTestCase(TestCase):
     def setUp(self) -> None:
         super().setUp()
-        sys.stderr.write(f"[@{get_elapsed_time()}] ")
-        sys.stderr.flush()
+        if "-v" in sys.argv:
+            sys.stderr.write(f"[@{get_elapsed_time()}] ")
+            sys.stderr.flush()
 
     def tearDown(self) -> None:
-        sys.stderr.write(f"[+{get_duration()}] ")
+        if "-v" in sys.argv:
+            sys.stderr.write(f"[+{get_duration()}] ")
         super().tearDown()
 
 
