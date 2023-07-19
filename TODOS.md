@@ -49,6 +49,7 @@ Issues:
 
 * Server errors:
   * In README.md assert acked_events[event9.id] == 0, acked_events[event9.id]  # sometimes this isn't zero?
+    * this is because the client is "too slow" so that the server retries to send the event
   * In README.md, sometimes we don't receive event9 from persistent subscription, even though we received it from catchup subscription
   * In README.md, sometimes catchup subscription gives unexpected results.
   * In cluster info, sometimes get status UNKNOWN

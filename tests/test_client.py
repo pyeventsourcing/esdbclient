@@ -3843,6 +3843,7 @@ class TestEventStoreDBClient(TestCase):
                     self.assertEqual(num_leaders, 1)
                     # Todo: This is very occasionally 1... hence retries.
                     self.assertEqual(num_followers, 2)
+                    break
                 except AssertionError:
                     if retries:
                         sleep(1)
@@ -3876,6 +3877,7 @@ class TestEventStoreDBClient(TestCase):
                     self.assertEqual(num_leaders, 1)
                     # Todo: This is very occasionally 1... hence retries.
                     self.assertEqual(num_followers, 2)
+                    break
                 except AssertionError:
                     if retries:
                         sleep(1)
