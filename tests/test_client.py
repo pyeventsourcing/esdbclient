@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
+import datetime
 import os
 import ssl
+import sys
 from time import sleep
 from typing import Any, List, Tuple, cast
 from unittest import TestCase
@@ -41,6 +43,31 @@ from esdbclient.exceptions import (
 from esdbclient.gossip import NODE_STATE_FOLLOWER, NODE_STATE_LEADER
 from esdbclient.persistent import SubscriptionReadReqs
 from esdbclient.protos.Grpc import persistent_pb2
+
+started = datetime.datetime.now()
+last = datetime.datetime.now()
+
+
+def get_elapsed_time() -> str:
+    global last
+    last = datetime.datetime.now()
+    delta = last - started
+    result = ""
+    minutes = int(delta.seconds // 60)
+    if minutes:
+        result += f"{minutes}m"
+    seconds = int(delta.seconds % 60)
+    return result + f"{seconds}s"
+
+
+def get_duration() -> str:
+    delta_seconds = (datetime.datetime.now() - last).total_seconds()
+    minutes = int(delta_seconds // 60)
+    result = ""
+    if minutes:
+        result = f"{minutes}m"
+    seconds = delta_seconds % 60
+    return result + f"{seconds:.3f}s"
 
 
 class TestConnectionSpec(TestCase):
@@ -296,7 +323,12 @@ class TestEventStoreDBClient(TestCase):
                 f"Test doesn't work with cluster size {self.ESDB_CLUSTER_SIZE}"
             )
 
+    def setUp(self) -> None:
+        sys.stderr.write(f"[@{get_elapsed_time()}] ")
+        sys.stderr.flush()
+
     def tearDown(self) -> None:
+        sys.stderr.write(f"[+{get_duration()}] ")
         if hasattr(self, "client"):
             self.client.close()
 
