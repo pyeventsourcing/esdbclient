@@ -70,6 +70,17 @@ def get_duration() -> str:
     return result + f"{seconds:.3f}s"
 
 
+class TimedTestCase(TestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        sys.stderr.write(f"[@{get_elapsed_time()}] ")
+        sys.stderr.flush()
+
+    def tearDown(self) -> None:
+        sys.stderr.write(f"[+{get_duration()}] ")
+        super().tearDown()
+
+
 class TestConnectionSpec(TestCase):
     def test_scheme_and_netloc(self) -> None:
         spec = ConnectionSpec("esdb://host1:2110")
@@ -296,7 +307,7 @@ def get_server_certificate(grpc_target: str) -> str:
     )
 
 
-class TestEventStoreDBClient(TestCase):
+class TestEventStoreDBClient(TimedTestCase):
     client: EventStoreDBClient
 
     ESDB_TARGET = "localhost:2114"
@@ -323,12 +334,8 @@ class TestEventStoreDBClient(TestCase):
                 f"Test doesn't work with cluster size {self.ESDB_CLUSTER_SIZE}"
             )
 
-    def setUp(self) -> None:
-        sys.stderr.write(f"[@{get_elapsed_time()}] ")
-        sys.stderr.flush()
-
     def tearDown(self) -> None:
-        sys.stderr.write(f"[+{get_duration()}] ")
+        super().tearDown()
         if hasattr(self, "client"):
             self.client.close()
 
@@ -3982,9 +3989,10 @@ class TestGrpcOptions(TestCase):
         self.assertEqual(self.client.grpc_options["grpc.keepalive_timeout_ms"], 1000)
 
 
-class TestRequiresLeaderHeader(TestCase):
+class TestRequiresLeaderHeader(TimedTestCase):
     def setUp(self) -> None:
-        self.uri = "esdb://admin:changeit@127.0.0.1:2110"
+        super().setUp()
+        self.uri = "esdb://admin:changeit@127.0.0.1:2110,127.0.0.1:2111,127.0.0.1:2112"
         self.ca_cert = get_ca_certificate()
         self.writer = EventStoreDBClient(
             self.uri + "?NodePreference=leader", root_certificates=self.ca_cert
@@ -3996,6 +4004,7 @@ class TestRequiresLeaderHeader(TestCase):
     def tearDown(self) -> None:
         self.writer.close()
         self.reader.close()
+        super().tearDown()
 
     def test_can_subscribe_to_all_on_follower(self) -> None:
         # Write to leader.
@@ -4303,9 +4312,10 @@ class TestRequiresLeaderHeader(TestCase):
         )
 
 
-class TestAutoReconnectClosedConnection(TestCase):
+class TestAutoReconnectClosedConnection(TimedTestCase):
     def setUp(self) -> None:
-        self.uri = "esdb://admin:changeit@127.0.0.1:2110"
+        super().setUp()
+        self.uri = "esdb://admin:changeit@127.0.0.1:2110,127.0.0.1:2111,127.0.0.1:2112"
         self.ca_cert = get_ca_certificate()
         self.writer = EventStoreDBClient(
             self.uri + "?NodePreference=leader", root_certificates=self.ca_cert
@@ -4314,6 +4324,7 @@ class TestAutoReconnectClosedConnection(TestCase):
 
     def tearDown(self) -> None:
         self.writer.close()
+        super().tearDown()
 
     def test_append_events(self) -> None:
         # Append events - should reconnect.
@@ -4334,8 +4345,9 @@ class TestAutoReconnectClosedConnection(TestCase):
             self.writer.read_subscription_to_all(str(uuid4()))
 
 
-class TestAutoReconnectAfterServiceUnavailable(TestCase):
+class TestAutoReconnectAfterServiceUnavailable(TimedTestCase):
     def setUp(self) -> None:
+        super().setUp()
         uri = "esdb://admin:changeit@localhost:2114?MaxDiscoverAttempts=1&DiscoveryInterval=0"
         server_certificate = get_server_certificate("localhost:2114")
         self.client = EventStoreDBClient(uri=uri, root_certificates=server_certificate)
@@ -4346,6 +4358,7 @@ class TestAutoReconnectAfterServiceUnavailable(TestCase):
 
     def tearDown(self) -> None:
         self.client.close()
+        super().tearDown()
 
     def test_append_events(self) -> None:
         self.client.append_events(
@@ -4445,7 +4458,7 @@ class TestAutoReconnectAfterServiceUnavailable(TestCase):
         self.client.read_cluster_gossip()
 
 
-class TestConnectToPreferredNode(TestCase):
+class TestConnectToPreferredNode(TimedTestCase):
     def test_no_followers(self) -> None:
         uri = "esdb://admin:changeit@127.0.0.1:2113?Tls=false&NodePreference=follower"
         with self.assertRaises(FollowerNotFound):
@@ -4461,7 +4474,7 @@ class TestConnectToPreferredNode(TestCase):
         EventStoreDBClient(uri)
 
 
-class TestSubscriptionReadRequest(TestCase):
+class TestSubscriptionReadRequest(TimedTestCase):
     def test_request_ack_after_100_acks(self) -> None:
         read_request = SubscriptionReadReqs("group1")
         read_request_iter = read_request
