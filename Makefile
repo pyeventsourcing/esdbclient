@@ -1,6 +1,7 @@
 .EXPORT_ALL_VARIABLES:
 
 # SHELL = bash
+EVENTSTORE_IMAGE_NAME ?= ghcr.io/eventstore/eventstore
 EVENTSTORE_IMAGE_TAG ?= 21.10.9-buster-slim
 POETRY ?= poetry
 POETRY_INSTALLER_URL ?= https://install.python-poetry.org
@@ -115,7 +116,7 @@ start-eventstoredb-insecure:
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
     --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2113" \
     --name my-eventstoredb-insecure \
-    eventstore/eventstore:$(EVENTSTORE_IMAGE_TAG) \
+    $(EVENTSTORE_IMAGE_NAME):$(EVENTSTORE_IMAGE_TAG) \
     --insecure
 
 .PHONY: start-eventstoredb-secure
@@ -125,7 +126,7 @@ start-eventstoredb-secure:
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
     --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
     --name my-eventstoredb-secure \
-    eventstore/eventstore:$(EVENTSTORE_IMAGE_TAG) \
+    $(EVENTSTORE_IMAGE_NAME):$(EVENTSTORE_IMAGE_TAG) \
     --dev
 
 .PHONY: attach-eventstoredb-insecure

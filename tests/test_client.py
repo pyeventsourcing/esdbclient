@@ -2558,7 +2558,9 @@ class TestEventStoreDBClient(TimedTestCase):
         )
 
         # Read subscription.
-        subscription = self.client.read_subscription_to_all(group_name=group_name)
+        subscription = self.client.read_subscription_to_all(
+            group_name=group_name, timeout=30
+        )
 
         # Park event.
         parked_events = []
@@ -4045,7 +4047,8 @@ class TestRequiresLeaderHeader(TimedTestCase):
         #   which is occasionally a cause of failure of test_append_events()
         #   with both EventStoreDB 21.10.9 and 22.10.0.
         old.close()
-        sleep(0.1)
+        # sleep(0.1)
+        sleep(1)
 
     def test_reconnects_to_new_leader_on_append_event(self) -> None:
         # Fail to write to follower.

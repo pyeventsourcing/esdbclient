@@ -1,5 +1,10 @@
 ## For version 1.0
 
+* Pull these images:
+  * ghcr.io/eventstore/eventstore:lts
+  * ghcr.io/eventstore/eventstore:previous-lts
+  * ghcr.io/eventstore/eventstore:ci
+
 * Something about causation and correlation IDs?
 
 * Commit position vs prepare position?
@@ -20,10 +25,6 @@
 
 * OAuth (requires commercial license)
   * What if anything would be needed in the client to support OAuth?
-
-* Change GitHub workflow to also test with 22.10.0?
-  * 22.10.0 seems a little buggy (see tests)?
-    * Actually, occasionally getting "Exception was thrown by handler" from 21.10.9...
 
 * I noticed the issue raised about "consumer too slow" - does the server close subscriptions?
   * what actually does the server do in this case? end the call? send a ReadResp?
