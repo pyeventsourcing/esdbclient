@@ -47,12 +47,13 @@
 -----
 Issues:
 
-* Server errors:
+* Server errors on GitHub Actions:
   * In README.md assert acked_events[event9.id] == 0, acked_events[event9.id]  # sometimes this isn't zero?
     * this is because the client is "too slow" so that the server retries to send the event
   * In README.md, sometimes we don't receive event9 from persistent subscription, even though we received it from catchup subscription
   * In README.md, sometimes catchup subscription gives unexpected results.
   * In cluster info, sometimes get status UNKNOWN
+    * this can happen when leader election timesout (on GHA prob due to virtualisation)
   * In various methods, occasionally get "Exception was thrown by handler" - do I need to get the logs?
     * In test, test_reconnects_to_new_leader_on_append_events() especially often for some reason.
   * In test_reconnects_to_new_leader_on_set_stream_metadata, occasionally get FollowerNotFound, despite previous and subsequent tests passing okay, as if gossip is a bit flaky.

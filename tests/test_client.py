@@ -3823,9 +3823,11 @@ class TestEventStoreDBClient(TestCase):
         if self.ESDB_CLUSTER_SIZE == 1:
             cluster_info = self.client.read_gossip()
             self.assertEqual(len(cluster_info), 1)
+            expected_address = self.ESDB_TARGET.split(":")[0]
+            expected_port = int(self.ESDB_TARGET.split(":")[1])
             self.assertEqual(cluster_info[0].state, NODE_STATE_LEADER)
-            self.assertEqual(cluster_info[0].address, "127.0.0.1")
-            self.assertEqual(cluster_info[0].port, 2113)
+            self.assertEqual(cluster_info[0].address, expected_address)
+            self.assertEqual(cluster_info[0].port, expected_port)
         elif self.ESDB_CLUSTER_SIZE == 3:
             retries = 10
             while True:
