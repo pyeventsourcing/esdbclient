@@ -3820,51 +3820,67 @@ class TestEventStoreDBClient(TestCase):
 
     def test_gossip_read(self) -> None:
         self.construct_esdb_client()
-        sleep(0.1)  # sometimes we need to wait a little bit for EventStoreDB
-        cluster_info = self.client.read_gossip()
         if self.ESDB_CLUSTER_SIZE == 1:
-            self.assertEqual(len(cluster_info), 1)
-            self.assertEqual(cluster_info[0].state, NODE_STATE_LEADER)
-            self.assertEqual(cluster_info[0].address, "localhost")
-            self.assertIn(str(cluster_info[0].port), self.ESDB_TARGET)
-        elif self.ESDB_CLUSTER_SIZE == 3:
-            self.assertEqual(len(cluster_info), 3)
-            num_leaders = 0
-            num_followers = 0
-            for member_info in cluster_info:
-                if member_info.state == NODE_STATE_LEADER:
-                    num_leaders += 1
-                elif member_info.state == NODE_STATE_FOLLOWER:
-                    num_followers += 1
-            self.assertEqual(num_leaders, 1)
-
-            # Todo: This is very occasionally 1...
-            self.assertEqual(num_followers, 2)
-        else:
-            self.fail(f"Test doesn't work with cluster size {self.ESDB_CLUSTER_SIZE}")
-
-    def test_gossip_cluster_read(self) -> None:
-        self.construct_esdb_client()
-        sleep(0.1)  # sometimes we need to wait a little bit for EventStoreDB
-        cluster_info = self.client.read_cluster_gossip()
-        if self.ESDB_CLUSTER_SIZE == 1:
+            cluster_info = self.client.read_gossip()
             self.assertEqual(len(cluster_info), 1)
             self.assertEqual(cluster_info[0].state, NODE_STATE_LEADER)
             self.assertEqual(cluster_info[0].address, "127.0.0.1")
             self.assertEqual(cluster_info[0].port, 2113)
         elif self.ESDB_CLUSTER_SIZE == 3:
-            self.assertEqual(len(cluster_info), 3)
-            num_leaders = 0
-            num_followers = 0
-            for member_info in cluster_info:
-                if member_info.state == NODE_STATE_LEADER:
-                    num_leaders += 1
-                elif member_info.state == NODE_STATE_FOLLOWER:
-                    num_followers += 1
-            self.assertEqual(num_leaders, 1)
+            retries = 10
+            while True:
+                retries -= 1
+                try:
+                    cluster_info = self.client.read_gossip()
+                    self.assertEqual(len(cluster_info), 3)
+                    num_leaders = 0
+                    num_followers = 0
+                    for member_info in cluster_info:
+                        if member_info.state == NODE_STATE_LEADER:
+                            num_leaders += 1
+                        elif member_info.state == NODE_STATE_FOLLOWER:
+                            num_followers += 1
+                    self.assertEqual(num_leaders, 1)
+                    # Todo: This is very occasionally 1... hence retries.
+                    self.assertEqual(num_followers, 2)
+                except AssertionError:
+                    if retries:
+                        sleep(1)
+                    else:
+                        raise
+        else:
+            self.fail(f"Test doesn't work with cluster size {self.ESDB_CLUSTER_SIZE}")
 
-            # Todo: This is very occasionally 1...
-            self.assertEqual(num_followers, 2)
+    def test_gossip_cluster_read(self) -> None:
+        self.construct_esdb_client()
+        if self.ESDB_CLUSTER_SIZE == 1:
+            cluster_info = self.client.read_cluster_gossip()
+            self.assertEqual(len(cluster_info), 1)
+            self.assertEqual(cluster_info[0].state, NODE_STATE_LEADER)
+            self.assertEqual(cluster_info[0].address, "127.0.0.1")
+            self.assertEqual(cluster_info[0].port, 2113)
+        elif self.ESDB_CLUSTER_SIZE == 3:
+            retries = 10
+            while True:
+                retries -= 1
+                try:
+                    cluster_info = self.client.read_cluster_gossip()
+                    self.assertEqual(len(cluster_info), 3)
+                    num_leaders = 0
+                    num_followers = 0
+                    for member_info in cluster_info:
+                        if member_info.state == NODE_STATE_LEADER:
+                            num_leaders += 1
+                        elif member_info.state == NODE_STATE_FOLLOWER:
+                            num_followers += 1
+                    self.assertEqual(num_leaders, 1)
+                    # Todo: This is very occasionally 1... hence retries.
+                    self.assertEqual(num_followers, 2)
+                except AssertionError:
+                    if retries:
+                        sleep(1)
+                    else:
+                        raise
         else:
             self.fail(f"Test doesn't work with cluster size {self.ESDB_CLUSTER_SIZE}")
 
