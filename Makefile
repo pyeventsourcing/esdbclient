@@ -2,7 +2,7 @@
 
 # SHELL = bash
 EVENTSTORE_IMAGE_NAME ?= ghcr.io/eventstore/eventstore
-EVENTSTORE_IMAGE_TAG ?= 21.10.9-buster-slim
+EVENTSTORE_IMAGE_TAG ?= 22.10.2-bullseye-slim
 POETRY ?= poetry
 POETRY_INSTALLER_URL ?= https://install.python-poetry.org
 PYTHONUNBUFFERED: 1

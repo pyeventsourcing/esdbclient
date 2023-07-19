@@ -7,7 +7,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
-        eventstore-image-tag: ["21.10.9-buster-slim", "22.10.2-buster-slim"]
+        eventstore-image-tag: ["21.10.10-buster-slim", "22.10.2-bullseye-slim"]
     env:
       EVENTSTORE_IMAGE_TAG: ${{ matrix.eventstore-image-tag }}
     runs-on: "ubuntu-22.04"
