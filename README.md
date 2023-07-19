@@ -2126,23 +2126,11 @@ for event in subscription:
         subscription.stop()
 ```
 
-The events we appended above are received in the order they were recorded.
+The events are not guaranteed to be received in the order they were recorded. But
+we will have received `event9`.
 
 ```python
-assert received_events[-14].id == event1.id
-assert received_events[-13].id == event2.id
-assert received_events[-12].id == event3.id
-assert received_events[-11].type == "DogRegistered"
-assert received_events[-10].type == "DogLearnedTrick"
-assert received_events[-9].type == "DogLearnedTrick"
-assert received_events[-8].type == "Snapshot"
-assert received_events[-7].type == "DogLearnedTrick"
-assert received_events[-6].id == event4.id
-assert received_events[-5].id == event5.id
-assert received_events[-4].id == event6.id
-assert received_events[-3].id == event7.id
-assert received_events[-2].id == event8.id
-assert received_events[-1].id == event9.id
+assert event9.id in [e.id for e in received_events]
 ```
 
 The `PersistentSubscription` object also has an `nack()` method that should be used
