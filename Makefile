@@ -1,10 +1,15 @@
 .EXPORT_ALL_VARIABLES:
 
 # SHELL = bash
-# EVENTSTORE_IMAGE_NAME ?= ghcr.io/eventstore/eventstore
-EVENTSTORE_IMAGE_NAME ?= ghcr.io/thefringeninja/eventstore
-# EVENTSTORE_IMAGE_TAG ?= 22.10.2-bullseye-slim
-EVENTSTORE_IMAGE_TAG ?= 21.10.11-dev
+
+# For testing with production EventStoreDB builds...
+EVENTSTORE_IMAGE_NAME ?= ghcr.io/eventstore/eventstore
+EVENTSTORE_IMAGE_TAG ?= 22.10.2-bullseye-slim
+
+# For testing with Jaao's dev builds...
+# EVENTSTORE_IMAGE_NAME ?= ghcr.io/thefringeninja/eventstore
+# EVENTSTORE_IMAGE_TAG ?= 21.10.11-dev
+
 POETRY ?= poetry
 POETRY_INSTALLER_URL ?= https://install.python-poetry.org
 PYTHONUNBUFFERED: 1

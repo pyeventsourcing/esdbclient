@@ -1,5 +1,7 @@
 ## For version 1.0
 
+* Use grpc "trailer" instead of Status Code NOT_FOUND with "Leader info available"?
+
 * Pull these images:
   * ghcr.io/eventstore/eventstore:lts
   * ghcr.io/eventstore/eventstore:previous-lts
