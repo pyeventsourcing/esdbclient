@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package google.rpc;
+package esdbclient.rpc;
 
 import "google/protobuf/any.proto";
 import "esdbclient/protos/Grpc/code.proto";
@@ -35,7 +35,7 @@ option objc_class_prefix = "RPC";
 // [API Design Guide](https://cloud.google.com/apis/design/errors).
 message Status {
 	// The status code, which should be an enum value of [google.rpc.Code][google.rpc.Code].
-	google.rpc.Code code = 1;
+	esdbclient.rpc.Code code = 1;
 
 	// A developer-facing error message, which should be in English. Any
 	// user-facing error message should be localized and sent in the
