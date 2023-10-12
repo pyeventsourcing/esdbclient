@@ -49,7 +49,7 @@ class TestPersistentSubscriptionACK(TestCase):
 
     def given_subscription(self) -> str:
         group_name = f"my-subscription-{uuid4().hex}"
-        print(f"  Given subscription {group_name}")
+        # print(f"  Given subscription {group_name}")
         self.client.create_subscription_to_all(group_name=group_name, from_end=True)
         return group_name
 
@@ -61,7 +61,7 @@ class TestPersistentSubscriptionACK(TestCase):
             events=events,
         )
         ids = [e.id for e in events]
-        print(f"  When appending events:\n    {', '.join(str(id) for id in ids)}")
+        # print(f"  When appending events:\n    {', '.join(str(id) for id in ids)}")
         return ids
 
     def then_consumer_receives_and_acks(
@@ -69,15 +69,15 @@ class TestPersistentSubscriptionACK(TestCase):
         expected_ids: List[UUID],
         on: str,
     ) -> None:
-        print(
-            f"  Then consumer of {on} should receive:\n   "
-            f" {', '.join(str(id) for id in expected_ids)}"
-        )
+        # print(
+        #     f"  Then consumer of {on} should receive:\n   "
+        #     f" {', '.join(str(id) for id in expected_ids)}"
+        # )
         unexpected_ids = []
         with self.client.read_subscription_to_all(group_name=on) as subscription:
             expected_received_count = 0
             for _, event in enumerate(subscription, start=1):
-                print(f"    > Received: {event.id!s}")
+                # print(f"    > Received: {event.id!s}")
                 if event.id not in expected_ids:
                     unexpected_ids.append(event.id)
                 else:
@@ -92,7 +92,7 @@ class TestPersistentSubscriptionACK(TestCase):
             self.fail(msg)
 
     def test_event_is_removed_from_subscription_after_ack(self) -> None:
-        print("Scenario: Persistent subscription consumer doesn't receive ACKed events")
+        # print("Scenario: Persistent sub. consumer doesn't receive ACKed events")
         subscription = self.given_subscription()
 
         first_batch = self.when_append_new_events(random_data(), random_data())
