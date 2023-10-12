@@ -47,6 +47,10 @@
     then ignore the subsequent event that has the same commit position.
   * See: test_checkpoint_commit_position()
 
+Other issues:
+* "$et-EventType" steam name convention (and links to events?)
+  * https://github.com/pyeventsourcing/esdbclient/issues/6
+
 -----
 Issues:
 
