@@ -897,6 +897,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         group_name: str,
         *,
         buffer_size: int = 100,
+        grace: float = 0.2,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> PersistentSubscription:
@@ -906,6 +907,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         return self._connection.persistent_subscriptions.read(
             group_name=group_name,
             buffer_size=buffer_size,
+            grace=grace,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -919,6 +921,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         stream_name: str,
         *,
         buffer_size: int = 100,
+        grace: float = 0.2,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> PersistentSubscription:
@@ -929,6 +932,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             group_name=group_name,
             stream_name=stream_name,
             buffer_size=buffer_size,
+            grace=grace,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,

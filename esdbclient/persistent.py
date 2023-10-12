@@ -448,13 +448,20 @@ class BasePersistentSubscriptionsService(ESDBService):
 
 class SubscriptionReadReqs(BaseSubscriptionReadReqs):
     def __init__(
-        self, group_name: str, stream_name: Optional[str] = None, buffer_size: int = 100
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        buffer_size: int = 100,
+        grace: float = 0.2,
     ) -> None:
         super().__init__(
             group_name=group_name, stream_name=stream_name, buffer_size=buffer_size
         )
-        self.queue: queue.Queue[Tuple[Optional[UUID], str]] = queue.Queue()
-        self.held: Optional[Tuple[UUID, str]] = None  # Used when changing n/ack action.
+        self._grace = grace
+        self._queue: queue.Queue[Tuple[Optional[UUID], str]] = queue.Queue()
+        self._held: Optional[Tuple[UUID, str]] = (
+            None  # Used when changing n/ack action.
+        )
         self._is_stopping = False  # Indicates queue was poisoned.
         self._is_stopped = Event()  # Indicates req loop has exited.
 
@@ -468,22 +475,22 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
             # Send buffer of n/ack reqs whenever it is full, or when the
             # n/ack actions changes, or periodically, or when stopping.
             current_action: Optional[str] = None
-            if self.held is not None:
+            if self._held is not None:
                 # Move held n/ack to buffer.
-                held_id, current_action = self.held
-                self.held = None
+                held_id, current_action = self._held
+                self._held = None
                 buffer.append(shared_pb2.UUID(string=str(held_id)))
             while True:
                 try:
                     if self._is_stopping:
                         # Queue was poisoned and buffer has been
                         # sent, so exit req iterator.
-                        sleep(0.5)  # Grace for server to process last n/acks.
+                        sleep(self._grace)  # Grace for server to process last n/acks.
                         self._is_stopped.set()
                         raise StopIteration() from None
 
                     # Read the queue.
-                    event_id, action = self.queue.get(timeout=0.1)
+                    event_id, action = self._queue.get(timeout=0.2)
 
                     if action == "poison":
                         # Queue was poisoned, so send buffer.
@@ -500,7 +507,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                             current_action = action
                         elif action != current_action:
                             # Hold last n/ack and send buffer.
-                            self.held = (event_id, action)
+                            self._held = (event_id, action)
                             return self._construct_ack_or_nack_read_req(
                                 buffer, current_action
                             )
@@ -523,7 +530,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                         pass
 
     def ack(self, event_id: UUID) -> None:
-        self.queue.put((event_id, "ack"))
+        self._queue.put((event_id, "ack"))
 
     def nack(
         self,
@@ -531,10 +538,10 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
         action: Literal["unknown", "park", "retry", "skip", "stop"],
     ) -> None:
         assert action in ["unknown", "park", "retry", "skip", "stop"]
-        self.queue.put((event_id, action))
+        self._queue.put((event_id, action))
 
     def stop(self) -> None:
-        self.queue.put((None, "poison"))
+        self._queue.put((None, "poison"))
         self._is_stopped.wait(timeout=5)
 
 
@@ -707,6 +714,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         group_name: str,
         stream_name: Optional[str] = None,
         buffer_size: int = 100,
+        grace: float = 0.2,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -715,6 +723,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
             group_name=group_name,
             stream_name=stream_name,
             buffer_size=buffer_size,
+            grace=grace,
         )
         read_resps = self._stub.Read(
             read_reqs,
