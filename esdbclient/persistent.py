@@ -3,6 +3,7 @@ import queue
 from abc import abstractmethod
 from dataclasses import dataclass
 from threading import Event
+from time import sleep
 from typing import Any, Iterator, List, Optional, Sequence, Tuple, Union, overload
 from uuid import UUID
 
@@ -468,7 +469,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
             # n/ack actions changes, or periodically, or when stopping.
             current_action: Optional[str] = None
             if self.held is not None:
-                # Move last n/ack to buffer.
+                # Move held n/ack to buffer.
                 held_id, current_action = self.held
                 self.held = None
                 buffer.append(shared_pb2.UUID(string=str(held_id)))
@@ -477,6 +478,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                     if self._is_stopping:
                         # Queue was poisoned and buffer has been
                         # sent, so exit req iterator.
+                        sleep(0.5)  # Grace for server to process last n/acks.
                         self._is_stopped.set()
                         raise StopIteration() from None
 
@@ -497,13 +499,13 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                             # Initialise current action.
                             current_action = action
                         elif action != current_action:
-                            # Remember last n/ack and send buffer.
+                            # Hold last n/ack and send buffer.
                             self.held = (event_id, action)
                             return self._construct_ack_or_nack_read_req(
                                 buffer, current_action
                             )
 
-                        # Append n/ack to buffer.
+                        # Append queued n/ack to buffer.
                         buffer.append(shared_pb2.UUID(string=str(event_id)))
 
                         if len(buffer) >= self._buffer_size:
