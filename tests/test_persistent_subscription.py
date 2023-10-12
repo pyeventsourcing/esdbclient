@@ -73,18 +73,18 @@ class TestPersistentSubscriptionACK(TestCase):
             f"  Then consumer of {on} should receive:\n   "
             f" {', '.join(str(id) for id in expected_ids)}"
         )
-        subscription = self.client.read_subscription_to_all(group_name=on)
         unexpected_ids = []
-        expected_received_count = 0
-        for _, event in enumerate(subscription, start=1):
-            print(f"    > Received: {event.id!s}")
-            if event.id not in expected_ids:
-                unexpected_ids.append(event.id)
-            else:
-                subscription.ack(event.id)
-                expected_received_count += 1
-            if expected_received_count == len(expected_ids):
-                break
+        with self.client.read_subscription_to_all(group_name=on) as subscription:
+            expected_received_count = 0
+            for _, event in enumerate(subscription, start=1):
+                print(f"    > Received: {event.id!s}")
+                if event.id not in expected_ids:
+                    unexpected_ids.append(event.id)
+                else:
+                    subscription.ack(event.id)
+                    expected_received_count += 1
+                if expected_received_count == len(expected_ids):
+                    break
         if unexpected_ids:
             msg = "Unexpected events were received:\n"
             for unexpected_id in unexpected_ids:

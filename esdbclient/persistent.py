@@ -533,7 +533,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
 
     def stop(self) -> None:
         self.queue.put((None, "poison"))
-        self._is_stopped.wait()
+        self._is_stopped.wait(timeout=5)
 
 
 class AsyncioPersistentSubscriptionsService(BasePersistentSubscriptionsService):
@@ -594,6 +594,12 @@ class PersistentSubscription(Iterator[RecordedEvent], BasePersistentSubscription
     def stop(self) -> None:
         self.read_reqs.stop()
         self.read_resps.cancel()
+
+    def __enter__(self) -> "PersistentSubscription":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
 
     def ack(self, event_id: UUID) -> None:
         self.read_reqs.ack(event_id)
