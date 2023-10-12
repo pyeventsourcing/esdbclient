@@ -11,6 +11,7 @@ EVENTSTORE_IMAGE_TAG ?= 22.10.2-bullseye-slim
 # EVENTSTORE_IMAGE_TAG ?= 21.10.11-dev
 
 POETRY ?= poetry
+POETRY_VERSION=1.5.1
 POETRY_INSTALLER_URL ?= https://install.python-poetry.org
 PYTHONUNBUFFERED: 1
 
