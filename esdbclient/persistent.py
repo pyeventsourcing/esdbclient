@@ -3,7 +3,7 @@ import queue
 from abc import abstractmethod
 from dataclasses import dataclass
 from threading import Event
-from typing import Iterator, List, Optional, Sequence, Tuple, Union, overload
+from typing import Any, Iterator, List, Optional, Sequence, Tuple, Union, overload
 from uuid import UUID
 
 import grpc
@@ -595,10 +595,10 @@ class PersistentSubscription(Iterator[RecordedEvent], BasePersistentSubscription
         self.read_reqs.stop()
         self.read_resps.cancel()
 
-    def __enter__(self) -> "PersistentSubscription":
+    def __enter__(self, *args: Any, **kwargs: Any) -> "PersistentSubscription":
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, *args: Any, **kwargs: Any) -> None:
         self.stop()
 
     def ack(self, event_id: UUID) -> None:
