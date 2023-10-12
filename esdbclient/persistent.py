@@ -2,6 +2,7 @@
 import queue
 from abc import abstractmethod
 from dataclasses import dataclass
+from threading import Event
 from typing import Iterator, List, Optional, Sequence, Tuple, Union, overload
 from uuid import UUID
 
@@ -71,6 +72,9 @@ class BaseSubscriptionReadReqs:
         ids: List[shared_pb2.UUID], action: str
     ) -> persistent_pb2.ReadReq:
         if action == "ack":
+            # print(
+            #     f"Constructing ACK req for IDs: {', '.join([id.string for id in ids])}"
+            # )
             return persistent_pb2.ReadReq(ack=persistent_pb2.ReadReq.Ack(ids=ids))
         else:
             if action == "unknown":
@@ -448,41 +452,71 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
         super().__init__(
             group_name=group_name, stream_name=stream_name, buffer_size=buffer_size
         )
-        self.queue: queue.Queue[Tuple[UUID, str]] = queue.Queue()
-        self.held: Optional[Tuple[UUID, str]] = None
-        self._is_stopped = True
+        self.queue: queue.Queue[Tuple[Optional[UUID], str]] = queue.Queue()
+        self.held: Optional[Tuple[UUID, str]] = None  # Used when changing n/ack action.
+        self._is_stopping = False  # Indicates queue was poisoned.
+        self._is_stopped = Event()  # Indicates req loop has exited.
 
     def __next__(self) -> persistent_pb2.ReadReq:
         if not self._has_requested_options:
+            # Send initial read req.
             self._has_requested_options = True
             return self._construct_initial_read_req()
         else:
-            # Send a response whenever there are 100 acks or nacks of
-            # the same kind, or when the kind of ack or nack changes,
-            # or at least every 100ms when there is something to send.
-            ids = []
+            buffer = []  # Buffer of n/acks.
+            # Send buffer of n/ack reqs whenever it is full, or when the
+            # n/ack actions changes, or periodically, or when stopping.
             current_action: Optional[str] = None
             if self.held is not None:
+                # Move last n/ack to buffer.
                 held_id, current_action = self.held
                 self.held = None
-                ids.append(shared_pb2.UUID(string=str(held_id)))
+                buffer.append(shared_pb2.UUID(string=str(held_id)))
             while True:
                 try:
+                    if self._is_stopping:
+                        # Queue was poisoned and buffer has been
+                        # sent, so exit req iterator.
+                        self._is_stopped.set()
+                        raise StopIteration() from None
+
+                    # Read the queue.
                     event_id, action = self.queue.get(timeout=0.1)
-                    if current_action is None:
-                        current_action = action
-                    elif current_action != action:
-                        self.held = (event_id, action)
-                        return self._construct_ack_or_nack_read_req(ids, current_action)
-                    ids.append(shared_pb2.UUID(string=str(event_id)))
-                    if len(ids) >= self._buffer_size:
-                        return self._construct_ack_or_nack_read_req(ids, current_action)
-                except queue.Empty as e:
-                    if len(ids) >= 1:
+
+                    if action == "poison":
+                        # Queue was poisoned, so send buffer.
+                        self._is_stopping = True
+                        if len(buffer):
+                            assert current_action is not None
+                            return self._construct_ack_or_nack_read_req(
+                                buffer, current_action
+                            )
+                    else:
+                        assert isinstance(event_id, UUID)
+                        if current_action is None:
+                            # Initialise current action.
+                            current_action = action
+                        elif action != current_action:
+                            # Remember last n/ack and send buffer.
+                            self.held = (event_id, action)
+                            return self._construct_ack_or_nack_read_req(
+                                buffer, current_action
+                            )
+
+                        # Append n/ack to buffer.
+                        buffer.append(shared_pb2.UUID(string=str(event_id)))
+
+                        if len(buffer) >= self._buffer_size:
+                            # Send buffer, because it is full.
+                            return self._construct_ack_or_nack_read_req(
+                                buffer, current_action
+                            )
+                except queue.Empty:
+                    if len(buffer) >= 1:
                         assert current_action is not None
-                        return self._construct_ack_or_nack_read_req(ids, current_action)
-                    elif self._is_stopped:
-                        raise StopIteration() from e
+                        return self._construct_ack_or_nack_read_req(
+                            buffer, current_action
+                        )
                     else:  # pragma: no cover
                         pass
 
@@ -498,7 +532,8 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
         self.queue.put((event_id, action))
 
     def stop(self) -> None:
-        self._is_stopped = True
+        self.queue.put((None, "poison"))
+        self._is_stopped.wait()
 
 
 class AsyncioPersistentSubscriptionsService(BasePersistentSubscriptionsService):

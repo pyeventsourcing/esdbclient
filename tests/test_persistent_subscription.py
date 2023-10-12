@@ -1,10 +1,11 @@
+# -*- coding: utf-8 -*-
 import os
 from typing import List
 from unittest import TestCase
-from uuid import uuid4, UUID
+from uuid import UUID, uuid4
 
 from esdbclient import EventStoreDBClient, NewEvent, StreamState
-from tests.test_client import get_server_certificate, get_ca_certificate
+from tests.test_client import get_ca_certificate, get_server_certificate
 
 
 def random_data() -> bytes:
@@ -60,30 +61,42 @@ class TestPersistentSubscriptionACK(TestCase):
             events=events,
         )
         ids = [e.id for e in events]
-        print(f"  When appending events: {ids!s}")
+        print(f"  When appending events:\n    {', '.join(str(id) for id in ids)}")
         return ids
 
     def then_consumer_receives_and_acks(
-        self, expected_events: List[UUID], on: str,
+        self,
+        expected_ids: List[UUID],
+        on: str,
     ) -> None:
-        print(f"  Then consumer of {on} receives events: {expected_events!s}")
+        print(
+            f"  Then consumer of {on} should receive:\n   "
+            f" {', '.join(str(id) for id in expected_ids)}"
+        )
         subscription = self.client.read_subscription_to_all(group_name=on)
-        for i, event in enumerate(subscription, start=1):
-            print(f"     > Received {event.id!r}")
-            assert event.id in expected_events, f"{event.id!r} not in expected {expected_events!s}"
-            subscription.ack(event.id)
-            if i == len(expected_events):
+        unexpected_ids = []
+        expected_received_count = 0
+        for _, event in enumerate(subscription, start=1):
+            print(f"    > Received: {event.id!s}")
+            if event.id not in expected_ids:
+                unexpected_ids.append(event.id)
+            else:
+                subscription.ack(event.id)
+                expected_received_count += 1
+            if expected_received_count == len(expected_ids):
                 break
-        subscription.stop()
+        if unexpected_ids:
+            msg = "Unexpected events were received:\n"
+            for unexpected_id in unexpected_ids:
+                msg += f"{unexpected_id!r} not expected {expected_ids!s}\n"
+            self.fail(msg)
 
-    def test_event_is_removed_from_subscription_after_ack(self):
-        print("Scenario: Consumer of persistent subscription don't receive ACKed event")
+    def test_event_is_removed_from_subscription_after_ack(self) -> None:
+        print("Scenario: Persistent subscription consumer doesn't receive ACKed events")
         subscription = self.given_subscription()
 
         first_batch = self.when_append_new_events(random_data(), random_data())
         self.then_consumer_receives_and_acks(first_batch, on=subscription)
 
-        batch_after_ack = self.when_append_new_events(random_data(), random_data())
-        self.then_consumer_receives_and_acks(
-            expected_events=batch_after_ack, on=subscription,
-        )
+        second_batch = self.when_append_new_events(random_data(), random_data())
+        self.then_consumer_receives_and_acks(second_batch, on=subscription)
