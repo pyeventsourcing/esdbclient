@@ -30,21 +30,22 @@ DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
     b' \x01(\x0b\x32#.event_store.client.gossip.EndPoint"\x9a\x02\n\nVNodeState\x12\x10\n\x0cInitializing\x10\x00\x12\x12\n\x0e\x44iscoverLeader\x10\x01\x12\x0b\n\x07Unknown\x10\x02\x12\x0e\n\nPreReplica\x10\x03\x12\x0e\n\nCatchingUp\x10\x04\x12\t\n\x05\x43lone\x10\x05\x12\x0c\n\x08\x46ollower\x10\x06\x12\r\n\tPreLeader\x10\x07\x12\n\n\x06Leader\x10\x08\x12\x0b\n\x07Manager\x10\t\x12\x10\n\x0cShuttingDown\x10\n\x12\x0c\n\x08Shutdown\x10\x0b\x12\x16\n\x12ReadOnlyLeaderless\x10\x0c\x12\x16\n\x12PreReadOnlyReplica\x10\r\x12\x13\n\x0fReadOnlyReplica\x10\x0e\x12\x13\n\x0fResigningLeader\x10\x0f\x32S\n\x06Gossip\x12I\n\x04Read\x12\x19.event_store.client.Empty\x1a&.event_store.client.gossip.ClusterInfoB&\n$com.eventstore.dbclient.proto.gossipb\x06proto3'
 )
 
-_builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
+_globals = globals()
+_builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(
-    DESCRIPTOR, "esdbclient.protos.Grpc.gossip_pb2", globals()
+    DESCRIPTOR, "esdbclient.protos.Grpc.gossip_pb2", _globals
 )
 if _descriptor._USE_C_DESCRIPTORS == False:
     DESCRIPTOR._options = None
     DESCRIPTOR._serialized_options = b"\n$com.eventstore.dbclient.proto.gossip"
-    _CLUSTERINFO._serialized_start = 103
-    _CLUSTERINFO._serialized_end = 172
-    _ENDPOINT._serialized_start = 174
-    _ENDPOINT._serialized_end = 215
-    _MEMBERINFO._serialized_start = 218
-    _MEMBERINFO._serialized_end = 726
-    _MEMBERINFO_VNODESTATE._serialized_start = 444
-    _MEMBERINFO_VNODESTATE._serialized_end = 726
-    _GOSSIP._serialized_start = 728
-    _GOSSIP._serialized_end = 811
+    _globals["_CLUSTERINFO"]._serialized_start = 103
+    _globals["_CLUSTERINFO"]._serialized_end = 172
+    _globals["_ENDPOINT"]._serialized_start = 174
+    _globals["_ENDPOINT"]._serialized_end = 215
+    _globals["_MEMBERINFO"]._serialized_start = 218
+    _globals["_MEMBERINFO"]._serialized_end = 726
+    _globals["_MEMBERINFO_VNODESTATE"]._serialized_start = 444
+    _globals["_MEMBERINFO_VNODESTATE"]._serialized_end = 726
+    _globals["_GOSSIP"]._serialized_start = 728
+    _globals["_GOSSIP"]._serialized_end = 811
 # @@protoc_insertion_point(module_scope)

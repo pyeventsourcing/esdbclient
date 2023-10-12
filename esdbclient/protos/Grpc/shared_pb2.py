@@ -37,37 +37,38 @@ DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
     b" \x01(\tB&\n$com.eventstore.dbclient.proto.sharedb\x06proto3"
 )
 
-_builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
+_globals = globals()
+_builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(
-    DESCRIPTOR, "esdbclient.protos.Grpc.shared_pb2", globals()
+    DESCRIPTOR, "esdbclient.protos.Grpc.shared_pb2", _globals
 )
 if _descriptor._USE_C_DESCRIPTORS == False:
     DESCRIPTOR._options = None
     DESCRIPTOR._serialized_options = b"\n$com.eventstore.dbclient.proto.shared"
-    _UUID._serialized_start = 89
-    _UUID._serialized_end = 258
-    _UUID_STRUCTURED._serialized_start = 174
-    _UUID_STRUCTURED._serialized_end = 249
-    _EMPTY._serialized_start = 260
-    _EMPTY._serialized_end = 267
-    _STREAMIDENTIFIER._serialized_start = 269
-    _STREAMIDENTIFIER._serialized_end = 314
-    _ALLSTREAMPOSITION._serialized_start = 316
-    _ALLSTREAMPOSITION._serialized_end = 386
-    _WRONGEXPECTEDVERSION._serialized_start = 389
-    _WRONGEXPECTEDVERSION._serialized_end = 764
-    _ACCESSDENIED._serialized_start = 766
-    _ACCESSDENIED._serialized_end = 780
-    _STREAMDELETED._serialized_start = 782
-    _STREAMDELETED._serialized_end = 862
-    _TIMEOUT._serialized_start = 864
-    _TIMEOUT._serialized_end = 873
-    _UNKNOWN._serialized_start = 875
-    _UNKNOWN._serialized_end = 884
-    _INVALIDTRANSACTION._serialized_start = 886
-    _INVALIDTRANSACTION._serialized_end = 906
-    _MAXIMUMAPPENDSIZEEXCEEDED._serialized_start = 908
-    _MAXIMUMAPPENDSIZEEXCEEDED._serialized_end = 958
-    _BADREQUEST._serialized_start = 960
-    _BADREQUEST._serialized_end = 989
+    _globals["_UUID"]._serialized_start = 89
+    _globals["_UUID"]._serialized_end = 258
+    _globals["_UUID_STRUCTURED"]._serialized_start = 174
+    _globals["_UUID_STRUCTURED"]._serialized_end = 249
+    _globals["_EMPTY"]._serialized_start = 260
+    _globals["_EMPTY"]._serialized_end = 267
+    _globals["_STREAMIDENTIFIER"]._serialized_start = 269
+    _globals["_STREAMIDENTIFIER"]._serialized_end = 314
+    _globals["_ALLSTREAMPOSITION"]._serialized_start = 316
+    _globals["_ALLSTREAMPOSITION"]._serialized_end = 386
+    _globals["_WRONGEXPECTEDVERSION"]._serialized_start = 389
+    _globals["_WRONGEXPECTEDVERSION"]._serialized_end = 764
+    _globals["_ACCESSDENIED"]._serialized_start = 766
+    _globals["_ACCESSDENIED"]._serialized_end = 780
+    _globals["_STREAMDELETED"]._serialized_start = 782
+    _globals["_STREAMDELETED"]._serialized_end = 862
+    _globals["_TIMEOUT"]._serialized_start = 864
+    _globals["_TIMEOUT"]._serialized_end = 873
+    _globals["_UNKNOWN"]._serialized_start = 875
+    _globals["_UNKNOWN"]._serialized_end = 884
+    _globals["_INVALIDTRANSACTION"]._serialized_start = 886
+    _globals["_INVALIDTRANSACTION"]._serialized_end = 906
+    _globals["_MAXIMUMAPPENDSIZEEXCEEDED"]._serialized_start = 908
+    _globals["_MAXIMUMAPPENDSIZEEXCEEDED"]._serialized_end = 958
+    _globals["_BADREQUEST"]._serialized_start = 960
+    _globals["_BADREQUEST"]._serialized_end = 989
 # @@protoc_insertion_point(module_scope)

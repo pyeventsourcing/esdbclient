@@ -131,9 +131,9 @@ DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
     b" \x01(\x0c\x12\x0c\n\x04\x64\x61ta\x18\x04"
     b" \x01(\x0c\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01"
     b" \x01(\t\x12\r\n\x05value\x18\x02"
-    b' \x01(\t:\x02\x38\x01"\xa4\x05\n\x0f\x42\x61tchAppendResp\x12\x30\n\x0e\x63orrelation_id\x18\x01'
-    b" \x01(\x0b\x32\x18.event_store.client.UUID\x12#\n\x05\x65rror\x18\x02"
-    b" \x01(\x0b\x32\x12.google.rpc.StatusH\x00\x12\x46\n\x07success\x18\x03"
+    b' \x01(\t:\x02\x38\x01"\xa8\x05\n\x0f\x42\x61tchAppendResp\x12\x30\n\x0e\x63orrelation_id\x18\x01'
+    b" \x01(\x0b\x32\x18.event_store.client.UUID\x12'\n\x05\x65rror\x18\x02"
+    b" \x01(\x0b\x32\x16.esdbclient.rpc.StatusH\x00\x12\x46\n\x07success\x18\x03"
     b" \x01(\x0b\x32\x33.event_store.client.streams.BatchAppendResp.SuccessH\x00\x12?\n\x11stream_identifier\x18\x04"
     b" \x01(\x0b\x32$.event_store.client.StreamIdentifier\x12\x19\n\x0fstream_position\x18\x05"
     b" \x01(\x04H\x01\x12+\n\tno_stream\x18\x06"
@@ -166,9 +166,10 @@ DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
     b" \x01(\x04\x42\x11\n\x0fposition_option2\xe0\x03\n\x07Streams\x12S\n\x04Read\x12#.event_store.client.streams.ReadReq\x1a$.event_store.client.streams.ReadResp0\x01\x12Y\n\x06\x41ppend\x12%.event_store.client.streams.AppendReq\x1a&.event_store.client.streams.AppendResp(\x01\x12W\n\x06\x44\x65lete\x12%.event_store.client.streams.DeleteReq\x1a&.event_store.client.streams.DeleteResp\x12`\n\tTombstone\x12(.event_store.client.streams.TombstoneReq\x1a).event_store.client.streams.TombstoneResp\x12j\n\x0b\x42\x61tchAppend\x12*.event_store.client.streams.BatchAppendReq\x1a+.event_store.client.streams.BatchAppendResp(\x01\x30\x01\x42'\n%com.eventstore.dbclient.proto.streamsb\x06proto3"
 )
 
-_builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, globals())
+_globals = globals()
+_builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(
-    DESCRIPTOR, "esdbclient.protos.Grpc.streams_pb2", globals()
+    DESCRIPTOR, "esdbclient.protos.Grpc.streams_pb2", _globals
 )
 if _descriptor._USE_C_DESCRIPTORS == False:
     DESCRIPTOR._options = None
@@ -179,86 +180,86 @@ if _descriptor._USE_C_DESCRIPTORS == False:
     _APPENDREQ_PROPOSEDMESSAGE_METADATAENTRY._serialized_options = b"8\001"
     _BATCHAPPENDREQ_PROPOSEDMESSAGE_METADATAENTRY._options = None
     _BATCHAPPENDREQ_PROPOSEDMESSAGE_METADATAENTRY._serialized_options = b"8\001"
-    _READREQ._serialized_start = 237
-    _READREQ._serialized_end = 2074
-    _READREQ_OPTIONS._serialized_start = 311
-    _READREQ_OPTIONS._serialized_end = 2074
-    _READREQ_OPTIONS_STREAMOPTIONS._serialized_start = 968
-    _READREQ_OPTIONS_STREAMOPTIONS._serialized_end = 1173
-    _READREQ_OPTIONS_ALLOPTIONS._serialized_start = 1176
-    _READREQ_OPTIONS_ALLOPTIONS._serialized_end = 1362
-    _READREQ_OPTIONS_SUBSCRIPTIONOPTIONS._serialized_start = 1364
-    _READREQ_OPTIONS_SUBSCRIPTIONOPTIONS._serialized_end = 1385
-    _READREQ_OPTIONS_POSITION._serialized_start = 1387
-    _READREQ_OPTIONS_POSITION._serialized_end = 1448
-    _READREQ_OPTIONS_FILTEROPTIONS._serialized_start = 1451
-    _READREQ_OPTIONS_FILTEROPTIONS._serialized_end = 1819
-    _READREQ_OPTIONS_FILTEROPTIONS_EXPRESSION._serialized_start = 1756
-    _READREQ_OPTIONS_FILTEROPTIONS_EXPRESSION._serialized_end = 1799
-    _READREQ_OPTIONS_UUIDOPTION._serialized_start = 1821
-    _READREQ_OPTIONS_UUIDOPTION._serialized_end = 1938
-    _READREQ_OPTIONS_CONTROLOPTION._serialized_start = 1940
-    _READREQ_OPTIONS_CONTROLOPTION._serialized_end = 1978
-    _READREQ_OPTIONS_READDIRECTION._serialized_start = 1980
-    _READREQ_OPTIONS_READDIRECTION._serialized_end = 2024
-    _READRESP._serialized_start = 2077
-    _READRESP._serialized_end = 3378
-    _READRESP_READEVENT._serialized_start = 2534
-    _READRESP_READEVENT._serialized_end = 3166
-    _READRESP_READEVENT_RECORDEDEVENT._serialized_start = 2778
-    _READRESP_READEVENT_RECORDEDEVENT._serialized_end = 3154
-    _READRESP_READEVENT_RECORDEDEVENT_METADATAENTRY._serialized_start = 3107
-    _READRESP_READEVENT_RECORDEDEVENT_METADATAENTRY._serialized_end = 3154
-    _READRESP_SUBSCRIPTIONCONFIRMATION._serialized_start = 3168
-    _READRESP_SUBSCRIPTIONCONFIRMATION._serialized_end = 3219
-    _READRESP_CHECKPOINT._serialized_start = 3221
-    _READRESP_CHECKPOINT._serialized_end = 3284
-    _READRESP_STREAMNOTFOUND._serialized_start = 3286
-    _READRESP_STREAMNOTFOUND._serialized_end = 3367
-    _APPENDREQ._serialized_start = 3381
-    _APPENDREQ._serialized_end = 4052
-    _APPENDREQ_OPTIONS._serialized_start = 3544
-    _APPENDREQ_OPTIONS._serialized_end = 3808
-    _APPENDREQ_PROPOSEDMESSAGE._serialized_start = 3811
-    _APPENDREQ_PROPOSEDMESSAGE._serialized_end = 4041
-    _APPENDREQ_PROPOSEDMESSAGE_METADATAENTRY._serialized_start = 3107
-    _APPENDREQ_PROPOSEDMESSAGE_METADATAENTRY._serialized_end = 3154
-    _APPENDRESP._serialized_start = 4055
-    _APPENDRESP._serialized_end = 5220
-    _APPENDRESP_POSITION._serialized_start = 1387
-    _APPENDRESP_POSITION._serialized_end = 1448
-    _APPENDRESP_SUCCESS._serialized_start = 4295
-    _APPENDRESP_SUCCESS._serialized_end = 4545
-    _APPENDRESP_WRONGEXPECTEDVERSION._serialized_start = 4548
-    _APPENDRESP_WRONGEXPECTEDVERSION._serialized_end = 5210
-    _BATCHAPPENDREQ._serialized_start = 5223
-    _BATCHAPPENDREQ._serialized_end = 6088
-    _BATCHAPPENDREQ_OPTIONS._serialized_start = 5466
-    _BATCHAPPENDREQ_OPTIONS._serialized_end = 5850
-    _BATCHAPPENDREQ_PROPOSEDMESSAGE._serialized_start = 5853
-    _BATCHAPPENDREQ_PROPOSEDMESSAGE._serialized_end = 6088
-    _BATCHAPPENDREQ_PROPOSEDMESSAGE_METADATAENTRY._serialized_start = 3107
-    _BATCHAPPENDREQ_PROPOSEDMESSAGE_METADATAENTRY._serialized_end = 3154
-    _BATCHAPPENDRESP._serialized_start = 6091
-    _BATCHAPPENDRESP._serialized_end = 6767
-    _BATCHAPPENDRESP_SUCCESS._serialized_start = 6495
-    _BATCHAPPENDRESP_SUCCESS._serialized_end = 6729
-    _DELETEREQ._serialized_start = 6770
-    _DELETEREQ._serialized_end = 7112
-    _DELETEREQ_OPTIONS._serialized_start = 3544
-    _DELETEREQ_OPTIONS._serialized_end = 3808
-    _DELETERESP._serialized_start = 7115
-    _DELETERESP._serialized_end = 7328
-    _DELETERESP_POSITION._serialized_start = 1387
-    _DELETERESP_POSITION._serialized_end = 1448
-    _TOMBSTONEREQ._serialized_start = 7331
-    _TOMBSTONEREQ._serialized_end = 7679
-    _TOMBSTONEREQ_OPTIONS._serialized_start = 3544
-    _TOMBSTONEREQ_OPTIONS._serialized_end = 3808
-    _TOMBSTONERESP._serialized_start = 7682
-    _TOMBSTONERESP._serialized_end = 7901
-    _TOMBSTONERESP_POSITION._serialized_start = 1387
-    _TOMBSTONERESP_POSITION._serialized_end = 1448
-    _STREAMS._serialized_start = 7904
-    _STREAMS._serialized_end = 8384
+    _globals["_READREQ"]._serialized_start = 237
+    _globals["_READREQ"]._serialized_end = 2074
+    _globals["_READREQ_OPTIONS"]._serialized_start = 311
+    _globals["_READREQ_OPTIONS"]._serialized_end = 2074
+    _globals["_READREQ_OPTIONS_STREAMOPTIONS"]._serialized_start = 968
+    _globals["_READREQ_OPTIONS_STREAMOPTIONS"]._serialized_end = 1173
+    _globals["_READREQ_OPTIONS_ALLOPTIONS"]._serialized_start = 1176
+    _globals["_READREQ_OPTIONS_ALLOPTIONS"]._serialized_end = 1362
+    _globals["_READREQ_OPTIONS_SUBSCRIPTIONOPTIONS"]._serialized_start = 1364
+    _globals["_READREQ_OPTIONS_SUBSCRIPTIONOPTIONS"]._serialized_end = 1385
+    _globals["_READREQ_OPTIONS_POSITION"]._serialized_start = 1387
+    _globals["_READREQ_OPTIONS_POSITION"]._serialized_end = 1448
+    _globals["_READREQ_OPTIONS_FILTEROPTIONS"]._serialized_start = 1451
+    _globals["_READREQ_OPTIONS_FILTEROPTIONS"]._serialized_end = 1819
+    _globals["_READREQ_OPTIONS_FILTEROPTIONS_EXPRESSION"]._serialized_start = 1756
+    _globals["_READREQ_OPTIONS_FILTEROPTIONS_EXPRESSION"]._serialized_end = 1799
+    _globals["_READREQ_OPTIONS_UUIDOPTION"]._serialized_start = 1821
+    _globals["_READREQ_OPTIONS_UUIDOPTION"]._serialized_end = 1938
+    _globals["_READREQ_OPTIONS_CONTROLOPTION"]._serialized_start = 1940
+    _globals["_READREQ_OPTIONS_CONTROLOPTION"]._serialized_end = 1978
+    _globals["_READREQ_OPTIONS_READDIRECTION"]._serialized_start = 1980
+    _globals["_READREQ_OPTIONS_READDIRECTION"]._serialized_end = 2024
+    _globals["_READRESP"]._serialized_start = 2077
+    _globals["_READRESP"]._serialized_end = 3378
+    _globals["_READRESP_READEVENT"]._serialized_start = 2534
+    _globals["_READRESP_READEVENT"]._serialized_end = 3166
+    _globals["_READRESP_READEVENT_RECORDEDEVENT"]._serialized_start = 2778
+    _globals["_READRESP_READEVENT_RECORDEDEVENT"]._serialized_end = 3154
+    _globals["_READRESP_READEVENT_RECORDEDEVENT_METADATAENTRY"]._serialized_start = 3107
+    _globals["_READRESP_READEVENT_RECORDEDEVENT_METADATAENTRY"]._serialized_end = 3154
+    _globals["_READRESP_SUBSCRIPTIONCONFIRMATION"]._serialized_start = 3168
+    _globals["_READRESP_SUBSCRIPTIONCONFIRMATION"]._serialized_end = 3219
+    _globals["_READRESP_CHECKPOINT"]._serialized_start = 3221
+    _globals["_READRESP_CHECKPOINT"]._serialized_end = 3284
+    _globals["_READRESP_STREAMNOTFOUND"]._serialized_start = 3286
+    _globals["_READRESP_STREAMNOTFOUND"]._serialized_end = 3367
+    _globals["_APPENDREQ"]._serialized_start = 3381
+    _globals["_APPENDREQ"]._serialized_end = 4052
+    _globals["_APPENDREQ_OPTIONS"]._serialized_start = 3544
+    _globals["_APPENDREQ_OPTIONS"]._serialized_end = 3808
+    _globals["_APPENDREQ_PROPOSEDMESSAGE"]._serialized_start = 3811
+    _globals["_APPENDREQ_PROPOSEDMESSAGE"]._serialized_end = 4041
+    _globals["_APPENDREQ_PROPOSEDMESSAGE_METADATAENTRY"]._serialized_start = 3107
+    _globals["_APPENDREQ_PROPOSEDMESSAGE_METADATAENTRY"]._serialized_end = 3154
+    _globals["_APPENDRESP"]._serialized_start = 4055
+    _globals["_APPENDRESP"]._serialized_end = 5220
+    _globals["_APPENDRESP_POSITION"]._serialized_start = 1387
+    _globals["_APPENDRESP_POSITION"]._serialized_end = 1448
+    _globals["_APPENDRESP_SUCCESS"]._serialized_start = 4295
+    _globals["_APPENDRESP_SUCCESS"]._serialized_end = 4545
+    _globals["_APPENDRESP_WRONGEXPECTEDVERSION"]._serialized_start = 4548
+    _globals["_APPENDRESP_WRONGEXPECTEDVERSION"]._serialized_end = 5210
+    _globals["_BATCHAPPENDREQ"]._serialized_start = 5223
+    _globals["_BATCHAPPENDREQ"]._serialized_end = 6088
+    _globals["_BATCHAPPENDREQ_OPTIONS"]._serialized_start = 5466
+    _globals["_BATCHAPPENDREQ_OPTIONS"]._serialized_end = 5850
+    _globals["_BATCHAPPENDREQ_PROPOSEDMESSAGE"]._serialized_start = 5853
+    _globals["_BATCHAPPENDREQ_PROPOSEDMESSAGE"]._serialized_end = 6088
+    _globals["_BATCHAPPENDREQ_PROPOSEDMESSAGE_METADATAENTRY"]._serialized_start = 3107
+    _globals["_BATCHAPPENDREQ_PROPOSEDMESSAGE_METADATAENTRY"]._serialized_end = 3154
+    _globals["_BATCHAPPENDRESP"]._serialized_start = 6091
+    _globals["_BATCHAPPENDRESP"]._serialized_end = 6771
+    _globals["_BATCHAPPENDRESP_SUCCESS"]._serialized_start = 6499
+    _globals["_BATCHAPPENDRESP_SUCCESS"]._serialized_end = 6733
+    _globals["_DELETEREQ"]._serialized_start = 6774
+    _globals["_DELETEREQ"]._serialized_end = 7116
+    _globals["_DELETEREQ_OPTIONS"]._serialized_start = 3544
+    _globals["_DELETEREQ_OPTIONS"]._serialized_end = 3808
+    _globals["_DELETERESP"]._serialized_start = 7119
+    _globals["_DELETERESP"]._serialized_end = 7332
+    _globals["_DELETERESP_POSITION"]._serialized_start = 1387
+    _globals["_DELETERESP_POSITION"]._serialized_end = 1448
+    _globals["_TOMBSTONEREQ"]._serialized_start = 7335
+    _globals["_TOMBSTONEREQ"]._serialized_end = 7683
+    _globals["_TOMBSTONEREQ_OPTIONS"]._serialized_start = 3544
+    _globals["_TOMBSTONEREQ_OPTIONS"]._serialized_end = 3808
+    _globals["_TOMBSTONERESP"]._serialized_start = 7686
+    _globals["_TOMBSTONERESP"]._serialized_end = 7905
+    _globals["_TOMBSTONERESP_POSITION"]._serialized_start = 1387
+    _globals["_TOMBSTONERESP_POSITION"]._serialized_end = 1448
+    _globals["_STREAMS"]._serialized_start = 7908
+    _globals["_STREAMS"]._serialized_end = 8388
 # @@protoc_insertion_point(module_scope)
