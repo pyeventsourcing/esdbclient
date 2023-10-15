@@ -888,8 +888,8 @@ The `read_stream()` and `get_stream()` methods have one required argument, `stre
 The required `stream_name` argument is a Python `str` that uniquely identifies a
 stream from which recorded events will be returned.
 
-The `read_stream()` and `get_stream()` methods also have four optional arguments,
-`stream_position`, `backwards`, `limit`, and `timeout`.
+The `read_stream()` and `get_stream()` methods also have five optional arguments,
+`stream_position`, `backwards`, `resolve_links`, `limit`, and `timeout`.
 
 The optional `stream_position` argument is a Python `int` that can be used to
 indicate the position in the stream from which to start reading. The default value
@@ -906,6 +906,11 @@ If `backwards` is `False` and `stream_position` is `None`, the stream's events w
 returned in the order they were recorded, starting from the first recorded event. If
 `backwards` is `True` and `stream_position` is `None`, the stream's events will be
 returned in reverse order, starting from the last recorded event.
+
+The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
+is `False`, which means any event links will not be resolved, so that the events that are
+returned may represent event links. If `resolve_links` is `True`, any event links will
+be resolved, so that the linked events will be returned instead of the event links.
 
 The optional `limit` argument is a Python `int` which restricts the number of events
 that will be returned. The default value of `limit` is `sys.maxint`.
@@ -1893,13 +1898,19 @@ returns a "catch-up subscription" iterator.
 This method has a required `stream_name` argument, which specifies the name of the
 stream from which recorded events will be received.
 
-This method also has three optional arguments, `stream_position`, `timeout` and `credentials`.
+This method also has four optional arguments, `stream_position`, `resolve_links`,
+`timeout` and `credentials`.
 
 The optional `stream_position` argument specifies a position in the stream. The
 default value of `stream_position` is `None`, which means that all events
 recorded in the stream will be obtained in the order they were recorded.
 If a stream position is given, then only events recorded after that position
 will be obtained.
+
+The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
+is `False`, which means any event links will not be resolved, so that the events that are
+returned may represent event links. If `resolve_links` is `True`, any event links will
+be resolved, so that the linked events will be returned instead of the event links.
 
 The optional `timeout` argument is a Python `float` that sets
 a deadline for the completion of the gRPC operation.

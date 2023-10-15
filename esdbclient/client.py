@@ -488,6 +488,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         stream_position: Optional[int] = None,
         backwards: bool = False,
+        resolve_links: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -500,6 +501,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
                 stream_name=stream_name,
                 stream_position=stream_position,
                 backwards=backwards,
+                resolve_links=resolve_links,
                 limit=limit,
                 timeout=timeout,
             )
@@ -511,6 +513,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         stream_position: Optional[int] = None,
         backwards: bool = False,
+        resolve_links: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -522,6 +525,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             stream_name=stream_name,
             stream_position=stream_position,
             backwards=backwards,
+            resolve_links=resolve_links,
             limit=limit,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -712,6 +716,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         stream_name: str,
         *,
         stream_position: Optional[int] = None,
+        resolve_links: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> CatchupSubscription:
@@ -722,6 +727,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         return self._connection.streams.read(
             stream_name=stream_name,
             stream_position=stream_position,
+            resolve_links=resolve_links,
             subscribe=True,
             timeout=timeout,
             metadata=self._call_metadata,

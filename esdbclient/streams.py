@@ -93,6 +93,7 @@ class BaseReadResponse:
                 recorded_event, streams_pb2.ReadResp.ReadEvent.RecordedEvent
             )
             # There's also read_event.link...
+            # print("Link:", read_event.link)
             position_oneof = read_event.WhichOneof("position")
             if position_oneof == "commit_position":
                 commit_position = read_event.commit_position
@@ -484,6 +485,7 @@ class BaseStreamsService(ESDBService):
         stream_position: Optional[int] = None,
         commit_position: Optional[int] = None,
         backwards: bool = False,
+        resolve_links: bool = False,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
@@ -540,7 +542,7 @@ class BaseStreamsService(ESDBService):
             options.read_direction = streams_pb2.ReadReq.Options.Backwards
 
         # Decide 'resolve_links'.
-        options.resolve_links = False
+        options.resolve_links = resolve_links
 
         # Decide 'count_option'.
         if subscribe:
@@ -692,6 +694,7 @@ class AsyncioStreamsService(BaseStreamsService):
         stream_name: Optional[str] = None,
         stream_position: Optional[int] = None,
         backwards: bool = False,
+        resolve_links: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -761,6 +764,7 @@ class AsyncioStreamsService(BaseStreamsService):
         stream_position: Optional[int] = None,
         commit_position: Optional[int] = None,
         backwards: bool = False,
+        resolve_links: bool = False,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
@@ -785,6 +789,7 @@ class AsyncioStreamsService(BaseStreamsService):
             stream_position=stream_position,
             commit_position=commit_position,
             backwards=backwards,
+            resolve_links=resolve_links,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
@@ -899,6 +904,7 @@ class StreamsService(BaseStreamsService):
         stream_name: Optional[str] = None,
         stream_position: Optional[int] = None,
         backwards: bool = False,
+        resolve_links: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -914,6 +920,7 @@ class StreamsService(BaseStreamsService):
         *,
         stream_name: Optional[str] = None,
         stream_position: Optional[int] = None,
+        resolve_links: bool = False,
         subscribe: Literal[True],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -968,6 +975,7 @@ class StreamsService(BaseStreamsService):
         stream_position: Optional[int] = None,
         commit_position: Optional[int] = None,
         backwards: bool = False,
+        resolve_links: bool = False,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
@@ -992,6 +1000,7 @@ class StreamsService(BaseStreamsService):
             stream_position=stream_position,
             commit_position=commit_position,
             backwards=backwards,
+            resolve_links=resolve_links,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,

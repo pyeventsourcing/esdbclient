@@ -663,6 +663,42 @@ class TestEventStoreDBClient(TimedTestCase):
         self.assertEqual(events[1].id, event2.id)
         self.assertEqual(events[2].id, event3.id)
 
+    def test_resolve_links_when_reading_from_dollar_et_projection(self) -> None:
+        if self.ESDB_CLUSTER_SIZE > 1 or self.ESDB_TARGET is not True:
+            self.skipTest("This test doesn't work with this configuration")
+
+        self.construct_esdb_client()
+        event_type = "EventType" + str(uuid4()).replace("-", "")[:5]
+
+        # Append new events (stream does not exist).
+        stream_name = str(uuid4())
+        # NB only events with JSON data are projected into "$et-{event_type}" streams.
+        event1 = NewEvent(type=event_type, data=b"{}")
+        event2 = NewEvent(type=event_type, data=b"{}")
+        self.client.append_events(
+            stream_name, current_version=StreamState.ANY, events=[event1, event2]
+        )
+
+        sleep(1)  # Give the projection time to run.
+
+        filtered_events = list(self.client.read_all(filter_include=(event_type,)))
+
+        projected_events = self.client.get_stream(
+            stream_name=f"$et-{event_type}", resolve_links=True
+        )
+
+        self.assertEqual(len(filtered_events), len(projected_events))
+        for i, event in enumerate(projected_events):
+            self.assertEqual(event.id, filtered_events[i].id)
+
+        subscription = self.client.subscribe_to_stream(
+            stream_name=f"$et-{event_type}", resolve_links=True
+        )
+        for i, event in enumerate(subscription):
+            self.assertEqual(event.id, filtered_events[i].id)
+            if i + 1 == len(filtered_events):
+                subscription.stop()
+
     def test_stream_append_event_with_stream_state_any(self) -> None:
         self.construct_esdb_client()
         stream_name = str(uuid4())
