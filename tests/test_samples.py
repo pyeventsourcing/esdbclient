@@ -25,20 +25,31 @@ class TestSamples(TestCase):
 
         # Exec each sample.
         for file_path in file_paths:
+            # Copy os.environ.
+            oringinal_env = os.environ.copy()
+
+            # Print out the sample file path.
             sys.stderr.write(f'File "{file_path}", ')
 
+            # Read the sample.
             with open(file_path) as f:
                 readlines = f.readlines()
                 sys.stderr.write(f" {len(readlines)} lines")
                 source = "".join(readlines)
 
+            # Compile and exec the sample.
             try:
                 try:
-                    compiled = compile(source=source, filename=file_path, mode="exec")
+                    compiled = compile(
+                        source,
+                        filename=file_path,
+                        mode="exec",
+                    )
                 finally:
+                    # Track elapsed time of the test suite.
                     sys.stderr.write(f" [@{get_elapsed_time()}]")
                     sys.stderr.flush()
-                exec(compiled, globals(), globals())
+                exec(compiled, {"__name__": "__main__"}, {})
                 tb = None
             except Exception:
                 lines = [
@@ -48,9 +59,11 @@ class TestSamples(TestCase):
                 ]
                 tb = "".join(lines)
 
+            # Track duration of executing the sample.
             duration = get_duration()
             sys.stderr.write(f" [+{duration}]")
 
+            # Check the sample executed okay.
             if tb is not None:
                 sample_failures += 1
                 sys.stderr.write(f" ERROR: RAISED EXCEPTION\n\n{tb}\n")
@@ -61,6 +74,16 @@ class TestSamples(TestCase):
                 sys.stderr.write(" OK\n")
             sys.stderr.flush()
 
+            # Restore os.environ.
+            for key, value in os.environ.items():
+                if key not in oringinal_env:
+                    os.environ.pop(key)
+                else:
+                    os.environ[key] = value
+
+        # Allow time for the above writes to flush.
         sleep(0.1)
+
+        # Check for any sample failures.
         if sample_failures:
             self.fail(f"{sample_failures} samples failed")
