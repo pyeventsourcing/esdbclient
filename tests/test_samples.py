@@ -21,20 +21,25 @@ class TestSamples(TestCase):
                     file_path = os.path.join(samples_path, dirpath, filename)
                     file_paths.append(file_path)
                     sys.stdout.write(file_path)
+
+        if len(file_paths) == 0:
+            self.fail(f"No sample files found on path: {samples_path}")
+
         sample_failures = 0
 
         # Exec each sample.
+        sys.stderr.write("\n")
         for file_path in file_paths:
             # Copy os.environ.
             oringinal_env = os.environ.copy()
 
             # Print out the sample file path.
-            sys.stderr.write(f'File "{file_path}", ')
+            sys.stderr.write(f'File "{file_path}"')
 
             # Read the sample.
             with open(file_path) as f:
                 readlines = f.readlines()
-                sys.stderr.write(f" {len(readlines)} lines")
+                sys.stderr.write(f" has {len(readlines)} lines")
                 source = "".join(readlines)
 
             # Compile and exec the sample.
