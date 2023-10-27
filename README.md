@@ -9,7 +9,7 @@ by this client, many of the most useful features are presented
 in an easy-to-use interface.
 
 This client has been tested to work with EventStoreDB LTS versions 21.10
-and 22.10, without and without SSL/TLS, and with Python versions 3.7 to 3.11.
+and 22.10, without and without SSL/TLS, and with Python versions 3.7 to 3.12.
 There is 100% test coverage. The code has typing annotations, checked with mypy.
 The code is formatted with black and isort, and checked with flake8. Poetry
 is used for package management during development, and for building and
