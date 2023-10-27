@@ -13,41 +13,40 @@ class TestSamples(TestCase):
     def test(self) -> None:
         # Gather samples.
         base_dir = Path(__file__).parents[1]
-        samples_path = os.path.join(base_dir, "samples")
-        file_paths = []
-        for dirpath, _, filenames in os.walk(samples_path):
+        samples_dir = base_dir / "samples"
+        sample_files = []
+        for dirpath, _, filenames in os.walk(samples_dir):
             for filename in filenames:
                 if filename.endswith(".py"):
-                    file_path = os.path.join(samples_path, dirpath, filename)
-                    file_paths.append(file_path)
-                    sys.stdout.write(file_path)
+                    sample_file = samples_dir / dirpath / filename
+                    sample_files.append(sample_file)
 
-        if len(file_paths) == 0:
-            self.fail(f"No sample files found on path: {samples_path}")
+        if len(sample_files) == 0:
+            self.fail(f"No sample files found on path: {samples_dir}")
+        else:
+            sys.stderr.write("\n")
 
+        # Run each sample...
         sample_failures = 0
-
-        # Exec each sample.
-        sys.stderr.write("\n")
-        for file_path in file_paths:
+        for sample_file in sample_files:
             # Copy os.environ.
             oringinal_env = os.environ.copy()
 
             # Print out the sample file path.
-            sys.stderr.write(f'File "{file_path}"')
+            sys.stderr.write(f'File "{sample_file}"')
 
             # Read the sample.
-            with open(file_path) as f:
-                readlines = f.readlines()
-                sys.stderr.write(f" has {len(readlines)} lines")
-                source = "".join(readlines)
+            with open(sample_file) as f:
+                sample_lines = f.readlines()
+                sys.stderr.write(f" has {len(sample_lines)} lines")
+                source = "".join(sample_lines)
 
             # Compile and exec the sample.
             try:
                 try:
                     compiled = compile(
                         source,
-                        filename=file_path,
+                        filename=sample_file,
                         mode="exec",
                     )
                 finally:
@@ -57,12 +56,13 @@ class TestSamples(TestCase):
                 exec(compiled, {"__name__": "__main__"}, {})
                 tb = None
             except Exception:
-                lines = [
+                # Remove this call from the traceback (so it's just clearer).
+                tb_lines = [
                     line
                     for line in traceback.format_exception(*sys.exc_info())
                     if "test_samples.py" not in line
                 ]
-                tb = "".join(lines)
+                tb = "".join(tb_lines)
 
             # Track duration of executing the sample.
             duration = get_duration()
@@ -89,6 +89,6 @@ class TestSamples(TestCase):
         # Allow time for the above writes to flush.
         sleep(0.1)
 
-        # Check for any sample failures.
-        if sample_failures:
+        # Assert there were zero sample failures.
+        if sample_failures != 0:
             self.fail(f"{sample_failures} samples failed")
