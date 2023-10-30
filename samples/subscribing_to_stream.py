@@ -1,7 +1,13 @@
-from esdbclient import EventStoreDBClient, StreamState, NewEvent, exceptions
+# -*- coding: utf-8 -*-
 from typing import List
-
 from uuid import uuid4
+
+from esdbclient import (
+    EventStoreDBClient,
+    NewEvent,
+    StreamState,
+    exceptions,
+)
 
 client = EventStoreDBClient(uri="esdb://localhost:2113?tls=false")
 
@@ -9,13 +15,13 @@ stream_name = str(uuid4())
 
 event_data_one = NewEvent(
     type="test-event",
-    data=b''
+    data=b"",
 )
 
 client.append_to_stream(
     stream_name=stream_name,
     events=event_data_one,
-    current_version=StreamState.ANY
+    current_version=StreamState.ANY,
 )
 
 events: List[NewEvent] = []
@@ -23,38 +29,34 @@ events: List[NewEvent] = []
 for _ in range(50):
     event_data = NewEvent(
         type="test-event",
-        data=b''
+        data=b"",
     )
 
     event = client.append_to_stream(
         stream_name=stream_name,
         events=event_data,
-        current_version=StreamState.ANY
+        current_version=StreamState.ANY,
     )
     events.append(event_data)
 
 
 # region subscribe-to-stream
-subscription = client.subscribe_to_stream(
-    stream_name=stream_name
-)
+subscription = client.subscribe_to_stream(stream_name=stream_name)
 
 for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
-# endregion subscribe-to-stream
+    # endregion subscribe-to-stream
     break
 
 # region subscribe-to-stream-from-position
 client.subscribe_to_stream(
     stream_name=stream_name,
-    stream_position=20
+    stream_position=20,
 )
 # endregion subscribe-to-stream-from-position
 
 # region subscribe-to-stream-live
-client.subscribe_to_stream(
-    stream_name=stream_name,
-)
+client.subscribe_to_stream(stream_name=stream_name)
 # endregion subscribe-to-stream-live
 
 # region subscribe-to-stream-resolving-linktos
@@ -68,12 +70,12 @@ client.subscribe_to_stream(
 # region subscribe-to-stream-subscription-dropped
 subscription = client.subscribe_to_stream(
     stream_name=stream_name,
-    stream_position=0
+    stream_position=0,
 )
 
 for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
-# endregion subscribe-to-stream-subscription-dropped
+    # endregion subscribe-to-stream-subscription-dropped
     break
 
 
@@ -84,14 +86,15 @@ subscription = client.subscribe_to_all(
 
 for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
-# endregion subscribe-to-all
+    # endregion subscribe-to-all
     break
 
 try:
     # region subscribe-to-all-from-position
-    client.subscribe_to_all(commit_position=1_056)  # ! How do I read prepare position
+    # ! How do I read prepare position
+    client.subscribe_to_all(commit_position=1_056)
     # endregion subscribe-to-all-from-position
-except Exception as e:
+except Exception:
     pass
 
 # region subscribe-to-all-live
@@ -127,13 +130,11 @@ client.subscribe_to_all(
 try:
     # region overriding-user-credentials
     credentials = client.construct_call_credentials(
-        username='admin',
-        password='changeit'
+        username="admin",
+        password="changeit",
     )
 
-    client.subscribe_to_all(
-        credentials=credentials
-    )
+    client.subscribe_to_all(credentials=credentials)
     # endregion overriding-user-credentials
 except exceptions.GrpcError:
     pass

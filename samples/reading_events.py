@@ -1,13 +1,20 @@
-from esdbclient import EventStoreDBClient, exceptions, NewEvent, StreamState
+# -*- coding: utf-8 -*-
 from uuid import uuid4
+
+from esdbclient import (
+    EventStoreDBClient,
+    NewEvent,
+    StreamState,
+    exceptions,
+)
 
 client = EventStoreDBClient(uri="esdb://localhost:2113?tls=false")
 
 stream_name = str(uuid4())
 
 event_data = NewEvent(
-    type='some-event',
-    data=b'{"id": "1", "important_data": "some value"}'
+    type="some-event",
+    data=b'{"id": "1", "important_data": "some value"}',
 )
 
 # append 20 events
@@ -15,7 +22,7 @@ for _ in range(20):
     client.append_to_stream(
         stream_name=stream_name,
         current_version=StreamState.ANY,
-        events=event_data
+        events=event_data,
     )
 
 # region read-from-stream
@@ -39,7 +46,7 @@ for event in events:
 events = client.get_stream(
     stream_name=stream_name,
     stream_position=10,
-    limit=20
+    limit=20,
 )
 # endregion read-from-stream-position
 
@@ -52,8 +59,8 @@ for event in events:
 try:
     # region overriding-user-credentials
     credentials = client.construct_call_credentials(
-        username='admin',
-        password='changeit'
+        username="admin",
+        password="changeit",
     )
 
     stream = client.read_stream(
@@ -73,7 +80,7 @@ try:
         stream_name=unknown_stream_name,
         backwards=False,
         stream_position=10,
-        limit=100
+        limit=100,
     )
 
     for event in events:
@@ -98,7 +105,7 @@ for event in events:
 stream = client.read_all(
     commit_position=0,
     backwards=False,
-    limit=100
+    limit=100,
 )
 # endregion read-from-all-stream
 # region read-from-all-stream-iterate
@@ -110,14 +117,12 @@ for event in events:
 
 
 # region ignore-system-events
-stream = client.read_all(
-    limit=100
-)
+stream = client.read_all(limit=100)
 
 events = tuple(stream)
 
 for event in events:
-    if event.type.startswith('$'):
+    if event.type.startswith("$"):
         continue
 
     print(f"Event: {event.type}")
@@ -127,7 +132,7 @@ for event in events:
 # region read-from-all-stream-backwards
 stream = client.read_all(
     backwards=True,
-    limit=100
+    limit=100,
 )
 # endregion read-from-all-stream-backwards
 # region read-from-all-stream-backwards-iterate
@@ -145,13 +150,13 @@ client.read_all(limit=100)
 
 # region read-all-overriding-user-credentials
 credentials = client.construct_call_credentials(
-    username='admin',
-    password='changeit'
+    username="admin",
+    password="changeit",
 )
 
 client.read_all(
     commit_position=0,
-    credentials=credentials
+    credentials=credentials,
 )
 # endregion read-all-overriding-user-credentials
 
