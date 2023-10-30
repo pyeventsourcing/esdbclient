@@ -1732,14 +1732,20 @@ The`subscribe_to_all()` method can be used to start a catch-up subscription
 from which all events recorded in the database can be obtained in the order
 they were recorded. This method returns a "catch-up subscription" iterator.
 
-This method also has six optional arguments, `commit_position`, `filter_exclude`,
-`filter_include`, `filter_by_stream_name`, `timeout` and `credentials`.
+This method also has six optional arguments, `commit_position`, `from_end`,
+`filter_exclude`, `filter_include`, `filter_by_stream_name`, `timeout` and `credentials`.
 
 The optional `commit_position` argument specifies a commit position. The default
 value of `commit_position` is `None`, which means the catch-up subscription will
 start from the first recorded event in the database. If a commit position is given,
 it must match an actually existing commit position in the database. Only events
 recorded after that position will be obtained.
+
+The optional `from_end` argument specifies whether or not the catch-up subscription
+will start from the last recorded event in the database. By default, this argument
+is `False`. If `from_end` is `True`, only events recorded after the subscription
+is started will be obtained. This argument will be disregarded if `commit_position`
+is not `None`.
 
 The optional `filter_exclude` argument is a sequence of regular expressions that
 specifies which recorded events should be returned. This argument is ignored
@@ -1835,10 +1841,10 @@ thread.join()
 
 The example below shows how to subscribe to events recorded after a
 particular commit position, in this case from the commit position of
-the last recorded event that was received above. Another event is
-recorded before the subscription is restarted. Further events are
-recorded whilst the subscription is running. The events we appended
-are received in the order they were recorded.
+the last recorded event that was received above. Then, another event is
+recorded before the subscription is restarted. And three more events are
+recorded whilst the subscription is running. These four events are
+received in the order they were recorded.
 
 
 ```python
@@ -1875,7 +1881,7 @@ client.append_to_stream(
     events=[event7, event8, event9],
 )
 
-# Wait for events.
+# Wait for events 7, 8 and 9.
 wait_for_event(event7.id)
 wait_for_event(event8.id)
 wait_for_event(event9.id)
