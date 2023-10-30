@@ -98,9 +98,7 @@ except Exception:
     pass
 
 # region subscribe-to-all-live
-client.subscribe_to_all(
-    commit_position=0,  # ! How do I read from end of stream,
-)
+subscription = client.subscribe_to_all(from_end=True)
 # endregion subscribe-to-all-live
 
 # region subscribe-to-all-subscription-dropped
