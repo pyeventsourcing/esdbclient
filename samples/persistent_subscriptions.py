@@ -96,7 +96,8 @@ stream_name = str(uuid4())
 group_name = str(uuid4())
 
 client.create_subscription_to_stream(
-    stream_name=stream_name, group_name=group_name
+    stream_name=stream_name,
+    group_name=group_name,
 )
 
 event_data = NewEvent(
@@ -112,7 +113,8 @@ client.append_to_stream(
 
 # region subscribe-to-persistent-subscription-with-manual-acks
 subscription = client.read_subscription_to_stream(
-    stream_name=stream_name, group_name=group_name
+    stream_name=stream_name,
+    group_name=group_name,
 )
 
 try:
