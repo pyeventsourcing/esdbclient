@@ -84,7 +84,8 @@ client.append_to_stream(
     stream_name=concurrency_stream,
     current_version=StreamState.ANY,
     events=NewEvent(
-        type="some-event", data=b'{"id": "1", "value": "some value"}'
+        type="some-event",
+        data=b'{"id": "1", "value": "some value"}',
     ),
 )
 
