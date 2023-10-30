@@ -2231,6 +2231,44 @@ class TestEventStoreDBClient(TimedTestCase):
         self.assertEqual(events[0].id, event2.id)
         self.assertEqual(events[1].id, event3.id)
 
+    def test_subscribe_to_all_from_end(self) -> None:
+        self.construct_esdb_client()
+
+        # Append an event.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        stream_name1 = str(uuid4())
+        self.client.append_events(
+            stream_name1, current_version=StreamState.NO_STREAM, events=[event1]
+        )
+
+        # Subscribe from end.
+        subscription = self.client.subscribe_to_all(from_end=True)
+
+        # Append more events.
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+        self.client.append_events(
+            stream_name1, current_version=0, events=[event2, event3]
+        )
+
+        events = []
+        for event in subscription:
+            # Expect catch-up subscription results are exclusive of given
+            # commit position, so that we expect event1 to be not included.
+            if event.id == event1.id:
+                self.fail("Not from end")
+
+            # Collect events.
+            events.append(event)
+
+            # Break if we got the last one we wrote.
+            if event.data == event3.data:
+                break
+
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event2.id)
+        self.assertEqual(events[1].id, event3.id)
+
     def test_subscribe_to_all_raises_deadline_exceeded(self) -> None:
         self.construct_esdb_client()
 

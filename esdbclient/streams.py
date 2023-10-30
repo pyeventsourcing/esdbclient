@@ -484,6 +484,7 @@ class BaseStreamsService(ESDBService):
         stream_name: Optional[str] = None,
         stream_position: Optional[int] = None,
         commit_position: Optional[int] = None,
+        from_end: bool = False,
         backwards: bool = False,
         resolve_links: bool = False,
         filter_exclude: Sequence[str] = (),
@@ -525,7 +526,7 @@ class BaseStreamsService(ESDBService):
                         prepare_position=commit_position,
                     )
                 )
-            elif backwards:
+            elif backwards or from_end:
                 all_options = streams_pb2.ReadReq.Options.AllOptions(
                     end=shared_pb2.Empty()
                 )
@@ -953,6 +954,7 @@ class StreamsService(BaseStreamsService):
         self,
         *,
         commit_position: Optional[int] = None,
+        from_end: bool = False,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
@@ -974,6 +976,7 @@ class StreamsService(BaseStreamsService):
         stream_name: Optional[str] = None,
         stream_position: Optional[int] = None,
         commit_position: Optional[int] = None,
+        from_end: bool = False,
         backwards: bool = False,
         resolve_links: bool = False,
         filter_exclude: Sequence[str] = (),
@@ -999,6 +1002,7 @@ class StreamsService(BaseStreamsService):
             stream_name=stream_name,
             stream_position=stream_position,
             commit_position=commit_position,
+            from_end=from_end,
             backwards=backwards,
             resolve_links=resolve_links,
             filter_exclude=filter_exclude,
