@@ -73,7 +73,7 @@ subscription = client.read_subscription_to_all(
 try:
     for event in subscription:
         print(
-            "handling event {event.type} with "
+            "handling event {event.type} with"
             " retryCount {event.retry_count}"
         )
         subscription.ack(event_id=event.id)
