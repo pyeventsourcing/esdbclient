@@ -2791,7 +2791,7 @@ building longer sequences of regular expressions.
 
 The constant `DEFAULT_EXCLUDE_FILTER` is a sequence of regular expressions that includes
 both `ESDB_SYSTEM_EVENTS_REGEX` and `ESDB_PERSISTENT_CONFIG_EVENTS_REGEX`. It is used
-as the default value of `filter_exclude` so that the generated internally by
+as the default value of `filter_exclude` so that the events generated internally by
 EventStoreDB are excluded by default.
 
 In all methods that have a `filter_exclude` argument, the default value of the argument
