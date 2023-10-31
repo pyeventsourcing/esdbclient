@@ -567,23 +567,23 @@ class BaseStreamsService(ESDBService):
                     if isinstance(filter_include, str)
                     else filter_include
                 )
-                filter_regex = "^" + "|".join(filter_include) + "$"
+                regex = "^" + "|".join(filter_include) + "$"
             else:
                 filter_exclude = (
                     [filter_exclude]
                     if isinstance(filter_exclude, str)
                     else filter_exclude
                 )
-                filter_regex = "^(?!(" + "|".join(filter_exclude) + ")).*$"
+                regex = "^(?!(" + "|".join([s + "$" for s in filter_exclude]) + "))"
 
-            filter_expression = streams_pb2.ReadReq.Options.FilterOptions.Expression(
-                regex=filter_regex
+            expression = streams_pb2.ReadReq.Options.FilterOptions.Expression(
+                regex=regex
             )
 
             if filter_by_stream_name:
-                filter_options.stream_identifier.CopyFrom(filter_expression)
+                filter_options.stream_identifier.CopyFrom(expression)
             else:
-                filter_options.event_type.CopyFrom(filter_expression)
+                filter_options.event_type.CopyFrom(expression)
 
             options.filter.CopyFrom(filter_options)
         else:

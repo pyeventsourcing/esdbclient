@@ -4,7 +4,7 @@ import os
 import ssl
 import sys
 from time import sleep
-from typing import Any, List, Tuple, cast
+from typing import Any, List, Sequence, Set, Tuple, cast
 from unittest import TestCase
 from unittest.case import _AssertRaisesContext
 from uuid import UUID, uuid4
@@ -14,7 +14,7 @@ from grpc._channel import _MultiThreadedRendezvous, _RPCState
 from grpc._cython.cygrpc import IntegratedCall
 
 import esdbclient.protos.Grpc.persistent_pb2 as grpc_persistent
-from esdbclient import RecordedEvent, StreamState
+from esdbclient import ESDB_SYSTEM_EVENTS_REGEX, RecordedEvent, StreamState
 from esdbclient.client import EventStoreDBClient
 from esdbclient.connection_spec import (
     NODE_PREFERENCE_FOLLOWER,
@@ -1222,32 +1222,244 @@ class TestEventStoreDBClient(TimedTestCase):
         self.assertEqual(events[2].stream_name, stream_name1)
         self.assertEqual(events[2].type, "OrderDeleted")
 
+    def assertFilteredEvents(
+        self,
+        commit_position: int,
+        expected: Set[str],
+        filter_exclude: Sequence[str] = (),
+        filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
+    ) -> None:
+        events: List[RecordedEvent] = list(
+            self.client.read_all(
+                commit_position=commit_position,
+                filter_exclude=filter_exclude,
+                filter_include=filter_include,
+                filter_by_stream_name=filter_by_stream_name,
+            )
+        )
+        if filter_by_stream_name is False:
+            actual = set([e.type for e in events])
+        else:
+            actual = set([e.stream_name for e in events])
+        self.assertEqual(expected, actual)
+
     def test_read_all_filter_include_event_types(self) -> None:
+        self.construct_esdb_client()
+
+        commit_position = self.client.get_commit_position()
+
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+        event4 = NewEvent(type="InvoiceCreated", data=b"{}", metadata=b"{}")
+        event5 = NewEvent(type="InvoiceUpdated", data=b"{}", metadata=b"{}")
+        event6 = NewEvent(type="InvoiceDeleted", data=b"{}", metadata=b"{}")
+        event7 = NewEvent(type="SomethingElse", data=b"{}", metadata=b"{}")
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        commit_position = self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1],
+        )
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.EXISTS,
+            events=[event2, event3, event4, event5, event6, event7],
+        )
+
+        # Read only OrderCreated.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_include="OrderCreated",
+            expected={"OrderCreated"},
+        )
+
+        # Read only OrderCreated and OrderDeleted.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_include=["OrderCreated", "OrderDeleted"],
+            expected={"OrderCreated", "OrderDeleted"},
+        )
+
+        # Read only Order.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_include="Order",
+            expected=set(),
+        )
+
+        # Read only Updated.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_include="Updated",
+            expected=set(),
+        )
+
+        # Read only Order.*.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_include="Order.*",
+            expected={"OrderCreated", "OrderUpdated", "OrderDeleted"},
+        )
+
+        # Read only Invoice.*.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_include="Invoice.*",
+            expected={"InvoiceCreated", "InvoiceUpdated", "InvoiceDeleted"},
+        )
+
+        # Read only .*Created.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_include=".*Created",
+            expected={"OrderCreated", "InvoiceCreated"},
+        )
+
+        # Read only .*Updated.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_include=".*Updated",
+            expected={"OrderUpdated", "InvoiceUpdated"},
+        )
+
+    def test_read_all_filter_exclude_event_types(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
         event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+        event4 = NewEvent(type="InvoiceCreated", data=b"{}", metadata=b"{}")
+        event5 = NewEvent(type="InvoiceUpdated", data=b"{}", metadata=b"{}")
+        event6 = NewEvent(type="InvoiceDeleted", data=b"{}", metadata=b"{}")
+        event7 = NewEvent(type="SomethingElse", data=b"{}", metadata=b"{}")
 
         # Append new events.
         stream_name1 = str(uuid4())
-        self.client.append_events(
+        commit_position = self.client.append_events(
             stream_name1,
             current_version=StreamState.NO_STREAM,
-            events=[event1, event2, event3],
+            events=[event1],
+        )
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.EXISTS,
+            events=[event2, event3, event4, event5, event6, event7],
         )
 
-        # Read only OrderCreated.
-        events = list(self.client.read_all(filter_include=("OrderCreated",)))
-        types = set([e.type for e in events])
-        self.assertEqual(types, {"OrderCreated"})
-
-        # Read only OrderCreated and OrderDeleted.
-        events = list(
-            self.client.read_all(filter_include=("OrderCreated", "OrderDeleted"))
+        # Exclude OrderCreated. Should exclude event1.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX, "OrderCreated"],
+            expected={
+                "OrderUpdated",
+                "OrderDeleted",
+                "InvoiceCreated",
+                "InvoiceUpdated",
+                "InvoiceDeleted",
+                "SomethingElse",
+            },
         )
-        types = set([e.type for e in events])
-        self.assertEqual(types, {"OrderCreated", "OrderDeleted"})
+
+        # Exclude OrderCreated and OrderDeleted. Should exclude event1 and event3.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX, "OrderCreated", "OrderDeleted"],
+            expected={
+                "OrderUpdated",
+                "InvoiceCreated",
+                "InvoiceUpdated",
+                "InvoiceDeleted",
+                "SomethingElse",
+            },
+        )
+
+        # Exclude Order. Should exclude nothing.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX, "Order"],
+            expected={
+                "OrderCreated",
+                "OrderUpdated",
+                "OrderDeleted",
+                "InvoiceCreated",
+                "InvoiceUpdated",
+                "InvoiceDeleted",
+                "SomethingElse",
+            },
+        )
+
+        # Exclude Created. Should exclude nothing.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX, "Created"],
+            expected={
+                "OrderCreated",
+                "OrderUpdated",
+                "OrderDeleted",
+                "InvoiceCreated",
+                "InvoiceUpdated",
+                "InvoiceDeleted",
+                "SomethingElse",
+            },
+        )
+
+        # Exclude Order.*. Should exclude event1, event2, event3.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX, "Order.*"],
+            expected={
+                "InvoiceCreated",
+                "InvoiceUpdated",
+                "InvoiceDeleted",
+                "SomethingElse",
+            },
+        )
+
+        # Exclude *.Created. Should exclude event1 and event4.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX, r".*Created"],
+            expected={
+                "OrderUpdated",
+                "OrderDeleted",
+                "InvoiceUpdated",
+                "InvoiceDeleted",
+                "SomethingElse",
+            },
+        )
+
+        # Exclude *.thing.*. Should exclude event7.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX, r".*thing.*"],
+            expected={
+                "OrderCreated",
+                "OrderUpdated",
+                "OrderDeleted",
+                "InvoiceCreated",
+                "InvoiceUpdated",
+                "InvoiceDeleted",
+            },
+        )
+
+        # Exclude OrderCreated.+. Should exclude nothing.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX, r".OrderCreated.+"],
+            expected={
+                "OrderCreated",
+                "OrderUpdated",
+                "OrderDeleted",
+                "InvoiceCreated",
+                "InvoiceUpdated",
+                "InvoiceDeleted",
+                "SomethingElse",
+            },
+        )
 
     def test_read_all_filter_include_stream_identifiers(self) -> None:
         self.construct_esdb_client()
@@ -1262,7 +1474,7 @@ class TestEventStoreDBClient(TimedTestCase):
         stream_name1 = prefix1 + str(uuid4())
         stream_name2 = prefix1 + str(uuid4())
         stream_name3 = prefix2 + str(uuid4())
-        self.client.append_events(
+        commit_position = self.client.append_events(
             stream_name1, current_version=StreamState.NO_STREAM, events=[event1]
         )
         self.client.append_events(
@@ -1273,71 +1485,36 @@ class TestEventStoreDBClient(TimedTestCase):
         )
 
         # Read only stream1 and stream2.
-        events = list(
-            self.client.read_all(
-                filter_include=(stream_name1, stream_name2), filter_by_stream_name=True
-            )
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_by_stream_name=True,
+            filter_include=[stream_name1, stream_name2],
+            expected={stream_name1, stream_name2},
         )
-        event_ids = set([e.id for e in events])
-        self.assertEqual(event_ids, {event1.id, event2.id})
 
         # Read only stream2 and stream3.
-        events = list(
-            self.client.read_all(
-                filter_include=(stream_name2, stream_name3), filter_by_stream_name=True
-            )
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_by_stream_name=True,
+            filter_include=[stream_name2, stream_name3],
+            expected={stream_name2, stream_name3},
         )
-        event_ids = set([e.id for e in events])
-        self.assertEqual(event_ids, {event2.id, event3.id})
 
         # Read only prefix1.
-        events = list(
-            self.client.read_all(
-                filter_include=(prefix1 + ".*",), filter_by_stream_name=True
-            )
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_by_stream_name=True,
+            filter_include=prefix1 + ".*",
+            expected={stream_name1, stream_name2},
         )
-        event_ids = set([e.id for e in events])
-        self.assertEqual(event_ids, {event1.id, event2.id})
 
         # Read only prefix2.
-        events = list(
-            self.client.read_all(
-                filter_include=(prefix2 + ".*",), filter_by_stream_name=True
-            )
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_by_stream_name=True,
+            filter_include=prefix2 + ".*",
+            expected={stream_name3},
         )
-        event_ids = set([e.id for e in events])
-        self.assertEqual(event_ids, {event3.id})
-
-    def test_read_all_filter_exclude_event_types(self) -> None:
-        self.construct_esdb_client()
-
-        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
-        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
-        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
-
-        # Append new events.
-        stream_name1 = str(uuid4())
-        self.client.append_events(
-            stream_name1,
-            current_version=StreamState.NO_STREAM,
-            events=[event1, event2, event3],
-        )
-
-        # Exclude OrderCreated.
-        events = list(self.client.read_all(filter_exclude=("OrderCreated",)))
-        types = set([e.type for e in events])
-        self.assertNotIn("OrderCreated", types)
-        self.assertIn("OrderUpdated", types)
-        self.assertIn("OrderDeleted", types)
-
-        # Exclude OrderCreated and OrderDeleted.
-        events = list(
-            self.client.read_all(filter_exclude=("OrderCreated", "OrderDeleted"))
-        )
-        types = set([e.type for e in events])
-        self.assertNotIn("OrderCreated", types)
-        self.assertIn("OrderUpdated", types)
-        self.assertNotIn("OrderDeleted", types)
 
     def test_read_all_filter_exclude_stream_identifiers(self) -> None:
         self.construct_esdb_client()
@@ -1352,7 +1529,7 @@ class TestEventStoreDBClient(TimedTestCase):
         stream_name1 = prefix1 + str(uuid4())
         stream_name2 = prefix1 + str(uuid4())
         stream_name3 = prefix2 + str(uuid4())
-        self.client.append_events(
+        commit_position = self.client.append_events(
             stream_name1, current_version=StreamState.NO_STREAM, events=[event1]
         )
         self.client.append_events(
@@ -1362,41 +1539,45 @@ class TestEventStoreDBClient(TimedTestCase):
             stream_name3, current_version=StreamState.NO_STREAM, events=[event3]
         )
 
-        # Read everything except stream1 and stream2.
-        events = list(
-            self.client.read_all(
-                filter_exclude=(stream_name1, stream_name2), filter_by_stream_name=True
-            )
+        # Read everything except stream1.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_by_stream_name=True,
+            filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX, stream_name1],
+            expected={stream_name2, stream_name3},
         )
-        event_ids = set([e.id for e in events])
-        self.assertEqual(event_ids.intersection({event1.id, event2.id}), set())
 
         # Read everything except stream2 and stream3.
-        events = list(
-            self.client.read_all(
-                filter_exclude=(stream_name2, stream_name3), filter_by_stream_name=True
-            )
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_by_stream_name=True,
+            filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX, stream_name2, stream_name3],
+            expected={stream_name1},
         )
-        event_ids = set([e.id for e in events])
-        self.assertEqual(event_ids.intersection({event2.id, event3.id}), set())
 
-        # Read everything except prefix1.
-        events = list(
-            self.client.read_all(
-                filter_exclude=(prefix1 + ".*",), filter_by_stream_name=True
-            )
+        # Read everything except prefix1.*.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_by_stream_name=True,
+            filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX, prefix1 + ".*"],
+            expected={stream_name3},
         )
-        event_ids = set([e.id for e in events])
-        self.assertEqual(event_ids.intersection({event1.id, event2.id}), set())
+
+        # Read everything except prefix2.*.
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_by_stream_name=True,
+            filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX, prefix2 + ".*"],
+            expected={stream_name1, stream_name2},
+        )
 
         # Read everything except prefix2.
-        events = list(
-            self.client.read_all(
-                filter_exclude=(prefix2 + ".*",), filter_by_stream_name=True
-            )
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_by_stream_name=True,
+            filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX, prefix2],
+            expected={stream_name1, stream_name2, stream_name3},
         )
-        event_ids = set([e.id for e in events])
-        self.assertEqual(event_ids.intersection({event3.id}), set())
 
     def test_read_all_filter_include_ignores_filter_exclude(self) -> None:
         self.construct_esdb_client()
@@ -1407,22 +1588,24 @@ class TestEventStoreDBClient(TimedTestCase):
 
         # Append new events.
         stream_name1 = str(uuid4())
-        self.client.append_events(
+        commit_position = self.client.append_events(
             stream_name1,
             current_version=StreamState.NO_STREAM,
-            events=[event1, event2, event3],
+            events=[event1],
+        )
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.EXISTS,
+            events=[event2, event3],
         )
 
         # Both include and exclude.
-        events = list(
-            self.client.read_all(
-                filter_include=("OrderCreated",), filter_exclude=("OrderCreated",)
-            )
+        self.assertFilteredEvents(
+            commit_position=commit_position,
+            filter_include=["OrderCreated"],
+            filter_exclude=["OrderCreated"],
+            expected={"OrderCreated"},
         )
-        types = set([e.type for e in events])
-        self.assertIn("OrderCreated", types)
-        self.assertNotIn("OrderUpdated", types)
-        self.assertNotIn("OrderDeleted", types)
 
     def test_stream_delete_with_current_version(self) -> None:
         self.construct_esdb_client()
