@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from typing import List
 from uuid import uuid4
 
 from esdbclient import (
@@ -8,55 +7,50 @@ from esdbclient import (
     StreamState,
     exceptions,
 )
+from esdbclient.streams import CatchupSubscription, RecordedEvent
+from tests.test_client import get_server_certificate
 
-client = EventStoreDBClient(uri="esdb://localhost:2113?tls=false")
+ESDB_TARGET = "localhost:2114"
+qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
+
+client = EventStoreDBClient(
+    uri=f"esdb://admin:changeit@{ESDB_TARGET}?{qs}",
+    root_certificates=get_server_certificate(ESDB_TARGET),
+)
 
 stream_name = str(uuid4())
 
-event_data_one = NewEvent(
-    type="test-event",
-    data=b"",
-)
-
-client.append_to_stream(
-    stream_name=stream_name,
-    events=event_data_one,
-    current_version=StreamState.ANY,
-)
-
-events: List[NewEvent] = []
-
-for _ in range(50):
-    event_data = NewEvent(
-        type="test-event",
-        data=b"",
-    )
+for _ in range(5):
+    event_data = NewEvent(type="test-event", data=b"")
 
     event = client.append_to_stream(
-        stream_name=stream_name,
+        stream_name,
         events=event_data,
         current_version=StreamState.ANY,
     )
-    events.append(event_data)
+
+
+def handle_event(ev: RecordedEvent, sub: CatchupSubscription):
+    print(f"handling event: {ev.stream_position} {ev.type}")
+    sub.stop()
 
 
 # region subscribe-to-stream
-subscription = client.subscribe_to_stream(stream_name=stream_name)
+subscription = client.subscribe_to_stream(stream_name)
 
 for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
-    # endregion subscribe-to-stream
-    break
+
+    # do something with the event
+    handle_event(event, subscription)
+# endregion subscribe-to-stream
 
 # region subscribe-to-stream-from-position
-client.subscribe_to_stream(
-    stream_name=stream_name,
-    stream_position=20,
-)
+client.subscribe_to_stream(stream_name, stream_position=20)
 # endregion subscribe-to-stream-from-position
 
 # region subscribe-to-stream-live
-client.subscribe_to_stream(stream_name=stream_name)
+client.subscribe_to_stream(stream_name)
 # endregion subscribe-to-stream-live
 
 # region subscribe-to-stream-resolving-linktos
@@ -69,45 +63,69 @@ client.subscribe_to_stream(
 
 # region subscribe-to-stream-subscription-dropped
 subscription = client.subscribe_to_stream(
-    stream_name=stream_name,
+    stream_name,
     stream_position=0,
 )
 
 for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
     # endregion subscribe-to-stream-subscription-dropped
-    break
-
+    subscription.stop()
 
 # region subscribe-to-all
-subscription = client.subscribe_to_all(
-    commit_position=0,  # ! How do I read from end of stream,
+subscription = client.subscribe_to_all(from_end=True)
+
+# Append some events
+event = client.append_to_stream(
+    stream_name,
+    events=NewEvent(type="test-event", data=b""),
+    current_version=StreamState.ANY,
 )
 
 for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
-    # endregion subscribe-to-all
-    break
+
+    # do something with the event
+    handle_event(event, subscription)
+# endregion subscribe-to-all
 
 try:
     # region subscribe-to-all-from-position
-    # ! How do I read prepare position
     client.subscribe_to_all(commit_position=1_056)
     # endregion subscribe-to-all-from-position
-except Exception:
+except exceptions.GrpcError:
+    # Commit position does not exist in this sample database, so we are skipping
     pass
 
 # region subscribe-to-all-live
 subscription = client.subscribe_to_all(from_end=True)
+
+# Append some events
+commit_position = client.append_to_stream(
+    stream_name,
+    events=NewEvent(type="test-event", data=b""),
+    current_version=StreamState.ANY,
+)
+
+# Retrieve the event we just appended from our subscription.
+next_event = next(subscription)
 # endregion subscribe-to-all-live
+assert next_event.commit_position == commit_position
+
 
 # region subscribe-to-all-subscription-dropped
 subscription = client.subscribe_to_all(commit_position=0)
 
-for event in subscription:
-    print(f"received event: {event.stream_position} {event.type}")
-    break
-    # ! How to handle subscription dropped?
+try:
+    for event in subscription:
+        print(f"received event: {event.stream_position} {event.type}")
+
+        # do something with the event
+        handle_event(event, subscription)
+except exceptions.AbortedByServer:
+    print("Subscription aborted by server")
+except Exception as e:
+    print("Something else went wrong", e)
 # endregion subscribe-to-all-subscription-dropped
 
 
@@ -117,25 +135,15 @@ client.subscribe_to_all(
     filter_by_stream_name=True,
 )
 # endregion stream-prefix-filtered-subscription
-# region stream-regex-filtered-subscription
-client.subscribe_to_all(
-    filter_include=["/invoice-\\d\\d\\d/g"],
-    filter_by_stream_name=True,
+
+# region overriding-user-credentials
+credentials = client.construct_call_credentials(
+    username="admin",
+    password="changeit",
 )
-# endregion stream-regex-filtered-subscription
 
-
-try:
-    # region overriding-user-credentials
-    credentials = client.construct_call_credentials(
-        username="admin",
-        password="changeit",
-    )
-
-    client.subscribe_to_all(credentials=credentials)
-    # endregion overriding-user-credentials
-except exceptions.GrpcError:
-    pass
+client.subscribe_to_all(credentials=credentials)
+# endregion overriding-user-credentials
 
 
 client.close()

@@ -3,12 +3,27 @@ from uuid import uuid4
 
 from esdbclient import (
     ESDB_SYSTEM_EVENTS_REGEX,
+    Checkpoint,
     EventStoreDBClient,
     NewEvent,
     StreamState,
 )
+from esdbclient.streams import CatchupSubscription, RecordedEvent
+from tests.test_client import get_server_certificate
 
-client = EventStoreDBClient(uri="esdb://localhost:2113?tls=false")
+ESDB_TARGET = "localhost:2114"
+qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
+
+client = EventStoreDBClient(
+    uri=f"esdb://admin:changeit@{ESDB_TARGET}?{qs}",
+    root_certificates=get_server_certificate(ESDB_TARGET),
+)
+
+
+def handle_event(ev: RecordedEvent, sub: CatchupSubscription):
+    print(f"handling event: {ev.stream_position} {ev.type}")
+    sub.stop()
+
 
 # region exclude-system
 subscription = client.subscribe_to_all(
@@ -18,7 +33,6 @@ subscription = client.subscribe_to_all(
 for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
     break
-
 # endregion exclude-system
 
 stream_name = str(uuid4())
@@ -38,13 +52,14 @@ client.append_to_stream(
 subscription = client.subscribe_to_all(
     filter_by_stream_name=False,
     filter_include=r"customer-\w+",
-    # commit_position=0,  # ! How to start from end
 )
 
 for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
-    # endregion event-type-prefix
-    break
+
+    # do something with the event
+    handle_event(event, subscription)
+# endregion event-type-prefix
 
 event_data_one = NewEvent(
     type="user-one",
@@ -69,14 +84,15 @@ client.append_to_stream(
 # region event-type-regex
 subscription = client.subscribe_to_all(
     filter_by_stream_name=False,
-    filter_include=["^user|^company"],
+    filter_include=["user.*", "company.*"],
 )
 
 for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
-    # endregion event-type-regex
-    break
 
+    # do something with the event
+    handle_event(event, subscription)
+# endregion event-type-regex
 
 event_data = NewEvent(
     type="test-event",
@@ -96,8 +112,10 @@ subscription = client.subscribe_to_all(
 )
 for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
-    # endregion stream-prefix
-    break
+
+    # do something with the event
+    handle_event(event, subscription)
+# endregion stream-prefix
 
 client.append_to_stream(
     stream_name="user-stream",
@@ -108,25 +126,29 @@ client.append_to_stream(
 # region stream-regex
 subscription = client.subscribe_to_all(
     filter_by_stream_name=True,
-    filter_include=["^user|^company"],
+    filter_include=["user.*", "company.*"],
 )
 for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
-    # endregion stream-regex
-    break
+
+    # do something with the event
+    handle_event(event, subscription)
+# endregion stream-regex
 
 # region checkpoint-with-interval
 subscription = client.subscribe_to_all(
     filter_by_stream_name=False,
-    filter_include="/^[^\\$].*/",
-    include_checkpoints=True,  # ! How to handle checkpoint reached event
+    filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX],
+    include_checkpoints=True,
+    checkpoint_interval_multiplier=1000,
 )
 # endregion checkpoint-with-interval
 
 # region checkpoint
 for event in subscription:
-    print(f"received event: {event.stream_position} {event.type}")
-    break
+    if isinstance(event, Checkpoint):
+        print(f"checkpoint taken at {event.commit_position}")
+        break
 # endregion checkpoint
 
 client.close()

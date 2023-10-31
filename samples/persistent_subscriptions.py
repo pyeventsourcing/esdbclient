@@ -2,14 +2,31 @@
 from uuid import uuid4
 
 from esdbclient import EventStoreDBClient, NewEvent, StreamState
+from esdbclient.persistent import (
+    PersistentSubscription,
+    RecordedEvent,
+)
+from tests.test_client import get_server_certificate
 
-stream_name = str(uuid4())
+STREAM_NAME = str(uuid4())
 
-client = EventStoreDBClient(uri="esdb://localhost:2113?tls=false")
+ESDB_TARGET = "localhost:2114"
+qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
+
+client = EventStoreDBClient(
+    uri=f"esdb://admin:changeit@{ESDB_TARGET}?{qs}",
+    root_certificates=get_server_certificate(ESDB_TARGET),
+)
+
+
+def handle_event(ev: RecordedEvent, sub: PersistentSubscription):
+    print(f"handling event: {ev.stream_position} {ev.type}")
+    sub.stop()
+
 
 # region create-persistent-subscription-to-stream
 client.create_subscription_to_stream(
-    stream_name=stream_name,
+    stream_name=STREAM_NAME,
     group_name="subscription-group",
 )
 # endregion create-persistent-subscription-to-stream
@@ -20,14 +37,14 @@ event_data = NewEvent(
 )
 
 client.append_to_stream(
-    stream_name=stream_name,
+    stream_name=STREAM_NAME,
     current_version=StreamState.ANY,
     events=event_data,
 )
 
 # region subscribe-to-persistent-subscription-to-stream
 subscription = client.read_subscription_to_stream(
-    stream_name=stream_name,
+    stream_name=STREAM_NAME,
     group_name="subscription-group",
 )
 
@@ -39,11 +56,13 @@ try:
                 f" retryCount {event.retry_count}"
             )
             subscription.ack(event_id=event.id)
-            break
+
+            # do something with the event
+            handle_event(event, subscription)
         except Exception as ex:
             print(f"handling failed with exception {ex}")
             subscription.nack(event_id=event.id, action="park")
-except BaseException as e:
+except Exception as e:
     print(f"Subscription was dropped. {e}")
 # endregion subscribe-to-persistent-subscription-to-stream
 
@@ -54,7 +73,7 @@ event_data = NewEvent(
 )
 
 client.append_to_stream(
-    stream_name=stream_name,
+    stream_name=STREAM_NAME,
     current_version=StreamState.ANY,
     events=event_data,
 )
@@ -77,8 +96,10 @@ try:
             " retryCount {event.retry_count}"
         )
         subscription.ack(event_id=event.id)
-        break
-except BaseException as e:
+
+        # do something with the event
+        handle_event(event, subscription)
+except Exception as e:
     print(f"Subscription was dropped. {e}")
 # endregion subscribe-to-persistent-subscription-to-all
 
@@ -92,11 +113,11 @@ client.create_subscription_to_all(
 )
 # endregion create-persistent-subscription-to-all
 
-stream_name = str(uuid4())
+STREAM_NAME = str(uuid4())
 group_name = str(uuid4())
 
 client.create_subscription_to_stream(
-    stream_name=stream_name,
+    stream_name=STREAM_NAME,
     group_name=group_name,
 )
 
@@ -106,14 +127,14 @@ event_data = NewEvent(
 )
 
 client.append_to_stream(
-    stream_name=stream_name,
+    stream_name=STREAM_NAME,
     current_version=StreamState.ANY,
     events=event_data,
 )
 
 # region subscribe-to-persistent-subscription-with-manual-acks
 subscription = client.read_subscription_to_stream(
-    stream_name=stream_name,
+    stream_name=STREAM_NAME,
     group_name=group_name,
 )
 
@@ -125,19 +146,20 @@ try:
                 f" retryCount {event.retry_count}"
             )
             subscription.ack(event_id=event.id)
-            break
+
+            # do something with the event
+            handle_event(event, subscription)
         except Exception as ex:
             print(f"handling failed with exception {ex}")
             subscription.nack(event_id=event.id, action="park")
-            break
-except BaseException as e:
+except Exception as e:
     print(f"Subscription was dropped. {e}")
 # endregion subscribe-to-persistent-subscription-with-manual-acks
 
 
 # region update-persistent-subscription
 client.update_subscription_to_stream(
-    stream_name=stream_name,
+    stream_name=STREAM_NAME,
     group_name=group_name,
 )
 # endregion update-persistent-subscription
@@ -145,7 +167,7 @@ client.update_subscription_to_stream(
 
 # region delete-persistent-subscription
 client.delete_subscription(
-    stream_name=stream_name,
+    stream_name=STREAM_NAME,
     group_name=group_name,
 )
 # endregion delete-persistent-subscription
