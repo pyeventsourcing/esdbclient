@@ -1191,23 +1191,24 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             credentials=credentials or self._call_credentials,
         )
 
-    @retrygrpc
-    @autoreconnect
-    def read_cluster_gossip(
-        self,
-        timeout: Optional[float] = None,
-        credentials: Optional[grpc.CallCredentials] = None,
-    ) -> Sequence[ClusterMember]:
-        timeout = (
-            timeout
-            if timeout is not None
-            else self.connection_spec.options.GossipTimeout
-        )
-        return self._connection.cluster_gossip.read(
-            timeout=timeout,
-            metadata=self._call_metadata,
-            credentials=credentials or self._call_credentials,
-        )
+    # Getting 'AccessDenied' with ESDB v23.10.
+    # @retrygrpc
+    # @autoreconnect
+    # def read_cluster_gossip(
+    #     self,
+    #     timeout: Optional[float] = None,
+    #     credentials: Optional[grpc.CallCredentials] = None,
+    # ) -> Sequence[ClusterMember]:
+    #     timeout = (
+    #         timeout
+    #         if timeout is not None
+    #         else self.connection_spec.options.GossipTimeout
+    #     )
+    #     return self._connection.cluster_gossip.read(
+    #         timeout=timeout,
+    #         metadata=self._call_metadata,
+    #         credentials=credentials or self._call_credentials,
+    #     )
 
     def close(self) -> None:
         """

@@ -128,41 +128,42 @@ class ClusterGossipService(BaseClusterGossipService):
     Encapsulates the 'cluster.Gossip' gRPC service.
     """
 
-    def read(
-        self,
-        timeout: Optional[float] = None,
-        metadata: Optional[Metadata] = None,
-        credentials: Optional[grpc.CallCredentials] = None,
-    ) -> Sequence[ClusterMember]:
-        """
-        Returns a sequence of ClusterMember
-        """
-
-        try:
-            read_resp = self._stub.Read(
-                shared_pb2.Empty(),
-                timeout=timeout,
-                metadata=self._metadata(metadata),
-                credentials=credentials,
-            )
-        except grpc.RpcError as e:
-            raise handle_rpc_error(e) from e
-
-        assert isinstance(read_resp, cluster_pb2.ClusterInfo)
-
-        members = []
-        for member_info in read_resp.members:
-            assert isinstance(member_info, cluster_pb2.MemberInfo)
-            # Todo: Here we might want to use member_info.advertise_host_to_client_as
-            #   and member_info.advertise_http_port_to_client_as, but I don't know
-            #   what the difference is. Are these different from
-            #   member_info.http_end_point.address and member_info.http_end_point.port?
-            member = ClusterMember(
-                state=CLUSTER_GOSSIP_NODE_STATES_MAPPING.get(
-                    member_info.state, NODE_STATE_OTHER
-                ),
-                address=member_info.http_end_point.address,
-                port=member_info.http_end_point.port,
-            )
-            members.append(member)
-        return tuple(members)
+    # Getting 'AccessDenied' with ESDB v23.10.
+    # def read(
+    #     self,
+    #     timeout: Optional[float] = None,
+    #     metadata: Optional[Metadata] = None,
+    #     credentials: Optional[grpc.CallCredentials] = None,
+    # ) -> Sequence[ClusterMember]:
+    #     """
+    #     Returns a sequence of ClusterMember
+    #     """
+    #
+    #     try:
+    #         read_resp = self._stub.Read(
+    #             shared_pb2.Empty(),
+    #             timeout=timeout,
+    #             metadata=self._metadata(metadata),
+    #             credentials=credentials,
+    #         )
+    #     except grpc.RpcError as e:
+    #         raise handle_rpc_error(e) from e
+    #
+    #     assert isinstance(read_resp, cluster_pb2.ClusterInfo)
+    #
+    #     members = []
+    #     for member_info in read_resp.members:
+    #         assert isinstance(member_info, cluster_pb2.MemberInfo)
+    #         # Todo: Here we might want to use member_info.advertise_host_to_client_as
+    #         #   and member_info.advertise_http_port_to_client_as, but I don't know
+    #         #   what the difference is. Are these different from
+    #         #   member_info.http_end_point.address and member_info.http_end_point.port?
+    #         member = ClusterMember(
+    #             state=CLUSTER_GOSSIP_NODE_STATES_MAPPING.get(
+    #                 member_info.state, NODE_STATE_OTHER
+    #             ),
+    #             address=member_info.http_end_point.address,
+    #             port=member_info.http_end_point.port,
+    #         )
+    #         members.append(member)
+    #     return tuple(members)

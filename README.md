@@ -8,16 +8,19 @@ team. Although not all the features of EventStoreDB are supported
 by this client, many of the most useful features are presented
 in an easy-to-use interface.
 
-This client has been tested to work with EventStoreDB LTS versions 21.10
-and 22.10, without and without SSL/TLS, and with Python versions 3.7 to 3.12.
-There is 100% test coverage. The code has typing annotations, checked with mypy.
-The code is formatted with black and isort, and checked with flake8. Poetry
-is used for package management during development, and for building and
-publishing distributions to [PyPI](https://pypi.org/project/esdbclient/).
+This client has been tested to work with EventStoreDB LTS versions 21.10,
+22.10, and 23.10, without and without SSL/TLS, and with Python versions 3.7,
+3.8, 3.9, 3.10, 3.11 and 3.12.
+
+The test suite has 100% line and branch coverage. The code has typing annotations
+checked strictly with mypy. The code is formatted with black and isort, and checked
+with flake8. Poetry is used for package management during development, and for
+building and publishing distributions to [PyPI](https://pypi.org/project/esdbclient/).
 
 ## Synopsis
 
-You can connect to an EventStoreDB database using the `EventStoreDBClient` class.
+You can connect and interact with an EventStoreDB server using the `EventStoreDBClient`
+class.
 
 The `EventStoreDBClient` class can be imported from the `esdbclient` package.
 
