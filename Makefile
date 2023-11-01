@@ -14,7 +14,8 @@ EVENTSTORE_IMAGE_TAG ?= 23.10.0-bookworm-slim
 POETRY ?= poetry
 POETRY_VERSION=1.5.1
 POETRY_INSTALLER_URL ?= https://install.python-poetry.org
-PYTHONUNBUFFERED: 1
+PYTHONUNBUFFERED=1
+SAMPLES_LINE_LENGTH=70
 
 .PHONY: install-poetry
 install-poetry:
@@ -53,7 +54,8 @@ update-packages:
 
 .PHONY: lint-black
 lint-black:
-	$(POETRY) run black --check --diff .
+	$(POETRY) run black --check --diff --extend-exclude samples .
+	$(POETRY) run black --check --diff --line-length=$(SAMPLES_LINE_LENGTH) ./samples
 
 .PHONY: lint-flake8
 lint-flake8:
@@ -61,7 +63,8 @@ lint-flake8:
 
 .PHONY: lint-isort
 lint-isort:
-	$(POETRY) run isort --check-only --diff .
+	$(POETRY) run isort --check-only --diff --extend-skip-glob samples .
+	$(POETRY) run isort --check-only --diff --line-length=$(SAMPLES_LINE_LENGTH) samples
 
 .PHONY: lint-mypy
 lint-mypy:
@@ -75,14 +78,16 @@ lint: lint-python
 
 .PHONY: fmt-black
 fmt-black:
-	$(POETRY) run black .
+	$(POETRY) run black --extend-exclude=samples .
+	$(POETRY) run black --line-length=$(SAMPLES_LINE_LENGTH) ./samples
 
 .PHONY: fmt-isort
 fmt-isort:
-	$(POETRY) run isort .
+	$(POETRY) run isort --extend-skip=samples .
+	$(POETRY) run isort --line-length=$(SAMPLES_LINE_LENGTH) samples
 
 .PHONY: fmt
-fmt: fmt-black fmt-isort
+fmt: fmt-isort fmt-black
 
 .PHONY: test
 test:
