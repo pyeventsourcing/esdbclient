@@ -30,9 +30,13 @@ for _ in range(5):
     )
 
 
-def handle_event(ev: RecordedEvent, sub: CatchupSubscription):
+subscription: CatchupSubscription
+
+
+def handle_event(ev: RecordedEvent):
     print(f"handling event: {ev.stream_position} {ev.type}")
-    sub.stop()
+    global subscription
+    subscription.stop()
 
 
 # region subscribe-to-stream
@@ -42,7 +46,7 @@ for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
 
     # do something with the event
-    handle_event(event, subscription)
+    handle_event(event)
 # endregion subscribe-to-stream
 
 # region subscribe-to-stream-from-position
@@ -86,7 +90,7 @@ for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
 
     # do something with the event
-    handle_event(event, subscription)
+    handle_event(event)
 # endregion subscribe-to-all
 
 try:
@@ -121,7 +125,7 @@ try:
         print(f"received event: {event.stream_position} {event.type}")
 
         # do something with the event
-        handle_event(event, subscription)
+        handle_event(event)
 except exceptions.AbortedByServer:
     print("Subscription aborted by server")
 except Exception as e:

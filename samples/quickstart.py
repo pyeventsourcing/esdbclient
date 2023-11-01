@@ -16,9 +16,13 @@ client = EventStoreDBClient(
 stream_name = str(uuid4())
 
 
-def handle_event(ev: RecordedEvent, sub: CatchupSubscription):
+subscription: CatchupSubscription
+
+
+def handle_event(ev: RecordedEvent):
     print(f"handling event: {ev.stream_position} {ev.type}")
-    sub.stop()
+    global subscription
+    subscription.stop()
 
 
 """
@@ -71,7 +75,7 @@ for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
 
     # do something with the event
-    handle_event(event, subscription)
+    handle_event(event)
 # endregion subscribeToAll
 
 client.close()

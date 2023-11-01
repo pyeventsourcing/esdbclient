@@ -18,10 +18,13 @@ client = EventStoreDBClient(
     root_certificates=get_server_certificate(ESDB_TARGET),
 )
 
+subscription: PersistentSubscription
 
-def handle_event(ev: RecordedEvent, sub: PersistentSubscription):
+
+def handle_event(ev: RecordedEvent):
     print(f"handling event: {ev.stream_position} {ev.type}")
-    sub.stop()
+    global subscription
+    subscription.stop()
 
 
 # region create-persistent-subscription-to-stream
@@ -58,7 +61,7 @@ try:
             subscription.ack(event_id=event.id)
 
             # do something with the event
-            handle_event(event, subscription)
+            handle_event(event)
         except Exception as ex:
             print(f"handling failed with exception {ex}")
             subscription.nack(event_id=event.id, action="park")
@@ -98,7 +101,7 @@ try:
         subscription.ack(event_id=event.id)
 
         # do something with the event
-        handle_event(event, subscription)
+        handle_event(event)
 except Exception as e:
     print(f"Subscription was dropped. {e}")
 # endregion subscribe-to-persistent-subscription-to-all
@@ -148,7 +151,7 @@ try:
             subscription.ack(event_id=event.id)
 
             # do something with the event
-            handle_event(event, subscription)
+            handle_event(event)
         except Exception as ex:
             print(f"handling failed with exception {ex}")
             subscription.nack(event_id=event.id, action="park")

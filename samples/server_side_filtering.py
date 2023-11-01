@@ -19,10 +19,13 @@ client = EventStoreDBClient(
     root_certificates=get_server_certificate(ESDB_TARGET),
 )
 
+subscription: CatchupSubscription
 
-def handle_event(ev: RecordedEvent, sub: CatchupSubscription):
+
+def handle_event(ev: RecordedEvent):
     print(f"handling event: {ev.stream_position} {ev.type}")
-    sub.stop()
+    global subscription
+    subscription.stop()
 
 
 # region exclude-system
@@ -58,7 +61,7 @@ for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
 
     # do something with the event
-    handle_event(event, subscription)
+    handle_event(event)
 # endregion event-type-prefix
 
 event_data_one = NewEvent(
@@ -91,7 +94,7 @@ for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
 
     # do something with the event
-    handle_event(event, subscription)
+    handle_event(event)
 # endregion event-type-regex
 
 event_data = NewEvent(
@@ -114,7 +117,7 @@ for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
 
     # do something with the event
-    handle_event(event, subscription)
+    handle_event(event)
 # endregion stream-prefix
 
 client.append_to_stream(
@@ -132,7 +135,7 @@ for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
 
     # do something with the event
-    handle_event(event, subscription)
+    handle_event(event)
 # endregion stream-regex
 
 # region checkpoint-with-interval
@@ -140,7 +143,7 @@ subscription = client.subscribe_to_all(
     filter_by_stream_name=False,
     filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX],
     include_checkpoints=True,
-    checkpoint_interval_multiplier=1000,
+    checkpoint_interval_multiplier=5,
 )
 # endregion checkpoint-with-interval
 
