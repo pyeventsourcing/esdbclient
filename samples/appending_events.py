@@ -17,7 +17,7 @@ client = EventStoreDBClient(
     root_certificates=get_server_certificate(ESDB_TARGET),
 )
 
-STREAM_NAME = str(uuid4())
+stream_name = str(uuid4())
 
 # region append-to-stream
 event_data = NewEvent(
@@ -26,13 +26,13 @@ event_data = NewEvent(
 )
 
 commit_position = client.append_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     current_version=StreamState.NO_STREAM,
     events=event_data,
 )
 # endregion append-to-stream
 
-STREAM_NAME = str(uuid4())
+stream_name = str(uuid4())
 
 # region append-duplicate-event
 event = NewEvent(
@@ -42,14 +42,14 @@ event = NewEvent(
 )
 
 client.append_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     current_version=StreamState.ANY,
     events=event,
 )
 
 try:
     client.append_to_stream(
-        stream_name=STREAM_NAME,
+        stream_name=stream_name,
         current_version=StreamState.ANY,
         events=event,
     )
@@ -58,7 +58,7 @@ except Exception as e:
     # endregion append-duplicate-event
     pass
 
-STREAM_NAME = str(uuid4())
+stream_name = str(uuid4())
 
 # region append-with-no-stream
 event_one = NewEvent(
@@ -67,7 +67,7 @@ event_one = NewEvent(
 )
 
 client.append_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     current_version=StreamState.NO_STREAM,
     events=event_one,
 )
@@ -80,7 +80,7 @@ event_two = NewEvent(
 try:
     # attempt to append the same event again
     client.append_to_stream(
-        stream_name=STREAM_NAME,
+        stream_name=stream_name,
         current_version=StreamState.NO_STREAM,
         events=event_two,
     )
@@ -89,10 +89,10 @@ except exceptions.WrongCurrentVersion:
     # endregion append-with-no-stream
     pass
 
-STREAM_NAME = str(uuid4())
+stream_name = str(uuid4())
 
 client.append_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     current_version=StreamState.ANY,
     events=NewEvent(
         type="some-event",
@@ -102,7 +102,7 @@ client.append_to_stream(
 
 # region append-with-concurrency-check
 events = client.get_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     backwards=True,
     limit=1,
 )
@@ -119,7 +119,7 @@ client_one_event = NewEvent(
 )
 
 client.append_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     current_version=revision,
     events=client_one_event,
 )
@@ -131,7 +131,7 @@ client_two_event = NewEvent(
 
 try:
     client.append_to_stream(
-        stream_name=STREAM_NAME,
+        stream_name=stream_name,
         current_version=revision,
         events=client_two_event,
     )
@@ -140,7 +140,7 @@ except exceptions.WrongCurrentVersion:
     # endregion append-with-concurrency-check
     pass
 
-STREAM_NAME = str(uuid4())
+stream_name = str(uuid4())
 
 event = NewEvent(
     type="some-event",
@@ -154,7 +154,7 @@ credentials = client.construct_call_credentials(
 )
 
 commit_position = client.append_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     current_version=StreamState.ANY,
     events=event,
     credentials=credentials,

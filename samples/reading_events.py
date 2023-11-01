@@ -17,7 +17,7 @@ client = EventStoreDBClient(
     root_certificates=get_server_certificate(ESDB_TARGET),
 )
 
-STREAM_NAME = str(uuid4())
+stream_name = str(uuid4())
 
 event_data = NewEvent(
     type="some-event",
@@ -27,14 +27,14 @@ event_data = NewEvent(
 # append 20 events
 for _ in range(20):
     client.append_to_stream(
-        stream_name=STREAM_NAME,
+        stream_name=stream_name,
         current_version=StreamState.ANY,
         events=event_data,
     )
 
 # region read-from-stream
 events = client.get_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     stream_position=0,
     limit=100,
 )
@@ -50,7 +50,7 @@ for event in events:
 
 # region read-from-stream-position
 events = client.get_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     stream_position=10,
     limit=20,
 )
@@ -70,7 +70,7 @@ try:
     )
 
     stream = client.read_stream(
-        stream_name=STREAM_NAME,
+        stream_name=stream_name,
         stream_position=0,
         credentials=credentials,
     )
@@ -97,7 +97,7 @@ except exceptions.NotFound:
 
 # region reading-backwards
 events = client.get_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     backwards=True,
     limit=10,
 )

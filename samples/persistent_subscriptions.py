@@ -8,7 +8,7 @@ from esdbclient.persistent import (
 )
 from tests.test_client import get_server_certificate
 
-STREAM_NAME = str(uuid4())
+stream_name = str(uuid4())
 
 ESDB_TARGET = "localhost:2114"
 qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
@@ -26,7 +26,7 @@ def handle_event(ev: RecordedEvent, sub: PersistentSubscription):
 
 # region create-persistent-subscription-to-stream
 client.create_subscription_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     group_name="subscription-group",
 )
 # endregion create-persistent-subscription-to-stream
@@ -37,14 +37,14 @@ event_data = NewEvent(
 )
 
 client.append_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     current_version=StreamState.ANY,
     events=event_data,
 )
 
 # region subscribe-to-persistent-subscription-to-stream
 subscription = client.read_subscription_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     group_name="subscription-group",
 )
 
@@ -52,8 +52,8 @@ try:
     for event in subscription:
         try:
             print(
-                f"handling event {event.type} with"
-                f" retryCount {event.retry_count}"
+                f"handling event {event.type} with retryCount",
+                f"{event.retry_count}",
             )
             subscription.ack(event_id=event.id)
 
@@ -73,27 +73,27 @@ event_data = NewEvent(
 )
 
 client.append_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     current_version=StreamState.ANY,
     events=event_data,
 )
 
-GROUP_NAME = str(uuid4())
+group_name = str(uuid4())
 
 client.create_subscription_to_all(
-    group_name=GROUP_NAME,
+    group_name=group_name,
 )
 
 # region subscribe-to-persistent-subscription-to-all
 subscription = client.read_subscription_to_all(
-    group_name=GROUP_NAME,
+    group_name=group_name,
 )
 
 try:
     for event in subscription:
         print(
-            "handling event {event.type} with"
-            " retryCount {event.retry_count}"
+            f"handling event {event.type} with retryCount",
+            f"{event.retry_count}",
         )
         subscription.ack(event_id=event.id)
 
@@ -113,11 +113,11 @@ client.create_subscription_to_all(
 )
 # endregion create-persistent-subscription-to-all
 
-STREAM_NAME = str(uuid4())
+stream_name = str(uuid4())
 group_name = str(uuid4())
 
 client.create_subscription_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     group_name=group_name,
 )
 
@@ -127,14 +127,14 @@ event_data = NewEvent(
 )
 
 client.append_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     current_version=StreamState.ANY,
     events=event_data,
 )
 
 # region subscribe-to-persistent-subscription-with-manual-acks
 subscription = client.read_subscription_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     group_name=group_name,
 )
 
@@ -142,8 +142,8 @@ try:
     for event in subscription:
         try:
             print(
-                f"handling event {event.type} with"
-                f" retryCount {event.retry_count}"
+                f"handling event {event.type} with retryCount",
+                f"{event.retry_count}",
             )
             subscription.ack(event_id=event.id)
 
@@ -159,7 +159,7 @@ except Exception as e:
 
 # region update-persistent-subscription
 client.update_subscription_to_stream(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     group_name=group_name,
 )
 # endregion update-persistent-subscription
@@ -167,7 +167,7 @@ client.update_subscription_to_stream(
 
 # region delete-persistent-subscription
 client.delete_subscription(
-    stream_name=STREAM_NAME,
+    stream_name=stream_name,
     group_name=group_name,
 )
 # endregion delete-persistent-subscription

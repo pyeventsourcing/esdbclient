@@ -72,6 +72,6 @@ for event in subscription:
 
     # do something with the event
     handle_event(event, subscription)
-# end subscribeToAll
+# endregion subscribeToAll
 
 client.close()
