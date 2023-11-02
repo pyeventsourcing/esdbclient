@@ -1,5 +1,15 @@
 ## For version 1.0
 
+Notes from meeting with Yves 2 Nov 2023:
+- can add "filter_regex" later if needed
+- can add "resolve_lines" to read_all() and subscribe_all() later
+- (might in future change gRPC interface to support filtering on both stream name and event type, including and excluding)
+- can add support for user admin later (maybe)
+- can add support for projection admin later (maybe)
+- can add support for reading from a prepare_position by adding a keyword argument as a non-breaking change, there will never be any need in this client to return two values from append_events() because the commit and prepare positions will always have the same value
+
+---
+
 * Use grpc "trailer" instead of Status Code NOT_FOUND with "Leader info available"?
 
 * Pull these images:

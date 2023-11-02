@@ -523,6 +523,7 @@ class BaseStreamsService(ESDBService):
                 all_options = streams_pb2.ReadReq.Options.AllOptions(
                     position=streams_pb2.ReadReq.Options.Position(
                         commit_position=commit_position,
+                        # prepare_position=prepare_position or commit_position,
                         prepare_position=commit_position,
                     )
                 )
