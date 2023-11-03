@@ -2046,7 +2046,7 @@ of the subscription should only receive events that were recorded after the subs
 was created.
 
 Alternatively, the optional `commit_position` argument can be used to specify a commit
-position from which commit position the group of consumers of the subscription should
+position from which the group of consumers of the subscription should
 receive events. Please note, the recorded event at the specified commit position might
 be included in the recorded events received by the group of consumers.
 
