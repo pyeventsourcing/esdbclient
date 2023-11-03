@@ -1,8 +1,6 @@
-## For version 1.0
-
 Notes from meeting with Yves 2 Nov 2023:
 - can add "filter_regex" later if needed
-- can add "resolve_lines" to read_all() and subscribe_all() later
+- can add "resolve_links" to read_all() and subscribe_all() later
 - (might in future change gRPC interface to support filtering on both stream name and event type, including and excluding)
 - can add support for user admin later (maybe)
 - can add support for projection admin later (maybe)
@@ -10,18 +8,26 @@ Notes from meeting with Yves 2 Nov 2023:
 
 ---
 
+For version 1.0:
+
 * Use grpc "trailer" instead of Status Code NOT_FOUND with "Leader info available"?
 
-* Pull these images:
+* Maybe the "require leader feature" should also apply to reading events, so the client
+  is guaranteed to be reading from a leader, and will reconnect if node changes from
+  leader to follower?
+
+* Pull these images in CI?
   * ghcr.io/eventstore/eventstore:lts
   * ghcr.io/eventstore/eventstore:previous-lts
   * ghcr.io/eventstore/eventstore:ci
+  * I kind of prefer using specific versions, so it's repeatable?
 
 * Something about causation and correlation IDs?
 
 * Commit position vs prepare position?
   * As I understand it, these values only differ when using TCP/IP client transaction?
     * So probably only used by a small number of people, if any?
+    * Can add 'prepare_position' option when reading as a non-breaking change
 
 * More persistent subscription options
   * https://developers.eventstore.com/clients/grpc/persistent-subscriptions.html#persistent-subscription-settings
@@ -34,35 +40,17 @@ Notes from meeting with Yves 2 Nov 2023:
 * Sample
   * Is the eventsourcing-eventstoredb package sufficient for v1.0?
   * Should I port Joao's banking app?
+  * We now have the website samples, this is probably what was wanted originally
 
 * OAuth (requires commercial license)
   * What if anything would be needed in the client to support OAuth?
 
-* I noticed the issue raised about "consumer too slow" - does the server close subscriptions?
-  * what actually does the server do in this case? end the call? send a ReadResp?
-    * "Bear in mind that a subscription can also drop because it is slow. The server tried to push all the live events to the subscription when it is in the live processing mode. If the subscription gets the reading buffer overflow and won't be able to acknowledge the buffer, it will break."
-      * from https://developers.eventstore.com/clients/grpc/subscriptions.html#dropped-subscriptions
-
-* I noticed that when subscribing to all with a catch-up subscription, a checkpoint is
-    received when there are no more recorded events which has a commit position that
-    at which there is no recorded event. This commit position is allocated to the next
-    new event which is recorded. Catch-up subscriptions started with a specific commit
-    position do not return the event at that commit position. So if an event processing
-    component records progress using the checkpoint commit positions, and restarts
-    catch-up subscription using the recorded commit positions, and happens to record
-    the commit position of a checkpoint received because there are no more recorded
-    events, and then happens to crash and be restarted, and then a new event is appended,
-    it will never receive that new event.... And also if you screen out responses by
-    looking for repeat commit positions, then you will see the checkpoint first, and
-    then ignore the subsequent event that has the same commit position.
-  * See: test_checkpoint_commit_position()
-
-Other issues:
-* "$et-EventType" steam name convention (and links to events?)
-  * https://github.com/pyeventsourcing/esdbclient/issues/6
-
 -----
 Issues:
+
+* "$et-EventType" steam name convention (and links to events?)
+  * https://github.com/pyeventsourcing/esdbclient/issues/6
+  * this was resolved by adding 'resolve_links' option
 
 * Server errors on GitHub Actions:
   * In README.md assert acked_events[event9.id] == 0, acked_events[event9.id]  # sometimes this isn't zero?
@@ -74,7 +62,6 @@ Issues:
   * In various methods, occasionally get "Exception was thrown by handler" - do I need to get the logs?
     * In test, test_reconnects_to_new_leader_on_append_events() especially often for some reason.
   * In test_reconnects_to_new_leader_on_set_stream_metadata, occasionally get FollowerNotFound, despite previous and subsequent tests passing okay, as if gossip is a bit flaky.
-
 
 * What is the "requires-leader" header actually for, since the server can decide if
   methods require leader? should this instead be something the client sets according to
@@ -93,6 +80,28 @@ Issues:
         * https://github.com/grpc/grpc/issues/15461
 
 
+-----
+
+* I noticed the issue raised about "consumer too slow" - does the server close subscriptions?
+  * what actually does the server do in this case? end the call? send a ReadResp?
+    * "Bear in mind that a subscription can also drop because it is slow. The server tried to push all the live events to the subscription when it is in the live processing mode. If the subscription gets the reading buffer overflow and won't be able to acknowledge the buffer, it will break."
+      * from https://developers.eventstore.com/clients/grpc/subscriptions.html#dropped-subscriptions
+  * this was a problem when running in GitHub Actions, fixed by configuring server environment variables
+
+* I noticed that when subscribing to all with a catch-up subscription, a checkpoint is
+    received when there are no more recorded events which has a commit position that
+    at which there is no recorded event. This commit position is allocated to the next
+    new event which is recorded. Catch-up subscriptions started with a specific commit
+    position do not return the event at that commit position. So if an event processing
+    component records progress using the checkpoint commit positions, and restarts
+    catch-up subscription using the recorded commit positions, and happens to record
+    the commit position of a checkpoint received because there are no more recorded
+    events, and then happens to crash and be restarted, and then a new event is appended,
+    it will never receive that new event.... And also if you screen out responses by
+    looking for repeat commit positions, then you will see the checkpoint first, and
+    then ignore the subsequent event that has the same commit position.
+  * See: test_checkpoint_commit_position()
+  * This was a server bug, now fixed in both 23.10 and 22.10
 
 -----
 
