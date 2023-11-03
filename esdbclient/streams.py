@@ -20,15 +20,17 @@ import grpc.aio
 from google.protobuf import duration_pb2, empty_pb2
 from typing_extensions import Literal, Protocol, runtime_checkable
 
-from esdbclient.connection_spec import ConnectionSpec
-from esdbclient.esdbapibase import (
+from esdbclient.common import (
     DEFAULT_BATCH_APPEND_REQUEST_DEADLINE,
     DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
     DEFAULT_WINDOW_SIZE,
     ESDBService,
     Metadata,
+    construct_filter_exclude_regex,
+    construct_filter_include_regex,
     handle_rpc_error,
 )
+from esdbclient.connection_spec import ConnectionSpec
 from esdbclient.events import Checkpoint, NewEvent, RecordedEvent
 from esdbclient.exceptions import (
     AccessDeniedError,
@@ -561,21 +563,11 @@ class BaseStreamsService(ESDBService):
                 checkpointIntervalMultiplier=checkpoint_interval_multiplier,
             )
 
-            # Decide 'filter'
+            # Decide 'expression'
             if filter_include:
-                filter_include = (
-                    [filter_include]
-                    if isinstance(filter_include, str)
-                    else filter_include
-                )
-                regex = "^" + "|".join(filter_include) + "$"
+                regex = construct_filter_include_regex(filter_include)
             else:
-                filter_exclude = (
-                    [filter_exclude]
-                    if isinstance(filter_exclude, str)
-                    else filter_exclude
-                )
-                regex = "^(?!(" + "|".join([s + "$" for s in filter_exclude]) + "))"
+                regex = construct_filter_exclude_regex(filter_exclude)
 
             expression = streams_pb2.ReadReq.Options.FilterOptions.Expression(
                 regex=regex

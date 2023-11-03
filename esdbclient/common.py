@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from base64 import b64encode
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Sequence, Tuple
 
 import grpc
 import grpc.aio
@@ -98,3 +98,13 @@ class ESDBService:
         )
         metadata = tuple() if metadata is None else metadata
         return metadata + requires_leader_metadata
+
+
+def construct_filter_include_regex(patterns: Sequence[str]) -> str:
+    patterns = [patterns] if isinstance(patterns, str) else patterns
+    return "^" + "|".join(patterns) + "$"
+
+
+def construct_filter_exclude_regex(patterns: Sequence[str]) -> str:
+    patterns = [patterns] if isinstance(patterns, str) else patterns
+    return "^(?!(" + "|".join([s + "$" for s in patterns]) + "))"

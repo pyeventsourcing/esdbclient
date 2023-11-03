@@ -24,6 +24,11 @@ import dns.resolver
 import grpc
 from typing_extensions import Literal
 
+from esdbclient.common import (
+    DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+    DEFAULT_WINDOW_SIZE,
+    BasicAuthCallCredentials,
+)
 from esdbclient.connection import ESDBConnection
 from esdbclient.connection_spec import (
     NODE_PREFERENCE_FOLLOWER,
@@ -33,11 +38,6 @@ from esdbclient.connection_spec import (
     URI_SCHEME_ESDB,
     URI_SCHEME_ESDB_DISCOVER,
     ConnectionSpec,
-)
-from esdbclient.esdbapibase import (
-    DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
-    DEFAULT_WINDOW_SIZE,
-    BasicAuthCallCredentials,
 )
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import (

@@ -16,12 +16,12 @@ from grpc._cython.cygrpc import IntegratedCall
 import esdbclient.protos.Grpc.persistent_pb2 as grpc_persistent
 from esdbclient import ESDB_SYSTEM_EVENTS_REGEX, RecordedEvent, StreamState
 from esdbclient.client import EventStoreDBClient
+from esdbclient.common import handle_rpc_error
 from esdbclient.connection_spec import (
     NODE_PREFERENCE_FOLLOWER,
     NODE_PREFERENCE_LEADER,
     ConnectionSpec,
 )
-from esdbclient.esdbapibase import handle_rpc_error
 from esdbclient.events import Checkpoint, NewEvent
 from esdbclient.exceptions import (
     AbortedByServer,

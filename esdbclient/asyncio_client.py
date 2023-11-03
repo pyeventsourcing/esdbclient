@@ -21,6 +21,10 @@ import dns.asyncresolver
 import grpc.aio
 
 from esdbclient.client import DEFAULT_EXCLUDE_FILTER, BaseEventStoreDBClient
+from esdbclient.common import (
+    DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+    DEFAULT_WINDOW_SIZE,
+)
 from esdbclient.connection import AsyncioESDBConnection
 from esdbclient.connection_spec import (
     NODE_PREFERENCE_FOLLOWER,
@@ -29,10 +33,6 @@ from esdbclient.connection_spec import (
     NODE_PREFERENCE_REPLICA,
     URI_SCHEME_ESDB,
     URI_SCHEME_ESDB_DISCOVER,
-)
-from esdbclient.esdbapibase import (
-    DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
-    DEFAULT_WINDOW_SIZE,
 )
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import (

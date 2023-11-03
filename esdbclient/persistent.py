@@ -10,14 +10,16 @@ from uuid import UUID
 import grpc
 from typing_extensions import Literal, Protocol, runtime_checkable
 
-from esdbclient.connection_spec import ConnectionSpec
-from esdbclient.esdbapibase import (
+from esdbclient.common import (
     DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
     DEFAULT_WINDOW_SIZE,
     ESDBService,
     Metadata,
+    construct_filter_exclude_regex,
+    construct_filter_include_regex,
     handle_rpc_error,
 )
+from esdbclient.connection_spec import ConnectionSpec
 from esdbclient.events import RecordedEvent
 from esdbclient.exceptions import (
     CancelledByClient,
@@ -228,40 +230,30 @@ class BasePersistentSubscriptionsService(ESDBService):
             # Decide 'filter_option'.
             if filter_exclude or filter_include:
                 if filter_include:
-                    filter_include = (
-                        [filter_include]
-                        if isinstance(filter_include, str)
-                        else filter_include
-                    )
-                    filter_regex = "^" + "|".join(filter_include) + "$"
+                    regex = construct_filter_include_regex(filter_include)
                 else:
-                    filter_exclude = (
-                        [filter_exclude]
-                        if isinstance(filter_exclude, str)
-                        else filter_exclude
-                    )
-                    filter_regex = "^(?!(" + "|".join(filter_exclude) + ")).*$"
+                    regex = construct_filter_exclude_regex(filter_exclude)
 
-                filter_expression = (
+                expression = (
                     persistent_pb2.CreateReq.AllOptions.FilterOptions.Expression(
-                        regex=filter_regex
+                        regex=regex
                     )
                 )
 
                 if filter_by_stream_name:
-                    stream_identifier_filter = filter_expression
+                    stream_identifier_filter = expression
                     event_type_filter = None
                 else:
                     stream_identifier_filter = None
-                    event_type_filter = filter_expression
+                    event_type_filter = expression
 
-                filter = persistent_pb2.CreateReq.AllOptions.FilterOptions(
+                filter_options = persistent_pb2.CreateReq.AllOptions.FilterOptions(
                     stream_identifier=stream_identifier_filter,
                     event_type=event_type_filter,
                     max=window_size,
                     checkpointIntervalMultiplier=checkpoint_interval_multiplier,
                 )
-                all_options.filter.CopyFrom(filter)
+                all_options.filter.CopyFrom(filter_options)
             else:
                 no_filter = shared_pb2.Empty()
                 all_options.no_filter.CopyFrom(no_filter)

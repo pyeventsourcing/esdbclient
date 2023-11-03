@@ -5,8 +5,8 @@ from typing import Optional, Sequence, Union
 import grpc
 import grpc.aio
 
+from esdbclient.common import ESDBService, Metadata, handle_rpc_error
 from esdbclient.connection_spec import ConnectionSpec
-from esdbclient.esdbapibase import ESDBService, Metadata, handle_rpc_error
 from esdbclient.protos.Grpc import (
     cluster_pb2,
     cluster_pb2_grpc,
