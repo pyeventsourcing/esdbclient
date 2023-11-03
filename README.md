@@ -2006,8 +2006,6 @@ In EventStoreDB, "persistent" subscriptions are similar to catch-up subscription
 in that reading a persistent subscription will block when there are no more recorded
 events to be received, and then continue when new events are subsequently recorded.
 
-Persistent subscriptions can
-
 Persistent subscriptions can be consumed by a group of consumers operating with one
 of the supported "consumer strategies".
 
