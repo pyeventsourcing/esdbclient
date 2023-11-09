@@ -5,7 +5,8 @@ import asyncio
 import os
 import ssl
 from pathlib import Path
-from tempfile import NamedTemporaryFile
+
+# from tempfile import NamedTemporaryFile
 from unittest import TestCase
 
 BASE_DIR = Path(__file__).parents[1]
@@ -155,11 +156,12 @@ class TestDocs(TestCase):
 
         print(f"{num_code_lines} lines of code in {doc_path}")
 
-        # Write the code into a temp file.
-        tempfile = NamedTemporaryFile("w+")
         source = "\n".join(lines) + "\n"
-        tempfile.writelines(source)
-        tempfile.flush()
+
+        # # Write the code into a temp file.
+        # tempfile = NamedTemporaryFile("w+")
+        # tempfile.writelines(source)
+        # tempfile.flush()
 
         exec(
             compile(source=source, filename=doc_path, mode="exec"), globals(), globals()
