@@ -265,28 +265,28 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Project Makefile commands](#project-makefile-commands)
 <!-- TOC -->
 
-## Install package
+## Install package<a id="install-package"></a>
 
 It is recommended to install Python packages into a Python virtual environment.
 
-### From PyPI
+### From PyPI<a id="from-pypi"></a>
 
 You can use pip to install this package directly from
 [the Python Package Index](https://pypi.org/project/esdbclient/).
 
     $ pip install esdbclient
 
-### With Poetry
+### With Poetry<a id="with-poetry"></a>
 
 You can use Poetry to add this package to your pyproject.toml and install it.
 
     $ poetry add esdbclient
 
-## EventStoreDB server
+## EventStoreDB server<a id="eventstoredb-server"></a>
 
 The EventStoreDB server can be run locally using the official Docker container image.
 
-### Run container
+### Run container<a id="run-container"></a>
 
 For development, you can run a "secure" EventStoreDB server using the following command.
 
@@ -332,7 +332,7 @@ be ignored by the client, so that they are not sent over an insecure channel.
 Please note, the "insecure" connection string uses a query string with the field-value
 `Tls=false`. The value of this field is by default `true`.
 
-### Stop container
+### Stop container<a id="stop-container"></a>
 
 To stop and remove the "secure" container, use the following Docker commands.
 
@@ -345,12 +345,12 @@ To stop and remove the "insecure" container, use the following Docker commands.
 	$ docker rm eventstoredb-insecure
 
 
-## EventStoreDB client
+## EventStoreDB client<a id="eventstoredb-client"></a>
 
 This EventStoreDB client is implemented in the `esdbclient` package with
 the `EventStoreDBClient` class.
 
-### Import class
+### Import class<a id="import-class"></a>
 
 The `EventStoreDBClient` class can be imported from the `esdbclient` package.
 
@@ -358,7 +358,7 @@ The `EventStoreDBClient` class can be imported from the `esdbclient` package.
 from esdbclient import EventStoreDBClient
 ```
 
-### Construct client
+### Construct client<a id="construct-client"></a>
 
 The `EventStoreDBClient` class has one required constructor argument, `uri`, and one
 optional constructor argument, `root_certificates`.
@@ -412,7 +412,7 @@ client = EventStoreDBClient(
 )
 ```
 
-## Connection strings
+## Connection strings<a id="connection-strings"></a>
 
 An EventStoreDB connection string is a URI that conforms with one of two possible
 schemes: either the "esdb" scheme, or the "esdb+discover" scheme.
@@ -420,7 +420,7 @@ schemes: either the "esdb" scheme, or the "esdb+discover" scheme.
 The syntax and semantics of the EventStoreDB URI schemes are described below. The
 syntax is defined using [EBNF](https://en.wikipedia.org/wiki/Extended_Backus–Naur_form).
 
-### Two schemes
+### Two schemes<a id="two-schemes"></a>
 
 The "esdb" URI scheme can be defined in the following way.
 
@@ -456,7 +456,7 @@ EventStoreDB cluster. A member of the cluster is selected by the client, accordi
 to the "node preference" option. The client may then need to close its
 connection and reconnect to the selected server.
 
-### User info string
+### User info string<a id="user-info-string"></a>
 
 In both the "esdb" and "esdb+discover" schemes, the URI may include a user info string.
 If it exists in the URI, the user info string must be separated from the rest of the URI
@@ -470,7 +470,7 @@ server, in a "basic auth" authorization header. This authorization header is use
 the server to authenticate the client. The authorization header is not sent to
 "insecure" servers.
 
-### Query string
+### Query string<a id="query-string"></a>
 
 In both the "esdb" and "esdb+discover" schemes, the optional query string must be one
 or many field-value arguments, separated from each other with the "&" character.
@@ -508,7 +508,7 @@ The table below describes the query field-values supported by this client.
 | KeepAliveTimeout    | integer (default: `None`)                                             | The value of the "grpc.keepalive_timeout_ms" gRPC channel option.                                                                                                 |
 
 
-### Examples
+### Examples<a id="examples"></a>
 
 Here are some examples of EventStoreDB connection string URIs.
 
@@ -574,13 +574,13 @@ The gRPC channel option "grpc.max_receive_message_length" is automatically
 configured to the value `17 * 1024 * 1024`. This value cannot be changed.
 
 
-## Event objects
+## Event objects<a id="event-objects"></a>
 
 This package defines a `NewEvent` class and a `RecordedEvent` class. The
 `NewEvent` class should be used when writing events to the database. The
 `RecordedEvent` class is used when reading events from the database.
 
-### New events
+### New events<a id="new-events"></a>
 
 The `NewEvent` class should be used when writing events to an EventStoreDB database.
 You will need to construct new event objects before calling `append_to_stream()`.
@@ -634,7 +634,7 @@ assert new_event2.content_type == 'application/octet-stream'
 assert new_event2.id == event_id
 ```
 
-### Recorded events
+### Recorded events<a id="recorded-events"></a>
 
 The `RecordedEvent` class is used when reading events from an EventStoreDB
 database. The client will return event objects of this type from all methods
@@ -707,7 +707,7 @@ recorded_event = RecordedEvent(
 ```
 
 
-## Streams
+## Streams<a id="streams"></a>
 
 In EventStoreDB, a "stream" is a sequence of recorded events that all have
 the same "stream name". There will normally be many streams in a database,
@@ -719,7 +719,7 @@ but are not gapless.
 The methods `append_to_stream()`, `get_stream()` and `read_all()` can
 be used to read and record in the database.
 
-### Append events
+### Append events<a id="append-events"></a>
 
 *requires leader*
 
@@ -809,7 +809,7 @@ downstream component until it has processed the newly recorded events, and then 
 an up-to-date view to the user.
 
 
-### Idempotent append operations
+### Idempotent append operations<a id="idempotent-append-operations"></a>
 
 The `append_to_stream()` method is "idempotent", in that if called with new events whose
 `id` attribute values equal those of recorded events in the named stream immediately
@@ -868,7 +868,7 @@ instance of `NewEvent` is constructed. The `id` argument can be used when
 constructing `NewEvent` objects to set the value of this attribute.
 
 
-### Read stream events
+### Read stream events<a id="read-stream-events"></a>
 
 The `read_stream()` method can be used to get events that have been appended
 to a stream. This method returns a "read response" object.
@@ -1013,7 +1013,7 @@ If you are reading a very large stream, then you might prefer to call `read_stre
 and begin iterating through the recorded events whilst they are being streamed from
 the server, rather than both waiting and having them all accumulate in memory.
 
-### Get current version
+### Get current version<a id="get-current-version"></a>
 
 The `get_current_version()` method is a convenience method that essentially calls
 `get_stream()` with `backwards=True` and `limit=1`. This method returns
@@ -1059,7 +1059,7 @@ current_version = client.get_current_version(
 assert current_version is StreamState.NO_STREAM
 ```
 
-### How to implement snapshotting with EventStoreDB
+### How to implement snapshotting with EventStoreDB<a id="how-to-implement-snapshotting-with-eventstoredb"></a>
 
 Snapshots can improve the performance of aggregates that would otherwise be
 reconstructed from very long streams. However, it is generally recommended to design
@@ -1381,7 +1381,7 @@ periods, after a particular type of event, immediately after events are
 appended, or as a background process.
 
 
-### Read all events
+### Read all events<a id="read-all-events"></a>
 
 The `read_all()` method can be used to get all recorded events
 in the database in the order they were recorded. This method returns
@@ -1548,7 +1548,7 @@ events from the server only starts when iterating over the "read response" start
 means that the method returns before the streaming starts, and so there is no chance for
 any decorators to catch any connection issues.
 
-### Get commit position
+### Get commit position<a id="get-commit-position"></a>
 
 The `get_commit_position()` method can be used to get the commit position of the
 last recorded event in the database. It simply calls `read_all()` with
@@ -1580,7 +1580,7 @@ event in a downstream component. In this case, the value of the `filter_exclude`
 by the downstream component to obtain recorded events.
 
 
-### Get stream metadata
+### Get stream metadata<a id="get-stream-metadata"></a>
 
 The `get_stream_metadata()` method returns the metadata for a stream, along
 with the version of the stream metadata.
@@ -1605,7 +1605,7 @@ value is either an `int` if the stream exists, or `StreamState.NO_STREAM` if the
 does not exist and no metadata has been set. These values can be used as the arguments
 of `set_stream_metadata()`.
 
-### Set stream metadata
+### Set stream metadata<a id="set-stream-metadata"></a>
 
 *requires leader*
 
@@ -1640,7 +1640,7 @@ obtained from `get_stream_metadata()`.
 Please refer to the EventStoreDB documentation for more information about stream
 metadata.
 
-### Delete stream
+### Delete stream<a id="delete-stream"></a>
 
 *requires leader*
 
@@ -1670,7 +1670,7 @@ After deleting a stream, it's still possible to append new events. Reading from 
 deleted stream will return only events that have been appended after it was
 deleted.
 
-### Tombstone stream
+### Tombstone stream<a id="tombstone-stream"></a>
 
 *requires leader*
 
@@ -1699,7 +1699,7 @@ commit_position = client.tombstone_stream(stream_name=stream_name1, current_vers
 After tombstoning a stream, it's not possible to append new events.
 
 
-## Catch-up subscriptions
+## Catch-up subscriptions<a id="catch-up-subscriptions"></a>
 
 A "catch-up" subscription can be used to receive events that have already been
 recorded and events that are recorded subsequently. A catch-up subscription can
@@ -1729,7 +1729,7 @@ immediately streamed to the client, and the iteration will then continue. The st
 of events, and hence the iteration, can be stopped by calling the `stop()` method on the
 "catch-up subscription" object.
 
-### Subscribe to all events
+### Subscribe to all events<a id="subscribe-to-all-events"></a>
 
 The`subscribe_to_all()` method can be used to start a catch-up subscription
 from which all events recorded in the database can be obtained in the order
@@ -1898,7 +1898,7 @@ The catch-up subscription call is ended as soon as the subscription object's
 `stop()` method is called. This happens automatically when it goes out of scope,
 or when it is explicitly deleted from memory using the Python `del` keyword.
 
-### Subscribe to stream events
+### Subscribe to stream events<a id="subscribe-to-stream-events"></a>
 
 The `subscribe_to_stream()` method can be used to start a catch-up subscription
 from which events recorded in a single stream can be obtained. This method
@@ -1946,7 +1946,7 @@ subscription = client.subscribe_to_stream(
 )
 ```
 
-### How to implement exactly-once event processing
+### How to implement exactly-once event processing<a id="how-to-implement-exactly-once-event-processing"></a>
 
 The commit positions of recorded events that are received and processed by a
 downstream component are usefully recorded by the downstream component, so that
@@ -2000,7 +2000,7 @@ subscriptions". Hoping to rely on acknowledging events to an upstream
 component is an example of dual writing.
 
 
-## Persistent subscriptions
+## Persistent subscriptions<a id="persistent-subscriptions"></a>
 
 In EventStoreDB, "persistent" subscriptions are similar to catch-up subscriptions,
 in that reading a persistent subscription will block when there are no more recorded
@@ -2027,7 +2027,7 @@ rely on their idempotent handling of duplicate messages, and their resilience to
 out-of-order delivery.
 
 
-### Create subscription to all
+### Create subscription to all<a id="create-subscription-to-all"></a>
 
 *requires leader*
 
@@ -2093,7 +2093,7 @@ group_name1 = f"group-{uuid.uuid4()}"
 client.create_subscription_to_all(group_name=group_name1)
 ```
 
-### Read subscription to all
+### Read subscription to all<a id="read-subscription-to-all"></a>
 
 *requires leader*
 
@@ -2159,7 +2159,7 @@ method also has an `action` argument, which should be a Python `str`: either
 `'unknown'`, `'park'`, `'retry'`, `'skip'` or `'stop'`.
 
 
-### How to write a persistent subscription consumer
+### How to write a persistent subscription consumer<a id="how-to-write-a-persistent-subscription-consumer"></a>
 
 The reading of a persistent subscription can be encapsulated in a "consumer" that calls
 a "policy" function when a recorded event is received and then automatically calls
@@ -2249,7 +2249,7 @@ assert event9.id in acked_events
 assert event9.id not in nacked_events
 ```
 
-### Update subscription to all
+### Update subscription to all<a id="update-subscription-to-all"></a>
 
 *requires leader*
 
@@ -2292,7 +2292,7 @@ database.
 client.update_subscription_to_all(group_name=group_name1, from_end=True)
 ```
 
-### Create subscription to stream
+### Create subscription to stream<a id="create-subscription-to-stream"></a>
 
 *requires leader*
 
@@ -2343,7 +2343,7 @@ client.create_subscription_to_stream(
 )
 ```
 
-### Read subscription to stream
+### Read subscription to stream<a id="read-subscription-to-stream"></a>
 
 *requires leader*
 
@@ -2401,7 +2401,7 @@ assert events[2].stream_name == stream_name2
 assert events[2].id == event6.id
 ```
 
-### Update subscription to stream
+### Update subscription to stream<a id="update-subscription-to-stream"></a>
 
 *requires leader*
 
@@ -2449,7 +2449,7 @@ client.update_subscription_to_stream(
 )
 ```
 
-### Replay parked events
+### Replay parked events<a id="replay-parked-events"></a>
 
 *requires leader*
 
@@ -2486,7 +2486,7 @@ client.replay_parked_events(
 )
 ```
 
-### Get subscription info
+### Get subscription info<a id="get-subscription-info"></a>
 
 *requires leader*
 
@@ -2525,7 +2525,7 @@ subscription_info = client.get_subscription_info(
 
 The returned value is a `SubscriptionInfo` object.
 
-### List subscriptions
+### List subscriptions<a id="list-subscriptions"></a>
 
 *requires leader*
 
@@ -2549,7 +2549,7 @@ subscriptions = client.list_subscriptions()
 The returned value is a list of `SubscriptionInfo` objects.
 
 
-### List subscriptions to stream
+### List subscriptions to stream<a id="list-subscriptions-to-stream"></a>
 
 *requires leader*
 
@@ -2573,7 +2573,7 @@ subscriptions = client.list_subscriptions_to_stream(
 The returned value is a list of `SubscriptionInfo` objects.
 
 
-### Delete subscription
+### Delete subscription<a id="delete-subscription"></a>
 
 *requires leader*
 
@@ -2610,7 +2610,7 @@ client.delete_subscription(
 )
 ```
 
-### Call credentials
+### Call credentials<a id="call-credentials"></a>
 
 Default call credentials are derived by the client from the user info part of the
 connection string URI.
@@ -2619,7 +2619,7 @@ Many of the client methods described above have an optional `credentials` argume
 which can be used to set call credentials for an individual method call that override
 those derived from the connection string URI.
 
-### Construct call credentials
+### Construct call credentials<a id="construct-call-credentials"></a>
 
 The client method `construct_call_credentials()` can be used to construct a call
 credentials object from a username and password.
@@ -2633,9 +2633,9 @@ call_credentials = client.construct_call_credentials(
 The call credentials object can be used as the value of the `credentials`
 argument in other client methods.
 
-## Connection
+## Connection<a id="connection"></a>
 
-### Reconnect
+### Reconnect<a id="reconnect"></a>
 
 The `reconnect()` method can be used to manually reconnect the client to a
 suitable EventStoreDB node. This method uses the same routine for reading the
@@ -2659,7 +2659,7 @@ this client, but this behavior might be implemented in a future release.
 Reconnection will happen automatically in many cases, due to the `@autoreconnect`
 decorator.
 
-### Close
+### Close<a id="close"></a>
 
 The `close()` method can be used to cleanly close the client's gRPC connection.
 
@@ -2668,7 +2668,7 @@ client.close()
 ```
 
 
-## Asyncio client
+## Asyncio client<a id="asyncio-client"></a>
 
 The `esdbclient` package also includes an early version of an asynchronous I/O
 gRPC Python client. It follows exactly the same behaviors as the multithreaded
@@ -2695,7 +2695,7 @@ method signatures, and can be called with the same arguments, to the same effect
 The methods which appear on `EventStoreDBClient` but not on `AsyncioEventStoreDBClient` will be
 added soon.
 
-### Synopsis
+### Synopsis<a id="synopsis-1"></a>
 
 The example below demonstrates the `append_to_stream()`, `get_stream()` and
 `subscribe_to_all()` methods. These are the most useful methods for writing
@@ -2756,9 +2756,9 @@ asyncio.get_event_loop().run_until_complete(
 )
 ```
 
-## Notes
+## Notes<a id="notes"></a>
 
-### Regular expression filters
+### Regular expression filters<a id="regular-expression-filters"></a>
 
 The `read_all()`, `subscribe_to_all()`, `create_subscription_to_all()`
 and `get_commit_position()` methods have `filter_exclude` and `filter_include`
@@ -2813,7 +2813,7 @@ a sequence of strings given to `filter_exclude` will return exactly those events
 that would not be included if the same argument value were used with `filter_include`.
 
 
-### Reconnect and retry method decorators
+### Reconnect and retry method decorators<a id="reconnect-and-retry-method-decorators"></a>
 
 Please note, nearly all the client methods are decorated with the `@autoreconnect` and
 the `@retrygrpc` decorators.
@@ -2849,9 +2849,9 @@ connection issues whilst iterating over a successfully received response, the co
 will need to be restarted.
 
 
-## Contributors
+## Contributors<a id="contributors"></a>
 
-### Install Poetry
+### Install Poetry<a id="install-poetry"></a>
 
 The first thing is to check you have Poetry installed.
 
@@ -2869,7 +2869,7 @@ installer tells you where it has been installed, and how to configure your shell
 Please refer to the [Poetry docs](https://python-poetry.org/docs/) for guidance on
 using Poetry.
 
-### Setup for PyCharm users
+### Setup for PyCharm users<a id="setup-for-pycharm-users"></a>
 
 You can easily obtain the project files using PyCharm (menu "Git > Clone...").
 PyCharm will then usually prompt you to open the project.
@@ -2903,7 +2903,7 @@ just use the Python Standard Library's ``unittest`` module.
 You should also be able to open a terminal window in PyCharm, and run the project's
 Makefile commands from the command line (see below).
 
-### Setup from command line
+### Setup from command line<a id="setup-from-command-line"></a>
 
 Obtain the project files, using Git or suitable alternative.
 
@@ -2928,7 +2928,7 @@ issues (don't know why) which might be problematic. If you encounter such
 issues, you can resolve these issues by deleting the virtual environment
 and creating the Poetry virtual environment using PyCharm (see above).
 
-### Project Makefile commands
+### Project Makefile commands<a id="project-makefile-commands"></a>
 
 You can start EventStoreDB using the following command.
 
