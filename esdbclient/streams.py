@@ -89,13 +89,6 @@ class BaseReadResponse:
             raise NotFound(f"Stream {self.stream_name!r} not found")
         elif content_oneof == "event":
             read_event = read_resp.event
-            assert isinstance(read_event, streams_pb2.ReadResp.ReadEvent)
-            recorded_event = read_event.event
-            assert isinstance(
-                recorded_event, streams_pb2.ReadResp.ReadEvent.RecordedEvent
-            )
-            # There's also read_event.link...
-            # print("Link:", read_event.link)
             position_oneof = read_event.WhichOneof("position")
             if position_oneof == "commit_position":
                 commit_position = read_event.commit_position
@@ -104,15 +97,29 @@ class BaseReadResponse:
                 assert position_oneof == "no_position", position_oneof
                 commit_position = None
 
-            # print("Recorded event commit position:", commit_position)
+            esdb_recorded_event = read_event.event
+            assert isinstance(
+                esdb_recorded_event, streams_pb2.ReadResp.ReadEvent.RecordedEvent
+            )
+            if esdb_recorded_event.id.string == "":
+                # Get this when resolving links after deleting a stream.
+                return None
+
+            # if commit_position:
+            #     # ???? is it?
+            #     assert commit_position == esdb_recorded_event.commit_position
+
+            event_id = UUID(esdb_recorded_event.id.string)
             return RecordedEvent(
-                id=UUID(read_event.event.id.string),
-                type=recorded_event.metadata["type"],
-                data=recorded_event.data,
-                content_type=recorded_event.metadata["content-type"],
-                metadata=recorded_event.custom_metadata,
-                stream_name=recorded_event.stream_identifier.stream_name.decode("utf8"),
-                stream_position=recorded_event.stream_revision,
+                id=event_id,
+                type=esdb_recorded_event.metadata["type"],
+                data=esdb_recorded_event.data,
+                content_type=esdb_recorded_event.metadata["content-type"],
+                metadata=esdb_recorded_event.custom_metadata,
+                stream_name=esdb_recorded_event.stream_identifier.stream_name.decode(
+                    "utf8"
+                ),
+                stream_position=esdb_recorded_event.stream_revision,
                 commit_position=commit_position,
             )
         elif content_oneof == "checkpoint":
@@ -930,6 +937,7 @@ class StreamsService(BaseStreamsService):
         *,
         commit_position: Optional[int] = None,
         backwards: bool = False,
+        resolve_links: bool = False,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
@@ -948,6 +956,7 @@ class StreamsService(BaseStreamsService):
         *,
         commit_position: Optional[int] = None,
         from_end: bool = False,
+        resolve_links: bool = False,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,

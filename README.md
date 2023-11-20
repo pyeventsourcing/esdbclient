@@ -924,8 +924,8 @@ The `read_stream()` and `get_stream()` methods have one required argument, `stre
 The required `stream_name` argument is a Python `str` that uniquely identifies a
 stream from which recorded events will be returned.
 
-The `read_stream()` and `get_stream()` methods also have five optional arguments,
-`stream_position`, `backwards`, `resolve_links`, `limit`, and `timeout`.
+The `read_stream()` and `get_stream()` methods also have six optional arguments,
+`stream_position`, `backwards`, `resolve_links`, `limit`, `timeout`, and `credentials`.
 
 The optional `stream_position` argument is a Python `int` that can be used to
 indicate the position in the stream from which to start reading. The default value
@@ -1428,7 +1428,7 @@ The streaming of events, and hence the iterator, can also be stopped by calling
 the `stop()` method on the "read response" object. The recorded event objects
 are instances of the `RecordedEvent` class.
 
-This method has eight optional arguments, `commit_position`, `backwards`,
+This method has nine optional arguments, `commit_position`, `backwards`, `resolve_links`,
 `filter_exclude`, `filter_include`, `filter_by_stream_name`, `limit`, `timeout`,
 and `credentials`.
 
@@ -1449,6 +1449,11 @@ be returned in the order they were recorded, starting from the first recorded ev
 This is the default behavior of `read_all()`. If `backwards` is `True` and
 `commit_position` is `None`, the database's events will be returned in reverse order,
 starting from the last recorded event.
+
+The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
+is `False`, which means any event links will not be resolved, so that the events that are
+returned may represent event links. If `resolve_links` is `True`, any event links will
+be resolved, so that the linked events will be returned instead of the event links.
 
 The optional `filter_exclude` argument is a sequence of regular expressions that
 specifies which recorded events should be returned. This argument is ignored
@@ -1768,7 +1773,7 @@ The`subscribe_to_all()` method can be used to start a catch-up subscription
 from which all events recorded in the database can be obtained in the order
 they were recorded. This method returns a "catch-up subscription" iterator.
 
-This method also has six optional arguments, `commit_position`, `from_end`,
+This method also has eight optional arguments, `commit_position`, `from_end`, `resolve_links`,
 `filter_exclude`, `filter_include`, `filter_by_stream_name`, `timeout` and `credentials`.
 
 The optional `commit_position` argument specifies a commit position. The default
@@ -1782,6 +1787,11 @@ will start from the last recorded event in the database. By default, this argume
 is `False`. If `from_end` is `True`, only events recorded after the subscription
 is started will be obtained. This argument will be disregarded if `commit_position`
 is not `None`.
+
+The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
+is `False`, which means any event links will not be resolved, so that the events that are
+returned may represent event links. If `resolve_links` is `True`, any event links will
+be resolved, so that the linked events will be returned instead of the event links.
 
 The optional `filter_exclude` argument is a sequence of regular expressions that
 specifies which recorded events should be returned. This argument is ignored
@@ -2070,7 +2080,7 @@ to all the recorded events in the database across all streams.
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
 
-This method also has eight optional arguments, `from_end`, `commit_position`,
+This method also has nine optional arguments, `from_end`, `commit_position`, `resolve_links`,
 `filter_exclude`, `filter_include`, `filter_by_stream_name`, `consumer_strategy`,
 `timeout` and `credentials`.
 
@@ -2085,6 +2095,11 @@ be included in the recorded events received by the group of consumers.
 
 If neither `from_end` or `commit_position` are specified, the group of consumers
 of the subscription will potentially receive all recorded events in the database.
+
+The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
+is `False`, which means any event links will not be resolved, so that the events that are
+returned may represent event links. If `resolve_links` is `True`, any event links will
+be resolved, so that the linked events will be returned instead of the event links.
 
 The optional `filter_exclude` argument is a sequence of regular expressions that
 specifies which recorded events should be returned. This argument is ignored
@@ -2292,8 +2307,8 @@ The `update_subscription_to_all()` method can be used to update a
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
 
-This method also has three optional arguments, `from_end`, `commit_position`, `timeout`
-and `credentials`.
+This method also has five optional arguments, `from_end`, `commit_position`,
+`resolve_links`, `timeout` and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
@@ -2306,6 +2321,11 @@ be included in the recorded events received by the group of consumers.
 
 If neither `from_end` or `commit_position` are specified, the group of consumers
 of the subscription will potentially receive all recorded events in the database.
+
+The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
+is `False`, which means any event links will not be resolved, so that the events that are
+returned may represent event links. If `resolve_links` is `True`, any event links will
+be resolved, so that the linked events will be returned instead of the event links.
 
 Please note, the filter options and consumer strategy cannot be adjusted.
 
@@ -2338,8 +2358,8 @@ from this subscription. The `stream_name` argument specifies which stream
 the subscription will follow. The values of both these arguments are expected
 to be Python `str` objects.
 
-This method also has five optional arguments, `stream_position`, `from_end`,
-`consumer_strategy`, `timeout` and `credentials`.
+This method also has six optional arguments, `stream_position`, `from_end`,
+`resolve_links`, `consumer_strategy`, `timeout` and `credentials`.
 
 The optional `stream_position` argument specifies a stream position from
 which to subscribe. The recorded event at this stream
@@ -2350,6 +2370,11 @@ By default, the value of this argument is `False`. If this argument is set
 to `True`, reading from the subscription will receive only events
 recorded after the subscription was created. That is, it is not inclusive
 of the current stream position.
+
+The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
+is `False`, which means any event links will not be resolved, so that the events that are
+returned may represent event links. If `resolve_links` is `True`, any event links will
+be resolved, so that the linked events will be returned instead of the event links.
 
 The optional `consumer_strategy` argument is a Python `str` that defines
 the consumer strategy for this persistent subscription. The value of this argument
@@ -2445,8 +2470,8 @@ This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription, and a required
 `stream_name` argument, which is the name of a stream.
 
-This method also has four optional arguments, `from_end`, `stream_position`,
-`timeout` and `credentials`.
+This method also has five optional arguments, `from_end`, `stream_position`,
+`resolve_links`, `timeout` and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
@@ -2459,6 +2484,11 @@ be included in the recorded events received by the group of consumers.
 
 If neither `from_end` or `commit_position` are specified, the group of consumers
 of the subscription will potentially receive all recorded events in the stream.
+
+The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
+is `False`, which means any event links will not be resolved, so that the events that are
+returned may represent event links. If `resolve_links` is `True`, any event links will
+be resolved, so that the linked events will be returned instead of the event links.
 
 Please note, the consumer strategy cannot be adjusted.
 

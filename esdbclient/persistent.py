@@ -98,25 +98,37 @@ class BaseSubscriptionReadReqs:
 
 class BasePersistentSubscription:
     @staticmethod
-    def _construct_recorded_event(read_resp: persistent_pb2.ReadResp) -> RecordedEvent:
-        event = read_resp.event.event
-        position_oneof = read_resp.event.WhichOneof("position")
+    def _construct_recorded_event(
+        read_event: persistent_pb2.ReadResp.ReadEvent,
+    ) -> Optional[RecordedEvent]:
+        esdb_recorded_event = read_event.event
+        assert isinstance(
+            esdb_recorded_event, persistent_pb2.ReadResp.ReadEvent.RecordedEvent
+        )
+        if read_event.event.id.string == "":  # pragma: no cover
+            # Sometimes get here when resolving links after deleting a stream.
+            # Sometimes never, e.g. when the test suite runs, don't know why.
+            return None
+
+        position_oneof = read_event.WhichOneof("position")
         if position_oneof == "commit_position":
-            commit_position = read_resp.event.commit_position
+            commit_position = read_event.commit_position
         else:  # pragma: no cover
             # We only get here with EventStoreDB < 22.10.
             assert position_oneof == "no_position", position_oneof
             commit_position = None
         recorded_event = RecordedEvent(
-            id=UUID(event.id.string),
-            type=event.metadata.get("type", ""),
-            data=event.data,
-            metadata=event.custom_metadata,
-            content_type=event.metadata.get("content-type", ""),
-            stream_name=event.stream_identifier.stream_name.decode("utf8"),
-            stream_position=event.stream_revision,
+            id=UUID(esdb_recorded_event.id.string),
+            type=esdb_recorded_event.metadata.get("type", ""),
+            data=esdb_recorded_event.data,
+            metadata=esdb_recorded_event.custom_metadata,
+            content_type=esdb_recorded_event.metadata.get("content-type", ""),
+            stream_name=esdb_recorded_event.stream_identifier.stream_name.decode(
+                "utf8"
+            ),
+            stream_position=esdb_recorded_event.stream_revision,
             commit_position=commit_position,
-            retry_count=read_resp.event.retry_count,
+            retry_count=read_event.retry_count,
         )
         return recorded_event
 
@@ -168,6 +180,7 @@ class BasePersistentSubscriptionsService(ESDBService):
         from_end: bool = False,
         commit_position: Optional[int] = None,
         stream_position: Optional[int] = None,
+        resolve_links: bool = False,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
@@ -177,7 +190,7 @@ class BasePersistentSubscriptionsService(ESDBService):
     ) -> persistent_pb2.CreateReq:
         # Construct 'settings'.
         settings = persistent_pb2.CreateReq.Settings(
-            resolve_links=False,
+            resolve_links=resolve_links,
             extra_statistics=False,
             max_retry_count=5,
             min_checkpoint_count=10,  # server recorded position
@@ -304,10 +317,11 @@ class BasePersistentSubscriptionsService(ESDBService):
         from_end: bool = False,
         commit_position: Optional[int] = None,
         stream_position: Optional[int] = None,
+        resolve_links: bool = False,
     ) -> persistent_pb2.UpdateReq:
         # Construct 'settings'.
         settings = persistent_pb2.UpdateReq.Settings(
-            resolve_links=False,
+            resolve_links=resolve_links,
             extra_statistics=False,
             max_retry_count=5,
             min_checkpoint_count=10,  # server recorded position
@@ -580,7 +594,13 @@ class PersistentSubscription(Iterator[RecordedEvent], BasePersistentSubscription
                 raise StopIteration() from e
             content_oneof = read_resp.WhichOneof("content")
             if content_oneof == "event":
-                return self._construct_recorded_event(read_resp)
+                recorded_event = self._construct_recorded_event(read_resp.event)
+                if recorded_event is not None:
+                    return recorded_event
+                else:  # pragma: no cover
+                    # Sometimes get here when resolving links after deleting a stream.
+                    # Sometimes never, e.g. when the test suite runs, don't know why.
+                    pass
             else:  # pragma: no cover
                 pass
 
@@ -628,6 +648,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         *,
         from_end: bool = False,
         commit_position: Optional[int] = None,
+        resolve_links: bool = False,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
@@ -639,7 +660,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
-        Signature for creating a persistent "all streams" subscription.
+        Signature for creating a persistent subscription to all.
         """
 
     @overload
@@ -650,6 +671,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         stream_name: Optional[str] = None,
         from_end: bool = False,
         stream_position: Optional[int] = None,
+        resolve_links: bool = False,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -666,6 +688,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         from_end: bool = False,
         commit_position: Optional[int] = None,
         stream_position: Optional[int] = None,
+        resolve_links: bool = False,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
@@ -682,6 +705,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
             from_end=from_end,
             commit_position=commit_position,
             stream_position=stream_position,
+            resolve_links=resolve_links,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
@@ -796,12 +820,13 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         *,
         from_end: bool = False,
         commit_position: Optional[int] = None,
+        resolve_links: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
-        Signature for updating a persistent "all streams" subscription.
+        Signature for updating a persistent subscription to all.
         """
 
     @overload
@@ -812,6 +837,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         stream_name: Optional[str] = None,
         from_end: bool = False,
         stream_position: Optional[int] = None,
+        resolve_links: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -827,6 +853,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         from_end: bool = False,
         commit_position: Optional[int] = None,
         stream_position: Optional[int] = None,
+        resolve_links: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -837,6 +864,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
             from_end=from_end,
             commit_position=commit_position,
             stream_position=stream_position,
+            resolve_links=resolve_links,
         )
         # Call 'Update' RPC.
         try:
