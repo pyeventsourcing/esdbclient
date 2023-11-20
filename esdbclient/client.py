@@ -504,6 +504,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
                 resolve_links=resolve_links,
                 limit=limit,
                 timeout=timeout,
+                credentials=credentials or self._call_credentials,
             )
         )
 
