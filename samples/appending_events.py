@@ -47,16 +47,13 @@ client.append_to_stream(
     events=event,
 )
 
-try:
-    client.append_to_stream(
-        stream_name=stream_name,
-        current_version=StreamState.ANY,
-        events=event,
-    )
-except Exception as e:
-    print("Error appending second event:", e)
-    # endregion append-duplicate-event
-    pass
+client.append_to_stream(
+    stream_name=stream_name,
+    current_version=StreamState.ANY,
+    events=event,
+)
+# endregion append-duplicate-event
+assert len(client.get_stream(stream_name)) == 1
 
 stream_name = str(uuid4())
 
