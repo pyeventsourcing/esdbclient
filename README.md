@@ -748,8 +748,10 @@ events, and then use the current version of the aggregate as the value of the
 the consistency of the recorded aggregate events, because operations that generate
 new aggregate events can be retried with a freshly reconstructed aggregate if
 a `WrongCurrentVersion` exception is encountered when recording new events. This
-controlling behavior can be disabled by setting the value of the `current_version`
-argument to the constant `StreamState.ANY`.
+controlling behavior can be entirely disabled by setting the value of the `current_version`
+argument to the constant `StreamState.ANY`. More selectively, this behaviour can be
+disabled for existing streams by setting the value of the `current_version`
+argument to the constant `StreamState.EXISTS`.
 
 The required `events` argument is expected to be a sequence of new event objects. The
 `NewEvent` class should be used to construct new event objects. The `append_to_stream()`
@@ -811,29 +813,43 @@ an up-to-date view to the user.
 
 ### Idempotent append operations<a id="idempotent-append-operations"></a>
 
-The `append_to_stream()` method is "idempotent", in that if called with new events whose
-`id` attribute values equal those of recorded events in the named stream immediately
-after the stream position specified by the value of the `current_version` argument, then
-it will return the commit position of the last new event, without making any changes to
-the database.
+The `append_to_stream()` method is "idempotent" with respect to the `id` value of a
+`NewEvent` object. That is to say, if `append_to_stream()` is called with events
+whose `id` values are equal to those already recorded in the stream, then the
+method call will successfully return, with the commit position of the last new event,
+without making any changes to the database.
 
-Sometimes it may happen, when calling `append_to_stream()`, that the new events are
-successfully recorded but somehow a connection issue occurs before the successful call
-can return successfully to the client. We cannot be sure if the events were recorded
-or not, and so we may wish to retry. If the events were in fact successfully recorded,
-it is convenient for the retried operation to return successfully without raising an
-exception. If those new events were in fact not recorded, and in the meantime no other
-new events were recorded in that stream, then it makes sense that the new events will
-be recorded when the append operation is retried. Of course, if a `WrongCurrentVersion`
-exception is raised when retrying the operation, then an application command which
-generated the new events in the context of already recorded events may need to be
-executed again. Alternatively, a suitable error might be displayed by the application,
-with an up-to-date view of the recorded data, giving a user of the application an
-opportunity to decide if they still wish to proceed with their original intention.
+This is because sometimes it may happen, when calling `append_to_stream()`, that the new
+events are successfully recorded, but somehow something bad happens before the method call
+can return successfully to the caller. In this case, we cannot be sure that the events have
+in fact been recorded, and so we may wish to retry.
 
-The example below shows the `append_to_stream()` method being called again with
-`event3` and `current_version=0`. We can see that repeating the call to
-`append_to_stream()` returns successfully.
+If the events were in fact successfully recorded, it is convenient for the retried method call
+to return successfully, and without either raising an exception (when `current_version`
+is either `StreamState.NO_STREAM` an integer value) or creating further event records
+(when `current_version` is `StreamState.ANY` or `StreamState.EXISTS`), as it would
+if the `append_to_stream()` method were not idempotent.
+
+If the method call initially failed and the new events were not in fact recorded, it
+makes good sense, when the method call is retried, that the new events are recorded
+and that the method call returns successfully. If the concurrency controls have not been disabled,
+that is if the `current version` is either `StreamState.NO_STREAM` or an integer value, and
+if a `WrongCurrentVersion` exception is raised when retrying the method call, then we can assume
+both that the initial method call did not in fact successfully record the events, and also
+that subsequent events have in the meantime been recorded by somebody else. In this case,
+an application command which generated the new events may need to be executed again. And
+the user of the application may need to be given an opportunity to decide if they still wish to
+proceed with their original intention, by displaying a suitable error with an up-to-date view of
+the recorded state. In the case where concurrency controls have been disabled, by using `StreamState.ANY` or
+`StreamState.EXISTS` as the value of `current_position`, retrying a method call that failed to
+return successfully will, more simply, just attempt to ensure the new events are recorded, regardless
+of their resulting stream positions. In either case, when the method call does return successfully, we
+can be sure the events have been recorded.
+
+The example below shows the `append_to_stream()` method being called again with events
+`event2` and `event3`, and with `current_version=0`. We can see that repeating the call
+to `append_to_stream()` returns successfully without raising a `WrongCurrentVersion`
+exception, as it would if the `append_to_stream() operation were not idempotent.
 
 ```python
 # Retry appending event3.
@@ -850,8 +866,25 @@ We can see that the same commit position is returned as above.
 assert commit_position_retry == commit_position2
 ```
 
-By calling `get_stream()`, we can also see the stream has been unchanged
-despite the `append_to_stream()` method having been called twice with the same arguments.
+The example below shows the `append_to_stream()` method being called again with events
+`event2` and `event3`, with and `current_version=StreamState.ANY`.
+
+```python
+# Retry appending event3.
+commit_position_retry = client.append_to_stream(
+    stream_name=stream_name1,
+    current_version=0,
+    events=[event2, event3],
+)
+```
+
+We can see that the same commit position is returned as above.
+
+```python
+assert commit_position_retry == commit_position2
+```
+
+By calling `get_stream()`, we can also see the stream has been unchanged.
 That is, there are still only three events in the stream.
 
 ```python
@@ -863,9 +896,9 @@ assert len(events) == 3
 ```
 
 This idempotent behaviour depends on the `id` attribute of the `NewEvent` class.
-This attribute, by default, is assigned a new and unique version-4 UUID when an
-instance of `NewEvent` is constructed. The `id` argument can be used when
-constructing `NewEvent` objects to set the value of this attribute.
+This attribute is, by default, assigned a new and unique version-4 UUID when an
+instance of `NewEvent` is constructed. To set the `id` value of a `NewEvent`,
+the optional `id` constructor argument can be used when constructing `NewEvent` objects.
 
 
 ### Read stream events<a id="read-stream-events"></a>
