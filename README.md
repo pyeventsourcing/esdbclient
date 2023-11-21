@@ -695,8 +695,9 @@ annotated with the type `Optional[int]` for this reason only.
 The `retry_count` is a Python `int`, used to indicate the number of times a persistent
 subscription has retried sending the event to a consumer.
 
-The `link` attribute is an optional `RecordedEvent` that carries information about link
-events.
+The `link` attribute is an optional `RecordedEvent` that carries information about
+"links". This allows link events to be acknowledged or negatively acknowledged
+when using persistence subscriptions with the `resolve_links` argument set to `True`.
 
 ```python
 from esdbclient.events import RecordedEvent
