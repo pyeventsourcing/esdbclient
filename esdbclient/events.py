@@ -36,6 +36,7 @@ class RecordedEvent:
     stream_position: int
     commit_position: Optional[int]
     retry_count: Optional[int] = None
+    link: Optional["RecordedEvent"] = None
 
 
 class Checkpoint(RecordedEvent):

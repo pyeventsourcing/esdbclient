@@ -28,6 +28,7 @@ from esdbclient.common import (
     Metadata,
     construct_filter_exclude_regex,
     construct_filter_include_regex,
+    construct_recorded_event,
     handle_rpc_error,
 )
 from esdbclient.connection_spec import ConnectionSpec
@@ -88,40 +89,7 @@ class BaseReadResponse:
         if content_oneof == "stream_not_found":
             raise NotFound(f"Stream {self.stream_name!r} not found")
         elif content_oneof == "event":
-            read_event = read_resp.event
-            position_oneof = read_event.WhichOneof("position")
-            if position_oneof == "commit_position":
-                commit_position = read_event.commit_position
-            else:  # pragma: no cover
-                # We only get here with EventStoreDB < 22.10.
-                assert position_oneof == "no_position", position_oneof
-                commit_position = None
-
-            esdb_recorded_event = read_event.event
-            assert isinstance(
-                esdb_recorded_event, streams_pb2.ReadResp.ReadEvent.RecordedEvent
-            )
-            if esdb_recorded_event.id.string == "":
-                # Get this when resolving links after deleting a stream.
-                return None
-
-            # if commit_position:
-            #     # ???? is it?
-            #     assert commit_position == esdb_recorded_event.commit_position
-
-            event_id = UUID(esdb_recorded_event.id.string)
-            return RecordedEvent(
-                id=event_id,
-                type=esdb_recorded_event.metadata["type"],
-                data=esdb_recorded_event.data,
-                content_type=esdb_recorded_event.metadata["content-type"],
-                metadata=esdb_recorded_event.custom_metadata,
-                stream_name=esdb_recorded_event.stream_identifier.stream_name.decode(
-                    "utf8"
-                ),
-                stream_position=esdb_recorded_event.stream_revision,
-                commit_position=commit_position,
-            )
+            return construct_recorded_event(read_resp.event)
         elif content_oneof == "checkpoint":
             checkpoint = read_resp.checkpoint
             # print("Checkpoint commit position:", checkpoint.commit_position)

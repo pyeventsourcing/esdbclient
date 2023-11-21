@@ -17,6 +17,7 @@ from esdbclient.common import (
     Metadata,
     construct_filter_exclude_regex,
     construct_filter_include_regex,
+    construct_recorded_event,
     handle_rpc_error,
 )
 from esdbclient.connection_spec import ConnectionSpec
@@ -94,43 +95,6 @@ class BaseSubscriptionReadReqs:
             return persistent_pb2.ReadReq(
                 nack=persistent_pb2.ReadReq.Nack(ids=ids, action=grpc_action)
             )
-
-
-class BasePersistentSubscription:
-    @staticmethod
-    def _construct_recorded_event(
-        read_event: persistent_pb2.ReadResp.ReadEvent,
-    ) -> Optional[RecordedEvent]:
-        esdb_recorded_event = read_event.event
-        assert isinstance(
-            esdb_recorded_event, persistent_pb2.ReadResp.ReadEvent.RecordedEvent
-        )
-        if read_event.event.id.string == "":  # pragma: no cover
-            # Sometimes get here when resolving links after deleting a stream.
-            # Sometimes never, e.g. when the test suite runs, don't know why.
-            return None
-
-        position_oneof = read_event.WhichOneof("position")
-        if position_oneof == "commit_position":
-            commit_position = read_event.commit_position
-        else:  # pragma: no cover
-            # We only get here with EventStoreDB < 22.10.
-            assert position_oneof == "no_position", position_oneof
-            commit_position = None
-        recorded_event = RecordedEvent(
-            id=UUID(esdb_recorded_event.id.string),
-            type=esdb_recorded_event.metadata.get("type", ""),
-            data=esdb_recorded_event.data,
-            metadata=esdb_recorded_event.custom_metadata,
-            content_type=esdb_recorded_event.metadata.get("content-type", ""),
-            stream_name=esdb_recorded_event.stream_identifier.stream_name.decode(
-                "utf8"
-            ),
-            stream_position=esdb_recorded_event.stream_revision,
-            commit_position=commit_position,
-            retry_count=read_event.retry_count,
-        )
-        return recorded_event
 
 
 @dataclass
@@ -555,7 +519,7 @@ class AsyncioPersistentSubscriptionsService(BasePersistentSubscriptionsService):
     pass
 
 
-class PersistentSubscription(Iterator[RecordedEvent], BasePersistentSubscription):
+class PersistentSubscription(Iterator[RecordedEvent]):
     def __init__(
         self,
         read_reqs: SubscriptionReadReqs,
@@ -594,7 +558,7 @@ class PersistentSubscription(Iterator[RecordedEvent], BasePersistentSubscription
                 raise StopIteration() from e
             content_oneof = read_resp.WhichOneof("content")
             if content_oneof == "event":
-                recorded_event = self._construct_recorded_event(read_resp.event)
+                recorded_event = construct_recorded_event(read_resp.event)
                 if recorded_event is not None:
                     return recorded_event
                 else:  # pragma: no cover

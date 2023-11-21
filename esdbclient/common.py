@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 from base64 import b64encode
-from typing import TYPE_CHECKING, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Optional, Sequence, Tuple, Union
+from uuid import UUID
 
 import grpc
 import grpc.aio
 
 from esdbclient.connection_spec import ConnectionSpec
+from esdbclient.events import RecordedEvent
 from esdbclient.exceptions import (
     AbortedByServer,
     CancelledByClient,
@@ -18,6 +20,7 @@ from esdbclient.exceptions import (
     NotFound,
     ServiceUnavailable,
 )
+from esdbclient.protos.Grpc import persistent_pb2, streams_pb2
 
 if TYPE_CHECKING:  # pragma: no cover
     from grpc import Metadata
@@ -108,3 +111,78 @@ def construct_filter_include_regex(patterns: Sequence[str]) -> str:
 def construct_filter_exclude_regex(patterns: Sequence[str]) -> str:
     patterns = [patterns] if isinstance(patterns, str) else patterns
     return "^(?!(" + "|".join([s + "$" for s in patterns]) + "))"
+
+
+def construct_recorded_event(
+    read_event: Union[
+        streams_pb2.ReadResp.ReadEvent, persistent_pb2.ReadResp.ReadEvent
+    ],
+) -> Optional[RecordedEvent]:
+    assert isinstance(
+        read_event, (streams_pb2.ReadResp.ReadEvent, persistent_pb2.ReadResp.ReadEvent)
+    )
+    event = read_event.event
+    assert isinstance(
+        event,
+        (
+            streams_pb2.ReadResp.ReadEvent.RecordedEvent,
+            persistent_pb2.ReadResp.ReadEvent.RecordedEvent,
+        ),
+    )
+    link = read_event.link
+    assert isinstance(
+        link,
+        (
+            streams_pb2.ReadResp.ReadEvent.RecordedEvent,
+            persistent_pb2.ReadResp.ReadEvent.RecordedEvent,
+        ),
+    )
+
+    if event.id.string == "":  # pragma: no cover
+        # Sometimes get here when resolving links after deleting a stream.
+        # Sometimes never, e.g. when the test suite runs, don't know why.
+        return None
+
+    position_oneof = read_event.WhichOneof("position")
+    if position_oneof == "commit_position":
+        ignore_commit_position = False
+        # # Is this equality always true? Ans: Not when resolve_links=True.
+        # assert read_event.commit_position == event.commit_position
+    else:  # pragma: no cover
+        # We get here with EventStoreDB < 22.10 when reading a stream.
+        assert position_oneof == "no_position", position_oneof
+        ignore_commit_position = True
+
+    if isinstance(read_event, persistent_pb2.ReadResp.ReadEvent):
+        retry_count: Optional[int] = read_event.retry_count
+    else:
+        retry_count = None
+
+    if link.id.string == "":
+        recorded_event_link: Optional[RecordedEvent] = None
+    else:
+        recorded_event_link = RecordedEvent(
+            id=UUID(link.id.string),
+            type=link.metadata.get("type", ""),
+            data=link.data,
+            metadata=link.custom_metadata,
+            content_type=link.metadata.get("content-type", ""),
+            stream_name=link.stream_identifier.stream_name.decode("utf8"),
+            stream_position=link.stream_revision,
+            commit_position=None if ignore_commit_position else link.commit_position,
+            retry_count=retry_count,
+        )
+
+    recorded_event = RecordedEvent(
+        id=UUID(event.id.string),
+        type=event.metadata.get("type", ""),
+        data=event.data,
+        metadata=event.custom_metadata,
+        content_type=event.metadata.get("content-type", ""),
+        stream_name=event.stream_identifier.stream_name.decode("utf8"),
+        stream_position=event.stream_revision,
+        commit_position=None if ignore_commit_position else event.commit_position,
+        retry_count=retry_count,
+        link=recorded_event_link,
+    )
+    return recorded_event

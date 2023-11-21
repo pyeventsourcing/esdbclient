@@ -644,7 +644,9 @@ and `read_subscription_to_all()`. You do not need to construct recorded event ob
 Like `NewEvent`, the `RecordedEvent` class is also a frozen Python dataclass. It has
 all the attributes that `NewEvent` has (`type`, `data`, `metadata`, `content_type`, `id`)
 and some additional attributes that follow from the fact that an event was recorded
-(`stream_name`, `stream_position`, `commit_position`).
+(`stream_name`, `stream_position`, `commit_position`). It also has a `retry_count`
+which is used only when reading persistence subscriptions. It also has a `link`
+attribute.
 
 The `type` attribute is a Python `str`, used to indicate the type of an event
 that was recorded.
@@ -690,6 +692,11 @@ that event objects obtained from both `get_stream()` and `read_all()` have the a
 commit position. The `commit_position` attribute of the `RecordedEvent` class is
 annotated with the type `Optional[int]` for this reason only.
 
+The `retry_count` is a Python `int`, used to indicate the number of times a persistent
+subscription has retried sending the event to a consumer.
+
+The `link` attribute is an option `RecordedEvent` that carries information about link
+events.
 
 ```python
 from esdbclient.events import RecordedEvent

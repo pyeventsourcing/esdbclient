@@ -558,7 +558,7 @@ class TestEventStoreDBClient(TimedTestCase):
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[0].stream_name, stream_name)
         self.assertEqual(events[0].stream_position, 0)
-        if events[0].commit_position is not None:  # v21.20 doesn't return this
+        if events[0].commit_position is not None:  # v21.10 doesn't return this
             self.assertEqual(events[0].commit_position, commit_position1)
 
         # Check we can't append another new event at initial position.
