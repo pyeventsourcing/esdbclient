@@ -158,6 +158,7 @@ while True:
 client.update_subscription_to_stream(
     stream_name=stream_name,
     group_name=group_name,
+    resolve_links=True,
 )
 # endregion update-persistent-subscription
 
