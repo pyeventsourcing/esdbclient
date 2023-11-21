@@ -154,6 +154,9 @@ last_commit_position = 0
 while True:
     subscription = client.subscribe_to_all(
         commit_position=last_commit_position,
+        filter_by_stream_name=True,
+        filter_include=["account.*", "savings.*"],
+        include_checkpoints=True,
     )
     try:
         for received in subscription:
