@@ -2743,6 +2743,58 @@ class TestEventStoreDBClient(TimedTestCase):
         self.assertEqual(events[1].id, event8.id)
         self.assertEqual(events[2].id, event9.id)
 
+    def test_subscribe_to_stream_from_end(self) -> None:
+        self.construct_esdb_client()
+
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        # Subscribe to stream events, from the end.
+        subscription = self.client.subscribe_to_stream(
+            stream_name=stream_name1, from_end=True
+        )
+
+        # Append three events to stream2.
+        event4 = NewEvent(type="OrderCreated", data=random_data())
+        event5 = NewEvent(type="OrderUpdated", data=random_data())
+        event6 = NewEvent(type="OrderDeleted", data=random_data())
+        stream_name2 = str(uuid4())
+        self.client.append_events(
+            stream_name2,
+            current_version=StreamState.NO_STREAM,
+            events=[event4, event5, event6],
+        )
+
+        # Append three more events to stream1.
+        event7 = NewEvent(type="OrderCreated", data=random_data())
+        event8 = NewEvent(type="OrderUpdated", data=random_data())
+        event9 = NewEvent(type="OrderDeleted", data=random_data())
+        self.client.append_events(
+            stream_name1, current_version=2, events=[event7, event8, event9]
+        )
+
+        # Continue reading from the subscription.
+        events = []
+        for event in subscription:
+            events.append(event)
+            if event.id == event9.id:
+                break
+
+        # Check we got events only from stream1 after we subscribed.
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event7.id)
+        self.assertEqual(events[1].id, event8.id)
+        self.assertEqual(events[2].id, event9.id)
+
     def test_subscribe_to_stream_from_stream_position(self) -> None:
         self.construct_esdb_client()
 

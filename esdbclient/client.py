@@ -716,6 +716,47 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             credentials=credentials or self._call_credentials,
         )
 
+    @overload
+    def subscribe_to_stream(
+        self,
+        stream_name: str,
+        *,
+        resolve_links: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> CatchupSubscription:
+        """
+        Signature to start catch-up subscription from the start of the stream.
+        """
+
+    @overload
+    def subscribe_to_stream(
+        self,
+        stream_name: str,
+        *,
+        stream_position: int,
+        resolve_links: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> CatchupSubscription:
+        """
+        Signature to start catch-up subscription from a particular stream position.
+        """
+
+    @overload
+    def subscribe_to_stream(
+        self,
+        stream_name: str,
+        *,
+        from_end: Literal[True] = True,
+        resolve_links: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> CatchupSubscription:
+        """
+        Signature to start catch-up subscription from the end of the stream.
+        """
+
     @retrygrpc
     @autoreconnect
     def subscribe_to_stream(
@@ -723,6 +764,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         stream_name: str,
         *,
         stream_position: Optional[int] = None,
+        from_end: bool = False,
         resolve_links: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -734,6 +776,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         return self._connection.streams.read(
             stream_name=stream_name,
             stream_position=stream_position,
+            from_end=from_end,
             resolve_links=resolve_links,
             subscribe=True,
             timeout=timeout,

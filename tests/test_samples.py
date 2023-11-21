@@ -53,7 +53,8 @@ class TestSamples(TestCase):
                     # Track elapsed time of the test suite.
                     sys.stderr.write(f" [@{get_elapsed_time()}]")
                     sys.stderr.flush()
-                exec(compiled, {"__name__": "__main__"}, {})
+                sample_globals = {"__name__": "__main__"}
+                exec(compiled, sample_globals, sample_globals)
                 tb = None
             except Exception:
                 # Remove this call from the traceback (so it's just clearer).

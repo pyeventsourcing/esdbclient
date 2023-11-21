@@ -521,6 +521,8 @@ class BaseStreamsService(ESDBService):
             # Decide 'revision_option'.
             if stream_position is not None:
                 stream_options.revision = stream_position
+            elif from_end is True:
+                stream_options.end.CopyFrom(shared_pb2.Empty())
             elif backwards is False:
                 stream_options.start.CopyFrom(shared_pb2.Empty())
             else:
@@ -921,6 +923,7 @@ class StreamsService(BaseStreamsService):
         *,
         stream_name: Optional[str] = None,
         stream_position: Optional[int] = None,
+        from_end: bool = False,
         resolve_links: bool = False,
         subscribe: Literal[True],
         timeout: Optional[float] = None,

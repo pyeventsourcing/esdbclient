@@ -1950,14 +1950,19 @@ returns a "catch-up subscription" iterator.
 This method has a required `stream_name` argument, which specifies the name of the
 stream from which recorded events will be received.
 
-This method also has four optional arguments, `stream_position`, `resolve_links`,
-`timeout` and `credentials`.
+This method also has five optional arguments, `stream_position`, `from_end`,
+`resolve_links`, `timeout` and `credentials`.
 
-The optional `stream_position` argument specifies a position in the stream. The
-default value of `stream_position` is `None`, which means that all events
-recorded in the stream will be obtained in the order they were recorded.
-If a stream position is given, then only events recorded after that position
-will be obtained.
+The optional `stream_position` argument specifies a position in the stream from
+which to start subscribing. The default value of `stream_position` is `None`,
+which means that all events recorded in the stream will be obtained in the
+order they were recorded, unless `from_end` is set to `True`. If a stream
+position is given, then only events recorded after that position will be obtained.
+
+The optional `from_end` argument specifies that the subscription will start
+from the last position in the stream. The default value of `from_end` is `False`.
+If `from_end` is `True`, then only events recorded after the subscription was
+created will be obtained. This argument if ignored is `stream_position` is set.
 
 The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
 is `False`, which means any event links will not be resolved, so that the events that are
