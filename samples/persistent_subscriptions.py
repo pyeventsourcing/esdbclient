@@ -84,7 +84,7 @@ while True:
                 subscription.ack(event_id=event.id)
 
     except ConsumerTooSlow:
-        # reconnect
+        # subscription was dropped
         continue
 
     # endregion subscribe-to-persistent-subscription-to-stream
@@ -112,7 +112,7 @@ while True:
                 subscription.ack(event_id=event.id)
 
     except ConsumerTooSlow:
-        # reconnect
+        # subscription was dropped
         continue
     # endregion subscribe-to-persistent-subscription-to-all
     break
@@ -148,7 +148,7 @@ while True:
                 subscription.ack(event_id=event.id)
 
     except ConsumerTooSlow:
-        # reconnect
+        # subscription was dropped
         continue
     # endregion subscribe-to-persistent-subscription-with-manual-acks
     break

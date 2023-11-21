@@ -172,7 +172,7 @@ while True:
             handle_event(received)
 
     except ConsumerTooSlow:
-        # resubscribe from last known position
+        # subscription was dropped
         continue
     # endregion checkpoint
     break

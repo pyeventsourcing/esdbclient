@@ -147,7 +147,7 @@ while True:
             handle_event(event)
 
     except ConsumerTooSlow:
-        # resubscribe from last known position
+        # subscription was dropped
         continue
     # endregion subscribe-to-stream-subscription-dropped
     break
@@ -170,7 +170,7 @@ while True:
             handle_event(event)
 
     except ConsumerTooSlow:
-        # resubscribe from last known position
+        # subscription was dropped
         continue
     # endregion subscribe-to-all-subscription-dropped
     break
