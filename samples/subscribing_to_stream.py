@@ -7,7 +7,7 @@ from esdbclient import (
     StreamState,
     exceptions,
 )
-from esdbclient.exceptions import AbortedByServer
+from esdbclient.exceptions import ConsumerTooSlow
 from esdbclient.streams import CatchupSubscription, RecordedEvent
 from tests.test_client import get_server_certificate
 
@@ -146,7 +146,7 @@ while True:
             # record stream position
             handle_event(event)
 
-    except AbortedByServer:
+    except ConsumerTooSlow:
         # resubscribe from last known position
         continue
     # endregion subscribe-to-stream-subscription-dropped
@@ -169,7 +169,7 @@ while True:
             # record commit position
             handle_event(event)
 
-    except AbortedByServer:
+    except ConsumerTooSlow:
         # resubscribe from last known position
         continue
     # endregion subscribe-to-all-subscription-dropped

@@ -2,7 +2,7 @@
 from uuid import uuid4
 
 from esdbclient import EventStoreDBClient, NewEvent, StreamState
-from esdbclient.exceptions import AbortedByServer
+from esdbclient.exceptions import ConsumerTooSlow
 from esdbclient.persistent import (
     PersistentSubscription,
     RecordedEvent,
@@ -83,7 +83,7 @@ while True:
             else:
                 subscription.ack(event_id=event.id)
 
-    except AbortedByServer:
+    except ConsumerTooSlow:
         # reconnect
         continue
 
@@ -111,7 +111,7 @@ while True:
             else:
                 subscription.ack(event_id=event.id)
 
-    except AbortedByServer:
+    except ConsumerTooSlow:
         # reconnect
         continue
     # endregion subscribe-to-persistent-subscription-to-all
@@ -147,7 +147,7 @@ while True:
             else:
                 subscription.ack(event_id=event.id)
 
-    except AbortedByServer:
+    except ConsumerTooSlow:
         # reconnect
         continue
     # endregion subscribe-to-persistent-subscription-with-manual-acks
