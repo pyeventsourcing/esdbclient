@@ -2,13 +2,21 @@
 from uuid import uuid4
 
 from esdbclient import EventStoreDBClient, NewEvent, StreamState
+from esdbclient.exceptions import AbortedByServer
 from esdbclient.persistent import (
     PersistentSubscription,
     RecordedEvent,
 )
 from tests.test_client import get_server_certificate
 
-stream_name = str(uuid4())
+DEBUG = False
+_print = print
+
+
+def print(*args):
+    if DEBUG:
+        _print(*args)
+
 
 ESDB_TARGET = "localhost:2114"
 qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
@@ -27,6 +35,20 @@ def handle_event(ev: RecordedEvent):
     subscription.stop()
 
 
+stream_name = "user-" + str(uuid4())
+
+event_data = NewEvent(
+    type="some-event",
+    data=b"{}",
+)
+
+client.append_to_stream(
+    stream_name=stream_name,
+    current_version=StreamState.ANY,
+    events=event_data,
+)
+
+
 # region create-persistent-subscription-to-stream
 client.create_subscription_to_stream(
     stream_name=stream_name,
@@ -34,89 +56,67 @@ client.create_subscription_to_stream(
 )
 # endregion create-persistent-subscription-to-stream
 
-event_data = NewEvent(
-    type="some-event",
-    data=b'{"id": "1", "important_data": "some value"}',
-)
-
-client.append_to_stream(
-    stream_name=stream_name,
-    current_version=StreamState.ANY,
-    events=event_data,
-)
-
-# region subscribe-to-persistent-subscription-to-stream
-subscription = client.read_subscription_to_stream(
-    stream_name=stream_name,
-    group_name="subscription-group",
-)
-
-try:
-    for event in subscription:
-        try:
-            print(
-                f"handling event {event.type} with retryCount",
-                f"{event.retry_count}",
-            )
-            subscription.ack(event_id=event.id)
-
-            # do something with the event
-            handle_event(event)
-        except Exception as ex:
-            print(f"handling failed with exception {ex}")
-            subscription.nack(event_id=event.id, action="park")
-except Exception as e:
-    print(f"Subscription was dropped. {e}")
-# endregion subscribe-to-persistent-subscription-to-stream
-
-
-event_data = NewEvent(
-    type="some-event",
-    data=b'{"id": "1", "important_data": "some value"}',
-)
-
-client.append_to_stream(
-    stream_name=stream_name,
-    current_version=StreamState.ANY,
-    events=event_data,
-)
-
-group_name = str(uuid4())
-
-client.create_subscription_to_all(
-    group_name=group_name,
-)
-
-# region subscribe-to-persistent-subscription-to-all
-subscription = client.read_subscription_to_all(
-    group_name=group_name,
-)
-
-try:
-    for event in subscription:
-        print(
-            f"handling event {event.type} with retryCount",
-            f"{event.retry_count}",
-        )
-        subscription.ack(event_id=event.id)
-
-        # do something with the event
-        handle_event(event)
-except Exception as e:
-    print(f"Subscription was dropped. {e}")
-# endregion subscribe-to-persistent-subscription-to-all
 
 group_name = str(uuid4())
 
 # region create-persistent-subscription-to-all
 client.create_subscription_to_all(
     group_name=group_name,
-    filter_include="test" + ".*",
     filter_by_stream_name=True,
+    filter_include=[r"user-.*"],
 )
 # endregion create-persistent-subscription-to-all
 
-stream_name = str(uuid4())
+
+# region subscribe-to-persistent-subscription-to-stream
+while True:
+    subscription = client.read_subscription_to_stream(
+        stream_name=stream_name,
+        group_name="subscription-group",
+    )
+    try:
+        for event in subscription:
+            try:
+                handle_event(event)
+            except Exception:
+                subscription.nack(event_id=event.id, action="park")
+            else:
+                subscription.ack(event_id=event.id)
+
+    except AbortedByServer:
+        # reconnect
+        continue
+
+    # endregion subscribe-to-persistent-subscription-to-stream
+    break
+
+group_name = str(uuid4())
+
+client.create_subscription_to_all(
+    group_name=group_name,
+)
+
+
+# region subscribe-to-persistent-subscription-to-all
+while True:
+    subscription = client.read_subscription_to_all(
+        group_name=group_name,
+    )
+    try:
+        for event in subscription:
+            try:
+                handle_event(event)
+            except Exception:
+                subscription.nack(event_id=event.id, action="park")
+            else:
+                subscription.ack(event_id=event.id)
+
+    except AbortedByServer:
+        # reconnect
+        continue
+    # endregion subscribe-to-persistent-subscription-to-all
+    break
+
 group_name = str(uuid4())
 
 client.create_subscription_to_stream(
@@ -124,40 +124,34 @@ client.create_subscription_to_stream(
     group_name=group_name,
 )
 
-event_data = NewEvent(
-    type="some-event",
-    data=b'{"id": "1", "important_data": "some value"}',
-)
-
-client.append_to_stream(
-    stream_name=stream_name,
-    current_version=StreamState.ANY,
-    events=event_data,
-)
 
 # region subscribe-to-persistent-subscription-with-manual-acks
-subscription = client.read_subscription_to_stream(
-    stream_name=stream_name,
-    group_name=group_name,
-)
+while True:
+    subscription = client.read_subscription_to_stream(
+        group_name=group_name,
+        stream_name=stream_name,
+    )
+    try:
+        for event in subscription:
+            try:
+                handle_event(event)
+            except Exception:
+                if event.retry_count < 5:
+                    subscription.nack(
+                        event_id=event.id, action="retry"
+                    )
+                else:
+                    subscription.nack(
+                        event_id=event.id, action="park"
+                    )
+            else:
+                subscription.ack(event_id=event.id)
 
-try:
-    for event in subscription:
-        try:
-            print(
-                f"handling event {event.type} with retryCount",
-                f"{event.retry_count}",
-            )
-            subscription.ack(event_id=event.id)
-
-            # do something with the event
-            handle_event(event)
-        except Exception as ex:
-            print(f"handling failed with exception {ex}")
-            subscription.nack(event_id=event.id, action="park")
-except Exception as e:
-    print(f"Subscription was dropped. {e}")
-# endregion subscribe-to-persistent-subscription-with-manual-acks
+    except AbortedByServer:
+        # reconnect
+        continue
+    # endregion subscribe-to-persistent-subscription-with-manual-acks
+    break
 
 
 # region update-persistent-subscription

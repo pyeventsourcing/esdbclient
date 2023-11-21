@@ -9,6 +9,15 @@ from esdbclient import (
 )
 from tests.test_client import get_server_certificate
 
+DEBUG = False
+_print = print
+
+
+def print(*args):
+    if DEBUG:
+        _print(*args)
+
+
 ESDB_TARGET = "localhost:2114"
 qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
 
@@ -20,15 +29,15 @@ client = EventStoreDBClient(
 stream_name = str(uuid4())
 
 # region append-to-stream
-event_data = NewEvent(
+event1 = NewEvent(
     type="some-event",
-    data=b'{"id": "1", "important_data": "some value"}',
+    data=b'{"important_data": "some value"}',
 )
 
 commit_position = client.append_to_stream(
     stream_name=stream_name,
     current_version=StreamState.NO_STREAM,
-    events=event_data,
+    events=[event1],
 )
 # endregion append-to-stream
 
@@ -38,7 +47,9 @@ stream_name = str(uuid4())
 event = NewEvent(
     id=uuid4(),
     type="some-event",
-    data=b'{"id": "1", "important_data": "some value"}',
+    data=b'{"important_data": "some value"}',
+    metadata=b"{}",
+    content_type="application/json",
 )
 
 client.append_to_stream(
@@ -55,23 +66,23 @@ client.append_to_stream(
 # endregion append-duplicate-event
 assert len(client.get_stream(stream_name)) == 1
 
-stream_name = str(uuid4())
-
 # region append-with-no-stream
-event_one = NewEvent(
+event1 = NewEvent(
     type="some-event",
-    data=b'{"id": "1", "important_data": "some value"}',
+    data=b'{"important_data": "some value"}',
 )
+
+stream_name = str(uuid4())
 
 client.append_to_stream(
     stream_name=stream_name,
     current_version=StreamState.NO_STREAM,
-    events=event_one,
+    events=event1,
 )
 
-event_two = NewEvent(
+event2 = NewEvent(
     type="some-event",
-    data=b'{"id": "2", "important_data": "some other value"}',
+    data=b'{"important_data": "some other value"}',
 )
 
 try:
@@ -79,12 +90,13 @@ try:
     client.append_to_stream(
         stream_name=stream_name,
         current_version=StreamState.NO_STREAM,
-        events=event_two,
+        events=event2,
     )
 except exceptions.WrongCurrentVersion:
     print("Error appending second event")
     # endregion append-with-no-stream
-    pass
+else:
+    raise Exception("Exception not raised")
 
 stream_name = str(uuid4())
 
@@ -98,44 +110,40 @@ client.append_to_stream(
 )
 
 # region append-with-concurrency-check
-events = client.get_stream(
-    stream_name=stream_name,
-    backwards=True,
-    limit=1,
-)
 
-revision = StreamState.NO_STREAM
-for event in events:
-    revision = event.stream_position
+original_version = StreamState.NO_STREAM
 
-last_event = events[-1]
+for event in client.read_stream(stream_name):
+    original_version = event.stream_position
 
-client_one_event = NewEvent(
+
+event1 = NewEvent(
     type="some-event",
-    data=b'{"id": "1", "important_data": "client one"}',
+    data=b'{"important_data": "some value"}',
 )
 
 client.append_to_stream(
     stream_name=stream_name,
-    current_version=revision,
-    events=client_one_event,
+    current_version=original_version,
+    events=event1,
 )
 
-client_two_event = NewEvent(
+event2 = NewEvent(
     type="some-event",
-    data=b'{"id": "1", "important_data": "client two"}',
+    data=b'{"important_data": "some other value"}',
 )
 
 try:
     client.append_to_stream(
         stream_name=stream_name,
-        current_version=revision,
-        events=client_two_event,
+        current_version=original_version,
+        events=event2,
     )
 except exceptions.WrongCurrentVersion:
-    print("Error appending second event")
+    print("Error appending event2")
     # endregion append-with-concurrency-check
-    pass
+else:
+    raise Exception("Exception not raised")
 
 stream_name = str(uuid4())
 
@@ -157,6 +165,5 @@ commit_position = client.append_to_stream(
     credentials=credentials,
 )
 # endregion overriding-user-credentials
-print(f"Commit position: {commit_position}")
 
 client.close()

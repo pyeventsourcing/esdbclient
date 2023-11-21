@@ -17,6 +17,15 @@ client = EventStoreDBClient(
     root_certificates=get_server_certificate(ESDB_TARGET),
 )
 
+DEBUG = False
+_print = print
+
+
+def print(*args):
+    if DEBUG:
+        _print(*args)
+
+
 stream_name = str(uuid4())
 
 event_data = NewEvent(
@@ -24,8 +33,8 @@ event_data = NewEvent(
     data=b'{"id": "1", "important_data": "some value"}',
 )
 
-# append 20 events
-for _ in range(20):
+
+for _ in range(1):
     client.append_to_stream(
         stream_name=stream_name,
         current_version=StreamState.ANY,
@@ -38,7 +47,6 @@ events = client.get_stream(
     stream_position=0,
     limit=100,
 )
-
 # endregion read-from-stream
 
 # region iterate-stream
@@ -48,109 +56,69 @@ for event in events:
 # endregion iterate-stream
 
 
+# region overriding-user-credentials
+credentials = client.construct_call_credentials(
+    username="admin",
+    password="changeit",
+)
+
+events = client.get_stream(
+    stream_name=stream_name,
+    credentials=credentials,
+)
+# endregion overriding-user-credentials
+
+
 # region read-from-stream-position
 events = client.get_stream(
     stream_name=stream_name,
     stream_position=10,
-    limit=20,
 )
 # endregion read-from-stream-position
 
-# region iterate-stream
-for event in events:
-    print(f"Event: {event}")
-# endregion iterate-stream
 
+# region reading-backwards
+events = client.get_stream(
+    stream_name=stream_name,
+    backwards=True,
+)
+# endregion reading-backwards
 
-try:
-    # region overriding-user-credentials
-    credentials = client.construct_call_credentials(
-        username="admin",
-        password="changeit",
-    )
-
-    stream = client.read_stream(
-        stream_name=stream_name,
-        stream_position=0,
-        credentials=credentials,
-    )
-    # endregion overriding-user-credentials
-except exceptions.GrpcError:
-    pass
 
 unknown_stream_name = str(uuid4())
 
 # region checking-for-stream-presence
 try:
     events = client.get_stream(
-        stream_name=unknown_stream_name,
-        backwards=False,
-        stream_position=10,
-        limit=100,
+        stream_name=unknown_stream_name, limit=1
     )
-
-    for event in events:
-        print(event.data)
 except exceptions.NotFound:
-    pass
+    print("The stream was not found")
 # endregion checking-for-stream-presence
-
-# region reading-backwards
-events = client.get_stream(
-    stream_name=stream_name,
-    backwards=True,
-    limit=10,
-)
-
-for event in events:
-    print(f"Event: {event}")
-# endregion reading-backwards
+else:
+    raise Exception("Exception not raised")
 
 
 # region read-from-all-stream
-stream = client.read_all(
+events = client.read_all(
     commit_position=0,
-    backwards=False,
     limit=100,
 )
 # endregion read-from-all-stream
-# region read-from-all-stream-iterate
-events = tuple(stream)
 
+
+# region read-from-all-stream-iterate
 for event in events:
     print(f"Event: {event}")
 # endregion read-from-all-stream-iterate
 
 
-# region ignore-system-events
-stream = client.read_all(limit=100)
-
-events = tuple(stream)
-
-for event in events:
-    if event.type.startswith("$"):
-        continue
-
-    print(f"Event: {event.type}")
-# endregion ignore-system-events
-
-
-# region read-from-all-stream-backwards
-stream = client.read_all(
-    backwards=True,
-    limit=100,
-)
-# endregion read-from-all-stream-backwards
-# region read-from-all-stream-backwards-iterate
-events = tuple(stream)
-
-for event in events:
-    print(f"Event: {event.type}")
-# endregion read-from-all-stream-backwards-iterate
-
-
 # region read-from-all-stream-resolving-link-Tos
-client.read_all(limit=100)
+events = client.read_all(
+    commit_position=0,
+    limit=100,
+    resolve_links=True,
+)
 # endregion read-from-all-stream-resolving-link-Tos
 
 
@@ -160,10 +128,40 @@ credentials = client.construct_call_credentials(
     password="changeit",
 )
 
-client.read_all(
+events = client.read_all(
     commit_position=0,
+    limit=100,
     credentials=credentials,
 )
 # endregion read-all-overriding-user-credentials
+
+
+# region read-from-all-stream-backwards
+events = client.read_all(
+    backwards=True,
+    limit=100,
+)
+# endregion read-from-all-stream-backwards
+
+
+# region ignore-system-events
+events = client.read_all(
+    filter_exclude=[],  # system events are excluded by default
+)
+
+for event in events:
+    if event.type.startswith("$"):
+        continue
+
+    print(f"Event: {event.type}")
+# endregion ignore-system-events
+
+
+# Is this actually used?
+# region read-from-all-stream-backwards-iterate
+for event in events:
+    print(f"Event: {event.type}")
+# endregion read-from-all-stream-backwards-iterate
+
 
 client.close()

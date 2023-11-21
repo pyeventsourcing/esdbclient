@@ -8,8 +8,18 @@ from esdbclient import (
     NewEvent,
     StreamState,
 )
+from esdbclient.exceptions import AbortedByServer
 from esdbclient.streams import CatchupSubscription, RecordedEvent
 from tests.test_client import get_server_certificate
+
+DEBUG = False
+_print = print
+
+
+def print(*args):
+    if DEBUG:
+        _print(*args)
+
 
 ESDB_TARGET = "localhost:2114"
 qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
@@ -34,9 +44,10 @@ subscription = client.subscribe_to_all(
 )
 
 for event in subscription:
-    print(f"received event: {event.stream_position} {event.type}")
+    print("Received event:", event.stream_position, event.type)
     break
 # endregion exclude-system
+subscription.stop()
 
 stream_name = str(uuid4())
 
@@ -53,8 +64,7 @@ client.append_to_stream(
 
 # region event-type-prefix
 subscription = client.subscribe_to_all(
-    filter_by_stream_name=False,
-    filter_include=r"customer-\w+",
+    filter_include=[r"customer-.*"],
 )
 
 for event in subscription:
@@ -111,7 +121,7 @@ client.append_to_stream(
 # region stream-prefix
 subscription = client.subscribe_to_all(
     filter_by_stream_name=True,
-    filter_include=[r"test-\w+"],
+    filter_include=[r"user-.*"],
 )
 for event in subscription:
     print(f"received event: {event.stream_position} {event.type}")
@@ -121,37 +131,56 @@ for event in subscription:
 # endregion stream-prefix
 
 client.append_to_stream(
-    stream_name="user-stream",
+    stream_name="account-stream",
     current_version=StreamState.ANY,
     events=event_data,
 )
 
+
 # region stream-regex
 subscription = client.subscribe_to_all(
     filter_by_stream_name=True,
-    filter_include=["user.*", "company.*"],
+    filter_include=["account.*", "savings.*"],
 )
 for event in subscription:
-    print(f"received event: {event.stream_position} {event.type}")
-
     # do something with the event
     handle_event(event)
 # endregion stream-regex
 
+# region checkpoint
+# get last recorded commit position
+last_commit_position = 0
+
+while True:
+    subscription = client.subscribe_to_all(
+        commit_position=last_commit_position,
+    )
+    try:
+        for received in subscription:
+            last_commit_position = received.commit_position
+
+            # checkpoints are like events but only have a commit position
+            if isinstance(received, Checkpoint):
+                print("We got a checkpoint!")
+            else:
+                print("We got an event!")
+
+            # record commit position
+            handle_event(received)
+
+    except AbortedByServer:
+        # resubscribe from last known position
+        continue
+    # endregion checkpoint
+    break
+
+
 # region checkpoint-with-interval
 subscription = client.subscribe_to_all(
-    filter_by_stream_name=False,
-    filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX],
+    commit_position=last_commit_position,
     include_checkpoints=True,
     checkpoint_interval_multiplier=5,
 )
 # endregion checkpoint-with-interval
-
-# region checkpoint
-for event in subscription:
-    if isinstance(event, Checkpoint):
-        print(f"checkpoint taken at {event.commit_position}")
-        break
-# endregion checkpoint
 
 client.close()

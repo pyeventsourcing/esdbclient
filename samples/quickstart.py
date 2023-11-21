@@ -5,6 +5,15 @@ from esdbclient import EventStoreDBClient, NewEvent, StreamState
 from esdbclient.streams import CatchupSubscription, RecordedEvent
 from tests.test_client import get_server_certificate
 
+DEBUG = False
+_print = print
+
+
+def print(*args):
+    if DEBUG:
+        _print(*args)
+
+
 ESDB_TARGET = "localhost:2114"
 qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
 
@@ -34,7 +43,7 @@ client = EventStoreDBClient(
 """
 
 # region createEvent
-event_data = NewEvent(
+new_event = NewEvent(
     id=uuid4(),
     type="TestEvent",
     data=b"I wrote my first event",
@@ -44,17 +53,14 @@ event_data = NewEvent(
 
 # region appendEvents
 client.append_to_stream(
-    stream_name,
-    events=event_data,
+    "some-stream",
+    events=[new_event],
     current_version=StreamState.ANY,
 )
 # endregion appendEvents
 
 # region readStream
-events = client.get_stream(
-    stream_name,
-    limit=10,
-)
+events = client.get_stream("some-stream")
 
 for event in events:
     # Doing something productive with the event
