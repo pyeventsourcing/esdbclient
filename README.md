@@ -695,7 +695,7 @@ annotated with the type `Optional[int]` for this reason only.
 The `retry_count` is a Python `int`, used to indicate the number of times a persistent
 subscription has retried sending the event to a consumer.
 
-The `link` attribute is an option `RecordedEvent` that carries information about link
+The `link` attribute is an optional `RecordedEvent` that carries information about link
 events.
 
 ```python
