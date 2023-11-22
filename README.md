@@ -644,9 +644,9 @@ and `read_subscription_to_all()`. You do not need to construct recorded event ob
 Like `NewEvent`, the `RecordedEvent` class is also a frozen Python dataclass. It has
 all the attributes that `NewEvent` has (`type`, `data`, `metadata`, `content_type`, `id`)
 and some additional attributes that follow from the fact that an event was recorded
-(`stream_name`, `stream_position`, `commit_position`). It also has a `retry_count`
-which is used only when reading persistence subscriptions. It also has a `link`
-attribute.
+(`stream_name`, `stream_position`, `commit_position`). It has a `retry_count`
+which is set only when reading persistence subscriptions. It also has a `link`
+attribute, which is set only when resolving "link events".
 
 The `type` attribute is a Python `str`, used to indicate the type of an event
 that was recorded.
@@ -696,23 +696,72 @@ The `retry_count` is a Python `int`, used to indicate the number of times a pers
 subscription has retried sending the event to a consumer.
 
 The `link` attribute is an optional `RecordedEvent` that carries information about
-"links". This allows link events to be acknowledged or negatively acknowledged
-when using persistence subscriptions with the `resolve_links` argument set to `True`.
+a "link event" that has been resolved. This allows link events to be acknowledged or
+negatively acknowledged when using persistence subscriptions with the `resolve_links`
+argument set to `True`. See the `ack_id` property.
+
 
 ```python
-from esdbclient.events import RecordedEvent
+from dataclasses import dataclass
 
-recorded_event = RecordedEvent(
-    type='OrderCreated',
-    data=b'{}',
-    metadata=b'',
-    content_type='application/json',
-    id=uuid.uuid4(),
-    stream_name='stream1',
-    stream_position=0,
-    commit_position=512,
-)
+@dataclass(frozen=True)
+class RecordedEvent:
+    """
+    Encapsulates event data that has been recorded in EventStoreDB.
+    """
+
+    type: str
+    data: bytes
+    metadata: bytes
+    content_type: str
+    id: UUID
+    stream_name: str
+    stream_position: int
+    commit_position: Optional[int]
+    retry_count: Optional[int] = None
+    link: Optional["RecordedEvent"] = None
+
+    @property
+    def ack_id(self) -> UUID:
+        if self.link is not None:
+            return self.link.id
+        else:
+            return self.id
+
+    @property
+    def is_system_event(self) -> bool:
+        return self.type.startswith("$")
+
+    @property
+    def is_link_event(self) -> bool:
+        return self.type == "$>"
+
+    @property
+    def is_resolved_event(self) -> bool:
+        return self.link is not None
+
+    @property
+    def is_checkpoint(self) -> bool:
+        return False
 ```
+
+The property `ack_id` can be used to obtain the correct event ID to `ack()` or `nack()`
+events received when reading persistent subscriptions. The returned value is either the
+value of the `id` attribute of the `link` attribute, if `link` is not `None`, otherwise
+it is the value of the `id` attribute.
+
+The property `is_system_event` indicates whether the event is a "system event". System
+events have a `type` value that starts with `'$'`.
+
+The property `is_link_event` indicates whether the event is a "link event". Link
+events have a `type` value of `'$>'`.
+
+The property `is_resolve_event` indicates whether the event has been resolved from a
+"link event". The returned value is `True` if `link` is not `None`.
+
+The property `is_checkpoint` is `False`. This can be used to identify `Checkpoint`
+instances returned when receiving events from `include_checkpoints=True`.
+
 
 
 ## Streams<a id="streams"></a>
@@ -1781,8 +1830,9 @@ The`subscribe_to_all()` method can be used to start a catch-up subscription
 from which all events recorded in the database can be obtained in the order
 they were recorded. This method returns a "catch-up subscription" iterator.
 
-This method also has eight optional arguments, `commit_position`, `from_end`, `resolve_links`,
-`filter_exclude`, `filter_include`, `filter_by_stream_name`, `timeout` and `credentials`.
+This method also has nine optional arguments, `commit_position`, `from_end`, `resolve_links`,
+`filter_exclude`, `filter_include`, `filter_by_stream_name`, `include_checkpoints`,
+`timeout` and `credentials`.
 
 The optional `commit_position` argument specifies a commit position. The default
 value of `commit_position` is `None`, which means the catch-up subscription will
@@ -1817,6 +1867,13 @@ The optional `filter_by_stream_name` argument is a Python `bool` that indicates
 whether the filtering will apply to event types or stream names. By default, this
 value is `False` and so the filtering will apply to the event type strings of
 recorded events.
+
+The optional `include_checkpoints` argument is a Python `bool` which indicates
+whether checkpoints should be included when recorded events are received. Checkpoints
+have a `commit_position` value that can be used by an event processing component to
+update its recorded commit position value, so that, when lots of events are being
+filter out, the subscriber does not have to start from the same old position when
+the event processing component is restarted.
 
 The optional `timeout` argument is a Python `float` which sets a
 deadline for the completion of the gRPC operation.
@@ -2181,11 +2238,13 @@ methods.
 subscription = client.read_subscription_to_all(group_name=group_name1)
 ```
 
-The `ack()` method should be used by a consumer to indicate to the server that it
-has received and successfully processed a recorded event. This will prevent that
+The `ack()` method should be used by a consumer to "acknowledge" to the server that
+it has received and successfully processed a recorded event. This will prevent that
 recorded event being received by another consumer in the same group. The `ack()`
-method takes an `event_id` argument, which is the ID of the recorded event that
-has been received.
+method takes an `event_id`. The value of this argument should be obtained from
+the `ack_id` attribute of the recorded event object that is being acknowledged. This
+is sometimes not the same as the value of the recorded event's `id` attribute when
+subscription has been configured to resolve links.
 
 The example below iterates over the subscription object, and calls `ack()`. The
 `stop()` method is called when we have received the last event, so that we can
@@ -2198,7 +2257,7 @@ for event in subscription:
     received_events.append(event)
 
     # Acknowledge the received event.
-    subscription.ack(event_id=event.id)
+    subscription.ack(event_id=event.ack_id)
 
     # Stop when 'event9' has been received.
     if event.id == event9.id:
@@ -2213,10 +2272,12 @@ assert event9.id in [e.id for e in received_events]
 ```
 
 The `PersistentSubscription` object also has an `nack()` method that should be used
-by a consumer to negatively acknowledge to the server that it has received but not
+by a consumer to "negatively acknowledge" to the server that it has received but not
 successfully processed a recorded event. The `nack()` method has an `event_id`
-argument, which is the ID of the recorded event that has been received. The `nack()`
-method also has an `action` argument, which should be a Python `str`: either
+argument. The value of this argument should be obtained from the `ack_id` attribute
+of the recorded event. This is sometimes not the same as the value of the recorded
+event's `id` attribute when subscription has been configured to resolve links. The
+`nack()` method also has an `action` argument, which should be a Python `str`: either
 `'unknown'`, `'park'`, `'retry'`, `'skip'` or `'stop'`.
 
 
@@ -2253,10 +2314,10 @@ class ExampleConsumer:
                         action = "retry"
                     else:
                         action = self.final_action
-                    self.subscription.nack(event.id, action=action)
+                    self.subscription.nack(event.ack_id, action=action)
                     self.after_nack(event, action)
                 else:
-                    self.subscription.ack(event.id)
+                    self.subscription.ack(event.ack_id)
                     self.after_ack(event)
         except Exception:
             self.stop()
@@ -2452,7 +2513,7 @@ for event in subscription:
     events.append(event)
 
     # Acknowledge the received event.
-    subscription.ack(event_id=event.id)
+    subscription.ack(event_id=event.ack_id)
 
     # Stop when 'event6' has been received.
     if event.id == event6.id:

@@ -4301,6 +4301,128 @@ class TestEventStoreDBClient(TimedTestCase):
         # Check received events.
         self.assertEqual(len(events), 1)
 
+    # def test_print_resolve_links(self) -> None:
+    #     if self.ESDB_CLUSTER_SIZE > 1 or self.ESDB_TLS is not True:
+    #         self.skipTest("This test doesn't work with this configuration")
+    #     self.construct_esdb_client()
+    #
+    #     event_type = "EventType-" + str(uuid4()).replace("-", "")[:5]
+    #     stream_name = str(uuid4())
+    #
+    #     # NB only events with JSON data are projected into "$et-{event_type}" streams.
+    #     print("new event type")
+    #     print(event_type)
+    #     print()
+    #     print("appended to new stream")
+    #     event1 = NewEvent(
+    #         id=uuid5(NAMESPACE_URL, "1" + event_type), type=event_type, data=b"{}"
+    #     )
+    #     event2 = NewEvent(
+    #         id=uuid5(NAMESPACE_URL, "2" + event_type), type=event_type, data=b"{}"
+    #     )
+    #     print("Event1 ID:", event1.id)
+    #     print("Event2 ID:", event2.id)
+    #     print()
+    #
+    #     try:
+    #         self.client.append_events(
+    #             stream_name,
+    #             current_version=StreamState.NO_STREAM,
+    #             events=[event1, event2],
+    #         )
+    #     except WrongCurrentVersion:
+    #         pass
+    #
+    #     event_type_stream_name = f"$et-{event_type}"
+    #
+    #     # Create three persistent stream subscriptions.
+    #     # group_name1 = f"my-subscription-{uuid4().hex}"
+    #     # group_name2 = f"my-subscription-{uuid4().hex}"
+    #     # group_name3 = f"my-subscription-{uuid4().hex}"
+    #     # self.client.create_subscription_to_stream(
+    #     #     group_name=group_name1,
+    #     #     stream_name=stream_name,
+    #     #     resolve_links=False,
+    #     # )
+    #     # self.client.create_subscription_to_stream(
+    #     #     group_name=group_name2,
+    #     #     stream_name=event_type_stream_name,
+    #     #     resolve_links=False,
+    #     # )
+    #     # self.client.create_subscription_to_stream(
+    #     #     group_name=group_name3,
+    #     #     stream_name=event_type_stream_name,
+    #     #     resolve_links=True,
+    #     # )
+    #
+    #     # subscription1 = self.client.read_subscription_to_stream(
+    #     #     group_name=group_name1,
+    #     #     stream_name=stream_name,
+    #     # )
+    #     # subscription2 = self.client.readption_to_stream(
+    #     #     group_name=group_name2,
+    #     #     stream_name=event_type_stream_name,
+    #     # )
+    #     # subscription3 = self.client.readption_to_stream(
+    #     #     group_name=group_name3,
+    #     #     stream_name=event_type_stream_name,
+    #     # )
+    #     subscription1 = self.client.read_stream(
+    #         # group_name=group_name1,
+    #         stream_name=stream_name,
+    #     )
+    #     subscription2 = self.client.read_stream(
+    #         # group_name=group_name2,
+    #         stream_name=event_type_stream_name,
+    #     )
+    #     subscription3 = self.client.read_stream(
+    #         # group_name=group_name3,
+    #         stream_name=event_type_stream_name,
+    #         resolve_links=True,
+    #     )
+    #
+    #     print("subscription to new stream")
+    #     with subscription1:
+    #         received1 = next(subscription1)
+    #         received2 = next(subscription1)
+    #         print("Event1 ID:", received1.id)
+    #         print("Event1 type:", received1.type)
+    #         print("Event1 link ID:", received1.link.id if received1.link else "")
+    #         print("Event1 link type:", received1.link.type if received1.link else "")
+    #         print("Event2 ID:", received2.id)
+    #         print("Event2 type:", received2.type)
+    #         print("Event2 link ID:", received2.link.id if received2.link else "")
+    #         print("Event1 link type:", received2.link.type if received2.link else "")
+    #         print()
+    #
+    #     print("subscription to event type stream: resolve_links=False")
+    #     with subscription2:
+    #         received1 = next(subscription2)
+    #         received2 = next(subscription2)
+    #         print("Event1 ID:", received1.id)
+    #         print("Event1 type:", received1.type)
+    #         print("Event1 link ID:", received1.link.id if received1.link else "")
+    #         print("Event1 link type:", received1.link.type if received1.link else "")
+    #         print("Event2 ID:", received2.id)
+    #         print("Event2 type:", received2.type)
+    #         print("Event2 link ID:", received2.link.id if received2.link else "")
+    #         print("Event1 link type:", received2.link.type if received2.link else "")
+    #         print()
+    #
+    #     print("subscription to event type stream: resolve_links=True")
+    #     with subscription3:
+    #         received1 = next(subscription3)
+    #         received2 = next(subscription3)
+    #         print("Event1 ID:", received1.id)
+    #         print("Event1 type:", received1.type)
+    #         print("Event1 link ID:", received1.link.id if received1.link else "")
+    #         print("Event1 link type:", received1.link.type if received1.link else "")
+    #         print("Event2 ID:", received2.id)
+    #         print("Event2 type:", received2.type)
+    #         print("Event2 link ID:", received2.link.id if received2.link else "")
+    #         print("Event1 link type:", received2.link.type if received2.link else "")
+    #         print()
+
     def test_stream_metadata_get_and_set(self) -> None:
         self.construct_esdb_client()
         stream_name = str(uuid4())

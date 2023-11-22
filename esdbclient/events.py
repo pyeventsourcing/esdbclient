@@ -38,13 +38,36 @@ class RecordedEvent:
     retry_count: Optional[int] = None
     link: Optional["RecordedEvent"] = None
 
+    @property
+    def ack_id(self) -> UUID:
+        if self.link is not None:
+            return self.link.id
+        else:
+            return self.id
+
+    @property
+    def is_system_event(self) -> bool:
+        return self.type.startswith("$")
+
+    @property
+    def is_link_event(self) -> bool:
+        return self.type == "$>"
+
+    @property
+    def is_resolved_event(self) -> bool:
+        return self.link is not None
+
+    @property
+    def is_checkpoint(self) -> bool:
+        return False
+
 
 class Checkpoint(RecordedEvent):
     CHECKPOINT_ID = UUID("00000000-0000-0000-0000-000000000000")
 
     def __init__(self, commit_position: int):
         super().__init__(
-            id=self.CHECKPOINT_ID,
+            id=Checkpoint.CHECKPOINT_ID,
             type="",
             data=b"",
             content_type="",
@@ -53,3 +76,7 @@ class Checkpoint(RecordedEvent):
             stream_position=0,
             commit_position=commit_position,
         )
+
+    @property
+    def is_checkpoint(self) -> bool:
+        return True
