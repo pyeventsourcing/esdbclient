@@ -50,13 +50,14 @@ class BaseSubscriptionReadReqs:
         self.group_name = group_name
         self.stream_name = stream_name
         assert isinstance(buffer_size, int) and buffer_size > 0, buffer_size
-        self._buffer_size = buffer_size
+        self._server_buffer_size = buffer_size
+        self._ack_buffer_size = min(buffer_size, 100)
         self._has_requested_options = False
 
     def _construct_initial_read_req(self) -> persistent_pb2.ReadReq:
         options = persistent_pb2.ReadReq.Options(
             group_name=self.group_name,
-            buffer_size=self._buffer_size,
+            buffer_size=self._server_buffer_size,
             uuid_option=persistent_pb2.ReadReq.Options.UUIDOption(
                 # structured=shared_pb2.Empty(),
                 string=shared_pb2.Empty(),
@@ -73,13 +74,16 @@ class BaseSubscriptionReadReqs:
 
     @staticmethod
     def _construct_ack_or_nack_read_req(
-        ids: List[shared_pb2.UUID], action: str
+        subscription_id: bytes, event_ids: List[UUID], action: str
     ) -> persistent_pb2.ReadReq:
+        ids = [shared_pb2.UUID(string=str(event_id)) for event_id in event_ids]
         if action == "ack":
-            # print(
-            #     f"Constructing ACK req for IDs: {', '.join([id.string for id in ids])}"
-            # )
-            return persistent_pb2.ReadReq(ack=persistent_pb2.ReadReq.Ack(ids=ids))
+            return persistent_pb2.ReadReq(
+                ack=persistent_pb2.ReadReq.Ack(
+                    id=subscription_id,
+                    ids=ids,
+                )
+            )
         else:
             if action == "unknown":
                 grpc_action = persistent_pb2.ReadReq.Nack.Unknown
@@ -93,7 +97,11 @@ class BaseSubscriptionReadReqs:
                 assert action == "stop"
                 grpc_action = persistent_pb2.ReadReq.Nack.Stop
             return persistent_pb2.ReadReq(
-                nack=persistent_pb2.ReadReq.Nack(ids=ids, action=grpc_action)
+                nack=persistent_pb2.ReadReq.Nack(
+                    id=subscription_id,
+                    ids=ids,
+                    action=grpc_action,
+                )
             )
 
 
@@ -427,74 +435,94 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
         super().__init__(
             group_name=group_name, stream_name=stream_name, buffer_size=buffer_size
         )
+        self.subscription_id = b""
         self._grace = grace
         self._queue: queue.Queue[Tuple[Optional[UUID], str]] = queue.Queue()
         self._held: Optional[Tuple[UUID, str]] = (
             None  # Used when changing n/ack action.
         )
-        self._is_stopping = False  # Indicates queue was poisoned.
+        self._queue_was_poisoned = False  # Indicates queue was poisoned.
         self._is_stopped = Event()  # Indicates req loop has exited.
 
     def __next__(self) -> persistent_pb2.ReadReq:
+        # First send read request options, then send a batch of n/acks
+        # whenever the buffer is full, or when the n/ack actions changes,
+        # or periodically, or when stopping.
+
         if not self._has_requested_options:
-            # Send initial read req.
+            # Send initial read request options.
             self._has_requested_options = True
             return self._construct_initial_read_req()
         else:
+            # Initialise buffer of n/acks.
             buffer = []  # Buffer of n/acks.
-            # Send buffer of n/ack reqs whenever it is full, or when the
-            # n/ack actions changes, or periodically, or when stopping.
+
+            # Initialise the "current action" - we need to detect when this changes.
             current_action: Optional[str] = None
+
+            # Move any "held" n/ack from previous call to the buffer now.
             if self._held is not None:
                 # Move held n/ack to buffer.
                 held_id, current_action = self._held
                 self._held = None
-                buffer.append(shared_pb2.UUID(string=str(held_id)))
+                buffer.append(held_id)
+
+            # Collect n/acks from the queue, until the queue is poisoned.
             while True:
                 try:
-                    if self._is_stopping:
-                        # Queue was poisoned and buffer has been
-                        # sent, so exit req iterator.
-                        sleep(self._grace)  # Grace for server to process last n/acks.
+                    # If queue was poisoned, stop the iteration.
+                    if self._queue_was_poisoned:
+                        # Allow time for server to process last n/acks.
+                        sleep(self._grace)
                         self._is_stopped.set()
                         raise StopIteration() from None
 
-                    # Read the queue.
-                    event_id, action = self._queue.get(timeout=0.2)
+                    # Wait for next n/ack from the queue (with timeout).
+                    event_id, action = self._queue.get(timeout=0.1)
 
+                    # If queue was poisoned....
                     if action == "poison":
-                        # Queue was poisoned, so send buffer.
-                        self._is_stopping = True
+                        self._queue_was_poisoned = True
                         if len(buffer):
+                            # ...send everything in the buffer.
                             assert current_action is not None
                             return self._construct_ack_or_nack_read_req(
-                                buffer, current_action
+                                subscription_id=self.subscription_id,
+                                event_ids=buffer,
+                                action=current_action,
                             )
                     else:
                         assert isinstance(event_id, UUID)
                         if current_action is None:
-                            # Initialise current action.
+                            # Set the "current action" if there isn't one already.
                             current_action = action
                         elif action != current_action:
-                            # Hold last n/ack and send buffer.
+                            # The n/ack action changed, so send everything we have now.
                             self._held = (event_id, action)
                             return self._construct_ack_or_nack_read_req(
-                                buffer, current_action
+                                subscription_id=self.subscription_id,
+                                event_ids=buffer,
+                                action=current_action,
                             )
 
-                        # Append queued n/ack to buffer.
-                        buffer.append(shared_pb2.UUID(string=str(event_id)))
+                        # Append event ID of queued n/ack to the buffer.
+                        buffer.append(event_id)
 
-                        if len(buffer) >= self._buffer_size:
-                            # Send buffer, because it is full.
+                        if len(buffer) >= self._ack_buffer_size:
+                            # Buffer is full so send everything we have now.
                             return self._construct_ack_or_nack_read_req(
-                                buffer, current_action
+                                subscription_id=self.subscription_id,
+                                event_ids=buffer,
+                                action=current_action,
                             )
                 except queue.Empty:
-                    if len(buffer) >= 1:
+                    # Queue timed out, so send everything we have now.
+                    if len(buffer) > 0:
                         assert current_action is not None
                         return self._construct_ack_or_nack_read_req(
-                            buffer, current_action
+                            subscription_id=self.subscription_id,
+                            event_ids=buffer,
+                            action=current_action,
                         )
                     else:  # pragma: no cover
                         pass
@@ -542,6 +570,7 @@ class PersistentSubscription(Iterator[RecordedEvent]):
                 or confirmed_stream_name != expected_stream_name
             ):  # pragma: no cover
                 raise SubscriptionConfirmationError()
+            self.read_reqs.subscription_id = subscription_id.encode()
         else:  # pragma: no cover
             raise EventStoreDBClientException(
                 f"Expected subscription confirmation, got: {first_read_resp}"
