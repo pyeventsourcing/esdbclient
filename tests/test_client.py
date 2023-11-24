@@ -26,6 +26,7 @@ from esdbclient.connection_spec import (
 from esdbclient.events import Checkpoint, NewEvent
 from esdbclient.exceptions import (
     AbortedByServer,
+    AlreadyExists,
     ConsumerTooSlow,
     DeadlineExceeded,
     DiscoveryFailed,
@@ -3694,6 +3695,18 @@ class TestEventStoreDBClient(TimedTestCase):
         self.assertIn(group_name1, group_names)
         self.assertIn(group_name2, group_names)
 
+    def test_subscription_to_all_already_exists(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-subscription-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_all(group_name)
+
+        # Try to create same persistent subscription.
+        with self.assertRaises(AlreadyExists):
+            self.client.create_subscription_to_all(group_name)
+
     def test_subscription_to_all_update(self) -> None:
         self.construct_esdb_client()
 
@@ -4219,6 +4232,19 @@ class TestEventStoreDBClient(TimedTestCase):
             group_name=group_name, stream_name=stream_name
         )
         self.assertTrue(info.resolve_link_tos)
+
+    def test_subscription_to_stream_already_exists(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+        stream_name = f"my-stream-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_stream(group_name, stream_name)
+
+        # Try to create same persistent subscription.
+        with self.assertRaises(AlreadyExists):
+            self.client.create_subscription_to_stream(group_name, stream_name)
 
     def test_subscription_to_stream_delete(self) -> None:
         self.construct_esdb_client()

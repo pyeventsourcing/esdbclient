@@ -10,6 +10,7 @@ from esdbclient.connection_spec import ConnectionSpec
 from esdbclient.events import RecordedEvent
 from esdbclient.exceptions import (
     AbortedByServer,
+    AlreadyExists,
     CancelledByClient,
     ConsumerTooSlow,
     DeadlineExceeded,
@@ -79,6 +80,8 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
             and e.details() == "Leader info available"
         ):
             return NodeIsNotLeader(e)
+        elif e.code() == grpc.StatusCode.ALREADY_EXISTS:
+            return AlreadyExists(e.details())
         elif e.code() == grpc.StatusCode.NOT_FOUND:
             return NotFound()
     return GrpcError(e)

@@ -715,7 +715,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
                 credentials=credentials,
             )
         except grpc.RpcError as e:
-            raise handle_rpc_error(e) from e
+            raise handle_rpc_error(e) from None
         assert isinstance(response, persistent_pb2.CreateResp)
 
     def read(

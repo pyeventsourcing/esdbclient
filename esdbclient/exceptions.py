@@ -60,6 +60,12 @@ class NotFound(EventStoreDBClientException):
     """
 
 
+class AlreadyExists(GrpcError):
+    """
+    Raised when creating something, e.g. a persistent subscription, that already exists.
+    """
+
+
 class SubscriptionConfirmationError(EventStoreDBClientException):
     """
     Raised when subscription confirmation fails.
