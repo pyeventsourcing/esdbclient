@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
+from abc import ABC, abstractmethod
 from base64 import b64encode
-from typing import TYPE_CHECKING, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Dict, Optional, Sequence, Tuple, Union
 from uuid import UUID
 
 import grpc
@@ -13,9 +14,9 @@ from esdbclient.exceptions import (
     AlreadyExists,
     CancelledByClient,
     ConsumerTooSlow,
-    DeadlineExceeded,
     EventStoreDBClientException,
     ExceptionThrownByHandler,
+    GrpcDeadlineExceeded,
     GrpcError,
     NodeIsNotLeader,
     NotFound,
@@ -32,9 +33,23 @@ else:
 __all__ = ["handle_rpc_error", "BasicAuthCallCredentials", "ESDBService", "Metadata"]
 
 
+PROTOBUF_MAX_DEADLINE_SECONDS = 315576000000
 DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER = 5
-DEFAULT_BATCH_APPEND_REQUEST_DEADLINE = 315576000000
 DEFAULT_WINDOW_SIZE = 30
+DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT = 30.0
+DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT = 10
+DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE = 100
+DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE = 100
+DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY = 0.2
+DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE = 0.2
+
+
+class GrpcStreamer(ABC):
+    @abstractmethod
+    def stop(self) -> None:
+        """
+        Stops the iterator(s) of streaming call.
+        """
 
 
 class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
@@ -72,7 +87,7 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
         ):
             return CancelledByClient(e)
         elif e.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
-            return DeadlineExceeded(e)
+            return GrpcDeadlineExceeded(e)
         elif e.code() == grpc.StatusCode.UNAVAILABLE:
             return ServiceUnavailable(e)
         elif (
@@ -88,15 +103,20 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
 
 
 class ESDBService:
-    def __init__(self, connection_spec: ConnectionSpec):
-        self.connection_spec = connection_spec
+    def __init__(
+        self,
+        connection_spec: ConnectionSpec,
+        grpc_streamers: Dict[int, GrpcStreamer],
+    ):
+        self._connection_spec = connection_spec
+        self._grpc_streamers = grpc_streamers
 
     def _metadata(
         self, metadata: Optional[Metadata], requires_leader: bool = False
     ) -> Metadata:
         default = (
             "true"
-            if self.connection_spec.options.NodePreference == "leader"
+            if self._connection_spec.options.NodePreference == "leader"
             else "false"
         )
         requires_leader_metadata: Metadata = (

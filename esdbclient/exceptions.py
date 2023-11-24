@@ -24,13 +24,19 @@ class ServiceUnavailable(GrpcError):
     """
 
 
-class DeadlineExceeded(GrpcError):
+class DeadlineExceeded(EventStoreDBClientException):
+    """
+    Base class for exceptions involving deadlines being exceeded.
+    """
+
+
+class GrpcDeadlineExceeded(GrpcError, DeadlineExceeded):
     """
     Raised when gRPC operation times out.
     """
 
 
-class CancelledByClient(GrpcError):
+class CancelledByClient(EventStoreDBClientException):
     """
     Raised when gRPC operation is cancelled.
     """
@@ -60,7 +66,7 @@ class NotFound(EventStoreDBClientException):
     """
 
 
-class AlreadyExists(GrpcError):
+class AlreadyExists(EventStoreDBClientException):
     """
     Raised when creating something, e.g. a persistent subscription, that already exists.
     """
@@ -96,7 +102,7 @@ class StreamIsDeleted(EventStoreDBClientException):
     """
 
 
-class TimeoutError(EventStoreDBClientException):
+class AppendDeadlineExceeded(DeadlineExceeded):
     """
     Raised when append operation is timed out by the server.
     """

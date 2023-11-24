@@ -26,6 +26,12 @@ from typing_extensions import Literal
 
 from esdbclient.common import (
     DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
     DEFAULT_WINDOW_SIZE,
     BasicAuthCallCredentials,
 )
@@ -176,10 +182,11 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         root_certificates: Optional[str] = None,
     ) -> None:
+        self._is_closed = False
         super().__init__(uri, root_certificates=root_certificates)
         self._is_reconnection_required = Event()
         self._reconnection_lock = Lock()
-        self._connection = self._connect_to_preferred_node()
+        self._esdb = self._connect_to_preferred_node()
 
         # self._batch_append_futures_lock = Lock()
         # self._batch_append_futures_queue = BatchAppendFutureQueue()
@@ -288,9 +295,9 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self._is_reconnection_required.set()
         with self._reconnection_lock:
             if self._is_reconnection_required.is_set():
-                new = self._connect_to_preferred_node()
-                old, self._connection = self._connection, new
-                old.close()
+                new_conn = self._connect_to_preferred_node()
+                old_conn, self._esdb = self._esdb, new_conn
+                old_conn.close()
                 self._is_reconnection_required.clear()
             else:  # pragma: no cover
                 # Todo: Test with concurrent writes to wrong node state.
@@ -379,14 +386,14 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> int:
         timeout = timeout if timeout is not None else self._default_deadline
-        return self._connection.streams.batch_append(
+        return self._esdb.streams.batch_append(
             stream_name=stream_name,
             current_version=current_version,
             events=events,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
-        ).commit_position
+        )
 
     @retrygrpc
     @autoreconnect
@@ -403,7 +410,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         Appends a new event to the named stream.
         """
         timeout = timeout if timeout is not None else self._default_deadline
-        return self._connection.streams.append(
+        return self._esdb.streams.append(
             stream_name=stream_name,
             current_version=current_version,
             events=[event],
@@ -453,7 +460,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     ) -> None:
         # Todo: Reconsider using current_version=None to indicate "stream exists"?
         timeout = timeout if timeout is not None else self._default_deadline
-        self._connection.streams.delete(
+        self._esdb.streams.delete(
             stream_name=stream_name,
             current_version=current_version,
             timeout=timeout,
@@ -472,7 +479,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         timeout = timeout if timeout is not None else self._default_deadline
-        self._connection.streams.tombstone(
+        self._esdb.streams.tombstone(
             stream_name=stream_name,
             current_version=current_version,
             timeout=timeout,
@@ -522,7 +529,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Reads recorded events from the named stream.
         """
-        return self._connection.streams.read(
+        return self._esdb.streams.read(
             stream_name=stream_name,
             stream_position=stream_position,
             backwards=backwards,
@@ -549,7 +556,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Reads recorded events in "all streams" in the database.
         """
-        return self._connection.streams.read(
+        return self._esdb.streams.read(
             commit_position=commit_position,
             backwards=backwards,
             resolve_links=resolve_links,
@@ -576,7 +583,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         try:
             last_event = list(
-                self._connection.streams.read(
+                self._esdb.streams.read(
                     stream_name=stream_name,
                     backwards=True,
                     limit=1,
@@ -700,7 +707,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         Starts a catch-up subscription, from which all
         recorded events in the database can be received.
         """
-        return self._connection.streams.read(
+        return self._esdb.streams.read(
             commit_position=commit_position,
             from_end=from_end,
             resolve_links=resolve_links,
@@ -773,7 +780,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         Starts a catch-up subscription from which
         recorded events in a stream can be received.
         """
-        return self._connection.streams.read(
+        return self._esdb.streams.read(
             stream_name=stream_name,
             stream_position=stream_position,
             from_end=from_end,
@@ -794,6 +801,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -812,6 +821,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -832,6 +843,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -854,6 +867,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -862,7 +877,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._connection.persistent_subscriptions.create(
+        self._esdb.persistent_subscriptions.create(
             group_name=group_name,
             from_end=from_end,
             commit_position=commit_position,
@@ -873,6 +888,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             filter_by_stream_name=filter_by_stream_name,
             window_size=window_size,
             checkpoint_interval_multiplier=checkpoint_interval_multiplier,
+            message_timeout=message_timeout,
+            max_retry_count=max_retry_count,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -886,6 +903,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         resolve_links: bool = False,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -902,6 +921,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         stream_position: int,
         resolve_links: bool = False,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -918,6 +939,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         from_end: bool = True,
         resolve_links: bool = False,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -936,6 +959,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         stream_position: Optional[int] = None,
         resolve_links: bool = False,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -944,13 +969,15 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._connection.persistent_subscriptions.create(
+        self._esdb.persistent_subscriptions.create(
             group_name=group_name,
             stream_name=stream_name,
             from_end=from_end,
             stream_position=stream_position,
             resolve_links=resolve_links,
             consumer_strategy=consumer_strategy,
+            message_timeout=message_timeout,
+            max_retry_count=max_retry_count,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -962,18 +989,22 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         group_name: str,
         *,
-        buffer_size: int = 100,
-        grace: float = 0.2,
+        event_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE,
+        max_ack_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
+        max_ack_delay: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
+        stopping_grace: float = DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> PersistentSubscription:
         """
         Reads a persistent subscription on all streams.
         """
-        return self._connection.persistent_subscriptions.read(
+        return self._esdb.persistent_subscriptions.read(
             group_name=group_name,
-            buffer_size=buffer_size,
-            grace=grace,
+            event_buffer_size=event_buffer_size,
+            max_ack_batch_size=max_ack_batch_size,
+            max_ack_delay=max_ack_delay,
+            stopping_grace=stopping_grace,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -986,19 +1017,23 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         group_name: str,
         stream_name: str,
         *,
-        buffer_size: int = 100,
-        grace: float = 0.2,
+        event_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE,
+        max_ack_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
+        max_ack_delay: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
+        stopping_grace: float = DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> PersistentSubscription:
         """
         Reads a persistent subscription on one stream.
         """
-        return self._connection.persistent_subscriptions.read(
+        return self._esdb.persistent_subscriptions.read(
             group_name=group_name,
             stream_name=stream_name,
-            buffer_size=buffer_size,
-            grace=grace,
+            event_buffer_size=event_buffer_size,
+            max_ack_batch_size=max_ack_batch_size,
+            max_ack_delay=max_ack_delay,
+            stopping_grace=stopping_grace,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1017,7 +1052,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Gets info for a persistent subscription.
         """
-        return self._connection.persistent_subscriptions.get_info(
+        return self._esdb.persistent_subscriptions.get_info(
             group_name=group_name,
             stream_name=stream_name,
             timeout=timeout,
@@ -1036,7 +1071,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Lists all persistent subscriptions.
         """
-        return self._connection.persistent_subscriptions.list(
+        return self._esdb.persistent_subscriptions.list(
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1054,7 +1089,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Lists persistent stream subscriptions.
         """
-        return self._connection.persistent_subscriptions.list(
+        return self._esdb.persistent_subscriptions.list(
             stream_name=stream_name,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -1067,6 +1102,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         group_name: str,
         *,
         resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1081,6 +1118,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         commit_position: int,
         resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1095,6 +1134,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         from_end: bool = True,
         resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1110,6 +1151,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         from_end: bool = False,
         commit_position: Optional[int] = None,
         resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1118,11 +1161,13 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._connection.persistent_subscriptions.update(
+        self._esdb.persistent_subscriptions.update(
             group_name=group_name,
             from_end=from_end,
             commit_position=commit_position,
             resolve_links=resolve_links,
+            message_timeout=message_timeout,
+            max_retry_count=max_retry_count,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1135,6 +1180,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         stream_name: str,
         *,
         resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1150,6 +1197,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         stream_position: int,
         resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1165,6 +1214,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         from_end: bool = True,
         resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1181,6 +1232,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         from_end: bool = False,
         stream_position: Optional[int] = None,
         resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1189,12 +1242,14 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._connection.persistent_subscriptions.update(
+        self._esdb.persistent_subscriptions.update(
             group_name=group_name,
             stream_name=stream_name,
             from_end=from_end,
             stream_position=stream_position,
             resolve_links=resolve_links,
+            message_timeout=message_timeout,
+            max_retry_count=max_retry_count,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1211,7 +1266,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     ) -> None:
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._connection.persistent_subscriptions.replay_parked(
+        self._esdb.persistent_subscriptions.replay_parked(
             group_name=group_name,
             stream_name=stream_name,
             timeout=timeout,
@@ -1233,7 +1288,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._connection.persistent_subscriptions.delete(
+        self._esdb.persistent_subscriptions.delete(
             group_name=group_name,
             stream_name=stream_name,
             timeout=timeout,
@@ -1253,7 +1308,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             if timeout is not None
             else self.connection_spec.options.GossipTimeout
         )
-        return self._connection.gossip.read(
+        return self._esdb.gossip.read(
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1282,12 +1337,14 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Closes the gRPC channel.
         """
-        try:
-            c = self._connection
-        except AttributeError:
-            pass
-        else:
-            c.close()
+        if not self._is_closed:
+            try:
+                esdb_connection = self._esdb
+            except AttributeError:
+                pass
+            else:
+                esdb_connection.close()
+                self._is_closed = True
 
     def __del__(self) -> None:
         self.close()

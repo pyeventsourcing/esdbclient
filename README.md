@@ -815,10 +815,10 @@ The required `events` argument is expected to be a sequence of new event objects
 operation is atomic, so that either all or none of the new events will be recorded. It
 is not possible with EventStoreDB atomically to record new events in more than one stream.
 
-This method also has an optional `timeout` argument, which is a Python `float`
-that sets a deadline for the completion of the gRPC operation.
+This method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
-This method also has an optional `credentials` argument, which can be used to
+This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
 
 In the example below, a new event, `event1`, is appended to a new stream. The stream
@@ -1008,10 +1008,10 @@ be resolved, so that the linked events will be returned instead of the event lin
 The optional `limit` argument is a Python `int` which restricts the number of events
 that will be returned. The default value of `limit` is `sys.maxint`.
 
-The optional `timeout` argument is a Python `float` which sets a deadline for
-the completion of the gRPC operation.
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
 
-This method also has an optional `credentials` argument, which can be used to
+This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
 
 The example below shows the default behavior, which is to return all the recorded
@@ -1117,11 +1117,10 @@ This method has one required argument, `stream_name`.
 The required `stream_name` argument is a Python `str` that uniquely identifies a
 stream from which a stream position will be returned.
 
-This method also has an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
+This method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
-This method also has an optional `credentials` argument, which can be used to
+This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
 
 In the example below, the last stream position of `stream_name1` is obtained.
@@ -1533,7 +1532,7 @@ The optional `limit` argument is an integer which restricts the number of events
 will be returned. The default value is `sys.maxint`.
 
 The optional `timeout` argument is a Python `float` which sets a
-deadline for the completion of the gRPC operation.
+maximum duration, in seconds, for the completion of the gRPC operation.
 
 The optional `credentials` argument can be used to
 override call credentials derived from the connection string URI.
@@ -1661,8 +1660,8 @@ This method has five optional arguments, `filter_exclude`, `filter_include`,
 The optional `filter_exclude`, `filter_include` and `filter_by_stream_name` arguments
 work in the same way as they do in the `read_all()` method.
 
-The optional `timeout` argument is a Python `float` that sets
-a deadline for the completion of the gRPC operation.
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
 
 The optional `credentials` argument can be used to override call credentials
 derived from the connection string URI.
@@ -1683,8 +1682,8 @@ with the version of the stream metadata.
 This method has one required argument, `stream_name`, which is a Python `str` that
 uniquely identifies a stream for which a stream metadata will be obtained.
 
-This method has an optional `timeout` argument, which is a Python `float` that sets
-a deadline for the completion of the gRPC operation.
+This method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
 This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
@@ -1710,8 +1709,8 @@ can be set before appending events to a stream.
 This method has one required argument, `stream_name`, which is a Python `str` that
 uniquely identifies a stream for which a stream metadata will be set.
 
-This method has an optional `timeout` argument, which is a Python `float` that sets
-a deadline for the completion of the gRPC operation.
+This method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
 This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
@@ -1749,8 +1748,8 @@ stream to which a sequence of events will be appended.
 The required `current_version` argument is expected to be either a Python `int`
 that indicates the stream position of the last recorded event in the stream.
 
-This method has an optional `timeout` argument, which is a Python `float` that sets
-a deadline for the completion of the gRPC operation.
+This method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
 This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
@@ -1779,8 +1778,8 @@ stream to which a sequence of events will be appended.
 The required `current_version` argument is expected to be either a Python `int`
 that indicates the stream position of the last recorded event in the stream.
 
-This method has an optional `timeout` argument, which is a Python `float` that sets
-a deadline for the completion of the gRPC operation.
+This method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
 This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
@@ -1876,7 +1875,7 @@ filter out, the subscriber does not have to start from the same old position whe
 the event processing component is restarted.
 
 The optional `timeout` argument is a Python `float` which sets a
-deadline for the completion of the gRPC operation.
+maximum duration, in seconds, for the completion of the gRPC operation.
 
 The optional `credentials` argument can be used to
 override call credentials derived from the connection string URI.
@@ -2034,8 +2033,8 @@ is `False`, which means any event links will not be resolved, so that the events
 returned may represent event links. If `resolve_links` is `True`, any event links will
 be resolved, so that the linked events will be returned instead of the event links.
 
-The optional `timeout` argument is a Python `float` that sets
-a deadline for the completion of the gRPC operation.
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
 
 The optional `credentials` argument can be used to
 override call credentials derived from the connection string URI.
@@ -2150,9 +2149,9 @@ to all the recorded events in the database across all streams.
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
 
-This method also has nine optional arguments, `from_end`, `commit_position`, `resolve_links`,
+This method has eleven optional arguments, `from_end`, `commit_position`, `resolve_links`,
 `filter_exclude`, `filter_include`, `filter_by_stream_name`, `consumer_strategy`,
-`timeout` and `credentials`.
+`message_timeout`, `max_retry_count`, `timeout` and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
@@ -2193,8 +2192,17 @@ the consumer strategy for this persistent subscription. The value of this argume
 can be `'DispatchToSingle'`, `'RoundRobin'`, `'Pinned'`, or `'PinnedByCorrelation'`. The
 default value is `'DispatchToSingle'`.
 
+The optional `message_timeout` argument is a Python `float` which sets a maximum duration,
+in seconds, from the server sending a recorded event to a consumer of the persistent
+subscription until either an "acknowledgement" (ack) or a "negative acknowledgement"
+(nack) is received by the server, after which the server will retry to send the event.
+The default value of `message_timeout` is `30.0`.
+
+The optional `max_retry_count` argument is a Python `int` which sets the number of times
+the server will retry to send an event. The default value of `max_retry_count` is `10`.
+
 The optional `timeout` argument is a Python `float` which sets a
-deadline for the completion of the gRPC operation.
+maximum duration, in seconds, for the completion of the gRPC operation.
 
 The optional `credentials` argument can be used to
 override call credentials derived from the connection string URI.
@@ -2223,11 +2231,10 @@ This method has a required `group_name` argument, which is
 the name of a "group" of consumers of the subscription specified
 when `create_subscription_to_all()` was called.
 
-This method has an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
+This method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
-This method also has an optional `credentials` argument, which can be used to
+This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
 
 This method returns a `PersistentSubscription` object, which is an iterator
@@ -2298,9 +2305,9 @@ nacked_events = {}
 
 
 class ExampleConsumer:
-    def __init__(self, subscription, max_retries, final_action):
+    def __init__(self, subscription, max_retry_count, final_action):
         self.subscription = subscription
-        self.max_retries = max_retries
+        self.max_retry_count = max_retry_count
         self.final_action = final_action
         self.error = None
 
@@ -2310,7 +2317,7 @@ class ExampleConsumer:
                 try:
                     self.policy(event)
                 except Exception:
-                    if event.retry_count < self.max_retries:
+                    if event.retry_count < self.max_retry_count:
                         action = "retry"
                     else:
                         action = self.final_action
@@ -2354,7 +2361,7 @@ subscription = client.read_subscription_to_all(group_name)
 # Construct consumer.
 consumer = ExampleConsumer(
     subscription=subscription,
-    max_retries=5,
+    max_retry_count=5,
     final_action="park",
 )
 
@@ -2381,8 +2388,8 @@ The `update_subscription_to_all()` method can be used to update a
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
 
-This method also has five optional arguments, `from_end`, `commit_position`,
-`resolve_links`, `timeout` and `credentials`.
+This method also has seven optional arguments, `from_end`, `commit_position`,
+`resolve_links`, `message_timeout`, `max_retry_count`, `timeout` and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
@@ -2403,8 +2410,17 @@ be resolved, so that the linked events will be returned instead of the event lin
 
 Please note, the filter options and consumer strategy cannot be adjusted.
 
+The optional `message_timeout` argument is a Python `float` which sets a maximum duration,
+in seconds, from the server sending a recorded event to a consumer of the persistent
+subscription until either an "acknowledgement" (ack) or a "negative acknowledgement"
+(nack) is received by the server, after which the server will retry to send the event.
+The default value of `message_timeout` is `30.0`.
+
+The optional `max_retry_count` argument is a Python `int` which sets the number of times
+the server will retry to send an event. The default value of `max_retry_count` is `10`.
+
 The optional `timeout` argument is a Python `float` which sets a
-deadline for the completion of the gRPC operation.
+maximum duration, in seconds, for the completion of the gRPC operation.
 
 The optional `credentials` argument can be used to
 override call credentials derived from the connection string URI.
@@ -2432,8 +2448,9 @@ from this subscription. The `stream_name` argument specifies which stream
 the subscription will follow. The values of both these arguments are expected
 to be Python `str` objects.
 
-This method also has six optional arguments, `stream_position`, `from_end`,
-`resolve_links`, `consumer_strategy`, `timeout` and `credentials`.
+This method also has eight optional arguments, `stream_position`, `from_end`,
+`resolve_links`, `consumer_strategy`, `message_timeout`, `max_retry_count`, `timeout`
+and `credentials`.
 
 The optional `stream_position` argument specifies a stream position from
 which to subscribe. The recorded event at this stream
@@ -2455,8 +2472,17 @@ the consumer strategy for this persistent subscription. The value of this argume
 can be `'DispatchToSingle'`, `'RoundRobin'`, `'Pinned'`, or `'PinnedByCorrelation'`. The
 default value is `'DispatchToSingle'`.
 
-The optional `timeout` argument is a Python `float` which sets a deadline
-for the completion of the gRPC operation.
+The optional `message_timeout` argument is a Python `float` which sets a maximum duration,
+in seconds, from the server sending a recorded event to a consumer of the persistent
+subscription until either an "acknowledgement" (ack) or a "negative acknowledgement"
+(nack) is received by the server, after which the server will retry to send the event.
+The default value of `message_timeout` is `30.0`.
+
+The optional `max_retry_count` argument is a Python `int` which sets the number of times
+the server will retry to send an event. The default value of `max_retry_count` is `10`.
+
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
 
 The optional `credentials` argument can be used to
 override call credentials derived from the connection string URI.
@@ -2485,11 +2511,10 @@ subscription to a stream.
 This method has two required arguments, `group_name` and `stream_name`, which
 should match the values of arguments used when calling `create_subscription_to_stream()`.
 
-This method has an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
+This method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
-This method also has an optional `credentials` argument, which can be used to
+This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
 
 This method returns a `PersistentSubscription` object, which is an iterator
@@ -2544,8 +2569,8 @@ This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription, and a required
 `stream_name` argument, which is the name of a stream.
 
-This method also has five optional arguments, `from_end`, `stream_position`,
-`resolve_links`, `timeout` and `credentials`.
+This method also has seven optional arguments, `from_end`, `stream_position`,
+`resolve_links`, `message_timeout`, `max_retry_count`, `timeout` and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
@@ -2566,8 +2591,17 @@ be resolved, so that the linked events will be returned instead of the event lin
 
 Please note, the consumer strategy cannot be adjusted.
 
+The optional `message_timeout` argument is a Python `float` which sets a maximum duration,
+in seconds, from the server sending a recorded event to a consumer of the persistent
+subscription until either an "acknowledgement" (ack) or a "negative acknowledgement"
+(nack) is received by the server, after which the server will retry to send the event.
+The default value of `message_timeout` is `30.0`.
+
+The optional `max_retry_count` argument is a Python `int` which sets the number of times
+the server will retry to send an event. The default value of `max_retry_count` is `10`.
+
 The optional `timeout` argument is a Python `float` which sets a
-deadline for the completion of the gRPC operation.
+maximum duration, in seconds, for the completion of the gRPC operation.
 
 The optional `credentials` argument can be used to
 override call credentials derived from the connection string URI.
@@ -2599,11 +2633,10 @@ This method has a required `group_name` argument and an optional `stream_name`
 argument. The values of these arguments should match those used when calling
 `create_subscription_to_all()` or `create_subscription_to_stream()`.
 
-This method has an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
+This method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
-This method also has an optional `credentials` argument, which can be used to
+This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
 
 The example below replays parked events for group `group_name1`.
@@ -2634,11 +2667,10 @@ This method has a required `group_name` argument and an optional `stream_name`
 argument, which should match the values of arguments used when calling either
 `create_subscription_to_all()` or `create_subscription_to_stream()`.
 
-This method has an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
+This method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
-This method also has an optional `credentials` argument, which can be used to
+This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
 
 The example below gets information for the persistent subscription `group_name1` which
@@ -2670,11 +2702,10 @@ The `list_subscriptions()` method can be used to get information for all
 existing persistent subscriptions, both "subscriptions to all" and
 "subscriptions to stream".
 
-This method has an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
+This method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
-This method also has an optional `credentials` argument, which can be used to
+This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
 
 The example below lists all the existing persistent subscriptions.
@@ -2695,10 +2726,10 @@ the persistent subscriptions to a stream.
 
 This method has one required argument, `stream_name`.
 
-This method has an optional `timeout` argument, that is expected to be a
-Python `float`, which sets a deadline for the completion of the gRPC operation.
+This method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
-This method also has an optional `credentials` argument, which can be used to
+This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
 
 ```python
@@ -2721,11 +2752,10 @@ This method has a required `group_name` argument and an optional `stream_name`
 argument, which should match the values of arguments used when calling either
 `create_subscription_to_all()` or `create_subscription_to_stream()`.
 
-This method has an optional `timeout` argument, that
-is expected to be a Python `float`, which sets a deadline
-for the completion of the gRPC operation.
+This method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
-This method also has an optional `credentials` argument, which can be used to
+This method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
 
 The example below deletes the persistent subscription `group_name1` which
@@ -2963,9 +2993,9 @@ connected to a leader, but the node that the client has been connected to stops 
 the leader. In this case, the client will reconnect to the current leader. After
 reconnecting, the failed operation will be retried.
 
-The `@retrygrpc` decorator retries operations that have failed due to a deadline being
-reached (so that the operation times out), and in case the server throws an exception
-when handling a client request.
+The `@retrygrpc` decorator selectively retries gRPC operations that have failed due to
+a timeout, network error, or server error. It doesn't retry operations that fail due to
+bad requests that will certainly fail again.
 
 Please also note, the aspects not covered by the reconnect and retry decorator
 behaviours have to do with methods that return iterators. For example, consider

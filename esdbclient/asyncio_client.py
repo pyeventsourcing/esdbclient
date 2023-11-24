@@ -270,7 +270,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> int:
         timeout = timeout if timeout is not None else self._default_deadline
-        result = await self._connection.streams.batch_append(
+        return await self._connection.streams.batch_append(
             stream_name=stream_name,
             current_version=current_version,
             events=events,
@@ -278,7 +278,6 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
         )
-        return result.commit_position
 
     async def append_to_stream(
         self,

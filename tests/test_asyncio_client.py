@@ -18,11 +18,11 @@ from esdbclient.asyncio_client import (
     _AsyncioEventStoreDBClient,
 )
 from esdbclient.exceptions import (
-    DeadlineExceeded,
     DiscoveryFailed,
     DNSError,
     FollowerNotFound,
     GossipSeedError,
+    GrpcDeadlineExceeded,
     NodeIsNotLeader,
     NotFound,
     ReadOnlyReplicaNotFound,
@@ -302,7 +302,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         stream_name1 = str(uuid4())
         events = [NewEvent(type="SomethingHappened", data=b"{}") for _ in range(1000)]
-        with self.assertRaises(DeadlineExceeded):
+        with self.assertRaises(GrpcDeadlineExceeded):
             await self.reader.append_events(
                 stream_name=stream_name1,
                 events=events,

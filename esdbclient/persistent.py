@@ -2,9 +2,10 @@
 import queue
 from abc import abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from threading import Event
 from time import sleep
-from typing import Any, Iterator, List, Optional, Sequence, Tuple, Union, overload
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union, overload
 from uuid import UUID
 
 import grpc
@@ -12,8 +13,15 @@ from typing_extensions import Literal, Protocol, runtime_checkable
 
 from esdbclient.common import (
     DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
     DEFAULT_WINDOW_SIZE,
     ESDBService,
+    GrpcStreamer,
     Metadata,
     construct_filter_exclude_regex,
     construct_filter_include_regex,
@@ -45,19 +53,28 @@ ConsumerStrategy = Literal[
 
 class BaseSubscriptionReadReqs:
     def __init__(
-        self, group_name: str, stream_name: Optional[str] = None, buffer_size: int = 100
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        event_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE,
+        max_ack_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
+        max_ack_delay: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
+        stopping_grace: float = DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
     ) -> None:
         self.group_name = group_name
         self.stream_name = stream_name
-        assert isinstance(buffer_size, int) and buffer_size > 0, buffer_size
-        self._server_buffer_size = buffer_size
-        self._ack_buffer_size = min(buffer_size, 100)
+        assert isinstance(event_buffer_size, int) and event_buffer_size > 0
+        self._event_buffer_size = event_buffer_size
+        self._max_ack_batch_size = max_ack_batch_size
+        self._max_ack_delay = max_ack_delay
+        self._stopping_grace = stopping_grace
         self._has_requested_options = False
+        self.subscription_id = b""
 
     def _construct_initial_read_req(self) -> persistent_pb2.ReadReq:
         options = persistent_pb2.ReadReq.Options(
             group_name=self.group_name,
-            buffer_size=self._server_buffer_size,
+            buffer_size=self._event_buffer_size,
             uuid_option=persistent_pb2.ReadReq.Options.UUIDOption(
                 # structured=shared_pb2.Empty(),
                 string=shared_pb2.Empty(),
@@ -141,8 +158,9 @@ class BasePersistentSubscriptionsService(ESDBService):
         self,
         channel: Union[grpc.Channel, grpc.aio.Channel],
         connection_spec: ConnectionSpec,
+        grpc_streamers: Dict[int, GrpcStreamer],
     ):
-        super().__init__(connection_spec=connection_spec)
+        super().__init__(connection_spec=connection_spec, grpc_streamers=grpc_streamers)
         self._stub = persistent_pb2_grpc.PersistentSubscriptionsStub(channel)
 
     def _construct_create_req(
@@ -158,20 +176,22 @@ class BasePersistentSubscriptionsService(ESDBService):
         filter_by_stream_name: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
     ) -> persistent_pb2.CreateReq:
         # Construct 'settings'.
         settings = persistent_pb2.CreateReq.Settings(
             resolve_links=resolve_links,
             extra_statistics=False,
-            max_retry_count=5,
+            max_retry_count=max_retry_count,
             min_checkpoint_count=10,  # server recorded position
             max_checkpoint_count=10,  # server recorded position
             max_subscriber_count=5,
             live_buffer_size=1000,  # how many new events to hold in memory?
             read_batch_size=8,  # how many events to read from DB records?
             history_buffer_size=200,  # how many recorded events to hold in memory?
-            message_timeout_ms=1000,
+            message_timeout_ms=int(round(1000 * message_timeout)),  # time before retry
             checkpoint_after_ms=100,
             consumer_strategy=consumer_strategy,
         )
@@ -290,19 +310,21 @@ class BasePersistentSubscriptionsService(ESDBService):
         commit_position: Optional[int] = None,
         stream_position: Optional[int] = None,
         resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
     ) -> persistent_pb2.UpdateReq:
         # Construct 'settings'.
         settings = persistent_pb2.UpdateReq.Settings(
             resolve_links=resolve_links,
             extra_statistics=False,
-            max_retry_count=5,
+            max_retry_count=max_retry_count,
             min_checkpoint_count=10,  # server recorded position
             max_checkpoint_count=10,  # server recorded position
             max_subscriber_count=5,
             live_buffer_size=1000,  # how many new events to hold in memory?
             read_batch_size=8,  # how many events to read from DB records?
             history_buffer_size=200,  # how many recorded events to hold in memory?
-            message_timeout_ms=1000,
+            message_timeout_ms=int(round(1000 * message_timeout)),  # time before retry
             checkpoint_after_ms=100,
         )
         # Construct UpdateReq.Options.
@@ -429,20 +451,28 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
         self,
         group_name: str,
         stream_name: Optional[str] = None,
-        buffer_size: int = 100,
-        grace: float = 0.2,
+        event_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE,
+        max_ack_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
+        max_ack_delay: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
+        stopping_grace: float = DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
     ) -> None:
         super().__init__(
-            group_name=group_name, stream_name=stream_name, buffer_size=buffer_size
+            group_name=group_name,
+            stream_name=stream_name,
+            event_buffer_size=event_buffer_size,
+            max_ack_batch_size=max_ack_batch_size,
+            max_ack_delay=max_ack_delay,
+            stopping_grace=stopping_grace,
         )
-        self.subscription_id = b""
-        self._grace = grace
-        self._queue: queue.Queue[Tuple[Optional[UUID], str]] = queue.Queue()
-        self._held: Optional[Tuple[UUID, str]] = (
-            None  # Used when changing n/ack action.
+        self._ack_queue: queue.Queue[Tuple[Optional[UUID], str]] = queue.Queue()
+        self._ack_held: Optional[Tuple[UUID, str]] = (
+            None  # Used for changing n/ack action.
         )
-        self._queue_was_poisoned = False  # Indicates queue was poisoned.
+        self._queue_poison_sent = False
+        self._is_stopping = False
         self._is_stopped = Event()  # Indicates req loop has exited.
+        self._is_aborted = Event()  # Indicates req loop has exited.
+        self._last_ack_batch_time = datetime.utcnow()
 
     def __next__(self) -> persistent_pb2.ReadReq:
         # First send read request options, then send a batch of n/acks
@@ -454,81 +484,90 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
             self._has_requested_options = True
             return self._construct_initial_read_req()
         else:
-            # Initialise buffer of n/acks.
-            buffer = []  # Buffer of n/acks.
+            # Send a batch of n/acks.
 
-            # Initialise the "current action" - we need to detect when this changes.
-            current_action: Optional[str] = None
+            # Initialise batch, maybe from held n/ack.
+            batch_ids: List[UUID] = []
+            batch_action: Optional[str] = None
+            if self._ack_held is not None:
+                held_event_id, batch_action = self._ack_held
+                batch_ids.append(held_event_id)
+                self._ack_held = None
 
-            # Move any "held" n/ack from previous call to the buffer now.
-            if self._held is not None:
-                # Move held n/ack to buffer.
-                held_id, current_action = self._held
-                self._held = None
-                buffer.append(held_id)
-
-            # Collect n/acks from the queue, until the queue is poisoned.
+            # Get n/acks from the queue, until the queue is poisoned.
             while True:
                 try:
-                    # If queue was poisoned, stop the iteration.
-                    if self._queue_was_poisoned:
+                    # Maybe stop the iteration.
+                    if self._is_stopping:
                         # Allow time for server to process last n/acks.
-                        sleep(self._grace)
+                        sleep(self._stopping_grace)
                         self._is_stopped.set()
                         raise StopIteration() from None
 
-                    # Wait for next n/ack from the queue (with timeout).
-                    event_id, action = self._queue.get(timeout=0.1)
+                    # Wait for next n/ack, timeout with "max ack delay".
+                    get_timeout = (
+                        datetime.utcnow() - self._last_ack_batch_time
+                    ).total_seconds()
+                    event_id, action = self._ack_queue.get(timeout=get_timeout)
 
-                    # If queue was poisoned....
+                    # If queue was poisoned, send non-empty batch now.
                     if action == "poison":
-                        self._queue_was_poisoned = True
-                        if len(buffer):
-                            # ...send everything in the buffer.
-                            assert current_action is not None
+                        self._is_stopping = True
+                        if len(batch_ids):
+                            assert batch_action is not None
+                            self._last_ack_batch_time = datetime.utcnow()
                             return self._construct_ack_or_nack_read_req(
                                 subscription_id=self.subscription_id,
-                                event_ids=buffer,
-                                action=current_action,
+                                event_ids=batch_ids,
+                                action=batch_action,
                             )
                     else:
                         assert isinstance(event_id, UUID)
-                        if current_action is None:
+                        if batch_action is None:
                             # Set the "current action" if there isn't one already.
-                            current_action = action
-                        elif action != current_action:
-                            # The n/ack action changed, so send everything we have now.
-                            self._held = (event_id, action)
+                            batch_action = action
+                        elif action != batch_action:
+                            # Action changed, hold this ack and send the batch.
+                            self._ack_held = (event_id, action)
+                            self._last_ack_batch_time = datetime.utcnow()
                             return self._construct_ack_or_nack_read_req(
                                 subscription_id=self.subscription_id,
-                                event_ids=buffer,
-                                action=current_action,
+                                event_ids=batch_ids,
+                                action=batch_action,
                             )
 
-                        # Append event ID of queued n/ack to the buffer.
-                        buffer.append(event_id)
+                        # Add event ID to the batch.
+                        batch_ids.append(event_id)
 
-                        if len(buffer) >= self._ack_buffer_size:
-                            # Buffer is full so send everything we have now.
+                        # Send the batch if full or late.
+                        batch_age_datetime = (
+                            datetime.utcnow() - self._last_ack_batch_time
+                        )
+                        batch_age_seconds = batch_age_datetime.total_seconds()
+                        is_batch_late = batch_age_seconds > self._max_ack_delay
+                        is_batch_full = len(batch_ids) >= self._max_ack_batch_size
+                        if is_batch_full or is_batch_late:
+                            self._last_ack_batch_time = datetime.utcnow()
                             return self._construct_ack_or_nack_read_req(
                                 subscription_id=self.subscription_id,
-                                event_ids=buffer,
-                                action=current_action,
+                                event_ids=batch_ids,
+                                action=batch_action,
                             )
                 except queue.Empty:
-                    # Queue timed out, so send everything we have now.
-                    if len(buffer) > 0:
-                        assert current_action is not None
+                    # Send a non-empty batch at least every "max ack delay".
+                    self._last_ack_batch_time = datetime.utcnow()
+                    if len(batch_ids) > 0:
+                        assert batch_action is not None
                         return self._construct_ack_or_nack_read_req(
                             subscription_id=self.subscription_id,
-                            event_ids=buffer,
-                            action=current_action,
+                            event_ids=batch_ids,
+                            action=batch_action,
                         )
                     else:  # pragma: no cover
                         pass
 
     def ack(self, event_id: UUID) -> None:
-        self._queue.put((event_id, "ack"))
+        self._ack_queue.put((event_id, "ack"))
 
     def nack(
         self,
@@ -536,45 +575,67 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
         action: Literal["unknown", "park", "retry", "skip", "stop"],
     ) -> None:
         assert action in ["unknown", "park", "retry", "skip", "stop"]
-        self._queue.put((event_id, action))
+        self._ack_queue.put((event_id, action))
+
+    def abort(self) -> None:
+        self._is_stopping = True
+        self._ack_queue.put((None, "poison"))  # in case blocked on __next__()
+        self._is_stopped.set()
 
     def stop(self) -> None:
-        self._queue.put((None, "poison"))
-        self._is_stopped.wait(timeout=5)
+        if not self._is_stopped.is_set():
+            self._ack_queue.put((None, "poison"))
+            self._queue_poison_sent = True
+            self._is_stopped.wait(timeout=5)
+        else:  # pragma: no cover
+            pass
 
 
 class AsyncioPersistentSubscriptionsService(BasePersistentSubscriptionsService):
     pass
 
 
-class PersistentSubscription(Iterator[RecordedEvent]):
+class PersistentSubscription(GrpcStreamer, Iterator[RecordedEvent]):
     def __init__(
         self,
         read_reqs: SubscriptionReadReqs,
         read_resps: _ReadResps,
         expected_group_name: str,
         stream_name: Optional[str],
+        grpc_streamers: Dict[int, GrpcStreamer],
     ):
-        self.read_reqs = read_reqs
-        self.read_resps = read_resps
+        self._read_reqs = read_reqs
+        self._read_resps = read_resps
+        self._grpc_streamers = grpc_streamers
+        self._grpc_streamers[id(self)] = self
+        self._is_stopped = False
 
-        first_read_resp = self._get_next_read_resp()
-        if first_read_resp.WhichOneof("content") == "subscription_confirmation":
-            expected_stream_name = stream_name if stream_name is not None else "$all"
-            subscription_id = first_read_resp.subscription_confirmation.subscription_id
-            confirmed_stream_name, _, confirmed_group_name = subscription_id.partition(
-                "::"
-            )
-            if (
-                confirmed_group_name != expected_group_name
-                or confirmed_stream_name != expected_stream_name
-            ):  # pragma: no cover
-                raise SubscriptionConfirmationError()
-            self.read_reqs.subscription_id = subscription_id.encode()
-        else:  # pragma: no cover
-            raise EventStoreDBClientException(
-                f"Expected subscription confirmation, got: {first_read_resp}"
-            )
+        try:
+            first_read_resp = self._get_next_read_resp()
+
+            if first_read_resp.WhichOneof("content") == "subscription_confirmation":
+                expected_stream_name = (
+                    stream_name if stream_name is not None else "$all"
+                )
+                subscription_id = (
+                    first_read_resp.subscription_confirmation.subscription_id
+                )
+                confirmed_stream_name, _, confirmed_group_name = (
+                    subscription_id.partition("::")
+                )
+                if (
+                    confirmed_group_name != expected_group_name
+                    or confirmed_stream_name != expected_stream_name
+                ):  # pragma: no cover
+                    raise SubscriptionConfirmationError()
+                self._read_reqs.subscription_id = subscription_id.encode()
+            else:  # pragma: no cover
+                raise EventStoreDBClientException(
+                    f"Expected subscription confirmation, got: {first_read_resp}"
+                )
+        except Exception:
+            self._abort()
+            raise
 
     def __iter__(self) -> Iterator[RecordedEvent]:
         return self
@@ -583,8 +644,8 @@ class PersistentSubscription(Iterator[RecordedEvent]):
         while True:
             try:
                 read_resp = self._get_next_read_resp()
-            except CancelledByClient as e:
-                raise StopIteration() from e
+            except CancelledByClient:
+                raise StopIteration() from None
             content_oneof = read_resp.WhichOneof("content")
             if content_oneof == "event":
                 recorded_event = construct_recorded_event(read_resp.event)
@@ -599,15 +660,24 @@ class PersistentSubscription(Iterator[RecordedEvent]):
 
     def _get_next_read_resp(self) -> persistent_pb2.ReadResp:
         try:
-            read_resp = next(self.read_resps)
+            read_resp = next(self._read_resps)
         except grpc.RpcError as e:
-            raise handle_rpc_error(e) from e
+            raise handle_rpc_error(e) from None
         assert isinstance(read_resp, persistent_pb2.ReadResp)
         return read_resp
 
+    def _abort(self) -> None:
+        self._read_reqs.abort()
+        self._read_resps.cancel()
+        self._grpc_streamers.pop(id(self))
+        self._is_stopped = True
+
     def stop(self) -> None:
-        self.read_reqs.stop()
-        self.read_resps.cancel()
+        if not self._is_stopped:
+            self._read_reqs.stop()
+            self._read_resps.cancel()
+            self._grpc_streamers.pop(id(self))
+            self._is_stopped = True
 
     def __enter__(self, *args: Any, **kwargs: Any) -> "PersistentSubscription":
         return self
@@ -616,14 +686,14 @@ class PersistentSubscription(Iterator[RecordedEvent]):
         self.stop()
 
     def ack(self, event_id: UUID) -> None:
-        self.read_reqs.ack(event_id)
+        self._read_reqs.ack(event_id)
 
     def nack(
         self,
         event_id: UUID,
         action: Literal["unknown", "park", "retry", "skip", "stop"],
     ) -> None:
-        self.read_reqs.nack(event_id, action=action)
+        self._read_reqs.nack(event_id, action=action)
 
     def __del__(self) -> None:
         self.stop()
@@ -648,6 +718,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         filter_by_stream_name: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -666,6 +738,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         stream_position: Optional[int] = None,
         resolve_links: bool = False,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -688,6 +762,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -705,6 +781,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
             window_size=window_size,
             checkpoint_interval_multiplier=checkpoint_interval_multiplier,
             consumer_strategy=consumer_strategy,
+            message_timeout=message_timeout,
+            max_retry_count=max_retry_count,
         )
         # Call 'Create' RPC.
         try:
@@ -722,8 +800,10 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         self,
         group_name: str,
         stream_name: Optional[str] = None,
-        buffer_size: int = 100,
-        grace: float = 0.2,
+        event_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE,
+        max_ack_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
+        max_ack_delay: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
+        stopping_grace: float = DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -731,8 +811,10 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         read_reqs = SubscriptionReadReqs(
             group_name=group_name,
             stream_name=stream_name,
-            buffer_size=buffer_size,
-            grace=grace,
+            event_buffer_size=event_buffer_size,
+            max_ack_batch_size=max_ack_batch_size,
+            max_ack_delay=max_ack_delay,
+            stopping_grace=stopping_grace,
         )
         read_resps = self._stub.Read(
             read_reqs,
@@ -742,12 +824,14 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         )
         assert isinstance(read_resps, _ReadResps)
 
-        return PersistentSubscription(
+        subscription = PersistentSubscription(
+            grpc_streamers=self._grpc_streamers,
             read_reqs=read_reqs,
             read_resps=read_resps,
             expected_group_name=group_name,
             stream_name=stream_name,
         )
+        return subscription
 
     def get_info(
         self,
@@ -771,7 +855,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
                 and e.details() == "Server Is Not Ready"
             ):
                 raise NodeIsNotLeader() from e
-            raise handle_rpc_error(e) from e
+            raise handle_rpc_error(e) from None
 
         else:
             assert isinstance(resp, persistent_pb2.GetInfoResp)
@@ -801,7 +885,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
             ):
                 raise NodeIsNotLeader() from e
             else:
-                raise handle_rpc_error(e) from e
+                raise handle_rpc_error(e) from None
 
         assert isinstance(resp, persistent_pb2.ListResp)
         return self._construct_subscription_infos(resp)
@@ -814,6 +898,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         from_end: bool = False,
         commit_position: Optional[int] = None,
         resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -831,6 +917,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         from_end: bool = False,
         stream_position: Optional[int] = None,
         resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -847,6 +935,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         commit_position: Optional[int] = None,
         stream_position: Optional[int] = None,
         resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -858,6 +948,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
             commit_position=commit_position,
             stream_position=stream_position,
             resolve_links=resolve_links,
+            message_timeout=message_timeout,
+            max_retry_count=max_retry_count,
         )
         # Call 'Update' RPC.
         try:
@@ -868,7 +960,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
                 credentials=credentials,
             )
         except grpc.RpcError as e:
-            raise handle_rpc_error(e) from e
+            raise handle_rpc_error(e) from None
         assert isinstance(response, persistent_pb2.UpdateResp)
 
     def delete(
@@ -888,7 +980,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
                 credentials=credentials,
             )
         except grpc.RpcError as e:
-            raise handle_rpc_error(e) from e
+            raise handle_rpc_error(e) from None
         assert isinstance(resp, persistent_pb2.DeleteResp)
 
     def replay_parked(
@@ -908,5 +1000,5 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
                 credentials=credentials,
             )
         except grpc.RpcError as e:
-            raise handle_rpc_error(e) from e
+            raise handle_rpc_error(e) from None
         assert isinstance(resp, persistent_pb2.ReplayParkedResp)

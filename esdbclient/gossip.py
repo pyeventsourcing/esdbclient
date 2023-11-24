@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
-from typing import Optional, Sequence, Union
+from typing import Dict, Optional, Sequence, Union
 
 import grpc
 import grpc.aio
 
-from esdbclient.common import ESDBService, Metadata, handle_rpc_error
+from esdbclient.common import ESDBService, GrpcStreamer, Metadata, handle_rpc_error
 from esdbclient.connection_spec import ConnectionSpec
 from esdbclient.protos.Grpc import (
     cluster_pb2,
@@ -39,8 +39,9 @@ class BaseGossipService(ESDBService):
         self,
         channel: Union[grpc.Channel, grpc.aio.Channel],
         connection_spec: ConnectionSpec,
+        grpc_streamers: Dict[int, GrpcStreamer],
     ):
-        super().__init__(connection_spec=connection_spec)
+        super().__init__(connection_spec=connection_spec, grpc_streamers=grpc_streamers)
         self._stub = gossip_pb2_grpc.GossipStub(channel)
 
     @staticmethod
@@ -73,7 +74,7 @@ class AsyncioGossipService(BaseGossipService):
                 credentials=credentials,
             )
         except grpc.RpcError as e:
-            raise handle_rpc_error(e) from e
+            raise handle_rpc_error(e) from None
 
         return self._construct_cluster_members(read_resp)
 
@@ -97,7 +98,7 @@ class GossipService(BaseGossipService):
                 credentials=credentials,
             )
         except grpc.RpcError as e:
-            raise handle_rpc_error(e) from e
+            raise handle_rpc_error(e) from None
 
         return self._construct_cluster_members(read_resp)
 
@@ -114,8 +115,9 @@ class BaseClusterGossipService(ESDBService):
         self,
         channel: Union[grpc.Channel, grpc.aio.Channel],
         connection_spec: ConnectionSpec,
+        grpc_streamers: Dict[int, GrpcStreamer],
     ):
-        super().__init__(connection_spec=connection_spec)
+        super().__init__(connection_spec=connection_spec, grpc_streamers=grpc_streamers)
         self._stub = cluster_pb2_grpc.GossipStub(channel)
 
 
@@ -147,7 +149,7 @@ class ClusterGossipService(BaseClusterGossipService):
     #             credentials=credentials,
     #         )
     #     except grpc.RpcError as e:
-    #         raise handle_rpc_error(e) from e
+    #         raise handle_rpc_error(e) from None
     #
     #     assert isinstance(read_resp, cluster_pb2.ClusterInfo)
     #

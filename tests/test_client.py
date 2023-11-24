@@ -4,6 +4,7 @@ import os
 import ssl
 import sys
 from collections import Counter
+from threading import Thread
 from time import sleep
 from typing import Any, List, Sequence, Set, Tuple, cast
 from unittest import TestCase, skipIf
@@ -28,12 +29,12 @@ from esdbclient.exceptions import (
     AbortedByServer,
     AlreadyExists,
     ConsumerTooSlow,
-    DeadlineExceeded,
     DiscoveryFailed,
     DNSError,
     ExceptionThrownByHandler,
     FollowerNotFound,
     GossipSeedError,
+    GrpcDeadlineExceeded,
     GrpcError,
     NodeIsNotLeader,
     NotFound,
@@ -377,8 +378,8 @@ class TestEventStoreDBClient(TimedTestCase):
         self.construct_esdb_client()
 
         # Reconstruct connection with wrong port.
-        self.client._connection.close()
-        self.client._connection = self.client._construct_connection("localhost:2222")
+        self.client._esdb.close()
+        self.client._esdb = self.client._construct_connection("localhost:2222")
         self.client.connection_spec._targets = ["localhost:2222"]
 
         cm: _AssertRaisesContext[Any]
@@ -486,6 +487,77 @@ class TestEventStoreDBClient(TimedTestCase):
         self.assertEqual(len(events), 3)
         self.assertEqual(events[0].commit_position, commit_position1)
         self.assertEqual(events[2].commit_position, commit_position2)
+
+    def test_stream_append_to_stream_takes_one_or_many_events(self) -> None:
+        # This method exists to match other language clients.
+        self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+
+        # Append single event.
+        commit_position1 = self.client.append_to_stream(
+            stream_name=stream_name,
+            current_version=StreamState.NO_STREAM,
+            events=event1,
+        )
+
+        # Append sequence of events.
+        commit_position2 = self.client.append_to_stream(
+            stream_name=stream_name,
+            current_version=0,
+            events=[event2, event3],
+        )
+
+        # Check commit positions are returned.
+        events = list(self.client.read_all(commit_position=commit_position1))
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].commit_position, commit_position1)
+        self.assertEqual(events[2].commit_position, commit_position2)
+
+    # def test_stream_append_to_stream_is_atomic(self) -> None:
+    #     # This method exists to match other language clients.
+    #     self.construct_esdb_client()
+    #
+    #     def append_events(stream_name: str, n: int) -> bool:
+    #         timeout = None
+    #         # print("Generating events")
+    #         events = list(
+    #             [NewEvent(type=f"EventType{i}", data=b"{}") for i in range(n)]
+    #         )
+    #
+    #         # print("Appending events")
+    #         try:
+    #             self.client.append_to_stream(
+    #                 stream_name=stream_name,
+    #                 current_version=StreamState.NO_STREAM,
+    #                 events=events,
+    #                 timeout=timeout,
+    #             )
+    #         except GrpcError as e:
+    #             # print("Error appending events:", e)
+    #             return False
+    #         else:
+    #             return True
+    #
+    #     def count_events(stream_name: str) -> int:
+    #         try:
+    #             return len(self.client.get_stream(stream_name))
+    #         except NotFound:
+    #             # print("Not found")
+    #             return 0
+    #
+    #     # Should be able to append 2 events.
+    #     stream_name1 = str(uuid4())
+    #     self.assertTrue(append_events(stream_name1, 2))
+    #     self.assertTrue(count_events(stream_name1))
+    #
+    #     # Should NOT be able to append 10000 events.
+    #     stream_name2 = str(uuid4())
+    #     self.assertFalse(append_events(stream_name2, 20000))
+    #     self.assertFalse(count_events(stream_name2))  # should be atomic
 
     def test_stream_append_event_with_current_version(self) -> None:
         self.construct_esdb_client()
@@ -1062,7 +1134,7 @@ class TestEventStoreDBClient(TimedTestCase):
         )
         new_events = [event1] * 10000
         # Timeout appending new event.
-        with self.assertRaises(DeadlineExceeded):
+        with self.assertRaises(GrpcDeadlineExceeded):
             self.client.append_events(
                 stream_name=stream_name1,
                 current_version=StreamState.NO_STREAM,
@@ -1811,7 +1883,7 @@ class TestEventStoreDBClient(TimedTestCase):
         # Timeout reading all events.
         read_response = self.client.read_all(timeout=0.001)
         sleep(0.5)
-        with self.assertRaises(DeadlineExceeded):
+        with self.assertRaises(GrpcDeadlineExceeded):
             list(read_response)
 
     def test_read_all_can_be_stopped(self) -> None:
@@ -2374,7 +2446,7 @@ class TestEventStoreDBClient(TimedTestCase):
         )
 
         # We shouldn't get an extra checkpoint at the end (ESDB bug < v23.10).
-        with self.assertRaises(DeadlineExceeded):
+        with self.assertRaises(GrpcDeadlineExceeded):
             for event in subscription1:
                 if isinstance(event, Checkpoint):
                     break
@@ -2609,7 +2681,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
             # Expect to timeout instead of waiting indefinitely for next event.
             count = 0
-            with self.assertRaises(DeadlineExceeded):
+            with self.assertRaises(GrpcDeadlineExceeded):
                 for _ in subscription:
                     count += 1
             if count > 0:
@@ -3194,6 +3266,239 @@ class TestEventStoreDBClient(TimedTestCase):
         assert events[-2].data == event2.data
         assert events[-1].data == event3.data
 
+    def test_subscription_to_all_read_with_message_timeout_event_buffer_size_1(
+        self,
+    ) -> None:
+        self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription_to_all(
+            group_name=group_name, from_end=True, message_timeout=1
+        )
+
+        # Append three events.
+        stream_name1 = str(uuid4())
+
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        # Read all events.
+        subscription = self.client.read_subscription_to_all(
+            group_name=group_name, event_buffer_size=1, max_ack_batch_size=1
+        )
+
+        events = []
+        for event in subscription:
+            # if event.id == event1.id:
+            #     print("Received event1")
+            # if event.id == event2.id:
+            #     print("Received event2")
+            # if event.id == event3.id:
+            #     print("Received event3")
+            events.append(event)
+            if event.id == event1.id and event.retry_count == 0:
+                continue
+            subscription.ack(event.id)
+            if len(events) == 4:
+                break
+
+        assert events[-4].data == event1.data
+        assert events[-3].data == event1.data
+        assert events[-2].data == event2.data
+        assert events[-1].data == event3.data
+
+    def test_subscription_to_all_read_with_message_timeout_event_buffer_size_10(
+        self,
+    ) -> None:
+        self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription_to_all(
+            group_name=group_name, from_end=True, message_timeout=1
+        )
+
+        # Append three events.
+        stream_name1 = str(uuid4())
+
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        # Read all events.
+        subscription = self.client.read_subscription_to_all(
+            group_name=group_name, event_buffer_size=10, max_ack_batch_size=1
+        )
+
+        events = []
+        for event in subscription:
+            # if event.id == event1.id:
+            #     print("Received event1")
+            # if event.id == event2.id:
+            #     print("Received event2")
+            # if event.id == event3.id:
+            #     print("Received event3")
+            events.append(event)
+            if event.id == event1.id and event.retry_count == 0:
+                continue
+            subscription.ack(event.id)
+            if len(events) == 4:
+                break
+
+        assert events[-4].data == event1.data
+        assert events[-3].data == event2.data
+        assert events[-2].data == event3.data
+        assert events[-1].data == event1.data
+
+    def test_subscription_to_all_read_with_max_retry_count_3(
+        self,
+    ) -> None:
+        self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription_to_all(
+            group_name=group_name, from_end=True, message_timeout=0.1, max_retry_count=3
+        )
+
+        # Append three events.
+        stream_name1 = str(uuid4())
+
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        # Read all events.
+        subscription = self.client.read_subscription_to_all(
+            group_name=group_name,
+            event_buffer_size=1,
+        )
+
+        events = []
+        for event in subscription:
+            events.append(event)
+            if event.id == event1.id:
+                continue
+            subscription.ack(event.id)
+            if len(events) == 6:
+                break
+
+        assert events[-6].data == event1.data
+        assert events[-5].data == event1.data
+        assert events[-4].data == event1.data
+        assert events[-3].data == event1.data
+        assert events[-2].data == event2.data
+        assert events[-1].data == event3.data
+
+    # def test_subscription_to_all_read_with_message_timeout_consumer_crashes_and_resumes(
+    #     self,
+    # ) -> None:
+    #     self.construct_esdb_client()
+    #
+    #     # Create persistent subscription (large message timeout).
+    #     group_name = f"my-subscription-{uuid4().hex}"
+    #     self.client.create_subscription_to_all(
+    #         group_name=group_name,
+    #         from_end=True,
+    #         message_timeout=10,
+    #         consumer_strategy="RoundRobin",
+    #         # consumer_strategy="Pinned",
+    #     )
+    #
+    #     # Append three events.
+    #     stream_name1 = str(uuid4())
+    #
+    #     event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+    #     event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+    #     event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+    #     event4 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+    #     event5 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+    #     event6 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+    #
+    #     self.client.append_events(
+    #         stream_name1,
+    #         current_version=StreamState.NO_STREAM,
+    #         events=[event1, event2, event3, event4, event5, event6],
+    #     )
+    #
+    #     # Read all events.
+    #     subscription1 = self.client.read_subscription_to_all(
+    #         group_name=group_name, event_buffer_size=10, max_ack_batch_size=1
+    #     )
+    #     subscription2 = self.client.read_subscription_to_all(
+    #         group_name=group_name, event_buffer_size=10, max_ack_batch_size=1
+    #     )
+    #
+    #     for event in subscription1:
+    #         # if event.id == event1.id:
+    #         #     print("Subscription1 received event1")
+    #         # if event.id == event2.id:
+    #         #     print("Subscription1 received event2")
+    #         # if event.id == event3.id:
+    #         #     print("Subscription1 received event3")
+    #         # if event.id == event4.id:
+    #         #     print("Subscription1 received event4")
+    #         # if event.id == event5.id:
+    #         #     print("Subscription1 received event5")
+    #         # if event.id == event6.id:
+    #         #     print("Subscription1 received event6")
+    #         self.assertEqual(event.id, event1.id)
+    #         # subscription1.ack(event.id)
+    #         break  # Fail to ack event1 and crash out.
+    #
+    #     # del subscription1
+    #     subscription1.stop()  # If we don't stop(), then subscription2 is severely delayed.
+    #
+    #     # Read all events.
+    #
+    #     try:
+    #         events = []
+    #         for event in subscription2:
+    #             # if event.id == event1.id:
+    #             #     print("Subscription2 received event1")
+    #             # if event.id == event2.id:
+    #             #     print("Subscription2 received event2")
+    #             # if event.id == event3.id:
+    #             #     print("Subscription2 received event3")
+    #             # if event.id == event4.id:
+    #             #     print("Subscription2 received event4")
+    #             # if event.id == event5.id:
+    #             #     print("Subscription2 received event5")
+    #             # if event.id == event6.id:
+    #             #     print("Subscription2 received event6")
+    #             events.append(event)
+    #             subscription2.ack(event.id)
+    #             if len(events) == 6:
+    #                 break
+    #
+    #         assert events[-3].data == event1.data
+    #         assert events[-2].data == event2.data
+    #         assert events[-1].data == event3.data
+    #     finally:
+    #         pass
+    #         # subscription2.stop()
+    #     # subscription1.stop()
+
     def test_subscription_to_all_can_be_stopped(self) -> None:
         self.construct_esdb_client()
 
@@ -3755,6 +4060,70 @@ class TestEventStoreDBClient(TimedTestCase):
         info = self.client.get_subscription_info(group_name=group_name)
         self.assertTrue(info.resolve_link_tos)
 
+    def test_subscription_to_all_message_timeout_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_all(
+            group_name=group_name,
+            message_timeout=60,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.message_timeout_milliseconds, 60000)
+
+        # Update subscription.
+        self.client.update_subscription_to_all(
+            group_name=group_name,
+            message_timeout=1,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.message_timeout_milliseconds, 1000)
+
+        # Update subscription (check rounding to nearest millisecond).
+        self.client.update_subscription_to_all(
+            group_name=group_name,
+            message_timeout=1.0003,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.message_timeout_milliseconds, 1000)
+
+        # Update subscription (check rounding to nearest millisecond).
+        self.client.update_subscription_to_all(
+            group_name=group_name,
+            message_timeout=1.0009,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.message_timeout_milliseconds, 1001)
+
+    def test_subscription_to_all_max_retry_count_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_all(
+            group_name=group_name,
+            max_retry_count=60,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.max_retry_count, 60)
+
+        # Update subscription.
+        self.client.update_subscription_to_all(
+            group_name=group_name,
+            max_retry_count=1,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.max_retry_count, 1)
+
     def test_subscription_delete(self) -> None:
         self.construct_esdb_client()
 
@@ -4171,8 +4540,8 @@ class TestEventStoreDBClient(TimedTestCase):
     def test_subscription_to_stream_update(self) -> None:
         self.construct_esdb_client()
 
-        group_name = f"my-subscription-{uuid4().hex}"
-        stream_name = str(uuid4().hex)
+        group_name = f"my-group-{uuid4().hex}"
+        stream_name = f"my-stream-{uuid4().hex}"
 
         # Can't update a subscription that doesn't exist.
         with self.assertRaises(NotFound):
@@ -4232,6 +4601,70 @@ class TestEventStoreDBClient(TimedTestCase):
             group_name=group_name, stream_name=stream_name
         )
         self.assertTrue(info.resolve_link_tos)
+
+    def test_subscription_to_stream_message_timeout_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+        stream_name = f"my-stream-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            message_timeout=12.345,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.message_timeout_milliseconds, 12345)
+
+        # Update subscription.
+        self.client.update_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            message_timeout=54.321,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.message_timeout_milliseconds, 54321)
+
+    def test_subscription_to_stream_max_retry_count_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+        stream_name = f"my-stream-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            max_retry_count=60,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.max_retry_count, 60)
+
+        # Update subscription.
+        self.client.update_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            max_retry_count=1,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.max_retry_count, 1)
 
     def test_subscription_to_stream_already_exists(self) -> None:
         self.construct_esdb_client()
@@ -4703,6 +5136,9 @@ class TestRequiresLeaderHeader(TimedTestCase):
         super().tearDown()
 
     def test_can_subscribe_to_all_on_follower(self) -> None:
+        # Subscribe to follower.
+        subscription = self.reader.subscribe_to_all(timeout=10, from_end=True)
+
         # Write to leader.
         stream_name = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -4713,7 +5149,7 @@ class TestRequiresLeaderHeader(TimedTestCase):
             events=[event1, event2],
         )
         # Read from follower.
-        for recorded_event in self.reader.subscribe_to_all(timeout=5):
+        for recorded_event in subscription:
             if recorded_event.id == event2.id:
                 break
 
@@ -4734,7 +5170,7 @@ class TestRequiresLeaderHeader(TimedTestCase):
 
     def _set_reader_connection_on_writer(self) -> None:
         # Give the writer a connection to a follower.
-        old, self.writer._connection = self.writer._connection, self.reader._connection
+        old, self.writer._esdb = self.writer._esdb, self.reader._esdb
         # - this is hopeful mitigation for the "Exception was thrown by handler"
         #   which is occasionally a cause of failure of test_append_events()
         #   with both EventStoreDB 21.10.9 and 22.10.0.
@@ -4999,14 +5435,12 @@ class TestRequiresLeaderHeader(TimedTestCase):
 
         # Check reader reconnects to leader.
         self.assertNotEqual(
-            self.reader._connection.grpc_target, self.writer._connection.grpc_target
+            self.reader._esdb._grpc_target, self.writer._esdb._grpc_target
         )
-        connection_id = id(self.reader._connection)
+        connection_id = id(self.reader._esdb)
         self.reader.get_stream(stream_name)
-        self.assertNotEqual(connection_id, id(self.reader._connection))
-        self.assertEqual(
-            self.reader._connection.grpc_target, self.writer._connection.grpc_target
-        )
+        self.assertNotEqual(connection_id, id(self.reader._esdb))
+        self.assertEqual(self.reader._esdb._grpc_target, self.writer._esdb._grpc_target)
 
 
 class TestAutoReconnectClosedConnection(TimedTestCase):
@@ -5050,8 +5484,8 @@ class TestAutoReconnectAfterServiceUnavailable(TimedTestCase):
         self.client = EventStoreDBClient(uri=uri, root_certificates=server_certificate)
 
         # Reconstruct connection with wrong port (to inspire ServiceUnavailble).
-        self.client._connection.close()
-        self.client._connection = self.client._construct_connection("localhost:2222")
+        self.client._esdb.close()
+        self.client._esdb = self.client._construct_connection("localhost:2222")
 
     def tearDown(self) -> None:
         self.client.close()
@@ -5180,27 +5614,24 @@ class TestSubscriptionReadRequest(TimedTestCase):
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
         self.assertEqual(grpc_read_req.options.buffer_size, 100)
 
-        # Do one batch of acks.
         event_ids: List[UUID] = []
-        for _ in range(100):
+        for _ in range(102):
             event_id = uuid4()
             event_ids.append(event_id)
             read_request.ack(event_id)
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, persistent_pb2.ReadReq)
-        self.assertEqual(len(grpc_read_req.ack.ids), 100)
-        self.assertEqual(len(grpc_read_req.nack.ids), 0)
-
-        # Do another batch of acks.
-        event_ids.clear()
-        for _ in range(100):
-            event_id = uuid4()
-            event_ids.append(event_id)
-            read_request.ack(event_id)
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, persistent_pb2.ReadReq)
-        self.assertEqual(len(grpc_read_req.ack.ids), 100)
-        self.assertEqual(len(grpc_read_req.nack.ids), 0)
+        sleep(read_request._max_ack_delay)
+        grpc_read_req1 = next(read_request_iter)
+        grpc_read_req2 = next(read_request_iter)
+        grpc_read_req3 = next(read_request_iter)
+        self.assertIsInstance(grpc_read_req1, persistent_pb2.ReadReq)
+        self.assertEqual(len(grpc_read_req1.ack.ids), 1)
+        self.assertEqual(len(grpc_read_req1.nack.ids), 0)
+        self.assertIsInstance(grpc_read_req2, persistent_pb2.ReadReq)
+        self.assertEqual(len(grpc_read_req2.ack.ids), 100)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 0)
+        self.assertIsInstance(grpc_read_req3, persistent_pb2.ReadReq)
+        self.assertEqual(len(grpc_read_req3.ack.ids), 1)
+        self.assertEqual(len(grpc_read_req3.nack.ids), 0)
 
     def test_request_nack_after_100_nacks(self) -> None:
         read_request = SubscriptionReadReqs("group1")
@@ -5209,34 +5640,31 @@ class TestSubscriptionReadRequest(TimedTestCase):
         self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
         self.assertEqual(grpc_read_req.options.buffer_size, 100)
 
-        # Do one batch of acks.
         event_ids: List[UUID] = []
-        for _ in range(100):
+        for _ in range(102):
             event_id = uuid4()
             event_ids.append(event_id)
             read_request.nack(event_id, "park")
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, persistent_pb2.ReadReq)
-        self.assertEqual(len(grpc_read_req.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req.nack.ids), 100)
+        sleep(read_request._max_ack_delay)
+        grpc_read_req1 = next(read_request_iter)
+        grpc_read_req2 = next(read_request_iter)
+        grpc_read_req3 = next(read_request_iter)
+        self.assertIsInstance(grpc_read_req1, persistent_pb2.ReadReq)
+        self.assertEqual(len(grpc_read_req1.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req1.nack.ids), 1)
+        self.assertIsInstance(grpc_read_req2, persistent_pb2.ReadReq)
+        self.assertEqual(len(grpc_read_req2.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 100)
+        self.assertIsInstance(grpc_read_req3, persistent_pb2.ReadReq)
+        self.assertEqual(len(grpc_read_req3.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req3.nack.ids), 1)
 
-        # Do another batch of acks.
-        event_ids.clear()
-        for _ in range(100):
-            event_id = uuid4()
-            event_ids.append(event_id)
-            read_request.nack(event_id, "park")
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, persistent_pb2.ReadReq)
-        self.assertEqual(len(grpc_read_req.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req.nack.ids), 100)
-
-    def test_request_ack_after_100ms(self) -> None:
+    def test_request_ack_ack_ack(self) -> None:
         read_request = SubscriptionReadReqs("group1")
         read_request_iter = read_request
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req.options.buffer_size, 100)
+        grpc_read_req1 = next(read_request_iter)
+        self.assertIsInstance(grpc_read_req1, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req1.options.buffer_size, 100)
 
         # Do three acks.
         event_id1 = uuid4()
@@ -5245,19 +5673,23 @@ class TestSubscriptionReadRequest(TimedTestCase):
         read_request.ack(event_id1)
         read_request.ack(event_id2)
         read_request.ack(event_id3)
-        grpc_read_req = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req.ack.ids), 3)
-        self.assertEqual(len(grpc_read_req.nack.ids), 0)
-        self.assertEqual(grpc_read_req.ack.ids[0].string, str(event_id1))
-        self.assertEqual(grpc_read_req.ack.ids[1].string, str(event_id2))
-        self.assertEqual(grpc_read_req.ack.ids[2].string, str(event_id3))
+        sleep(read_request._max_ack_delay)
+        grpc_read_req2 = next(read_request_iter)
+        grpc_read_req3 = next(read_request_iter)
+        self.assertEqual(len(grpc_read_req2.ack.ids), 1)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 0)
+        self.assertEqual(len(grpc_read_req3.ack.ids), 2)
+        self.assertEqual(len(grpc_read_req3.nack.ids), 0)
+        self.assertEqual(grpc_read_req2.ack.ids[0].string, str(event_id1))
+        self.assertEqual(grpc_read_req3.ack.ids[0].string, str(event_id2))
+        self.assertEqual(grpc_read_req3.ack.ids[1].string, str(event_id3))
 
-    def test_request_nack_unknown_after_100ms(self) -> None:
+    def test_request_nack_unknown_after_max_delay(self) -> None:
         read_request = SubscriptionReadReqs("group1")
         read_request_iter = read_request
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req.options.buffer_size, 100)
+        grpc_read_req1 = next(read_request_iter)
+        self.assertIsInstance(grpc_read_req1, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req1.options.buffer_size, 100)
 
         # Do three nack unknown.
         event_id1 = uuid4()
@@ -5266,20 +5698,29 @@ class TestSubscriptionReadRequest(TimedTestCase):
         read_request.nack(event_id1, "unknown")
         read_request.nack(event_id2, "unknown")
         read_request.nack(event_id3, "unknown")
-        grpc_read_req = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req.nack.ids), 3)
-        self.assertEqual(len(grpc_read_req.ack.ids), 0)
-        self.assertEqual(grpc_read_req.nack.ids[0].string, str(event_id1))
-        self.assertEqual(grpc_read_req.nack.ids[1].string, str(event_id2))
-        self.assertEqual(grpc_read_req.nack.ids[2].string, str(event_id3))
-        self.assertEqual(grpc_read_req.nack.action, persistent_pb2.ReadReq.Nack.Unknown)
+        sleep(read_request._max_ack_delay)
+        grpc_read_req2 = next(read_request_iter)
+        grpc_read_req3 = next(read_request_iter)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req2.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req3.nack.ids), 2)
+        self.assertEqual(len(grpc_read_req3.ack.ids), 0)
+        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id1))
+        self.assertEqual(grpc_read_req3.nack.ids[0].string, str(event_id2))
+        self.assertEqual(grpc_read_req3.nack.ids[1].string, str(event_id3))
+        self.assertEqual(
+            grpc_read_req2.nack.action, persistent_pb2.ReadReq.Nack.Unknown
+        )
+        self.assertEqual(
+            grpc_read_req3.nack.action, persistent_pb2.ReadReq.Nack.Unknown
+        )
 
-    def test_request_nack_park_after_100ms(self) -> None:
+    def test_request_nack_park_after_delay(self) -> None:
         read_request = SubscriptionReadReqs("group1")
         read_request_iter = read_request
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req.options.buffer_size, 100)
+        grpc_read_req1 = next(read_request_iter)
+        self.assertIsInstance(grpc_read_req1, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req1.options.buffer_size, 100)
 
         # Do three nack park.
         event_id1 = uuid4()
@@ -5288,81 +5729,101 @@ class TestSubscriptionReadRequest(TimedTestCase):
         read_request.nack(event_id1, "park")
         read_request.nack(event_id2, "park")
         read_request.nack(event_id3, "park")
-        grpc_read_req = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req.nack.ids), 3)
-        self.assertEqual(len(grpc_read_req.ack.ids), 0)
-        self.assertEqual(grpc_read_req.nack.ids[0].string, str(event_id1))
-        self.assertEqual(grpc_read_req.nack.ids[1].string, str(event_id2))
-        self.assertEqual(grpc_read_req.nack.ids[2].string, str(event_id3))
-        self.assertEqual(grpc_read_req.nack.action, persistent_pb2.ReadReq.Nack.Park)
+        sleep(read_request._max_ack_delay)
+        grpc_read_req2 = next(read_request_iter)
+        grpc_read_req3 = next(read_request_iter)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req2.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req3.nack.ids), 2)
+        self.assertEqual(len(grpc_read_req3.ack.ids), 0)
+        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id1))
+        self.assertEqual(grpc_read_req3.nack.ids[0].string, str(event_id2))
+        self.assertEqual(grpc_read_req3.nack.ids[1].string, str(event_id3))
+        self.assertEqual(grpc_read_req2.nack.action, persistent_pb2.ReadReq.Nack.Park)
+        self.assertEqual(grpc_read_req3.nack.action, persistent_pb2.ReadReq.Nack.Park)
 
-    def test_request_nack_retry_after_100ms(self) -> None:
+    def test_request_nack_retry_after_max_delay(self) -> None:
         read_request = SubscriptionReadReqs("group1")
         read_request_iter = read_request
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req.options.buffer_size, 100)
+        grpc_read_req1 = next(read_request_iter)
+        self.assertIsInstance(grpc_read_req1, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req1.options.buffer_size, 100)
 
-        # Do three nack retry.
+        # Do three nack park.
         event_id1 = uuid4()
         event_id2 = uuid4()
         event_id3 = uuid4()
         read_request.nack(event_id1, "retry")
         read_request.nack(event_id2, "retry")
         read_request.nack(event_id3, "retry")
-        grpc_read_req = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req.nack.ids), 3)
-        self.assertEqual(len(grpc_read_req.ack.ids), 0)
-        self.assertEqual(grpc_read_req.nack.ids[0].string, str(event_id1))
-        self.assertEqual(grpc_read_req.nack.ids[1].string, str(event_id2))
-        self.assertEqual(grpc_read_req.nack.ids[2].string, str(event_id3))
-        self.assertEqual(grpc_read_req.nack.action, persistent_pb2.ReadReq.Nack.Retry)
+        sleep(read_request._max_ack_delay)
+        grpc_read_req2 = next(read_request_iter)
+        grpc_read_req3 = next(read_request_iter)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req2.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req3.nack.ids), 2)
+        self.assertEqual(len(grpc_read_req3.ack.ids), 0)
+        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id1))
+        self.assertEqual(grpc_read_req3.nack.ids[0].string, str(event_id2))
+        self.assertEqual(grpc_read_req3.nack.ids[1].string, str(event_id3))
+        self.assertEqual(grpc_read_req2.nack.action, persistent_pb2.ReadReq.Nack.Retry)
+        self.assertEqual(grpc_read_req3.nack.action, persistent_pb2.ReadReq.Nack.Retry)
 
     def test_request_nack_skip_after_100ms(self) -> None:
         read_request = SubscriptionReadReqs("group1")
         read_request_iter = read_request
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req.options.buffer_size, 100)
+        grpc_read_req1 = next(read_request_iter)
+        self.assertIsInstance(grpc_read_req1, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req1.options.buffer_size, 100)
 
-        # Do three nack skip.
+        # Do three nack park.
         event_id1 = uuid4()
         event_id2 = uuid4()
         event_id3 = uuid4()
         read_request.nack(event_id1, "skip")
         read_request.nack(event_id2, "skip")
         read_request.nack(event_id3, "skip")
-        grpc_read_req = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req.nack.ids), 3)
-        self.assertEqual(len(grpc_read_req.ack.ids), 0)
-        self.assertEqual(grpc_read_req.nack.ids[0].string, str(event_id1))
-        self.assertEqual(grpc_read_req.nack.ids[1].string, str(event_id2))
-        self.assertEqual(grpc_read_req.nack.ids[2].string, str(event_id3))
-        self.assertEqual(grpc_read_req.nack.action, persistent_pb2.ReadReq.Nack.Skip)
+        sleep(read_request._max_ack_delay)
+        grpc_read_req2 = next(read_request_iter)
+        grpc_read_req3 = next(read_request_iter)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req2.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req3.nack.ids), 2)
+        self.assertEqual(len(grpc_read_req3.ack.ids), 0)
+        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id1))
+        self.assertEqual(grpc_read_req3.nack.ids[0].string, str(event_id2))
+        self.assertEqual(grpc_read_req3.nack.ids[1].string, str(event_id3))
+        self.assertEqual(grpc_read_req2.nack.action, persistent_pb2.ReadReq.Nack.Skip)
+        self.assertEqual(grpc_read_req3.nack.action, persistent_pb2.ReadReq.Nack.Skip)
 
-    def test_request_nack_stop_after_100ms(self) -> None:
+    def test_request_nack_stop_after_max_delay(self) -> None:
         read_request = SubscriptionReadReqs("group1")
         read_request_iter = read_request
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req.options.buffer_size, 100)
+        grpc_read_req1 = next(read_request_iter)
+        self.assertIsInstance(grpc_read_req1, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req1.options.buffer_size, 100)
 
-        # Do three nack stop.
+        # Do three nack park.
         event_id1 = uuid4()
         event_id2 = uuid4()
         event_id3 = uuid4()
         read_request.nack(event_id1, "stop")
         read_request.nack(event_id2, "stop")
         read_request.nack(event_id3, "stop")
-        grpc_read_req = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req.nack.ids), 3)
-        self.assertEqual(len(grpc_read_req.ack.ids), 0)
-        self.assertEqual(grpc_read_req.nack.ids[0].string, str(event_id1))
-        self.assertEqual(grpc_read_req.nack.ids[1].string, str(event_id2))
-        self.assertEqual(grpc_read_req.nack.ids[2].string, str(event_id3))
-        self.assertEqual(grpc_read_req.nack.action, persistent_pb2.ReadReq.Nack.Stop)
+        sleep(read_request._max_ack_delay)
+        grpc_read_req2 = next(read_request_iter)
+        grpc_read_req3 = next(read_request_iter)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req2.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req3.nack.ids), 2)
+        self.assertEqual(len(grpc_read_req3.ack.ids), 0)
+        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id1))
+        self.assertEqual(grpc_read_req3.nack.ids[0].string, str(event_id2))
+        self.assertEqual(grpc_read_req3.nack.ids[1].string, str(event_id3))
+        self.assertEqual(grpc_read_req2.nack.action, persistent_pb2.ReadReq.Nack.Stop)
+        self.assertEqual(grpc_read_req3.nack.action, persistent_pb2.ReadReq.Nack.Stop)
 
-    def test_request_ack_after_ack_followed_by_nack(self) -> None:
+    def test_request_ack_ack_nack(self) -> None:
         read_request = SubscriptionReadReqs("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
@@ -5370,22 +5831,30 @@ class TestSubscriptionReadRequest(TimedTestCase):
         self.assertEqual(grpc_read_req.options.buffer_size, 100)
 
         event_id1 = uuid4()
+        event_id2 = uuid4()
+        event_id3 = uuid4()
         read_request.ack(event_id1)
+        read_request.ack(event_id2)
+        read_request.nack(event_id3, "park")
 
-        event_id2 = uuid4()
-        read_request.nack(event_id2, "park")
+        sleep(read_request._max_ack_delay)
 
-        grpc_read_req = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req.ack.ids), 1)
-        self.assertEqual(grpc_read_req.ack.ids[0].string, str(event_id1))
-        self.assertEqual(len(grpc_read_req.nack.ids), 0)
+        grpc_read_req1 = next(read_request_iter)
+        grpc_read_req2 = next(read_request_iter)
+        grpc_read_req3 = next(read_request_iter)
+        self.assertEqual(len(grpc_read_req1.ack.ids), 1)
+        self.assertEqual(len(grpc_read_req1.nack.ids), 0)
+        self.assertEqual(grpc_read_req1.ack.ids[0].string, str(event_id1))
 
-        grpc_read_req = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req.nack.ids), 1)
-        self.assertEqual(grpc_read_req.nack.ids[0].string, str(event_id2))
+        self.assertEqual(len(grpc_read_req2.ack.ids), 1)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 0)
+        self.assertEqual(grpc_read_req2.ack.ids[0].string, str(event_id2))
 
-    def test_request_nack_after_nack_followed_by_ack(self) -> None:
+        self.assertEqual(len(grpc_read_req3.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req3.nack.ids), 1)
+        self.assertEqual(grpc_read_req3.nack.ids[0].string, str(event_id3))
+
+    def test_request_nack_nack_ack(self) -> None:
         read_request = SubscriptionReadReqs("group1")
         read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
@@ -5393,20 +5862,28 @@ class TestSubscriptionReadRequest(TimedTestCase):
         self.assertEqual(grpc_read_req.options.buffer_size, 100)
 
         event_id1 = uuid4()
-        read_request.nack(event_id1, "park")
-
         event_id2 = uuid4()
-        read_request.ack(event_id2)
+        event_id3 = uuid4()
+        read_request.nack(event_id1, "park")
+        read_request.nack(event_id2, "park")
+        read_request.ack(event_id3)
 
-        grpc_read_req = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req.nack.ids), 1)
-        self.assertEqual(grpc_read_req.nack.ids[0].string, str(event_id1))
+        sleep(read_request._max_ack_delay)
 
-        grpc_read_req = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req.ack.ids), 1)
-        self.assertEqual(len(grpc_read_req.nack.ids), 0)
-        self.assertEqual(grpc_read_req.ack.ids[0].string, str(event_id2))
+        grpc_read_req1 = next(read_request_iter)
+        grpc_read_req2 = next(read_request_iter)
+        grpc_read_req3 = next(read_request_iter)
+        self.assertEqual(len(grpc_read_req1.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req1.nack.ids), 1)
+        self.assertEqual(grpc_read_req1.nack.ids[0].string, str(event_id1))
+
+        self.assertEqual(len(grpc_read_req2.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 1)
+        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id2))
+
+        self.assertEqual(len(grpc_read_req3.ack.ids), 1)
+        self.assertEqual(len(grpc_read_req3.nack.ids), 0)
+        self.assertEqual(grpc_read_req3.ack.ids[0].string, str(event_id3))
 
     def test_request_nack_after_nack_followed_by_nack_with_other_action(self) -> None:
         read_request = SubscriptionReadReqs("group1")
@@ -5416,22 +5893,60 @@ class TestSubscriptionReadRequest(TimedTestCase):
         self.assertEqual(grpc_read_req.options.buffer_size, 100)
 
         event_id1 = uuid4()
-        read_request.nack(event_id1, "park")
-
         event_id2 = uuid4()
-        read_request.nack(event_id2, "skip")
+        event_id3 = uuid4()
+        read_request.nack(event_id1, "park")
+        read_request.nack(event_id2, "park")
+        read_request.nack(event_id3, "skip")
 
-        grpc_read_req = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req.nack.ids), 1)
-        self.assertEqual(grpc_read_req.nack.ids[0].string, str(event_id1))
-        self.assertEqual(grpc_read_req.nack.action, persistent_pb2.ReadReq.Nack.Park)
+        sleep(read_request._max_ack_delay)
 
+        grpc_read_req1 = next(read_request_iter)
+        grpc_read_req2 = next(read_request_iter)
+        grpc_read_req3 = next(read_request_iter)
+        self.assertEqual(len(grpc_read_req1.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req1.nack.ids), 1)
+        self.assertEqual(grpc_read_req1.nack.ids[0].string, str(event_id1))
+        self.assertEqual(grpc_read_req1.nack.action, persistent_pb2.ReadReq.Nack.Park)
+
+        self.assertEqual(len(grpc_read_req2.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 1)
+        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id2))
+        self.assertEqual(grpc_read_req2.nack.action, persistent_pb2.ReadReq.Nack.Park)
+
+        self.assertEqual(len(grpc_read_req3.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req3.nack.ids), 1)
+        self.assertEqual(grpc_read_req3.nack.ids[0].string, str(event_id3))
+        self.assertEqual(grpc_read_req3.nack.action, persistent_pb2.ReadReq.Nack.Skip)
+
+    def test_request_iter_stop(self) -> None:
+        read_request = SubscriptionReadReqs("group1")
+        read_request_iter = read_request
         grpc_read_req = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req.nack.ids), 1)
-        self.assertEqual(grpc_read_req.nack.ids[0].string, str(event_id2))
-        self.assertEqual(grpc_read_req.nack.action, persistent_pb2.ReadReq.Nack.Skip)
+        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req.options.buffer_size, 100)
+
+        event_id1 = uuid4()
+        event_id2 = uuid4()
+        event_id3 = uuid4()
+        read_request.ack(event_id1)
+        read_request.ack(event_id2)
+        read_request.ack(event_id3)
+        thread = Thread(target=read_request.stop)
+        thread.start()
+
+        sleep(read_request._max_ack_delay)
+
+        while True:
+            try:
+                grpc_read_req1 = next(read_request_iter)
+            except StopIteration:
+                break
+
+        thread.join()
+
+        self.assertEqual(len(grpc_read_req1.ack.ids), 2)
+        self.assertEqual(len(grpc_read_req1.nack.ids), 0)
 
 
 class TestHandleRpcError(TestCase):
@@ -5440,7 +5955,7 @@ class TestHandleRpcError(TestCase):
             raise handle_rpc_error(FakeExceptionThrownByHandlerError()) from None
 
     def test_handle_deadline_exceeded_error(self) -> None:
-        with self.assertRaises(DeadlineExceeded):
+        with self.assertRaises(GrpcDeadlineExceeded):
             raise handle_rpc_error(FakeDeadlineExceededRpcError()) from None
 
     def test_handle_unavailable_error(self) -> None:
