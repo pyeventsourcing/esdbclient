@@ -71,14 +71,14 @@ class BaseReadResponse(GrpcStreamer):
         self,
         stream_name: Optional[str],
     ):
-        self.stream_name = stream_name
+        self._stream_name = stream_name
 
-    def handle_stream_read_rpc_error(
+    def _handle_stream_read_rpc_error(
         self, e: grpc.RpcError
     ) -> EventStoreDBClientException:
         if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
             details = e.details() or ""
-            if self.stream_name and details and "is deleted" in details:
+            if self._stream_name and details and "is deleted" in details:
                 return StreamIsDeleted()
             else:  # pragma: no cover
                 return handle_rpc_error(e)
@@ -90,7 +90,7 @@ class BaseReadResponse(GrpcStreamer):
     ) -> Optional[RecordedEvent]:
         content_oneof = read_resp.WhichOneof("content")
         if content_oneof == "stream_not_found":
-            raise NotFound(f"Stream {self.stream_name!r} not found")
+            raise NotFound(f"Stream {self._stream_name!r} not found")
         elif content_oneof == "event":
             return construct_recorded_event(read_resp.event)
         elif content_oneof == "checkpoint":
@@ -139,7 +139,7 @@ class AsyncioReadResponse(AsyncIterator[RecordedEvent], BaseReadResponse):
         try:
             read_resp = await self.read_resp_iter.__anext__()
         except grpc.RpcError as e:
-            raise self.handle_stream_read_rpc_error(e) from None
+            raise self._handle_stream_read_rpc_error(e) from None
         except CancelledError:
             raise CancelledByClient() from None
         else:
@@ -208,7 +208,7 @@ class ReadResponse(BaseReadResponse, Iterator[RecordedEvent]):
         try:
             read_resp = next(self._read_resps)
         except grpc.RpcError as e:
-            raise self.handle_stream_read_rpc_error(e) from None
+            raise self._handle_stream_read_rpc_error(e) from None
         else:
             assert isinstance(read_resp, streams_pb2.ReadResp)
             return read_resp
@@ -237,8 +237,8 @@ class CatchupSubscription(ReadResponse):
             stream_name=stream_name,
             grpc_streamers=grpc_streamers,
         )
-        self.subscription_id: Optional[UUID] = None
-        self.include_checkpoints = include_checkpoints
+        self._subscription_id: Optional[UUID] = None
+        self._include_checkpoints = include_checkpoints
         try:
             first_read_resp = self._get_next_read_resp()
             content_oneof = first_read_resp.WhichOneof("content")
@@ -256,7 +256,7 @@ class CatchupSubscription(ReadResponse):
     def __next__(self) -> RecordedEvent:
         while True:
             recorded_event = super().__next__()
-            if self.include_checkpoints or not isinstance(recorded_event, Checkpoint):
+            if self._include_checkpoints or not isinstance(recorded_event, Checkpoint):
                 return recorded_event
 
 
