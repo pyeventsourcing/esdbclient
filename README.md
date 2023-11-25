@@ -2162,7 +2162,7 @@ position from which the group of consumers of the subscription should
 receive events. Please note, the recorded event at the specified commit position might
 be included in the recorded events received by the group of consumers.
 
-If neither `from_end` or `commit_position` are specified, the group of consumers
+If neither `from_end` nor `commit_position` are specified, the group of consumers
 of the subscription will potentially receive all recorded events in the database.
 
 The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
@@ -2383,7 +2383,8 @@ assert event9.id not in nacked_events
 *requires leader*
 
 The `update_subscription_to_all()` method can be used to update a
-"persistent subscription".
+"persistent subscription". Please note, the filter options and consumer
+strategy cannot be adjusted.
 
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
@@ -2400,15 +2401,13 @@ position from which commit position the group of consumers of the subscription s
 receive events. Please note, the recorded event at the specified commit position might
 be included in the recorded events received by the group of consumers.
 
-If neither `from_end` or `commit_position` are specified, the group of consumers
+If neither `from_end` nor `commit_position` are specified, the group of consumers
 of the subscription will potentially receive all recorded events in the database.
 
 The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
 is `False`, which means any event links will not be resolved, so that the events that are
 returned may represent event links. If `resolve_links` is `True`, any event links will
 be resolved, so that the linked events will be returned instead of the event links.
-
-Please note, the filter options and consumer strategy cannot be adjusted.
 
 The optional `message_timeout` argument is a Python `float` which sets a maximum duration,
 in seconds, from the server sending a recorded event to a consumer of the persistent
@@ -2562,8 +2561,8 @@ assert events[2].id == event6.id
 
 *requires leader*
 
-The `update_subscription_to_stream()` method can be used to update a
-persistent subscription to a stream.
+The `update_subscription_to_stream()` method can be used to update a persistent
+subscription to a stream. Please note, the consumer strategy cannot be adjusted.
 
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription, and a required
@@ -2581,15 +2580,13 @@ position from which commit position the group of consumers of the subscription s
 receive events. Please note, the recorded event at the specified stream position might
 be included in the recorded events received by the group of consumers.
 
-If neither `from_end` or `commit_position` are specified, the group of consumers
+If neither `from_end` nor `commit_position` are specified, the group of consumers
 of the subscription will potentially receive all recorded events in the stream.
 
 The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
 is `False`, which means any event links will not be resolved, so that the events that are
 returned may represent event links. If `resolve_links` is `True`, any event links will
 be resolved, so that the linked events will be returned instead of the event links.
-
-Please note, the consumer strategy cannot be adjusted.
 
 The optional `message_timeout` argument is a Python `float` which sets a maximum duration,
 in seconds, from the server sending a recorded event to a consumer of the persistent
