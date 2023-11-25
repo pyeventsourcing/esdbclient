@@ -2264,7 +2264,7 @@ for event in subscription:
     received_events.append(event)
 
     # Acknowledge the received event.
-    subscription.ack(event_id=event.ack_id)
+    subscription.ack(event)
 
     # Stop when 'event9' has been received.
     if event.id == event9.id:
@@ -2321,10 +2321,10 @@ class ExampleConsumer:
                         action = "retry"
                     else:
                         action = self.final_action
-                    self.subscription.nack(event.ack_id, action=action)
+                    self.subscription.nack(event, action)
                     self.after_nack(event, action)
                 else:
-                    self.subscription.ack(event.ack_id)
+                    self.subscription.ack(event)
                     self.after_ack(event)
         except Exception:
             self.stop()
@@ -2537,7 +2537,7 @@ for event in subscription:
     events.append(event)
 
     # Acknowledge the received event.
-    subscription.ack(event_id=event.ack_id)
+    subscription.ack(event)
 
     # Stop when 'event6' has been received.
     if event.id == event6.id:

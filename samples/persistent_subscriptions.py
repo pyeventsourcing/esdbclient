@@ -79,9 +79,9 @@ while True:
             try:
                 handle_event(event)
             except Exception:
-                subscription.nack(event_id=event.id, action="park")
+                subscription.nack(event, action="park")
             else:
-                subscription.ack(event_id=event.id)
+                subscription.ack(event)
 
     except ConsumerTooSlow:
         # subscription was dropped
@@ -107,9 +107,9 @@ while True:
             try:
                 handle_event(event)
             except Exception:
-                subscription.nack(event_id=event.id, action="park")
+                subscription.nack(event, action="park")
             else:
-                subscription.ack(event_id=event.id)
+                subscription.ack(event)
 
     except ConsumerTooSlow:
         # subscription was dropped
@@ -137,15 +137,11 @@ while True:
                 handle_event(event)
             except Exception:
                 if event.retry_count < 5:
-                    subscription.nack(
-                        event_id=event.id, action="retry"
-                    )
+                    subscription.nack(event, action="retry")
                 else:
-                    subscription.nack(
-                        event_id=event.id, action="park"
-                    )
+                    subscription.nack(event, action="park")
             else:
-                subscription.ack(event_id=event.id)
+                subscription.ack(event)
 
     except ConsumerTooSlow:
         # subscription was dropped

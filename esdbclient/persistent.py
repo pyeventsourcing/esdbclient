@@ -685,15 +685,22 @@ class PersistentSubscription(GrpcStreamer, Iterator[RecordedEvent]):
     def __exit__(self, *args: Any, **kwargs: Any) -> None:
         self.stop()
 
-    def ack(self, event_id: UUID) -> None:
-        self._read_reqs.ack(event_id)
+    def ack(self, item: Union[UUID, RecordedEvent]) -> None:
+        self._read_reqs.ack(event_id=self._get_event_id(item))
 
     def nack(
         self,
-        event_id: UUID,
+        item: Union[UUID, RecordedEvent],
         action: Literal["unknown", "park", "retry", "skip", "stop"],
     ) -> None:
-        self._read_reqs.nack(event_id, action=action)
+        self._read_reqs.nack(event_id=self._get_event_id(item), action=action)
+
+    @staticmethod
+    def _get_event_id(item: Union[UUID, RecordedEvent]) -> UUID:
+        if isinstance(item, RecordedEvent):
+            return item.ack_id
+        else:
+            return item
 
     def __del__(self) -> None:
         self.stop()

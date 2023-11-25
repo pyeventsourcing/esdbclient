@@ -81,7 +81,7 @@ class TestPersistentSubscriptionACK(TestCase):
                 if event.id not in expected_ids:
                     unexpected_ids.append(event.id)
                 else:
-                    subscription.ack(event.id)
+                    subscription.ack(event)
                     expected_received_count += 1
                 if expected_received_count == len(expected_ids):
                     break

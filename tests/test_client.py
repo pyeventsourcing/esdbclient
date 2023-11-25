@@ -2951,7 +2951,7 @@ class TestEventStoreDBClient(TimedTestCase):
         # Iterating should stop.
         list(subscription)
 
-    def test_subscription_to_all_read_with_ack(self) -> None:
+    def test_subscription_to_all_read_with_ack_event_id(self) -> None:
         self.construct_esdb_client()
 
         # Create persistent subscription.
@@ -2976,7 +2976,41 @@ class TestEventStoreDBClient(TimedTestCase):
 
         events = []
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event.ack_id)
+            events.append(event)
+            if event.id == event3.id:
+                break
+
+        assert events[-3].data == event1.data
+        assert events[-2].data == event2.data
+        assert events[-1].data == event3.data
+
+    def test_subscription_to_all_read_with_ack_event_object(self) -> None:
+        self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription_to_all(group_name=group_name, from_end=True)
+
+        # Append three events.
+        stream_name1 = str(uuid4())
+
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        # Read subscription.
+        subscription = self.client.read_subscription_to_all(group_name=group_name)
+
+        events = []
+        for event in subscription:
+            subscription.ack(event)
             events.append(event)
             if event.id == event3.id:
                 break
@@ -3010,7 +3044,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         events = []
         for event in subscription:
-            subscription.nack(event.id, action="unknown")
+            subscription.nack(event, action="unknown")
             events.append(event)
             if event.id == event3.id:
                 break
@@ -3044,7 +3078,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         events = []
         for event in subscription:
-            subscription.nack(event.id, action="park")
+            subscription.nack(event, action="park")
             events.append(event)
             if event.id == event3.id:
                 break
@@ -3081,7 +3115,7 @@ class TestEventStoreDBClient(TimedTestCase):
         # Park event.
         parked_events = []
         for event in subscription:
-            subscription.nack(event.id, action="park")
+            subscription.nack(event, action="park")
             parked_events.append(event)
             if event.id == event3.id:
                 break
@@ -3092,7 +3126,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         replayed_events = []
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             replayed_events.append(event)
             if event.id == event3.id:
                 subscription.stop()
@@ -3130,7 +3164,7 @@ class TestEventStoreDBClient(TimedTestCase):
         # Park event.
         parked_events = []
         for event in subscription:
-            subscription.nack(event.id, action="park")
+            subscription.nack(event, action="park")
             parked_events.append(event)
             if event.id == event3.id:
                 break
@@ -3143,7 +3177,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         replayed_events = []
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             replayed_events.append(event)
             if event.id == event3.id:
                 subscription.stop()
@@ -3180,7 +3214,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         events = []
         for event in subscription:
-            subscription.nack(event.id, action="retry")
+            subscription.nack(event, action="retry")
             events.append(event)
             if event.id == event3.id:
                 break
@@ -3192,7 +3226,7 @@ class TestEventStoreDBClient(TimedTestCase):
         # Should get the events again.
         expected_event_ids = {event1.id, event2.id, event3.id}
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             if event.id in expected_event_ids:
                 expected_event_ids.remove(event.id)
             if len(expected_event_ids) == 0:
@@ -3223,7 +3257,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         events = []
         for event in subscription:
-            subscription.nack(event.id, action="skip")
+            subscription.nack(event, action="skip")
             events.append(event)
             if event.id == event3.id:
                 break
@@ -3257,7 +3291,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         events = []
         for event in subscription:
-            subscription.nack(event.id, action="stop")
+            subscription.nack(event, action="stop")
             events.append(event)
             if event.id == event3.id:
                 break
@@ -3306,7 +3340,7 @@ class TestEventStoreDBClient(TimedTestCase):
             events.append(event)
             if event.id == event1.id and event.retry_count == 0:
                 continue
-            subscription.ack(event.id)
+            subscription.ack(event)
             if len(events) == 4:
                 break
 
@@ -3355,7 +3389,7 @@ class TestEventStoreDBClient(TimedTestCase):
             events.append(event)
             if event.id == event1.id and event.retry_count == 0:
                 continue
-            subscription.ack(event.id)
+            subscription.ack(event)
             if len(events) == 4:
                 break
 
@@ -3399,7 +3433,7 @@ class TestEventStoreDBClient(TimedTestCase):
             events.append(event)
             if event.id == event1.id:
                 continue
-            subscription.ack(event.id)
+            subscription.ack(event)
             if len(events) == 6:
                 break
 
@@ -3463,7 +3497,7 @@ class TestEventStoreDBClient(TimedTestCase):
     #         # if event.id == event6.id:
     #         #     print("Subscription1 received event6")
     #         self.assertEqual(event.id, event1.id)
-    #         # subscription1.ack(event.id)
+    #         # subscription1.ack(event)
     #         break  # Fail to ack event1 and crash out.
     #
     #     # del subscription1
@@ -3487,7 +3521,7 @@ class TestEventStoreDBClient(TimedTestCase):
     #             # if event.id == event6.id:
     #             #     print("Subscription2 received event6")
     #             events.append(event)
-    #             subscription2.ack(event.id)
+    #             subscription2.ack(event)
     #             if len(events) == 6:
     #                 break
     #
@@ -3559,7 +3593,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         events = []
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
 
             events.append(event)
 
@@ -3601,7 +3635,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         events = []
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             events.append(event)
             if event.id == event3.id:
                 break
@@ -3645,7 +3679,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         # Check we don't receive any OrderCreated events.
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             self.assertNotEqual(event.type, "OrderCreated")
             if event.id == event3.id:
                 break
@@ -3700,7 +3734,7 @@ class TestEventStoreDBClient(TimedTestCase):
         for event in subscription:
             if event.stream_name == stream_name1:
                 self.fail("Received event from stream_name1")
-            subscription.ack(event.id)
+            subscription.ack(event)
             if event.id == event4.id:
                 break
 
@@ -3710,7 +3744,7 @@ class TestEventStoreDBClient(TimedTestCase):
         for event in subscription:
             if event.stream_name.startswith(prefix1):
                 self.fail("Received event with stream name starting with prefix1")
-            subscription.ack(event.id)
+            subscription.ack(event)
             if event.id == event4.id:
                 break
 
@@ -3741,7 +3775,7 @@ class TestEventStoreDBClient(TimedTestCase):
         subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             self.assertEqual(event.type, "OrderCreated")
             if event.id == event1.id:
                 break
@@ -3809,7 +3843,7 @@ class TestEventStoreDBClient(TimedTestCase):
         events = []
         for event in subscription:
             events.append(event)
-            subscription.ack(event.id)
+            subscription.ack(event)
             if event.id == event4.id:
                 break
 
@@ -3833,7 +3867,7 @@ class TestEventStoreDBClient(TimedTestCase):
         subscription = self.client.read_subscription_to_all(group_name=group_name)
 
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             # Look for a "system" event.
             if event.type.startswith("$"):
                 break
@@ -3890,7 +3924,7 @@ class TestEventStoreDBClient(TimedTestCase):
         # Wait for more than one instance of event1 (resolved system generated links).
         counter = 0
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             if event.id == event1.id:
                 counter += 1
             if counter > 1:
@@ -3939,12 +3973,12 @@ class TestEventStoreDBClient(TimedTestCase):
         events2 = []
         while True:
             event = next(subscription1)
-            subscription1.ack(event.id)
+            subscription1.ack(event)
             events1.append(event)
             if event.id == event3.id:
                 break
             event = next(subscription2)
-            subscription2.ack(event.id)
+            subscription2.ack(event)
             events2.append(event)
             if event.id == event3.id:
                 break
@@ -4193,7 +4227,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         events = []
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             events.append(event)
             if event.id == event6.id:
                 break
@@ -4221,7 +4255,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         # Continue receiving events.
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             events.append(event)
             if event.id == event12.id:
                 break
@@ -4275,7 +4309,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         events = []
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             events.append(event)
             if event.id == event6.id:
                 break
@@ -4302,7 +4336,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         # Continue receiving events.
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             events.append(event)
             if event.id == event12.id:
                 break
@@ -4371,7 +4405,7 @@ class TestEventStoreDBClient(TimedTestCase):
         # Receive events from subscription.
         events = []
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             events.append(event)
             if event.id == event12.id:
                 break
@@ -4420,11 +4454,11 @@ class TestEventStoreDBClient(TimedTestCase):
         events2 = []
         while True:
             event = next(subscription1)
-            subscription1.ack(event.id)
+            subscription1.ack(event)
             events1.append(event)
 
             event = next(subscription2)
-            subscription2.ack(event.id)
+            subscription2.ack(event)
             events2.append(event)
             event_ids = {e.id for e in events1 + events2}
             if event4.id in event_ids:
@@ -4753,7 +4787,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         events = []
         for event in subscription:
-            subscription.ack(event.id)
+            subscription.ack(event)
             events.append(event)
             break
 
