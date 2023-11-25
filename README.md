@@ -1023,9 +1023,9 @@ events = client.get_stream(
 )
 
 assert len(events) == 3
-assert events[0].id == event1.id
-assert events[1].id == event2.id
-assert events[2].id == event3.id
+assert events[0] == event1
+assert events[1] == event2
+assert events[2] == event3
 ```
 
 The example below shows how to use the `stream_position` argument to read a stream
@@ -1040,8 +1040,8 @@ events = client.get_stream(
 )
 
 assert len(events) == 2
-assert events[0].id == event2.id
-assert events[1].id == event3.id
+assert events[0] == event2
+assert events[1] == event3
 ```
 
 The example below shows how to use the `backwards` argument to read a stream backwards.
@@ -1053,9 +1053,9 @@ events = client.get_stream(
 )
 
 assert len(events) == 3
-assert events[0].id == event3.id
-assert events[1].id == event2.id
-assert events[2].id == event1.id
+assert events[0] == event3
+assert events[1] == event2
+assert events[2] == event1
 ```
 
 The example below shows how to use the `limit` argument to read a limited number of
@@ -1068,8 +1068,8 @@ events = client.get_stream(
 )
 
 assert len(events) == 2
-assert events[0].id == event1.id
-assert events[1].id == event2.id
+assert events[0] == event1
+assert events[1] == event2
 ```
 
 The `read_stream()` and `get_stream()` methods will raise a `NotFound` exception if the
@@ -1573,9 +1573,9 @@ read_response = client.read_all(
 )
 
 # Step through the "read response" iterator.
-assert next(read_response).id == event1.id
-assert next(read_response).id == event2.id
-assert next(read_response).id == event3.id
+assert next(read_response) == event1
+assert next(read_response) == event2
+assert next(read_response) == event3
 
 # Stop the iterator.
 read_response.stop()
@@ -1615,7 +1615,7 @@ events = tuple(
 )
 
 assert len(events) == 1
-assert events[0].id == event1.id
+assert events[0] == event1
 ```
 
 The example below shows how to read a limited number of the recorded events
@@ -1916,10 +1916,10 @@ def receive_events():
         received_events.append(event)
 
 
-def wait_for_event(event_id):
+def wait_for_event(event):
     for _ in range(100):
-        for event in reversed(received_events):
-            if event.id == event_id:
+        for received in reversed(received_events):
+            if event == received:
                 return
         else:
             sleep(0.1)
@@ -1931,7 +1931,7 @@ thread = Thread(target=receive_events, daemon=True)
 thread.start()
 
 # Wait to receive event4.
-wait_for_event(event4.id)
+wait_for_event(event4)
 
 # Append another event whilst the subscription is running.
 event5 = NewEvent(type='OrderUpdated', data=b'data5')
@@ -1942,7 +1942,7 @@ client.append_to_stream(
 )
 
 # Wait for the subscription to block.
-wait_for_event(event5.id)
+wait_for_event(event5)
 
 # Stop the subscription.
 catchup_subscription.stop()
@@ -1977,7 +1977,7 @@ thread = Thread(target=receive_events, daemon=True)
 thread.start()
 
 # Wait for event6.
-wait_for_event(event6.id)
+wait_for_event(event6)
 
 # Append three more events to a new stream.
 stream_name3 = str(uuid.uuid4())
@@ -1992,9 +1992,9 @@ client.append_to_stream(
 )
 
 # Wait for events 7, 8 and 9.
-wait_for_event(event7.id)
-wait_for_event(event8.id)
-wait_for_event(event9.id)
+wait_for_event(event7)
+wait_for_event(event8)
+wait_for_event(event9)
 
 # Stop the subscription.
 catchup_subscription.stop()
@@ -2248,14 +2248,15 @@ subscription = client.read_subscription_to_all(group_name=group_name1)
 The `ack()` method should be used by a consumer to "acknowledge" to the server that
 it has received and successfully processed a recorded event. This will prevent that
 recorded event being received by another consumer in the same group. The `ack()`
-method takes an `event_id`. The value of this argument should be obtained from
-the `ack_id` attribute of the recorded event object that is being acknowledged. This
-is sometimes not the same as the value of the recorded event's `id` attribute when
-subscription has been configured to resolve links.
+has an `item` argument which can be either a `RecordedEvent` or a `UUID`. If you pass
+in a `RecordedEvent`, the value of its `ack_id` attribute will be used to acknowledge
+the event to the server. If you pass in a UUID, then used the value of the `ack_id`
+of the `RecordedEvent` that is being acknowledged, in case the event has been resolved
+from a link event.
 
-The example below iterates over the subscription object, and calls `ack()`. The
-`stop()` method is called when we have received the last event, so that we can
-continue with the examples below.
+The example below iterates over the subscription object, and calls `ack()` with the
+received `RecordedEvent` objects. The subscription's `stop()` method is called when
+we have received `event9`, so that we can continue with the examples below.
 
 ```python
 received_events = []
@@ -2267,26 +2268,17 @@ for event in subscription:
     subscription.ack(event)
 
     # Stop when 'event9' has been received.
-    if event.id == event9.id:
+    if event == event9:
         subscription.stop()
 ```
 
-The events are not guaranteed to be received in the order they were recorded. But
-we will have received `event9`.
+The `nack()` should be used by a consumer to "negatively acknowledge" to the server that
+it has received but not successfully processed a recorded event. The `nack()` method has
+an `item` argument that works in the same way as `ack()`. Use the recorded event or its
+`ack_id` attribute. The `nack()` method also has an `action` argument, which should be
+a Python `str`: either `'unknown'`, `'park'`, `'retry'`, `'skip'` or `'stop'`.
 
-```python
-assert event9.id in [e.id for e in received_events]
-```
-
-The `PersistentSubscription` object also has an `nack()` method that should be used
-by a consumer to "negatively acknowledge" to the server that it has received but not
-successfully processed a recorded event. The `nack()` method has an `event_id`
-argument. The value of this argument should be obtained from the `ack_id` attribute
-of the recorded event. This is sometimes not the same as the value of the recorded
-event's `id` attribute when subscription has been configured to resolve links. The
-`nack()` method also has an `action` argument, which should be a Python `str`: either
-`'unknown'`, `'park'`, `'retry'`, `'skip'` or `'stop'`.
-
+The `stop()` method can be used to stop the gRPC streaming operation.
 
 ### How to write a persistent subscription consumer<a id="how-to-write-a-persistent-subscription-consumer"></a>
 
@@ -2298,6 +2290,8 @@ perhaps retrying the event for a certain number of times before parking the even
 The simple example below shows how this might be done. We can see that 'event9' is
 acknowledged before 'event5' is finally parked.
 
+The  number of time a `RecordedEvent` has been retried is presented by the its
+`retry_count` attribute.
 
 ```python
 acked_events = {}
@@ -2335,7 +2329,7 @@ class ExampleConsumer:
 
     def policy(self, event):
         # Raise an exception when we see "event5".
-        if event.id == event5.id:
+        if event == event5:
             raise Exception()
 
     def after_ack(self, event):
@@ -2540,7 +2534,7 @@ for event in subscription:
     subscription.ack(event)
 
     # Stop when 'event6' has been received.
-    if event.id == event6.id:
+    if event == event6:
         subscription.stop()
 ```
 
@@ -2549,12 +2543,9 @@ in the examples above.
 
 ```python
 assert len(events) == 3
-assert events[0].stream_name == stream_name2
-assert events[0].id == event4.id
-assert events[1].stream_name == stream_name2
-assert events[1].id == event5.id
-assert events[2].stream_name == stream_name2
-assert events[2].id == event6.id
+assert events[0] == event4
+assert events[1] == event5
+assert events[2] == event6
 ```
 
 ### Update subscription to stream<a id="update-subscription-to-stream"></a>
@@ -2894,9 +2885,9 @@ async def demonstrate_asyncio_client():
     # Read stream events.
     recorded = await client.get_stream(stream_name)
     assert len(recorded) == 3
-    assert recorded[0].id == event1.id
-    assert recorded[1].id == event2.id
-    assert recorded[2].id == event3.id
+    assert recorded[0] == event1
+    assert recorded[1] == event2
+    assert recorded[2] == event3
 
 
     # Subscribe all events.
@@ -2905,9 +2896,9 @@ async def demonstrate_asyncio_client():
         received.append(event)
         if event.commit_position == commit_position:
             break
-    assert received[-3].id == event1.id
-    assert received[-2].id == event2.id
-    assert received[-1].id == event3.id
+    assert received[-3] == event1
+    assert received[-2] == event2
+    assert received[-1] == event3
 
 
     # Close the client.

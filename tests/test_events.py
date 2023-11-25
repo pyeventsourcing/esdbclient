@@ -163,3 +163,42 @@ class TestCheckpoint(TestCase):
 
         checkpoint = Checkpoint(commit_position=67890)
         self.assertEqual(checkpoint.commit_position, 67890)
+
+
+class TestEquality(TestCase):
+    def test(self) -> None:
+        new_event1 = NewEvent(type="Type1", data=b"{}")
+        new_event2 = NewEvent(type="Type2", data=b"{}")
+        recorded_event1 = RecordedEvent(
+            type="type1",
+            data=b'{"a": "b"}',
+            metadata=b'{"c": "d"}',
+            content_type="application/json",
+            id=new_event1.id,
+            stream_name="stream1",
+            stream_position=12,
+            commit_position=12345,
+            retry_count=5,
+            link=None,
+        )
+        recorded_event2 = RecordedEvent(
+            type="type1",
+            data=b'{"a": "b"}',
+            metadata=b'{"c": "d"}',
+            content_type="application/json",
+            id=new_event2.id,
+            stream_name="stream1",
+            stream_position=12,
+            commit_position=12345,
+            retry_count=5,
+            link=None,
+        )
+
+        self.assertEqual(new_event1, recorded_event1)
+        self.assertEqual(recorded_event1, new_event1)
+        self.assertEqual(new_event2, recorded_event2)
+        self.assertEqual(recorded_event2, new_event2)
+        self.assertNotEqual(new_event2, recorded_event1)
+        self.assertNotEqual(recorded_event1, new_event2)
+        self.assertNotEqual(new_event1, recorded_event2)
+        self.assertNotEqual(recorded_event2, new_event1)

@@ -20,6 +20,9 @@ class NewEvent:
     content_type: ContentType = "application/json"
     id: UUID = field(default_factory=uuid4)
 
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, (NewEvent, RecordedEvent)) and self.id == other.id
+
 
 @dataclass(frozen=True)
 class RecordedEvent:
