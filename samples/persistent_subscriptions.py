@@ -51,8 +51,8 @@ client.append_to_stream(
 
 # region create-persistent-subscription-to-stream
 client.create_subscription_to_stream(
-    stream_name=stream_name,
     group_name="subscription-group",
+    stream_name=stream_name,
 )
 # endregion create-persistent-subscription-to-stream
 
@@ -71,8 +71,8 @@ client.create_subscription_to_all(
 # region subscribe-to-persistent-subscription-to-stream
 while True:
     subscription = client.read_subscription_to_stream(
-        stream_name=stream_name,
         group_name="subscription-group",
+        stream_name=stream_name,
     )
     try:
         for event in subscription:
@@ -120,8 +120,8 @@ while True:
 group_name = str(uuid4())
 
 client.create_subscription_to_stream(
-    stream_name=stream_name,
     group_name=group_name,
+    stream_name=stream_name,
 )
 
 
@@ -152,8 +152,8 @@ while True:
 
 # region update-persistent-subscription
 client.update_subscription_to_stream(
-    stream_name=stream_name,
     group_name=group_name,
+    stream_name=stream_name,
     resolve_links=True,
 )
 # endregion update-persistent-subscription
@@ -161,8 +161,8 @@ client.update_subscription_to_stream(
 
 # region delete-persistent-subscription
 client.delete_subscription(
-    stream_name=stream_name,
     group_name=group_name,
+    stream_name=stream_name,
 )
 # endregion delete-persistent-subscription
 
