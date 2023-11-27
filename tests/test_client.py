@@ -31,6 +31,7 @@ from esdbclient.exceptions import (
     ConsumerTooSlow,
     DiscoveryFailed,
     DNSError,
+    ExceptionIteratingRequests,
     ExceptionThrownByHandler,
     FollowerNotFound,
     GossipSeedError,
@@ -3134,6 +3135,40 @@ class TestEventStoreDBClient(TimedTestCase):
         assert replayed_events[-3].data == event1.data
         assert replayed_events[-2].data == event2.data
         assert replayed_events[-1].data == event3.data
+
+    def test_subscription_to_all_ack_with_wrong_object(self) -> None:
+        self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription_to_all(group_name=group_name, from_end=True)
+
+        # Append three events.
+        stream_name1 = str(uuid4())
+
+        event1 = NewEvent(type="OrderCreated", data=random_data(), metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=random_data(), metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=random_data(), metadata=b"{}")
+
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        # Read subscription.
+        subscription = self.client.read_subscription_to_all(
+            group_name=group_name, timeout=30
+        )
+
+        class NotUUID:
+            pass
+
+        # Ack with wrong type of object.
+        with self.assertRaises(ExceptionIteratingRequests) as cm:
+            for _ in subscription:
+                subscription.ack(NotUUID())  # type: ignore
+        self.assertIsInstance(cm.exception.__cause__, AssertionError)
 
     def test_subscription_to_stream_replay_parked(self) -> None:
         self.construct_esdb_client()

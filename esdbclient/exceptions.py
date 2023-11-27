@@ -166,3 +166,12 @@ class ReadOnlyReplicaNotFound(DiscoveryFailed):
     """
     Raised when NodePreference is 'readonlyreplica' but the cluster has no such nodes.
     """
+
+
+class ExceptionIteratingRequests(EventStoreDBClientException):
+    """
+    Raised when a persistent subscription errors whilst iterating requests.
+
+    This helps debugging because otherwise we just get a gRPC error
+    that says "Exception iterating requests!"
+    """

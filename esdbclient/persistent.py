@@ -33,6 +33,7 @@ from esdbclient.events import RecordedEvent
 from esdbclient.exceptions import (
     CancelledByClient,
     EventStoreDBClientException,
+    ExceptionIteratingRequests,
     NodeIsNotLeader,
     SubscriptionConfirmationError,
 )
@@ -473,98 +474,103 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
         self._is_stopped = Event()  # Indicates req loop has exited.
         self._is_aborted = Event()  # Indicates req loop has exited.
         self._last_ack_batch_time = datetime.utcnow()
+        self.errored: Optional[Exception] = None
 
     def __next__(self) -> persistent_pb2.ReadReq:
-        # First send read request options, then send a batch of n/acks
-        # whenever the buffer is full, or when the n/ack actions changes,
-        # or periodically, or when stopping.
+        try:
+            # First send read request options, then send a batch of n/acks
+            # whenever the buffer is full, or when the n/ack actions changes,
+            # or periodically, or when stopping.
 
-        if not self._has_requested_options:
-            # Send initial read request options.
-            self._has_requested_options = True
-            return self._construct_initial_read_req()
-        else:
-            # Send a batch of n/acks.
+            if not self._has_requested_options:
+                # Send initial read request options.
+                self._has_requested_options = True
+                return self._construct_initial_read_req()
+            else:
+                # Send a batch of n/acks.
 
-            # Initialise batch, maybe from held n/ack.
-            batch_ids: List[UUID] = []
-            batch_action: Optional[str] = None
-            if self._ack_held is not None:
-                held_event_id, batch_action = self._ack_held
-                batch_ids.append(held_event_id)
-                self._ack_held = None
+                # Initialise batch, maybe from held n/ack.
+                batch_ids: List[UUID] = []
+                batch_action: Optional[str] = None
+                if self._ack_held is not None:
+                    held_event_id, batch_action = self._ack_held
+                    batch_ids.append(held_event_id)
+                    self._ack_held = None
 
-            # Get n/acks from the queue, until the queue is poisoned.
-            while True:
-                try:
-                    # Maybe stop the iteration.
-                    if self._is_stopping:
-                        # Allow time for server to process last n/acks.
-                        sleep(self._stopping_grace)
-                        self._is_stopped.set()
-                        raise StopIteration() from None
+                # Get n/acks from the queue, until the queue is poisoned.
+                while True:
+                    try:
+                        # Maybe stop the iteration.
+                        if self._is_stopping:
+                            # Allow time for server to process last n/acks.
+                            sleep(self._stopping_grace)
+                            self._is_stopped.set()
+                            raise StopIteration() from None
 
-                    # Wait for next n/ack, timeout with "max ack delay".
-                    get_timeout = (
-                        datetime.utcnow() - self._last_ack_batch_time
-                    ).total_seconds()
-                    event_id, action = self._ack_queue.get(timeout=get_timeout)
-
-                    # If queue was poisoned, send non-empty batch now.
-                    if action == "poison":
-                        self._is_stopping = True
-                        if len(batch_ids):
-                            assert batch_action is not None
-                            self._last_ack_batch_time = datetime.utcnow()
-                            return self._construct_ack_or_nack_read_req(
-                                subscription_id=self.subscription_id,
-                                event_ids=batch_ids,
-                                action=batch_action,
-                            )
-                    else:
-                        assert isinstance(event_id, UUID)
-                        if batch_action is None:
-                            # Set the "current action" if there isn't one already.
-                            batch_action = action
-                        elif action != batch_action:
-                            # Action changed, hold this ack and send the batch.
-                            self._ack_held = (event_id, action)
-                            self._last_ack_batch_time = datetime.utcnow()
-                            return self._construct_ack_or_nack_read_req(
-                                subscription_id=self.subscription_id,
-                                event_ids=batch_ids,
-                                action=batch_action,
-                            )
-
-                        # Add event ID to the batch.
-                        batch_ids.append(event_id)
-
-                        # Send the batch if full or late.
-                        batch_age_datetime = (
+                        # Wait for next n/ack, timeout with "max ack delay".
+                        get_timeout = (
                             datetime.utcnow() - self._last_ack_batch_time
-                        )
-                        batch_age_seconds = batch_age_datetime.total_seconds()
-                        is_batch_late = batch_age_seconds > self._max_ack_delay
-                        is_batch_full = len(batch_ids) >= self._max_ack_batch_size
-                        if is_batch_full or is_batch_late:
-                            self._last_ack_batch_time = datetime.utcnow()
+                        ).total_seconds()
+                        event_id, action = self._ack_queue.get(timeout=get_timeout)
+
+                        # If queue was poisoned, send non-empty batch now.
+                        if action == "poison":
+                            self._is_stopping = True
+                            if len(batch_ids):
+                                assert batch_action is not None
+                                self._last_ack_batch_time = datetime.utcnow()
+                                return self._construct_ack_or_nack_read_req(
+                                    subscription_id=self.subscription_id,
+                                    event_ids=batch_ids,
+                                    action=batch_action,
+                                )
+                        else:
+                            assert isinstance(event_id, UUID)
+                            if batch_action is None:
+                                # Set the "current action" if there isn't one already.
+                                batch_action = action
+                            elif action != batch_action:
+                                # Action changed, hold this ack and send the batch.
+                                self._ack_held = (event_id, action)
+                                self._last_ack_batch_time = datetime.utcnow()
+                                return self._construct_ack_or_nack_read_req(
+                                    subscription_id=self.subscription_id,
+                                    event_ids=batch_ids,
+                                    action=batch_action,
+                                )
+
+                            # Add event ID to the batch.
+                            batch_ids.append(event_id)
+
+                            # Send the batch if full or late.
+                            batch_age_datetime = (
+                                datetime.utcnow() - self._last_ack_batch_time
+                            )
+                            batch_age_seconds = batch_age_datetime.total_seconds()
+                            is_batch_late = batch_age_seconds > self._max_ack_delay
+                            is_batch_full = len(batch_ids) >= self._max_ack_batch_size
+                            if is_batch_full or is_batch_late:
+                                self._last_ack_batch_time = datetime.utcnow()
+                                return self._construct_ack_or_nack_read_req(
+                                    subscription_id=self.subscription_id,
+                                    event_ids=batch_ids,
+                                    action=batch_action,
+                                )
+                    except queue.Empty:
+                        # Send a non-empty batch at least every "max ack delay".
+                        self._last_ack_batch_time = datetime.utcnow()
+                        if len(batch_ids) > 0:
+                            assert batch_action is not None
                             return self._construct_ack_or_nack_read_req(
                                 subscription_id=self.subscription_id,
                                 event_ids=batch_ids,
                                 action=batch_action,
                             )
-                except queue.Empty:
-                    # Send a non-empty batch at least every "max ack delay".
-                    self._last_ack_batch_time = datetime.utcnow()
-                    if len(batch_ids) > 0:
-                        assert batch_action is not None
-                        return self._construct_ack_or_nack_read_req(
-                            subscription_id=self.subscription_id,
-                            event_ids=batch_ids,
-                            action=batch_action,
-                        )
-                    else:  # pragma: no cover
-                        pass
+                        else:  # pragma: no cover
+                            pass
+        except Exception as e:
+            self.errored = e
+            raise
 
     def ack(self, event_id: UUID) -> None:
         self._ack_queue.put((event_id, "ack"))
@@ -662,7 +668,14 @@ class PersistentSubscription(GrpcStreamer, Iterator[RecordedEvent]):
         try:
             read_resp = next(self._read_resps)
         except grpc.RpcError as e:
-            raise handle_rpc_error(e) from None
+            details = e.details()
+            if (
+                details is not None
+                and "Exception iterating requests!" in details
+                and self._read_reqs.errored
+            ):
+                raise ExceptionIteratingRequests() from self._read_reqs.errored
+            raise handle_rpc_error(e) from e
         assert isinstance(read_resp, persistent_pb2.ReadResp)
         return read_resp
 
