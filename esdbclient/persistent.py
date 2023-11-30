@@ -508,7 +508,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                             raise StopIteration() from None
 
                         # Wait for next n/ack, timeout with "max ack delay".
-                        get_timeout = time.monotonic() - self._last_ack_batch_time
+                        get_timeout = max(0.0, self._calc_time_until_next_ack_batch())
                         event_id, action = self._ack_queue.get(timeout=get_timeout)
 
                         # If queue was poisoned, send non-empty batch now.
@@ -541,8 +541,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                             batch_ids.append(event_id)
 
                             # Send the batch if full or late.
-                            batch_age = time.monotonic() - self._last_ack_batch_time
-                            is_batch_late = batch_age > self._max_ack_delay
+                            is_batch_late = self._calc_time_until_next_ack_batch() < 0.0
                             is_batch_full = len(batch_ids) >= self._max_ack_batch_size
                             if is_batch_full or is_batch_late:
                                 self._last_ack_batch_time = time.monotonic()
@@ -566,6 +565,9 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
         except Exception as e:
             self.errored = e
             raise
+
+    def _calc_time_until_next_ack_batch(self):
+        return self._last_ack_batch_time + self._max_ack_delay - time.monotonic()
 
     def ack(self, event_id: UUID) -> None:
         self._ack_queue.put((event_id, "ack"))
