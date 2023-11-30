@@ -488,7 +488,6 @@ appropriate value, separated with the "=" character.
                 | ( "GossipTimeout", "=" , integer )
                 | ( "MaxDiscoverAttempts", "=" , integer )
                 | ( "DiscoveryInterval", "=" , integer )
-                | ( "MaxDiscoverAttempts", "=" , integer )
                 | ( "KeepAliveInterval", "=" , integer )
                 | ( "KeepAliveTimeout", "=" , integer ) ;
 
