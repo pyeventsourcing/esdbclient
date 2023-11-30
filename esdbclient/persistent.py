@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import queue
+import time
 from abc import abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
 from threading import Event
 from time import sleep
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union, overload
@@ -473,7 +473,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
         self._is_stopping = False
         self._is_stopped = Event()  # Indicates req loop has exited.
         self._is_aborted = Event()  # Indicates req loop has exited.
-        self._last_ack_batch_time = datetime.utcnow()
+        self._last_ack_batch_time = time.monotonic()
         self.errored: Optional[Exception] = None
 
     def __next__(self) -> persistent_pb2.ReadReq:
@@ -508,9 +508,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                             raise StopIteration() from None
 
                         # Wait for next n/ack, timeout with "max ack delay".
-                        get_timeout = (
-                            datetime.utcnow() - self._last_ack_batch_time
-                        ).total_seconds()
+                        get_timeout = time.monotonic() - self._last_ack_batch_time
                         event_id, action = self._ack_queue.get(timeout=get_timeout)
 
                         # If queue was poisoned, send non-empty batch now.
@@ -518,7 +516,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                             self._is_stopping = True
                             if len(batch_ids):
                                 assert batch_action is not None
-                                self._last_ack_batch_time = datetime.utcnow()
+                                self._last_ack_batch_time = time.monotonic()
                                 return self._construct_ack_or_nack_read_req(
                                     subscription_id=self.subscription_id,
                                     event_ids=batch_ids,
@@ -532,7 +530,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                             elif action != batch_action:
                                 # Action changed, hold this ack and send the batch.
                                 self._ack_held = (event_id, action)
-                                self._last_ack_batch_time = datetime.utcnow()
+                                self._last_ack_batch_time = time.monotonic()
                                 return self._construct_ack_or_nack_read_req(
                                     subscription_id=self.subscription_id,
                                     event_ids=batch_ids,
@@ -543,14 +541,11 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                             batch_ids.append(event_id)
 
                             # Send the batch if full or late.
-                            batch_age_datetime = (
-                                datetime.utcnow() - self._last_ack_batch_time
-                            )
-                            batch_age_seconds = batch_age_datetime.total_seconds()
-                            is_batch_late = batch_age_seconds > self._max_ack_delay
+                            batch_age = time.monotonic() - self._last_ack_batch_time
+                            is_batch_late = batch_age > self._max_ack_delay
                             is_batch_full = len(batch_ids) >= self._max_ack_batch_size
                             if is_batch_full or is_batch_late:
-                                self._last_ack_batch_time = datetime.utcnow()
+                                self._last_ack_batch_time = time.monotonic()
                                 return self._construct_ack_or_nack_read_req(
                                     subscription_id=self.subscription_id,
                                     event_ids=batch_ids,
@@ -558,7 +553,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                                 )
                     except queue.Empty:
                         # Send a non-empty batch at least every "max ack delay".
-                        self._last_ack_batch_time = datetime.utcnow()
+                        self._last_ack_batch_time = time.monotonic()
                         if len(batch_ids) > 0:
                             assert batch_action is not None
                             return self._construct_ack_or_nack_read_req(
