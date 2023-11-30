@@ -490,7 +490,7 @@ appropriate value, separated with the "=" character.
                 | ( "DiscoveryInterval", "=" , integer )
                 | ( "MaxDiscoverAttempts", "=" , integer )
                 | ( "KeepAliveInterval", "=" , integer )
-                | ( "KeepAliveInterval", "=" , integer ) ;
+                | ( "KeepAliveTimeout", "=" , integer ) ;
 
 The table below describes the query field-values supported by this client.
 
