@@ -440,15 +440,15 @@ The host may be a hostname that can be resolved to an IP address, or an IP addre
 
 The "esdb+discover" URI scheme can be defined in the following way.
 
-    esdb-discover-uri = "esdb+discover://" , [ user-info, "@" ] , cluster-domainname , [ "?" , query-string ] ;
+    esdb-discover-uri = "esdb+discover://" , [ user-info, "@" ] , cluster-domainname, [ ":" , port-number ] , [ "?" , query-string ] ;
 
 In the "esdb+discover" URI scheme, after the optional user info string, there must be a
 domain name which should identify a cluster of EventStoreDB servers. The client will use
 a DNS server to resolve the domain name to a list of addresses of EventStoreDB servers,
-by querying for 'A' records. In this case, the port number "2113" will be used to
-construct gRPC targets from the addresses obtained from 'A' records provided by the
-DNS server. Therefore, if you want to use the "esdb+discover" URI scheme, you will
-need to configure DNS when setting up your EventStoreDB cluster.
+by querying for 'A' records. The specified port number, or the default port number
+"2113", will be used to construct gRPC targets from the addresses obtained from 'A'
+records provided by the DNS server. Therefore, if you want to use the "esdb+discover"
+URI scheme, you will need to configure DNS when setting up your EventStoreDB cluster.
 
 With both the "esdb" and "esdb+discover" URI schemes, the client firstly obtains
 a list of gRPC targets: either directly from "esdb" connection strings; or indirectly

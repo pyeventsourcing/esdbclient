@@ -5239,13 +5239,22 @@ class TestESDBClusterNode3(TestEventStoreDBClient):
 
 
 class TestESDBDiscoverScheme(TestCase):
-    def test_calls_dns(self) -> None:
+    def test_calls_dns_and_uses_given_port_number_or_default(self) -> None:
         uri = (
             "esdb+discover://example.com"
             "?Tls=false&GossipTimeout=0&DiscoveryInterval=0&MaxDiscoverAttempts=2"
         )
-        with self.assertRaises(DiscoveryFailed):
+        with self.assertRaises(DiscoveryFailed) as cm:
             EventStoreDBClient(uri)
+        self.assertIn(":2113", str(cm.exception))
+
+        uri = (
+            "esdb+discover://example.com:9898"
+            "?Tls=false&GossipTimeout=0&DiscoveryInterval=0&MaxDiscoverAttempts=2"
+        )
+        with self.assertRaises(DiscoveryFailed) as cm:
+            EventStoreDBClient(uri)
+        self.assertIn(":9898", str(cm.exception))
 
     def test_raises_dns_error(self) -> None:
         with self.assertRaises(DNSError):

@@ -71,12 +71,22 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         with self.assertRaises(DNSError):
             await AsyncioEventStoreDBClient("esdb+discover://xxxxxxxxxxxxxx?Tls=false")
 
-    async def test_calls_dns(self) -> None:
-        with self.assertRaises(DiscoveryFailed):
+    async def test_calls_dns_and_uses_given_port_number_or_default(self) -> None:
+        with self.assertRaises(DiscoveryFailed) as cm:
             await AsyncioEventStoreDBClient(
                 "esdb+discover://example.com?Tls=False"
                 "&GossipTimeout=0&MaxDiscoverAttempts=1&DiscoveryInterval=0"
             )
+        self.assertIn(":2113", str(cm.exception))
+        self.assertNotIn(":9898", str(cm.exception))
+
+        with self.assertRaises(DiscoveryFailed) as cm:
+            await AsyncioEventStoreDBClient(
+                "esdb+discover://example.com:9898?Tls=False"
+                "&GossipTimeout=0&MaxDiscoverAttempts=1&DiscoveryInterval=0"
+            )
+        self.assertNotIn(":2113", str(cm.exception))
+        self.assertIn(":9898", str(cm.exception))
 
     async def test_raises_gossip_seed_error(self) -> None:
         with self.assertRaises(GossipSeedError):

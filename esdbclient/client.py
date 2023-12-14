@@ -199,12 +199,14 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         # Obtain the gossip seed (a list of gRPC targets).
         if self.connection_spec.scheme == URI_SCHEME_ESDB_DISCOVER:
             assert len(self.connection_spec.targets) == 1
-            cluster_fqdn = self.connection_spec.targets[0]
+            cluster_fqdn, _, port = self.connection_spec.targets[0].partition(":")
+            if port == "":
+                port = "2113"
             try:
                 answers = dns.resolver.resolve(cluster_fqdn, "A")
             except dns.exception.DNSException as e:
                 raise DNSError() from e
-            gossip_seed: Sequence[str] = [f"{s.address}:2112" for s in answers]
+            gossip_seed: Sequence[str] = [f"{s.address}:{port}" for s in answers]
         else:
             assert self.connection_spec.scheme == URI_SCHEME_ESDB
             gossip_seed = self.connection_spec.targets
