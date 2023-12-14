@@ -12,7 +12,7 @@ from esdbclient.exceptions import ConsumerTooSlow
 from esdbclient.streams import CatchupSubscription, RecordedEvent
 from tests.test_client import get_server_certificate
 
-DEBUG = True
+DEBUG = False
 _print = print
 
 
@@ -38,18 +38,6 @@ def handle_event(ev: RecordedEvent):
     subscription.stop()
 
 
-print("region exclude-system")
-# region exclude-system
-subscription = client.subscribe_to_all(
-    filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX]
-)
-
-for event in subscription:
-    print("Received event:", event.stream_position, event.type)
-    break
-# endregion exclude-system
-subscription.stop()
-
 stream_name = str(uuid4())
 
 event_data = NewEvent(
@@ -62,6 +50,18 @@ client.append_to_stream(
     current_version=StreamState.ANY,
     events=event_data,
 )
+
+print("region exclude-system")
+# region exclude-system
+subscription = client.subscribe_to_all(
+    filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX]
+)
+
+for event in subscription:
+    print("Received event:", event.stream_position, event.type)
+    break
+# endregion exclude-system
+subscription.stop()
 
 print("region event-type-prefix")
 # region event-type-prefix
@@ -116,7 +116,7 @@ event_data = NewEvent(
 )
 
 client.append_to_stream(
-    stream_name="test-stream",
+    stream_name="user-" + str(uuid4()),
     current_version=StreamState.ANY,
     events=event_data,
 )
