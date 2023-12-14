@@ -12,7 +12,7 @@ from esdbclient.exceptions import ConsumerTooSlow
 from esdbclient.streams import CatchupSubscription, RecordedEvent
 from tests.test_client import get_server_certificate
 
-DEBUG = False
+DEBUG = True
 _print = print
 
 
@@ -38,6 +38,7 @@ def handle_event(ev: RecordedEvent):
     subscription.stop()
 
 
+print("region exclude-system")
 # region exclude-system
 subscription = client.subscribe_to_all(
     filter_exclude=[ESDB_SYSTEM_EVENTS_REGEX]
@@ -62,6 +63,7 @@ client.append_to_stream(
     events=event_data,
 )
 
+print("region event-type-prefix")
 # region event-type-prefix
 subscription = client.subscribe_to_all(
     filter_include=[r"customer-.*"],
@@ -94,6 +96,7 @@ client.append_to_stream(
     events=event_data_two,
 )
 
+print("region event-type-regex")
 # region event-type-regex
 subscription = client.subscribe_to_all(
     filter_by_stream_name=False,
@@ -118,6 +121,7 @@ client.append_to_stream(
     events=event_data,
 )
 
+print("region stream-prefix")
 # region stream-prefix
 subscription = client.subscribe_to_all(
     filter_by_stream_name=True,
@@ -137,6 +141,7 @@ client.append_to_stream(
 )
 
 
+print("region stream-regex")
 # region stream-regex
 subscription = client.subscribe_to_all(
     filter_by_stream_name=True,
@@ -147,6 +152,7 @@ for event in subscription:
     handle_event(event)
 # endregion stream-regex
 
+print("region checkpoint")
 # region checkpoint
 # get last recorded commit position
 last_commit_position = 0
@@ -178,6 +184,7 @@ while True:
     break
 
 
+print("region checkpoint-with-interval")
 # region checkpoint-with-interval
 subscription = client.subscribe_to_all(
     commit_position=last_commit_position,
