@@ -3,6 +3,7 @@ import datetime
 import os
 import ssl
 import sys
+import traceback
 from collections import Counter
 from threading import Thread
 from time import sleep
@@ -356,12 +357,27 @@ class TestEventStoreDBClient(TimedTestCase):
         self.client.close()
         self.client.close()
 
+    def test_constructor_with_tls_true_but_no_root_certificates(self) -> None:
+        if self.ESDB_TLS:
+            qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
+            uri = f"esdb://admin:changeit@{self.ESDB_TARGET}?{qs}"
+            try:
+                EventStoreDBClient(uri)
+            except DiscoveryFailed:
+                tb = traceback.format_exc()
+                self.assertIn("Ssl handshake failed", tb)
+                self.assertIn("routines:OPENSSL_internal:CERTIFICATE_VERIFY_FAILED", tb)
+            else:
+                self.fail("Didn't raise DiscoveryFailed exception")
+        else:
+            self.skipTest("Skipping for insecure server")
+
     def test_constructor_raises_value_errors(self) -> None:
-        # Secure URI without root_certificates.
+        # Secure URI without username or password.
         with self.assertRaises(ValueError) as cm0:
             EventStoreDBClient("esdb://localhost:2222")
         self.assertIn(
-            "root_certificates is required for secure connection",
+            "username and password are required",
             cm0.exception.args[0],
         )
 
@@ -602,6 +618,9 @@ class TestEventStoreDBClient(TimedTestCase):
         event3 = NewEvent(
             type="OrderDeleted", data=random_data(), metadata=random_data()
         )
+        event4 = NewEvent(
+            type="OrderCorrected", data=random_data(), metadata=random_data()
+        )
 
         # Check get error when attempting to append new event to position 1.
         with self.assertRaises(WrongCurrentVersion) as cm:
@@ -728,11 +747,77 @@ class TestEventStoreDBClient(TimedTestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].id, event2.id)
 
+        # Idempotent write of event1.
+        commit_position1_1 = self.client.append_event(
+            stream_name, current_version=StreamState.NO_STREAM, event=event1
+        )
+        self.assertEqual(commit_position1, commit_position1_1)
+
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
         # Idempotent write of event2.
         commit_position2_1 = self.client.append_event(
             stream_name, current_version=0, event=event2
         )
         self.assertEqual(commit_position2_1, commit_position2)
+
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Idempotent write of event3.
+        commit_position3_1 = self.client.append_event(
+            stream_name, current_version=1, event=event3
+        )
+        self.assertEqual(commit_position3, commit_position3_1)
+
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Idempotent write of event1, event2.
+        commit_position2_1 = self.client.append_events(
+            stream_name,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2],
+        )
+        self.assertEqual(commit_position2, commit_position2_1)
+
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Idempotent write of event2, event3.
+        commit_position3_1 = self.client.append_events(
+            stream_name,
+            current_version=0,
+            events=[event2, event3],
+        )
+        self.assertEqual(commit_position3, commit_position3_1)
+
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Mixture of "idempotent" write of event2, event3, with new event4.
+        with self.assertRaises(WrongCurrentVersion):
+            self.client.append_events(
+                stream_name,
+                current_version=0,
+                events=[event2, event3, event4],
+            )
 
         events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 3)

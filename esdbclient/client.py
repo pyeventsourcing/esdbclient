@@ -306,13 +306,14 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def _construct_connection(self, grpc_target: str) -> ESDBConnection:
         grpc_options: Tuple[Tuple[str, str], ...] = tuple(self.grpc_options.items())
         if self.connection_spec.options.Tls is True:
+            if not self.connection_spec.username or not self.connection_spec.password:
+                raise ValueError("username and password are required")
             if self.root_certificates is None:
-                raise ValueError("root_certificates is required for secure connection")
-
-            assert self.connection_spec.username
-            assert self.connection_spec.password
+                root_certificates = None
+            else:
+                root_certificates = self.root_certificates.encode()
             channel_credentials = grpc.ssl_channel_credentials(
-                root_certificates=self.root_certificates.encode()
+                root_certificates=root_certificates
             )
             grpc_channel = grpc.secure_channel(
                 target=grpc_target,

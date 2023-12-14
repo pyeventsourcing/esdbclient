@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
+import traceback
 from typing import Optional
 
 from esdbclient.streams import AsyncioCatchupSubscription
@@ -113,12 +114,22 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 "esdb://localhost:2113?Tls=False&NodePreference=readonlyreplica"
             )
 
-    async def test_root_certificates_required_for_secure_connection(self) -> None:
+    async def test_constructor_with_tls_true_but_no_root_certificates(self) -> None:
+        qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
+        uri = f"esdb://admin:changeit@localhost:2114?{qs}"
+        try:
+            await AsyncioEventStoreDBClient(uri)
+        except DiscoveryFailed:
+            tb = traceback.format_exc()
+            self.assertIn("Ssl handshake failed", tb)
+            self.assertIn("routines:OPENSSL_internal:CERTIFICATE_VERIFY_FAILED", tb)
+        else:
+            self.fail("Didn't raise DiscoveryFailed exception")
+
+    async def test_username_and_password_required_for_secure_connection(self) -> None:
         with self.assertRaises(ValueError) as cm:
             await AsyncioEventStoreDBClient("esdb://localhost:2114")
-        self.assertIn(
-            "root_certificates is required for secure connection", cm.exception.args[0]
-        )
+        self.assertIn("username and password are required", cm.exception.args[0])
 
     async def test_append_events_and_get_stream(self) -> None:
         # Append events.

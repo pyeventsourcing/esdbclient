@@ -303,13 +303,14 @@ and a "password" in the connection string, so that the server can authenticate t
 client. With EventStoreDB, the default username is "admin" and the default password
 is "changeit".
 
-When connecting to a "secure" server, your client will also need an SSL/TLS certificate
-as the value of its `root_certificates` constructor argument. The client uses the
-SSL/TLS certificate to authenticate the server. For development, you can either use the
-SSL/TLS certificate of the certificate authority used to create the server's certificate,
-or when using a single-node cluster, you can use the server certificate itself. You can
-get the server certificate with the following Python code.
-
+When connecting to a "secure" server, you may also need to provide an SSL/TLS certificate
+as the value of the `root_certificates` constructor argument. If the server certificate
+is publicly signed, the root certificates may be picked up by the grpc package from a
+default location. The client uses the root SSL/TLS certificate to authenticate the server.
+For development, you can either use the SSL/TLS certificate of a self-signing certificate
+authority used to create the server's certificate. Or, when using a single-node cluster,
+you can just use the server certificate itself, getting the server certificate with
+the following Python code.
 
 ```python
 import ssl
@@ -389,14 +390,16 @@ so that usernames and passwords are not sent over an "insecure" connection.
 Please note, the "insecure" connection string uses a query string with the field-value
 `Tls=false`. The value of this field is by default `true`. Unless the connection string
 URI includes the field-value `Tls=false` in the query string, the `root_certificates`
-constructor argument is also required.
+constructor argument can be used to supply SSL/TLS root certificate(s).
 
-When connecting to a "secure" server, the `root_certificates` argument is expected to
-be a Python `str` containing PEM encoded SSL/TLS root certificates. This value is
+When connecting to a "secure" server, the `root_certificates` argument can be
+a Python `str` containing PEM encoded SSL/TLS root certificates. This value is
 passed directly to `grpc.ssl_channel_credentials()`. It is used for authenticating the
 server to the client. It is commonly the certificate of the certificate authority that
 was responsible for generating the SSL/TLS certificate used by the EventStoreDB server.
-But, alternatively for development, you can use the server's certificate itself.
+Often it is unnecessary to provide these certificates explicitly, if they are installed
+locally in a such a way that the Python grpc library can pick them up from a default
+location. Alternatively, for development, you can use the server's certificate itself.
 
 In the example below, the constructor argument values are taken from the operating
 system environment. This is a typical arrangement in a production environment. It is
