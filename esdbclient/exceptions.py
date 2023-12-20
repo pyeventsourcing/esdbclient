@@ -175,3 +175,16 @@ class ExceptionIteratingRequests(EventStoreDBClientException):
     This helps debugging because otherwise we just get a gRPC error
     that says "Exception iterating requests!"
     """
+
+
+class FailedPrecondition(EventStoreDBClientException):
+    """
+    Raised when a "failed precondition" status error is encountered.
+    """
+
+
+class MaximumSubscriptionsReached(FailedPrecondition):
+    """
+    Raised when trying to read from a persistent subscription that
+    is already being read by the maximum number of subscribers.
+    """

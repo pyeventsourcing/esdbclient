@@ -38,6 +38,7 @@ from esdbclient.exceptions import (
     GossipSeedError,
     GrpcDeadlineExceeded,
     GrpcError,
+    MaximumSubscriptionsReached,
     NodeIsNotLeader,
     NotFound,
     ReadOnlyReplicaNotFound,
@@ -4111,6 +4112,23 @@ class TestEventStoreDBClient(TimedTestCase):
         # Check the consumers have received an equal number of events.
         self.assertLess((len1 - len2) ** 2, 2)
 
+    def test_subscription_to_all_max_subscriber_count(self) -> None:
+        self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name1 = f"my-subscription-{uuid4().hex}"
+        self.client.create_subscription_to_all(
+            group_name=group_name1, max_subscriber_count=2, from_end=True
+        )
+
+        # Multiple consumers.
+        subscription1 = self.client.read_subscription_to_all(group_name=group_name1)
+        subscription2 = self.client.read_subscription_to_all(group_name=group_name1)
+        with self.assertRaises(MaximumSubscriptionsReached):
+            self.client.read_subscription_to_all(group_name=group_name1)
+        subscription1.stop()
+        subscription2.stop()
+
     def test_subscription_get_info(self) -> None:
         self.construct_esdb_client()
 
@@ -4213,6 +4231,14 @@ class TestEventStoreDBClient(TimedTestCase):
         )
         info = self.client.get_subscription_info(group_name=group_name)
         self.assertTrue(info.resolve_link_tos)
+
+        # Update subscription's max_subscriber_count.
+        self.assertEqual(5, info.max_subscriber_count)
+        self.client.update_subscription_to_all(
+            group_name=group_name, max_subscriber_count=10
+        )
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(10, info.max_subscriber_count)
 
     def test_subscription_to_all_message_timeout_setting(self) -> None:
         self.construct_esdb_client()
@@ -4756,6 +4782,16 @@ class TestEventStoreDBClient(TimedTestCase):
         )
         self.assertTrue(info.resolve_link_tos)
 
+        # Update subscription's max_subscriber_count.
+        self.assertEqual(5, info.max_subscriber_count)
+        self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, max_subscriber_count=10
+        )
+        info = self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(10, info.max_subscriber_count)
+
     def test_subscription_to_stream_message_timeout_setting(self) -> None:
         self.construct_esdb_client()
 
@@ -4819,6 +4855,30 @@ class TestEventStoreDBClient(TimedTestCase):
             stream_name=stream_name,
         )
         self.assertEqual(info.max_retry_count, 1)
+
+    def test_subscription_to_stream_max_subscriber_count(self) -> None:
+        self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name = f"my-group-{uuid4().hex}"
+        stream_name = f"my-stream-{uuid4().hex}"
+        self.client.create_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, max_subscriber_count=2
+        )
+
+        # Multiple consumers.
+        subscription1 = self.client.read_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name
+        )
+        subscription2 = self.client.read_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name
+        )
+        with self.assertRaises(MaximumSubscriptionsReached):
+            self.client.read_subscription_to_stream(
+                group_name=group_name, stream_name=stream_name
+            )
+        subscription1.stop()
+        subscription2.stop()
 
     def test_subscription_to_stream_already_exists(self) -> None:
         self.construct_esdb_client()

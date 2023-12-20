@@ -30,6 +30,7 @@ from esdbclient.common import (
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
     DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
     DEFAULT_WINDOW_SIZE,
@@ -806,6 +807,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -826,6 +828,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -848,6 +851,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -872,6 +876,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -893,6 +898,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             checkpoint_interval_multiplier=checkpoint_interval_multiplier,
             message_timeout=message_timeout,
             max_retry_count=max_retry_count,
+            max_subscriber_count=max_subscriber_count,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -908,6 +914,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -926,6 +933,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -944,6 +952,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -964,6 +973,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -981,6 +991,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             consumer_strategy=consumer_strategy,
             message_timeout=message_timeout,
             max_retry_count=max_retry_count,
+            max_subscriber_count=max_subscriber_count,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1107,6 +1118,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1123,6 +1135,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1139,6 +1152,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1156,6 +1170,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1171,6 +1186,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             resolve_links=resolve_links,
             message_timeout=message_timeout,
             max_retry_count=max_retry_count,
+            max_subscriber_count=max_subscriber_count,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1185,6 +1201,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1202,6 +1219,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1219,6 +1237,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1237,6 +1256,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1253,6 +1273,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             resolve_links=resolve_links,
             message_timeout=message_timeout,
             max_retry_count=max_retry_count,
+            max_subscriber_count=max_subscriber_count,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,

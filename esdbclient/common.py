@@ -16,8 +16,10 @@ from esdbclient.exceptions import (
     ConsumerTooSlow,
     EventStoreDBClientException,
     ExceptionThrownByHandler,
+    FailedPrecondition,
     GrpcDeadlineExceeded,
     GrpcError,
+    MaximumSubscriptionsReached,
     NodeIsNotLeader,
     NotFound,
     ServiceUnavailable,
@@ -42,6 +44,7 @@ DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE = 100
 DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE = 100
 DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY = 0.2
 DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE = 0.2
+DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT = 5
 
 
 class GrpcStreamer(ABC):
@@ -99,6 +102,14 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
             return AlreadyExists(e.details())
         elif e.code() == grpc.StatusCode.NOT_FOUND:
             return NotFound()
+        elif e.code() == grpc.StatusCode.FAILED_PRECONDITION:
+            details = e.details()
+            if details is not None and details.startswith(
+                "Maximum subscriptions reached"
+            ):
+                return MaximumSubscriptionsReached(e)
+            else:  # pragma: no cover
+                return FailedPrecondition(e)
     return GrpcError(e)
 
 

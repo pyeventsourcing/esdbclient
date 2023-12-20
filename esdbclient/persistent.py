@@ -17,6 +17,7 @@ from esdbclient.common import (
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
     DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
     DEFAULT_WINDOW_SIZE,
@@ -180,6 +181,7 @@ class BasePersistentSubscriptionsService(ESDBService):
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
     ) -> persistent_pb2.CreateReq:
         # Construct 'settings'.
         settings = persistent_pb2.CreateReq.Settings(
@@ -188,7 +190,7 @@ class BasePersistentSubscriptionsService(ESDBService):
             max_retry_count=max_retry_count,
             min_checkpoint_count=10,  # server recorded position
             max_checkpoint_count=10,  # server recorded position
-            max_subscriber_count=5,
+            max_subscriber_count=max_subscriber_count,
             live_buffer_size=1000,  # how many new events to hold in memory?
             read_batch_size=8,  # how many events to read from DB records?
             history_buffer_size=200,  # how many recorded events to hold in memory?
@@ -313,6 +315,7 @@ class BasePersistentSubscriptionsService(ESDBService):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
     ) -> persistent_pb2.UpdateReq:
         # Construct 'settings'.
         settings = persistent_pb2.UpdateReq.Settings(
@@ -321,7 +324,7 @@ class BasePersistentSubscriptionsService(ESDBService):
             max_retry_count=max_retry_count,
             min_checkpoint_count=10,  # server recorded position
             max_checkpoint_count=10,  # server recorded position
-            max_subscriber_count=5,
+            max_subscriber_count=max_subscriber_count,
             live_buffer_size=1000,  # how many new events to hold in memory?
             read_batch_size=8,  # how many events to read from DB records?
             history_buffer_size=200,  # how many recorded events to hold in memory?
@@ -675,7 +678,7 @@ class PersistentSubscription(GrpcStreamer, Iterator[RecordedEvent]):
                 and self._read_reqs.errored
             ):
                 raise ExceptionIteratingRequests() from self._read_reqs.errored
-            raise handle_rpc_error(e) from e
+            raise handle_rpc_error(e) from None
         assert isinstance(read_resp, persistent_pb2.ReadResp)
         return read_resp
 
@@ -740,6 +743,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -760,6 +764,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -784,6 +789,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -803,6 +809,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
             consumer_strategy=consumer_strategy,
             message_timeout=message_timeout,
             max_retry_count=max_retry_count,
+            max_subscriber_count=max_subscriber_count,
         )
         # Call 'Create' RPC.
         try:
@@ -920,6 +927,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -939,6 +947,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -957,6 +966,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -970,6 +980,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
             resolve_links=resolve_links,
             message_timeout=message_timeout,
             max_retry_count=max_retry_count,
+            max_subscriber_count=max_subscriber_count,
         )
         # Call 'Update' RPC.
         try:
