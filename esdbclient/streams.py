@@ -125,15 +125,19 @@ class AsyncioReadResponse(AsyncIterator[RecordedEvent], BaseReadResponse):
     async def __anext__(self) -> RecordedEvent:
         while True:
             try:
-                read_resp = await self._get_next_read_resp()
-            except CancelledByClient:
-                raise StopAsyncIteration() from None
-            else:
-                recorded_event = self._convert_read_resp(read_resp)
-                if recorded_event is not None:
-                    return recorded_event
-                else:  # pragma: no cover
-                    pass
+                try:
+                    read_resp = await self._get_next_read_resp()
+                except CancelledByClient:
+                    raise StopAsyncIteration() from None
+                else:
+                    recorded_event = self._convert_read_resp(read_resp)
+                    if recorded_event is not None:
+                        return recorded_event
+                    else:  # pragma: no cover
+                        pass
+            except Exception:
+                self.stop()
+                raise
 
     async def _get_next_read_resp(self) -> streams_pb2.ReadResp:
         try:
@@ -194,15 +198,19 @@ class ReadResponse(BaseReadResponse, Iterator[RecordedEvent]):
     def __next__(self) -> RecordedEvent:
         while True:
             try:
-                read_resp = self._get_next_read_resp()
-            except CancelledByClient:
-                raise StopIteration() from None
-            else:
-                recorded_event = self._convert_read_resp(read_resp)
-                if recorded_event is not None:
-                    return recorded_event
-                else:  # pragma: no cover
-                    pass
+                try:
+                    read_resp = self._get_next_read_resp()
+                except CancelledByClient:
+                    raise StopIteration() from None
+                else:
+                    recorded_event = self._convert_read_resp(read_resp)
+                    if recorded_event is not None:
+                        return recorded_event
+                    else:  # pragma: no cover
+                        pass
+            except Exception:
+                self.stop()
+                raise
 
     def _get_next_read_resp(self) -> streams_pb2.ReadResp:
         try:
@@ -216,7 +224,10 @@ class ReadResponse(BaseReadResponse, Iterator[RecordedEvent]):
     def stop(self) -> None:
         if not self._is_stopped:
             self._read_resps.cancel()
-            self._grpc_streamers.pop(id(self))
+            try:
+                self._grpc_streamers.pop(id(self))
+            except KeyError:  # pragma: no cover
+                pass
             self._is_stopped = True
 
     def __del__(self) -> None:

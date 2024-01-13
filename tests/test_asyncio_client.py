@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import sys
 import traceback
 from typing import Optional
@@ -477,6 +478,38 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 catchup_subscription.stop()
         self.assertEqual(events[-2].id, event1.id)
         self.assertEqual(events[-1].id, event2.id)
+
+    async def test_subscribe_to_all_with_gather(self) -> None:
+        # Append events.
+        stream_name1 = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=b"{}")
+        await self.client.append_events(
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        stream_name2 = str(uuid4())
+        event2 = NewEvent(type="OrderCreated", data=b"{}")
+        await self.client.append_events(
+            stream_name=stream_name2,
+            events=[event2],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        class Worker:
+            def __init__(self, client: _AsyncioEventStoreDBClient) -> None:
+                self.client = client
+
+            async def run(self) -> None:
+                catchup_subscription = await self.client.subscribe_to_all()
+                events = []
+                async for event in catchup_subscription:
+                    events.append(event)
+                    if event.id == event2.id:
+                        catchup_subscription.stop()
+
+        await asyncio.gather(Worker(self.client).run(), Worker(self.client).run())
 
     async def test_subscribe_to_all_reconnects(self) -> None:
         # Reconstruct connection with wrong port (to inspire ServiceUnavailble).
