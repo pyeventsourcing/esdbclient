@@ -240,7 +240,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             if connection.grpc_target != grpc_target:
                 # Need to connect to a different node.
                 connection.close()
-                connection = self._construct_connection(grpc_target)
+                connection = self._construct_esdb_connection(grpc_target)
 
         return connection
 
@@ -251,7 +251,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         last_exception: Optional[Exception] = None
         for grpc_target in gossip_seed:
             # Construct a connection.
-            connection = self._construct_connection(grpc_target)
+            connection = self._construct_esdb_connection(grpc_target)
 
             # Read the gossip (get cluster members).
             try:
@@ -306,7 +306,14 @@ class EventStoreDBClient(BaseEventStoreDBClient):
                 # Todo: Test with concurrent writes to wrong node state.
                 pass
 
-    def _construct_connection(self, grpc_target: str) -> ESDBConnection:
+    def _construct_esdb_connection(self, grpc_target: str) -> ESDBConnection:
+        return ESDBConnection(
+            grpc_channel=self._construct_grpc_channel(grpc_target),
+            grpc_target=grpc_target,
+            connection_spec=self.connection_spec,
+        )
+
+    def _construct_grpc_channel(self, grpc_target: str) -> grpc.Channel:
         grpc_options: Tuple[Tuple[str, str], ...] = tuple(self.grpc_options.items())
         if self.connection_spec.options.Tls is True:
             if not self.connection_spec.username or not self.connection_spec.password:
@@ -327,12 +334,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             grpc_channel = grpc.insecure_channel(
                 target=grpc_target, options=grpc_options
             )
-
-        return ESDBConnection(
-            grpc_channel=grpc_channel,
-            grpc_target=grpc_target,
-            connection_spec=self.connection_spec,
-        )
+        return grpc_channel
 
     # def _batch_append_future_result_loop(self) -> None:
     #     # while self._channel_connectivity_state is not ChannelConnectivity.SHUTDOWN:

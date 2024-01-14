@@ -397,7 +397,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         # Reconstruct connection with wrong port.
         self.client._esdb.close()
-        self.client._esdb = self.client._construct_connection("localhost:2222")
+        self.client._esdb = self.client._construct_esdb_connection("localhost:2222")
         self.client.connection_spec._targets = ["localhost:2222"]
 
         cm: _AssertRaisesContext[Any]
@@ -5708,7 +5708,7 @@ class TestAutoReconnectAfterServiceUnavailable(TimedTestCase):
 
         # Reconstruct connection with wrong port (to inspire ServiceUnavailble).
         self.client._esdb.close()
-        self.client._esdb = self.client._construct_connection("localhost:2222")
+        self.client._esdb = self.client._construct_esdb_connection("localhost:2222")
 
     def tearDown(self) -> None:
         self.client.close()
