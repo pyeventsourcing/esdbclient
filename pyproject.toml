@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "esdbclient"
-version = "1.0.15"
+version = "1.0.16"
 
 description = "Python gRPC Client for EventStoreDB"
 authors = [
