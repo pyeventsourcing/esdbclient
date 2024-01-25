@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 from abc import ABC, abstractmethod
 from base64 import b64encode
-from typing import TYPE_CHECKING, Dict, Optional, Sequence, Tuple, Union
+from threading import Lock
+from typing import TYPE_CHECKING, Iterator, Optional, Sequence, Tuple, Union
 from uuid import UUID
+from weakref import WeakValueDictionary
 
 import grpc
 import grpc.aio
@@ -53,6 +55,30 @@ class GrpcStreamer(ABC):
         """
         Stops the iterator(s) of streaming call.
         """
+
+
+class GrpcStreamers:
+    def __init__(self) -> None:
+        self.map: WeakValueDictionary[int, GrpcStreamer] = WeakValueDictionary()
+        self.lock = Lock()
+
+    def __setitem__(self, key: int, value: GrpcStreamer) -> None:
+        with self.lock:
+            self.map[key] = value
+
+    def __iter__(self) -> Iterator[GrpcStreamer]:
+        with self.lock:
+            return iter(tuple(self.map.values()))
+
+    def pop(self, key: int) -> GrpcStreamer:
+        with self.lock:
+            return self.map.pop(key)
+
+    def close(self) -> None:
+        for grpc_streamer in self:
+            # print("closing streamer")
+            grpc_streamer.stop()
+            # print("closed streamer")
 
 
 class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
@@ -117,7 +143,7 @@ class ESDBService:
     def __init__(
         self,
         connection_spec: ConnectionSpec,
-        grpc_streamers: Dict[int, GrpcStreamer],
+        grpc_streamers: GrpcStreamers,
     ):
         self._connection_spec = connection_spec
         self._grpc_streamers = grpc_streamers

@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
-from typing import Dict, Optional, Sequence, Union
+from typing import Optional, Sequence, Union
 
 import grpc
 import grpc.aio
 
-from esdbclient.common import ESDBService, GrpcStreamer, Metadata, handle_rpc_error
+from esdbclient.common import ESDBService, GrpcStreamers, Metadata, handle_rpc_error
 from esdbclient.connection_spec import ConnectionSpec
 from esdbclient.protos.Grpc import (
     cluster_pb2,
@@ -39,7 +39,7 @@ class BaseGossipService(ESDBService):
         self,
         channel: Union[grpc.Channel, grpc.aio.Channel],
         connection_spec: ConnectionSpec,
-        grpc_streamers: Dict[int, GrpcStreamer],
+        grpc_streamers: GrpcStreamers,
     ):
         super().__init__(connection_spec=connection_spec, grpc_streamers=grpc_streamers)
         self._stub = gossip_pb2_grpc.GossipStub(channel)
@@ -115,7 +115,7 @@ class BaseClusterGossipService(ESDBService):
         self,
         channel: Union[grpc.Channel, grpc.aio.Channel],
         connection_spec: ConnectionSpec,
-        grpc_streamers: Dict[int, GrpcStreamer],
+        grpc_streamers: GrpcStreamers,
     ):
         super().__init__(connection_spec=connection_spec, grpc_streamers=grpc_streamers)
         self._stub = cluster_pb2_grpc.GossipStub(channel)

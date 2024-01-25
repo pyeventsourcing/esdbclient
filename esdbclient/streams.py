@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import (
     AsyncIterator,
-    Dict,
     Iterable,
     Iterator,
     Optional,
@@ -28,6 +27,7 @@ from esdbclient.common import (
     PROTOBUF_MAX_DEADLINE_SECONDS,
     ESDBService,
     GrpcStreamer,
+    GrpcStreamers,
     Metadata,
     construct_filter_exclude_regex,
     construct_filter_include_regex,
@@ -184,7 +184,7 @@ class ReadResponse(BaseReadResponse, Iterator[RecordedEvent]):
         self,
         read_resps: _ReadResps,
         stream_name: Optional[str],
-        grpc_streamers: Dict[int, GrpcStreamer],
+        grpc_streamers: GrpcStreamers,
     ):
         super().__init__(stream_name=stream_name)
         self._is_stopped = False
@@ -240,7 +240,7 @@ class CatchupSubscription(ReadResponse):
         self,
         read_resps: _ReadResps,
         stream_name: Optional[str],
-        grpc_streamers: Dict[int, GrpcStreamer],
+        grpc_streamers: GrpcStreamers,
         include_checkpoints: bool = False,
     ):
         super().__init__(
@@ -328,7 +328,7 @@ class BaseStreamsService(ESDBService):
         self,
         grpc_channel: Union[grpc.Channel, grpc.aio.Channel],
         connection_spec: ConnectionSpec,
-        grpc_streamers: Dict[int, GrpcStreamer],
+        grpc_streamers: GrpcStreamers,
     ):
         super().__init__(connection_spec=connection_spec, grpc_streamers=grpc_streamers)
         self._stub = streams_pb2_grpc.StreamsStub(grpc_channel)

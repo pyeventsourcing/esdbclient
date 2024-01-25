@@ -5,7 +5,7 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from threading import Event
 from time import sleep
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple, Union, overload
+from typing import Any, Iterator, List, Optional, Sequence, Tuple, Union, overload
 from uuid import UUID
 
 import grpc
@@ -23,6 +23,7 @@ from esdbclient.common import (
     DEFAULT_WINDOW_SIZE,
     ESDBService,
     GrpcStreamer,
+    GrpcStreamers,
     Metadata,
     construct_filter_exclude_regex,
     construct_filter_include_regex,
@@ -160,7 +161,7 @@ class BasePersistentSubscriptionsService(ESDBService):
         self,
         channel: Union[grpc.Channel, grpc.aio.Channel],
         connection_spec: ConnectionSpec,
-        grpc_streamers: Dict[int, GrpcStreamer],
+        grpc_streamers: GrpcStreamers,
     ):
         super().__init__(connection_spec=connection_spec, grpc_streamers=grpc_streamers)
         self._stub = persistent_pb2_grpc.PersistentSubscriptionsStub(channel)
@@ -611,7 +612,7 @@ class PersistentSubscription(GrpcStreamer, Iterator[RecordedEvent]):
         read_resps: _ReadResps,
         expected_group_name: str,
         stream_name: Optional[str],
-        grpc_streamers: Dict[int, GrpcStreamer],
+        grpc_streamers: GrpcStreamers,
     ):
         self._read_reqs = read_reqs
         self._read_resps = read_resps

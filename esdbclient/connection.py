@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
-from typing import Dict
 
 import grpc.aio
 
-from esdbclient.common import GrpcStreamer
+from esdbclient.common import GrpcStreamers
 from esdbclient.connection_spec import ConnectionSpec
 from esdbclient.gossip import (
     AsyncioClusterGossipService,
@@ -27,7 +26,7 @@ class ESDBConnection:
     ) -> None:
         self._grpc_channel = grpc_channel
         self._grpc_target = grpc_target
-        self._grpc_streamers: Dict[int, GrpcStreamer] = {}
+        self._grpc_streamers = GrpcStreamers()
         self.streams = StreamsService(
             grpc_channel=grpc_channel,
             connection_spec=connection_spec,
@@ -62,11 +61,12 @@ class ESDBConnection:
     #     # print("Channel connectivity state:", connectivity)
 
     def close(self) -> None:
-        for reader in self._grpc_streamers.copy().values():
-            reader.stop()
+        self._grpc_streamers.close()
         # self.grpc_channel.unsubscribe(self._receive_channel_connectivity_state)
         # sleep(0.1)  # Allow connectivity polling to stop.
+        # print("closing channel")
         self._grpc_channel.close()
+        # print("closed channel")
 
 
 class AsyncioESDBConnection:
@@ -78,7 +78,7 @@ class AsyncioESDBConnection:
     ) -> None:
         self._grpc_channel = grpc_channel
         self._grpc_target = grpc_target
-        self._grpc_streamers: Dict[int, GrpcStreamer] = {}
+        self._grpc_streamers = GrpcStreamers()
         self.streams = AsyncioStreamsService(
             grpc_channel,
             connection_spec=connection_spec,
