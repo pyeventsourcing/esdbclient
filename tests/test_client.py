@@ -5327,7 +5327,7 @@ class TestGrpcOptions(TestCase):
     def setUp(self) -> None:
         uri = (
             "esdb://localhost:2113"
-            "?Tls=false&KeepAliveInterval=1000&KeepAliveTimeout=1000"
+            "?Tls=false&KeepAliveInterval=1234&KeepAliveTimeout=5678"
         )
         self.client = EventStoreDBClient(uri)
 
@@ -5335,12 +5335,12 @@ class TestGrpcOptions(TestCase):
         self.client.close()
 
     def test(self) -> None:
+        options_dict = dict(self.client.grpc_options)
         self.assertEqual(
-            self.client.grpc_options["grpc.max_receive_message_length"],
-            17 * 1024 * 1024,
+            options_dict["grpc.max_receive_message_length"], 17 * 1024 * 1024,
         )
-        self.assertEqual(self.client.grpc_options["grpc.keepalive_ms"], 1000)
-        self.assertEqual(self.client.grpc_options["grpc.keepalive_timeout_ms"], 1000)
+        self.assertEqual(options_dict["grpc.keepalive_ms"], 1234)
+        self.assertEqual(options_dict["grpc.keepalive_timeout_ms"], 5678)
 
 
 class TestRequiresLeaderHeader(TimedTestCase):

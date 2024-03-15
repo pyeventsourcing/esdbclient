@@ -235,7 +235,6 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         return cluster_member, cluster_members, connection
 
     def _construct_connection(self, grpc_target: str) -> AsyncioESDBConnection:
-        grpc_options: Tuple[Tuple[str, str], ...] = tuple(self.grpc_options.items())
         if self.connection_spec.options.Tls is True:
             if not self.connection_spec.username or not self.connection_spec.password:
                 raise ValueError("username and password are required")
@@ -249,11 +248,11 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             grpc_channel = grpc.aio.secure_channel(
                 target=grpc_target,
                 credentials=channel_credentials,
-                options=grpc_options,
+                options=self.grpc_options,
             )
         else:
             grpc_channel = grpc.aio.insecure_channel(
-                target=grpc_target, options=grpc_options
+                target=grpc_target, options=self.grpc_options
             )
 
         return AsyncioESDBConnection(

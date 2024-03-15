@@ -138,16 +138,17 @@ class BaseEventStoreDBClient:
 
         self._default_deadline = self.connection_spec.options.DefaultDeadline
 
-        self.grpc_options: Dict[str, Any] = {
-            "grpc.max_receive_message_length": 17 * 1024 * 1024,
-        }
+        self.grpc_options: Tuple[Tuple[str, Union[str, int]], ...] = (
+            ("grpc.max_receive_message_length", 17 * 1024 * 1024),
+            ("grpc.lb_policy_name", "round_robin"),
+        )
         if self.connection_spec.options.KeepAliveInterval is not None:
-            self.grpc_options["grpc.keepalive_ms"] = (
-                self.connection_spec.options.KeepAliveInterval
+            self.grpc_options += (
+                ("grpc.keepalive_ms", self.connection_spec.options.KeepAliveInterval),
             )
         if self.connection_spec.options.KeepAliveTimeout is not None:
-            self.grpc_options["grpc.keepalive_timeout_ms"] = (
-                self.connection_spec.options.KeepAliveTimeout
+            self.grpc_options += (
+                ("grpc.keepalive_timeout_ms", self.connection_spec.options.KeepAliveTimeout),
             )
 
         self._call_metadata = (
@@ -314,7 +315,6 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         )
 
     def _construct_grpc_channel(self, grpc_target: str) -> grpc.Channel:
-        grpc_options: Tuple[Tuple[str, str], ...] = tuple(self.grpc_options.items())
         if self.connection_spec.options.Tls is True:
             if not self.connection_spec.username or not self.connection_spec.password:
                 raise ValueError("username and password are required")
@@ -328,11 +328,11 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             grpc_channel = grpc.secure_channel(
                 target=grpc_target,
                 credentials=channel_credentials,
-                options=grpc_options,
+                options=self.grpc_options,
             )
         else:
             grpc_channel = grpc.insecure_channel(
-                target=grpc_target, options=grpc_options
+                target=grpc_target, options=self.grpc_options
             )
         return grpc_channel
 
