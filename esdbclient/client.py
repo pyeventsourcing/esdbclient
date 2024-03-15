@@ -338,8 +338,9 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
     # def _batch_append_future_result_loop(self) -> None:
     #     # while self._channel_connectivity_state is not ChannelConnectivity.SHUTDOWN:
+    #     credentials = None
     #     try:
-    #         self._connection.streams.batch_append_multiplexed(
+    #         self._esdb.streams.batch_append_multiplexed(
     #             futures_queue=self._batch_append_futures_queue,
     #             timeout=None,
     #             metadata=self._call_metadata,
@@ -351,9 +352,10 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     #         self._clear_batch_append_futures_queue(  # pragma: no cover
     #             EventStoreDBClientException("Request not sent")
     #         )
-    #     # print("Looping on call to batch_append_multiplexed()....")
     #
-    # def _clear_batch_append_futures_queue(self, error: EventStoreDBClientException) -> None:
+    # def _clear_batch_append_futures_queue(
+    #     self, error: EventStoreDBClientException
+    # ) -> None:
     #     with self._batch_append_futures_lock:
     #         try:
     #             while True:
@@ -365,7 +367,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     # def append_events_multiplexed(
     #     self,
     #     stream_name: str,
-    #     current_version: Optional[int],
+    #     *,
+    #     current_version: Union[int, StreamState],
     #     events: Iterable[NewEvent],
     #     timeout: Optional[float] = None,
     # ) -> int:

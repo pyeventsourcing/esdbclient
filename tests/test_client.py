@@ -592,7 +592,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
         # Todo: Reintroduce this when/if testing for streaming individual events.
         # # Check get error when attempting to append empty list to position 1.
-        # with self.assertRaises(ExpectedPositionError) as cm:
+        # with self.assertRaises(WrongCurrentVersion) as cm:
         #     self.client.append_events(stream_name, current_version=1, events=[])
         # self.assertEqual(cm.exception.args[0], f"Stream {stream_name!r} does not exist")
 
@@ -1005,13 +1005,15 @@ class TestEventStoreDBClient(TimedTestCase):
     #     # Fail to append (stream already exists).
     #     event3 = NewEvent(type="OrderUpdated", data=random_data())
     #     event4 = NewEvent(type="OrderUpdated", data=random_data())
-    #     with self.assertRaises(ExpectedPositionError):
+    #     with self.assertRaises(WrongCurrentVersion):
     #         self.client.append_events_multiplexed(
-    #             stream_name, current_version=StreamState.NO_STREAM, events=[event3, event4]
+    #             stream_name,
+    #             current_version=StreamState.NO_STREAM,
+    #             events=[event3, event4],
     #         )
     #
     #     # Fail to append (wrong expected position).
-    #     with self.assertRaises(ExpectedPositionError):
+    #     with self.assertRaises(WrongCurrentVersion):
     #         self.client.append_events_multiplexed(
     #             stream_name, current_version=10, events=[event3, event4]
     #         )
@@ -1898,7 +1900,7 @@ class TestEventStoreDBClient(TimedTestCase):
         self.client.append_events(
             stream_name, current_version=StreamState.NO_STREAM, events=[event3]
         )
-        # with self.assertRaises(ExpectedPositionError):
+        # with self.assertRaises(WrongCurrentVersion):
         #     self.client.append_events(
         #         stream_name,
         #         current_version=StreamState.NO_STREAM,
