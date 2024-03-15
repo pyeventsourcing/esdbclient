@@ -6,7 +6,7 @@ import sys
 from collections import Counter
 from threading import Thread
 from time import sleep
-from typing import List, Sequence, Set, Tuple, cast
+from typing import List, Optional, Sequence, Set, Tuple, cast
 from unittest import TestCase, skipIf
 from uuid import UUID, uuid4
 
@@ -28,6 +28,7 @@ from esdbclient.exceptions import (
     AbortedByServer,
     AlreadyExists,
     ConsumerTooSlow,
+    DeadlineExceeded,
     DiscoveryFailed,
     ExceptionIteratingRequests,
     ExceptionThrownByHandler,
@@ -49,7 +50,7 @@ from esdbclient.protos.Grpc import persistent_pb2
 started = datetime.datetime.now()
 last = datetime.datetime.now()
 
-EVENTSTORE_IMAGE_TAG = os.environ.get("EVENTSTORE_IMAGE_TAG", "")
+EVENTSTORE_IMAGE_TAG = os.environ.get("EVENTSTORE_IMAGE_TAG", "24.2.0")
 
 
 def get_elapsed_time() -> str:
@@ -2423,8 +2424,115 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         else:
             self.fail("Didn't get a checkpoint")
 
-    @skipIf("21.10" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug")
-    @skipIf("22.10" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug")
+    @skipIf("23.10" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug was fixed")
+    @skipIf("24.2" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug was fixed")
+    def test_demonstrate_checkpoint_has_unused_commit_position(self) -> None:
+        self.construct_esdb_client()
+
+        # Append new events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+        stream_name1 = str(uuid4())
+        first_append_commit_position = self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        def get_event_at_commit_position(commit_position: int) -> RecordedEvent:
+            read_response = self.client.read_all(
+                commit_position=commit_position,
+                # backwards=True,
+                filter_exclude=[],
+                limit=1,
+            )
+            events = tuple(read_response)
+            assert len(events) == 1, len(events)
+            event = events[0]
+            assert event.commit_position == commit_position, event
+            return event
+
+        event = get_event_at_commit_position(first_append_commit_position)
+        self.assertEqual(event.id, event3.id)
+        self.assertEqual(event.commit_position, first_append_commit_position)
+        current_commit_position = self.client.get_commit_position(filter_exclude=[])
+        self.assertEqual(event.commit_position, current_commit_position)
+
+        # Subscribe excluding all events, with large window.
+        subscription1 = self.client.subscribe_to_all(
+            # filter_exclude=[".*"],
+            include_checkpoints=True,
+            window_size=10000,
+            checkpoint_interval_multiplier=500,
+            timeout=10,
+        )
+
+        # We always get a checkpoint at the end..... why?
+        try:
+            for event in subscription1:
+                if isinstance(event, Checkpoint):
+                    last_checkpoint_commit_position = event.commit_position
+                    break
+                else:
+                    pass
+        except DeadlineExceeded:
+            self.fail("We didn't get the extra checkpoint! Hooray!")
+
+        # Sadly, the checkpoint commit position doesn't correspond
+        # to an event that has been filtered out.
+        with self.assertRaises(AssertionError):
+            assert event.commit_position is not None
+            get_event_at_commit_position(event.commit_position)
+
+        # And the checkpoint commit position is greater than the current commit position.
+        assert last_checkpoint_commit_position is not None
+        self.assertLess(
+            self.client.get_commit_position(filter_exclude=[]),
+            last_checkpoint_commit_position,
+        )
+
+        # And the checkpoint commit position is allocated to the next appended new event.
+        event4 = NewEvent(type="OrderCreated", data=random_data())
+        stream_name2 = str(uuid4())
+        next_append_commit_position = self.client.append_events(
+            stream_name2,
+            current_version=StreamState.NO_STREAM,
+            events=[event4],
+        )
+        self.assertEqual(next_append_commit_position, last_checkpoint_commit_position)
+
+        # Which means that if a downstream event-processing component is going to
+        # restart a catch-up subscription from last_checkpoint_commit_position,
+        # it would not receive event4.
+
+        event5 = NewEvent(type="OrderCreated", data=random_data())
+        stream_name3 = str(uuid4())
+        self.client.append_events(
+            stream_name3,
+            current_version=StreamState.NO_STREAM,
+            events=[event5],
+        )
+
+        subscription2 = self.client.subscribe_to_all(
+            commit_position=last_checkpoint_commit_position
+        )
+        next_event_from_2 = next(subscription2)
+        assert isinstance(next_event_from_2.commit_position, int)
+        self.assertGreater(
+            next_event_from_2.commit_position, last_checkpoint_commit_position
+        )
+        self.assertNotEqual(next_event_from_2.id, event4.id)
+        self.assertEqual(next_event_from_2.id, event5.id)
+
+        next_event_from_1 = next(subscription1)
+        self.assertEqual(next_event_from_1.id, event4.id)
+        self.assertEqual(
+            next_event_from_1.commit_position, last_checkpoint_commit_position
+        )
+
+    @skipIf("21.10" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug not fixed")
+    @skipIf("22.10" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug not fixed")
     def test_extra_checkpoint_bug_is_fixed(self) -> None:
         self.construct_esdb_client()
 
@@ -2467,121 +2575,22 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
             timeout=5,
         )
 
-        # We shouldn't get an extra checkpoint at the end (ESDB bug < v23.10).
-        with self.assertRaises(GrpcDeadlineExceeded):
+        # We shouldn't get an extra checkpoint at the end (ESDB bug < v23.10),
+        # that has a commit position greater than the current commit position (v24.2).
+        checkpoint_commit_position: Optional[int] = None
+        try:
             for event in subscription1:
                 if isinstance(event, Checkpoint):
-                    break
-            self.fail("Server has 'extra checkpoint' bug. Please use v23.10 or later.")
+                    checkpoint_commit_position = event.commit_position
+                    # break
+        except GrpcDeadlineExceeded:
+            pass
 
-    #
-    # Disabled this test, bc the 'extra checkpoint' bug was fixed in LTS version 23.10.
-    #
-    # def test_demonstrate_checkpoint_has_unused_commit_position(self) -> None:
-    #
-    #     self.construct_esdb_client()
-    #
-    #     # Append new events.
-    #     event1 = NewEvent(type="OrderCreated", data=random_data())
-    #     event2 = NewEvent(type="OrderUpdated", data=random_data())
-    #     event3 = NewEvent(type="OrderDeleted", data=random_data())
-    #     stream_name1 = str(uuid4())
-    #     first_append_commit_position = self.client.append_events(
-    #         stream_name1,
-    #         current_version=StreamState.NO_STREAM,
-    #         events=[event1, event2, event3],
-    #     )
-    #
-    #     def get_event_at_commit_position(commit_position: int) -> RecordedEvent:
-    #         read_response = self.client.read_all(
-    #             commit_position=commit_position,
-    #             # backwards=True,
-    #             filter_exclude=[],
-    #             limit=1,
-    #         )
-    #         events = tuple(read_response)
-    #         assert len(events) == 1, len(events)
-    #         event = events[0]
-    #         assert event.commit_position == commit_position, event
-    #         return event
-    #
-    #     event = get_event_at_commit_position(first_append_commit_position)
-    #     self.assertEqual(event.id, event3.id)
-    #     self.assertEqual(event.commit_position, first_append_commit_position)
-    #     current_commit_position = self.client.get_commit_position(filter_exclude=[])
-    #     self.assertEqual(event.commit_position, current_commit_position)
-    #
-    #     # Subscribe excluding all events, with large window.
-    #     subscription1 = self.client.subscribe_to_all(
-    #         # filter_exclude=[".*"],
-    #         include_checkpoints=True,
-    #         window_size=10000,
-    #         checkpoint_interval_multiplier=500,
-    #         timeout=10
-    #     )
-    #
-    #     # We always get a checkpoint at the end..... why?
-    #     try:
-    #         for event in subscription1:
-    #             if isinstance(event, Checkpoint):
-    #                 last_checkpoint_commit_position = event.commit_position
-    #                 break
-    #             else:
-    #                 pass
-    #     except DeadlineExceeded:
-    #         self.fail("We didn't get the extra checkpoint! Hooray!")
-    #
-    #     # Sadly, the checkpoint commit position doesn't correspond
-    #     # to an event that has been filtered out.
-    #     with self.assertRaises(AssertionError):
-    #         assert event.commit_position is not None
-    #         get_event_at_commit_position(event.commit_position)
-    #
-    #     # And the checkpoint commit position is greater than the current commit position.
-    #     assert last_checkpoint_commit_position is not None
-    #     self.assertLess(
-    #         self.client.get_commit_position(filter_exclude=[]),
-    #         last_checkpoint_commit_position,
-    #     )
-    #
-    #     # And the checkpoint commit position is allocated to the next appended new event.
-    #     event4 = NewEvent(type="OrderCreated", data=random_data())
-    #     stream_name2 = str(uuid4())
-    #     next_append_commit_position = self.client.append_events(
-    #         stream_name2,
-    #         current_version=StreamState.NO_STREAM,
-    #         events=[event4],
-    #     )
-    #     self.assertEqual(next_append_commit_position, last_checkpoint_commit_position)
-    #
-    #     # Which means that if a downstream event-processing component is going to
-    #     # restart a catch-up subscription from last_checkpoint_commit_position,
-    #     # it would not receive event4.
-    #
-    #     event5 = NewEvent(type="OrderCreated", data=random_data())
-    #     stream_name3 = str(uuid4())
-    #     self.client.append_events(
-    #         stream_name3,
-    #         current_version=StreamState.NO_STREAM,
-    #         events=[event5],
-    #     )
-    #
-    #     subscription2 = self.client.subscribe_to_all(
-    #         commit_position=last_checkpoint_commit_position
-    #     )
-    #     next_event_from_2 = next(subscription2)
-    #     assert isinstance(next_event_from_2.commit_position, int)
-    #     self.assertGreater(
-    #         next_event_from_2.commit_position, last_checkpoint_commit_position
-    #     )
-    #     self.assertNotEqual(next_event_from_2.id, event4.id)
-    #     self.assertEqual(next_event_from_2.id, event5.id)
-    #
-    #     next_event_from_1 = next(subscription1)
-    #     self.assertEqual(next_event_from_1.id, event4.id)
-    #     self.assertEqual(
-    #         next_event_from_1.commit_position, last_checkpoint_commit_position
-    #     )
+        if (
+            checkpoint_commit_position is not None
+            and checkpoint_commit_position > current_commit_position
+        ):
+            self.fail("Server has 'extra checkpoint' bug. Please use v23.10 or later.")
 
     def test_subscribe_to_all_from_commit_position_zero(self) -> None:
         self.construct_esdb_client()

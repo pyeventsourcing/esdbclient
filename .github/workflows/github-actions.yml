@@ -7,7 +7,7 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
-        eventstore-image-tag: ["21.10.9-buster-slim", "22.10.3-buster-slim", "23.10.0-bookworm-slim"]
+        eventstore-image-tag: ["21.10.9-buster-slim", "22.10.3-buster-slim", "23.10.0-bookworm-slim", "24.2.0-bookworm-slim"]
 #        eventstore-image-tag: ["21.10.11-dev"]   # For Joao's dev builds (on ghcr.io).
     env:
       EVENTSTORE_IMAGE_TAG: ${{ matrix.eventstore-image-tag }}

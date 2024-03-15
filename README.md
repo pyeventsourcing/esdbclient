@@ -9,8 +9,8 @@ by this client, many of the most useful features are presented
 in an easy-to-use interface.
 
 This client has been tested to work with EventStoreDB LTS versions 21.10,
-22.10, and 23.10, without and without SSL/TLS, with single-server and cluster
-modes, with Python versions 3.7, 3.8, 3.9, 3.10, 3.11 and 3.12.
+22.10, 23.10, and version 24.2, without and without SSL/TLS, with single-server
+and cluster modes, and with Python versions 3.7, 3.8, 3.9, 3.10, 3.11 and 3.12.
 
 The test suite has 100% line and branch coverage. The code has typing annotations
 checked strictly with mypy. The code is formatted with black and isort, and checked

@@ -5,7 +5,8 @@
 # For testing with production EventStoreDB builds...
 EVENTSTORE_IMAGE_NAME ?= eventstore/eventstore
 # EVENTSTORE_IMAGE_TAG ?= 22.10.3-buster-slim
-EVENTSTORE_IMAGE_TAG ?= 23.10.0-bookworm-slim
+# EVENTSTORE_IMAGE_TAG ?= 23.10.0-bookworm-slim
+EVENTSTORE_IMAGE_TAG ?= 24.2.0-bookworm-slim
 
 # For testing with Jaao's dev builds...
 # EVENTSTORE_IMAGE_NAME ?= ghcr.io/thefringeninja/eventstore
