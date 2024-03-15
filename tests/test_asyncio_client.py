@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import sys
-import traceback
 from typing import Optional
 
 from esdbclient.streams import AsyncioCatchupSubscription
@@ -21,13 +20,12 @@ from esdbclient.asyncio_client import (
 )
 from esdbclient.exceptions import (
     DiscoveryFailed,
-    DNSError,
     FollowerNotFound,
-    GossipSeedError,
     GrpcDeadlineExceeded,
     NodeIsNotLeader,
     NotFound,
     ReadOnlyReplicaNotFound,
+    ServiceUnavailable,
     StreamIsDeleted,
     WrongCurrentVersion,
 )
@@ -51,13 +49,13 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
     async def setup_reader(self) -> None:
         self._reader = await AsyncioEventStoreDBClient(
-            uri="esdb://admin:changeit@localhost:2110?NodePreference=follower",
+            uri="esdb://admin:changeit@localhost:2110,localhost:2110?NodePreference=follower",
             root_certificates=get_ca_certificate(),
         )
 
     async def setup_writer(self) -> None:
         self._writer = await AsyncioEventStoreDBClient(
-            uri="esdb://admin:changeit@localhost:2110?NodePreference=leader",
+            uri="esdb://admin:changeit@localhost:2110,localhost:2110?NodePreference=leader",
             root_certificates=get_ca_certificate(),
         )
 
@@ -68,11 +66,13 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         if self._writer is not None:
             await self._writer.close()
 
-    async def test_raises_dns_error(self) -> None:
-        with self.assertRaises(DNSError):
-            await AsyncioEventStoreDBClient("esdb+discover://xxxxxxxxxxxxxx?Tls=false")
+    async def test_esdb_scheme_discovery_single_node_cluster(self) -> None:
+        await AsyncioEventStoreDBClient(
+            "esdb://localhost:2113,localhost:2113?Tls=False"
+            "&GossipTimeout=1&MaxDiscoverAttempts=1&DiscoveryInterval=0"
+        )
 
-    async def test_calls_dns_and_uses_given_port_number_or_default(self) -> None:
+    async def test_esdb_discover_scheme_raises_discovery_failed(self) -> None:
         with self.assertRaises(DiscoveryFailed) as cm:
             await AsyncioEventStoreDBClient(
                 "esdb+discover://example.com?Tls=False"
@@ -89,58 +89,61 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         self.assertNotIn(":2113", str(cm.exception))
         self.assertIn(":9898", str(cm.exception))
 
-    async def test_raises_gossip_seed_error(self) -> None:
-        with self.assertRaises(GossipSeedError):
-            await AsyncioEventStoreDBClient("esdb://")
-
     async def test_sometimes_reconnnects_to_selected_node_after_discovery(self) -> None:
         root_certificates = get_ca_certificate()
         await AsyncioEventStoreDBClient(
-            "esdb://admin:changeit@127.0.0.1:2110?NodePreference=leader",
+            "esdb://admin:changeit@127.0.0.1:2110,127.0.0.1:2110?NodePreference=leader",
             root_certificates=root_certificates,
         )
         await AsyncioEventStoreDBClient(
-            "esdb://admin:changeit@127.0.0.1:2111?NodePreference=leader",
+            "esdb://admin:changeit@127.0.0.1:2111,127.0.0.1:2111?NodePreference=leader",
             root_certificates=root_certificates,
         )
         await AsyncioEventStoreDBClient(
-            "esdb://admin:changeit@127.0.0.1:2112?NodePreference=leader",
+            "esdb://admin:changeit@127.0.0.1:2112,127.0.0.1:2112?NodePreference=leader",
             root_certificates=root_certificates,
         )
 
     async def test_node_preference_random(self) -> None:
         await AsyncioEventStoreDBClient(
-            "esdb://localhost:2113?Tls=False&NodePreference=random"
+            "esdb://localhost:2113,localhost:2113?Tls=False&NodePreference=random"
         )
 
     async def test_raises_follower_not_found(self) -> None:
         with self.assertRaises(FollowerNotFound):
             await AsyncioEventStoreDBClient(
-                "esdb://localhost:2113?Tls=False&NodePreference=follower"
+                "esdb://localhost:2113,localhost:2113?Tls=False&NodePreference=follower"
             )
 
     async def test_raises_read_only_replica_not_found(self) -> None:
         with self.assertRaises(ReadOnlyReplicaNotFound):
             await AsyncioEventStoreDBClient(
-                "esdb://localhost:2113?Tls=False&NodePreference=readonlyreplica"
+                "esdb://localhost:2113,localhost:2113?Tls=False&NodePreference=readonlyreplica"
             )
 
     async def test_constructor_with_tls_true_but_no_root_certificates(self) -> None:
         qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
         uri = f"esdb://admin:changeit@localhost:2114?{qs}"
-        try:
+        with self.assertRaises(ValueError) as cm:
             await AsyncioEventStoreDBClient(uri)
-        except DiscoveryFailed:
-            tb = traceback.format_exc()
-            self.assertIn("Ssl handshake failed", tb)
-            self.assertIn("routines:OPENSSL_internal:CERTIFICATE_VERIFY_FAILED", tb)
-        else:
-            self.fail("Didn't raise DiscoveryFailed exception")
+        self.assertIn("Root certificate(s) are required", str(cm.exception))
+
+    # async def test_constructor_with_tls_true_but_no_root_certificates(self) -> None:
+    #     qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
+    #     uri = f"esdb://admin:changeit@localhost:2114?{qs}"
+    #     try:
+    #         await AsyncioEventStoreDBClient(uri)
+    #     except DiscoveryFailed:
+    #         tb = traceback.format_exc()
+    #         self.assertIn("Ssl handshake failed", tb)
+    #         self.assertIn("routines:OPENSSL_internal:CERTIFICATE_VERIFY_FAILED", tb)
+    #     else:
+    #         self.fail("Didn't raise DiscoveryFailed exception")
 
     async def test_username_and_password_required_for_secure_connection(self) -> None:
         with self.assertRaises(ValueError) as cm:
             await AsyncioEventStoreDBClient("esdb://localhost:2114")
-        self.assertIn("username and password are required", cm.exception.args[0])
+        self.assertIn("Username and password are required", cm.exception.args[0])
 
     async def test_append_events_and_get_stream(self) -> None:
         # Append events.
@@ -217,9 +220,21 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             current_version=StreamState.NO_STREAM,
         )
 
-    async def test_append_events_raises_discovery_failed(self) -> None:
+    async def test_append_events_raises_service_unavailable(self) -> None:
         await self.client._connection.close()
         self.client.connection_spec._targets = ["localhost:2222"]
+        stream_name1 = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=b"{}")
+        with self.assertRaises(ServiceUnavailable):
+            await self.client.append_events(
+                stream_name=stream_name1,
+                events=[event1],
+                current_version=StreamState.NO_STREAM,
+            )
+
+    async def test_append_events_raises_discovery_failed(self) -> None:
+        await self.client._connection.close()
+        self.client.connection_spec._targets = ["localhost:2222", "localhost:2222"]
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
         with self.assertRaises(DiscoveryFailed):
@@ -341,12 +356,12 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         with self.assertRaises(NotFound):
             await self.client.get_stream(str(uuid4()))
 
-    async def test_get_stream_raises_discovery_failed(self) -> None:
+    async def test_get_stream_raises_service_unavailable(self) -> None:
         await self.client._connection.close()
         self.client.connection_spec._targets = ["localhost:2222"]
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
-        with self.assertRaises(DiscoveryFailed):
+        with self.assertRaises(ServiceUnavailable):
             await self.client.append_events(
                 stream_name=stream_name1,
                 events=[event1],
@@ -514,16 +529,18 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
     async def test_subscribe_to_all_reconnects(self) -> None:
         # Reconstruct connection with wrong port (to inspire ServiceUnavailble).
         await self.client._connection.close()
-        self.client._connection = self.client._construct_connection("localhost:2222")
+        self.client._connection = self.client._construct_esdb_connection(
+            "localhost:2222"
+        )
 
         catchup_subscription = await self.client.subscribe_to_all()
         self.assertIsInstance(catchup_subscription, AsyncioCatchupSubscription)
 
-    async def test_subscribe_to_all_raises_discovery_failed(self) -> None:
-        await self.client._connection.close()
-        # Reconstruct connection with wrong port (to inspire ServiceUnavailble).
-        await self.client._connection.close()
-        self.client._connection = self.client._construct_connection("localhost:2222")
-
-        await self.client.subscribe_to_all()
-        # with self.assertRaises(ServiceUnavailable):
+    # async def test_subscribe_to_all_raises_discovery_failed(self) -> None:
+    #     await self.client._connection.close()
+    #     # Reconstruct connection with wrong port (to inspire ServiceUnavailble).
+    #     await self.client._connection.close()
+    #     self.client._connection = self.client._construct_esdb_connection("localhost:2222")
+    #
+    #     await self.client.subscribe_to_all()
+    #     # with self.assertRaises(ServiceUnavailable):

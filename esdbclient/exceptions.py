@@ -24,6 +24,12 @@ class ServiceUnavailable(GrpcError):
     """
 
 
+class SSLError(GrpcError):
+    """
+    Raised when gRPC service is unavailable.
+    """
+
+
 class DeadlineExceeded(EventStoreDBClientException):
     """
     Base class for exceptions involving deadlines being exceeded.
@@ -135,18 +141,6 @@ class BadRequestError(EventStoreDBClientException):
 class DiscoveryFailed(EventStoreDBClientException):
     """
     Raised when client fails to satisfy node preference using gossip cluster info.
-    """
-
-
-class GossipSeedError(DiscoveryFailed):
-    """
-    Raised when client has no gossip seeds.
-    """
-
-
-class DNSError(DiscoveryFailed):
-    """
-    Raised when client request to DNS fails.
     """
 
 

@@ -431,33 +431,38 @@ The "esdb" URI scheme can be defined in the following way.
 
 In the "esdb" URI scheme, after the optional user info string, there must be at least
 one gRPC target. If there are several gRPC targets, they must be separated from each
-other with the "," character. Each gRPC target should indicate an EventStoreDB gRPC
-server socket, by specifying a host and a port number separated with the ":" character.
-The host may be a hostname that can be resolved to an IP address, or an IP address.
+other with the "," character.
+
+Each gRPC target should indicate an EventStoreDB gRPC server socket, all in the same
+EventStoreDB cluster, by specifying a host and a port number separated with the ":"
+character. The host may be a hostname that can be resolved to an IP address, or an IP
+address.
 
     grpc-target = ( hostname | ip-address ) , ":" , port-number ;
 
+If there is one gRPC target, the client will simply attempt to connect to this
+server, and it will use this connection when recording and retrieving events.
+
+If there are two or more gRPC targets, the client will attempt to connect to the
+Gossip API of each in turn, to obtain information about the whole cluster. A member
+of the cluster is then selected by the client according to the "node preference" option
+of the connection string. The client may then need to close its connection and reconnect
+to the selected node.
 
 The "esdb+discover" URI scheme can be defined in the following way.
 
     esdb-discover-uri = "esdb+discover://" , [ user-info, "@" ] , cluster-domainname, [ ":" , port-number ] , [ "?" , query-string ] ;
 
-In the "esdb+discover" URI scheme, after the optional user info string, there must be a
-domain name which should identify a cluster of EventStoreDB servers. The client will use
-a DNS server to resolve the domain name to a list of addresses of EventStoreDB servers,
-by querying for 'A' records. The specified port number, or the default port number
-"2113", will be used to construct gRPC targets from the addresses obtained from 'A'
-records provided by the DNS server. Therefore, if you want to use the "esdb+discover"
-URI scheme, you will need to configure DNS when setting up your EventStoreDB cluster.
+In the "esdb+discover" URI scheme, after the optional user info string, there should be
+a domain name which identifies a cluster of EventStoreDB servers. Individual nodes in
+the cluster should be declared with DNS 'A' records.
 
-With both the "esdb" and "esdb+discover" URI schemes, the client firstly obtains
-a list of gRPC targets: either directly from "esdb" connection strings; or indirectly
-from "esdb+discover" connection strings via DNS. This list of targets is known as the
-"gossip seed". The client will then attempt to connect to each gRPC target in turn,
-attempting to call the EventStoreDB Gossip API to obtain information about the
-EventStoreDB cluster. A member of the cluster is selected by the client, according
-to the "node preference" option. The client may then need to close its
-connection and reconnect to the selected server.
+The client will create a gRPC connection using the cluster's domain name, using the
+gRPC library's 'round robin' load balancing strategy to call the Gossip API of addresses
+to which this domain name resolves. Information about the EventStoreDB cluster is
+obtained from the Gossip API. A member of the cluster is then selected by the client
+according to the "node preference" option. The client may then need to close its
+connection and reconnect to the selected node.
 
 ### User info string<a id="user-info-string"></a>
 

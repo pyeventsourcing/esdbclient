@@ -3,13 +3,11 @@ import datetime
 import os
 import ssl
 import sys
-import traceback
 from collections import Counter
 from threading import Thread
 from time import sleep
-from typing import Any, List, Sequence, Set, Tuple, cast
+from typing import List, Sequence, Set, Tuple, cast
 from unittest import TestCase, skipIf
-from unittest.case import _AssertRaisesContext
 from uuid import UUID, uuid4
 
 from grpc import RpcError, StatusCode
@@ -31,11 +29,9 @@ from esdbclient.exceptions import (
     AlreadyExists,
     ConsumerTooSlow,
     DiscoveryFailed,
-    DNSError,
     ExceptionIteratingRequests,
     ExceptionThrownByHandler,
     FollowerNotFound,
-    GossipSeedError,
     GrpcDeadlineExceeded,
     GrpcError,
     MaximumSubscriptionsReached,
@@ -92,214 +88,229 @@ class TimedTestCase(TestCase):
 
 
 class TestConnectionSpec(TestCase):
-    def test_scheme_and_netloc(self) -> None:
-        spec = ConnectionSpec("esdb://host1:2110")
-        self.assertEqual(spec.scheme, "esdb")
-        self.assertEqual(spec.netloc, "host1:2110")
-        self.assertEqual(spec.targets, ["host1:2110"])
-        self.assertEqual(spec.username, None)
-        self.assertEqual(spec.password, None)
+    def test_constructor_raises_value_errors(self) -> None:
+        # Invalid scheme.
+        with self.assertRaises(ValueError) as cm1:
+            ConnectionSpec(uri="http://localhost:2222")
+        self.assertIn("Invalid URI scheme:", cm1.exception.args[0])
 
-        spec = ConnectionSpec("esdb://admin:changeit@host1:2110")
-        self.assertEqual(spec.scheme, "esdb")
-        self.assertEqual(spec.netloc, "admin:changeit@host1:2110")
-        self.assertEqual(spec.targets, ["host1:2110"])
-        self.assertEqual(spec.username, "admin")
-        self.assertEqual(spec.password, "changeit")
+        # No targets specified.
+        with self.assertRaises(ValueError) as cm1:
+            ConnectionSpec(uri="esdb://")
+        self.assertIn("No targets specified:", cm1.exception.args[0])
 
-        spec = ConnectionSpec("esdb://host1:2110,host2:2111,host3:2112")
-        self.assertEqual(spec.scheme, "esdb")
-        self.assertEqual(spec.netloc, "host1:2110,host2:2111,host3:2112")
-        self.assertEqual(spec.targets, ["host1:2110", "host2:2111", "host3:2112"])
-        self.assertEqual(spec.username, None)
-        self.assertEqual(spec.password, None)
+        # More than one target specified.
+        with self.assertRaises(ValueError) as cm1:
+            ConnectionSpec(uri="esdb+discover://localhost:2222,localhost:2223")
+        self.assertIn("More than one target specified:", cm1.exception.args[0])
 
-        spec = ConnectionSpec("esdb://admin:changeit@host1:2110,host2:2111,host3:2112")
-        self.assertEqual(spec.scheme, "esdb")
-        self.assertEqual(spec.netloc, "admin:changeit@host1:2110,host2:2111,host3:2112")
-        self.assertEqual(spec.targets, ["host1:2110", "host2:2111", "host3:2112"])
-        self.assertEqual(spec.username, "admin")
-        self.assertEqual(spec.password, "changeit")
+        # Secure without username or password.
+        with self.assertRaises(ValueError) as cm0:
+            ConnectionSpec(uri="esdb://localhost:2222")
+        self.assertIn(
+            "Username and password are required",
+            cm0.exception.args[0],
+        )
 
-        spec = ConnectionSpec("esdb+discover://host1:2110")
+    def test_uri(self) -> None:
+        uri = "esdb://host1:2110?Tls=false"
+        spec = ConnectionSpec(uri)
+        self.assertEqual(spec.uri, uri)
+
+    def test_scheme(self) -> None:
+        spec = ConnectionSpec("esdb://host1:2110?Tls=false")
+        self.assertEqual(spec.scheme, "esdb")
+
+        spec = ConnectionSpec("esdb+discover://host1:2110?Tls=false")
         self.assertEqual(spec.scheme, "esdb+discover")
-        self.assertEqual(spec.netloc, "host1:2110")
-        self.assertEqual(spec.targets, ["host1:2110"])
-        self.assertEqual(spec.username, None)
-        self.assertEqual(spec.password, None)
 
-        spec = ConnectionSpec("esdb+discover://admin:changeit@host1:2110")
-        self.assertEqual(spec.scheme, "esdb+discover")
-        self.assertEqual(spec.netloc, "admin:changeit@host1:2110")
+    def test_targets(self) -> None:
+        spec = ConnectionSpec("esdb://host1:2110?Tls=false")
         self.assertEqual(spec.targets, ["host1:2110"])
-        self.assertEqual(spec.username, "admin")
-        self.assertEqual(spec.password, "changeit")
+
+        spec = ConnectionSpec("esdb://host1:2110,host2:2111,host3:2112?Tls=false")
+        self.assertEqual(spec.targets, ["host1:2110", "host2:2111", "host3:2112"])
 
     def test_tls(self) -> None:
-        # Tls not mentioned.
-        spec = ConnectionSpec("esdb:")
+        # Tls default true.
+        spec = ConnectionSpec("esdb://admin:changeit@localhost:2222")
         self.assertIs(spec.options.Tls, True)
 
         # Set Tls "true".
-        spec = ConnectionSpec("esdb:?Tls=true")
+        spec = ConnectionSpec("esdb://admin:changeit@localhost:2222?Tls=true")
         self.assertIs(spec.options.Tls, True)
 
         # Set Tls "false".
-        spec = ConnectionSpec("esdb:?Tls=false")
+        spec = ConnectionSpec("esdb://localhost:2222?Tls=false")
         self.assertIs(spec.options.Tls, False)
 
         # Check case insensitivity.
-        spec = ConnectionSpec("esdb:?TLS=false")
-        self.assertIs(spec.options.Tls, False)
-        spec = ConnectionSpec("esdb:?tls=false")
-        self.assertIs(spec.options.Tls, False)
-        spec = ConnectionSpec("esdb:?TLS=true")
+        spec = ConnectionSpec("esdb://admin:changeit@localhost:2222?TLS=true")
         self.assertIs(spec.options.Tls, True)
-        spec = ConnectionSpec("esdb:?tls=true")
+        spec = ConnectionSpec("esdb://admin:changeit@localhost:2222?tls=true")
         self.assertIs(spec.options.Tls, True)
-
-        spec = ConnectionSpec("esdb:?TLS=False")
+        spec = ConnectionSpec("esdb://admin:changeit@localhost:2222?tls=TRUE")
+        self.assertIs(spec.options.Tls, True)
+        spec = ConnectionSpec("esdb://localhost:2222?TLS=false")
         self.assertIs(spec.options.Tls, False)
-        spec = ConnectionSpec("esdb:?tls=FALSE")
+        spec = ConnectionSpec("esdb://localhost:2222?tls=false")
+        self.assertIs(spec.options.Tls, False)
+        spec = ConnectionSpec("esdb://localhost:2222?tls=FALSE")
         self.assertIs(spec.options.Tls, False)
 
         # Invalid value.
         with self.assertRaises(ValueError):
-            ConnectionSpec("esdb:?Tls=blah")
+            ConnectionSpec("esdb://localhost:2222?Tls=blah")
 
         # Repeated field (use first value).
-        spec = ConnectionSpec("esdb:?Tls=true&Tls=false")
+        spec = ConnectionSpec("esdb://admin:changeit@localhost:2222?Tls=true&Tls=false")
         self.assertTrue(spec.options.Tls)
+        spec = ConnectionSpec("esdb://localhost:2222?Tls=false&Tls=true")
+        self.assertFalse(spec.options.Tls)
 
     def test_connection_name(self) -> None:
         # ConnectionName not mentioned.
-        spec = ConnectionSpec("esdb:")
+        uri = "esdb://localhost:2222?Tls=false"
+        spec = ConnectionSpec(uri)
         self.assertIsInstance(spec.options.ConnectionName, str)
 
         # Set ConnectionName.
         connection_name = str(uuid4())
-        spec = ConnectionSpec(f"esdb:?ConnectionName={connection_name}")
+        spec = ConnectionSpec(uri + f"&ConnectionName={connection_name}")
         self.assertEqual(spec.options.ConnectionName, connection_name)
 
         # Check case insensitivity.
-        spec = ConnectionSpec(f"esdb:?connectionName={connection_name}")
+        spec = ConnectionSpec(uri + f"&connectionName={connection_name}")
         self.assertEqual(spec.options.ConnectionName, connection_name)
 
         # Check case insensitivity.
-        spec = ConnectionSpec(f"esdb:?connectionName={connection_name}")
+        spec = ConnectionSpec(uri + f"&connectionName={connection_name}")
         self.assertEqual(spec.options.ConnectionName, connection_name)
 
     def test_max_discover_attempts(self) -> None:
         # MaxDiscoverAttempts not mentioned.
-        spec = ConnectionSpec("esdb:")
+        uri = "esdb://localhost:2222?Tls=false"
+        spec = ConnectionSpec(uri)
         self.assertEqual(spec.options.MaxDiscoverAttempts, 10)
 
         # Set MaxDiscoverAttempts.
-        spec = ConnectionSpec("esdb:?MaxDiscoverAttempts=5")
+        spec = ConnectionSpec(uri + "&MaxDiscoverAttempts=5")
         self.assertEqual(spec.options.MaxDiscoverAttempts, 5)
 
     def test_discovery_interval(self) -> None:
+        uri = "esdb://localhost:2222?Tls=false"
         # DiscoveryInterval not mentioned.
-        spec = ConnectionSpec("esdb:")
+        spec = ConnectionSpec(uri)
         self.assertEqual(spec.options.DiscoveryInterval, 100)
 
         # Set DiscoveryInterval.
-        spec = ConnectionSpec("esdb:?DiscoveryInterval=200")
+        spec = ConnectionSpec(uri + "&DiscoveryInterval=200")
         self.assertEqual(spec.options.DiscoveryInterval, 200)
 
     def test_gossip_timeout(self) -> None:
+        uri = "esdb://localhost:2222?Tls=false"
         # GossipTimeout not mentioned.
-        spec = ConnectionSpec("esdb:")
+        spec = ConnectionSpec(uri)
         self.assertEqual(spec.options.GossipTimeout, 5)
 
         # Set GossipTimeout.
-        spec = ConnectionSpec("esdb:?GossipTimeout=10")
+        spec = ConnectionSpec(uri + "&GossipTimeout=10")
         self.assertEqual(spec.options.GossipTimeout, 10)
 
     def test_node_preference(self) -> None:
+        uri = "esdb://localhost:2222?Tls=false"
         # NodePreference not mentioned.
-        spec = ConnectionSpec("esdb:")
+        spec = ConnectionSpec(uri)
         self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_LEADER)
 
         # Set NodePreference.
-        spec = ConnectionSpec("esdb:?NodePreference=leader")
+        spec = ConnectionSpec(uri + "&NodePreference=leader")
         self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_LEADER)
-        spec = ConnectionSpec("esdb:?NodePreference=follower")
+        spec = ConnectionSpec(uri + "&NodePreference=follower")
         self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_FOLLOWER)
 
         # Invalid value.
         with self.assertRaises(ValueError):
-            ConnectionSpec("esdb:?NodePreference=blah")
+            ConnectionSpec(uri + "&NodePreference=blah")
 
         # Case insensitivity.
-        spec = ConnectionSpec("esdb:?nodePreference=leader")
+        spec = ConnectionSpec(uri + "&nodePreference=leader")
         self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_LEADER)
-        spec = ConnectionSpec("esdb:?NODEPREFERENCE=follower")
-        self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_FOLLOWER)
-        spec = ConnectionSpec("esdb:?NodePreference=Leader")
+        spec = ConnectionSpec(uri + "&NODEPREFERENCE=leader")
         self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_LEADER)
-        spec = ConnectionSpec("esdb:?NodePreference=FOLLOWER")
+        spec = ConnectionSpec(uri + "&NodePreference=Leader")
+        self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_LEADER)
+        spec = ConnectionSpec(uri + "&NodePreference=FOLLOWER")
         self.assertEqual(spec.options.NodePreference, NODE_PREFERENCE_FOLLOWER)
 
     def test_tls_verify_cert(self) -> None:
+        uri = "esdb://localhost:2222?Tls=false"
         # TlsVerifyCert not mentioned.
-        spec = ConnectionSpec("esdb:")
+        spec = ConnectionSpec(uri)
         self.assertEqual(spec.options.TlsVerifyCert, True)
 
         # Set TlsVerifyCert.
-        spec = ConnectionSpec("esdb:?TlsVerifyCert=true")
+        spec = ConnectionSpec(uri + "&TlsVerifyCert=true")
         self.assertEqual(spec.options.TlsVerifyCert, True)
-        spec = ConnectionSpec("esdb:?TlsVerifyCert=false")
+        spec = ConnectionSpec(uri + "&TlsVerifyCert=false")
         self.assertEqual(spec.options.TlsVerifyCert, False)
 
         # Invalid value.
         with self.assertRaises(ValueError):
-            ConnectionSpec("esdb:?TlsVerifyCert=blah")
+            ConnectionSpec(uri + "&TlsVerifyCert=blah")
 
         # Case insensitivity.
-        spec = ConnectionSpec("esdb:?TLSVERIFYCERT=true")
+        spec = ConnectionSpec(uri + "&TLSVERIFYCERT=true")
         self.assertEqual(spec.options.TlsVerifyCert, True)
-        spec = ConnectionSpec("esdb:?tlsverifycert=false")
+        spec = ConnectionSpec(uri + "&tlsverifycert=false")
         self.assertEqual(spec.options.TlsVerifyCert, False)
-        spec = ConnectionSpec("esdb:?TlsVerifyCert=True")
+        spec = ConnectionSpec(uri + "&TlsVerifyCert=True")
         self.assertEqual(spec.options.TlsVerifyCert, True)
-        spec = ConnectionSpec("esdb:?TlsVerifyCert=False")
+        spec = ConnectionSpec(uri + "&TlsVerifyCert=False")
         self.assertEqual(spec.options.TlsVerifyCert, False)
 
     def test_default_deadline(self) -> None:
+        uri = "esdb://localhost:2222?Tls=false"
+
         # DefaultDeadline not mentioned.
-        spec = ConnectionSpec("esdb:")
+        spec = ConnectionSpec(uri)
         self.assertEqual(spec.options.DefaultDeadline, None)
 
         # Set DefaultDeadline.
-        spec = ConnectionSpec("esdb:?DefaultDeadline=10")
+        spec = ConnectionSpec(uri + "&DefaultDeadline=10")
         self.assertEqual(spec.options.DefaultDeadline, 10)
 
     def test_keep_alive_interval(self) -> None:
+        uri = "esdb://localhost:2222?Tls=false"
+
         # KeepAliveInterval not mentioned.
-        spec = ConnectionSpec("esdb:")
+        spec = ConnectionSpec(uri)
         self.assertEqual(spec.options.KeepAliveInterval, None)
 
         # Set KeepAliveInterval.
-        spec = ConnectionSpec("esdb:?KeepAliveInterval=10")
+        spec = ConnectionSpec(uri + "&KeepAliveInterval=10")
         self.assertEqual(spec.options.KeepAliveInterval, 10)
 
     def test_keep_alive_timeout(self) -> None:
+        uri = "esdb://localhost:2222?Tls=false"
+
         # KeepAliveTimeout not mentioned.
-        spec = ConnectionSpec("esdb:")
+        spec = ConnectionSpec(uri)
         self.assertEqual(spec.options.KeepAliveTimeout, None)
 
         # Set KeepAliveTimeout.
-        spec = ConnectionSpec("esdb:?KeepAliveTimeout=10")
+        spec = ConnectionSpec(uri + "&KeepAliveTimeout=10")
         self.assertEqual(spec.options.KeepAliveTimeout, 10)
 
     def test_raises_when_query_string_has_unsupported_field(self) -> None:
+        uri = "esdb://localhost:2222?Tls=false"
+
         with self.assertRaises(ValueError) as cm1:
-            ConnectionSpec("esdb:?NotSupported=10")
+            ConnectionSpec(uri + "&NotSupported=10")
         self.assertIn("Unknown field in", cm1.exception.args[0])
 
         with self.assertRaises(ValueError) as cm2:
-            ConnectionSpec("esdb:?NotSupported=10&AlsoNotSupported=20")
+            ConnectionSpec(uri + "&NotSupported=10&AlsoNotSupported=20")
         self.assertIn("Unknown fields in", cm2.exception.args[0])
 
 
@@ -317,15 +328,16 @@ def get_server_certificate(grpc_target: str) -> str:
     )
 
 
-class TestEventStoreDBClient(TimedTestCase):
+class EventStoreDBClientTestCase(TimedTestCase):
     client: EventStoreDBClient
 
     ESDB_TARGET = "localhost:2114"
     ESDB_TLS = True
     ESDB_CLUSTER_SIZE = 1
 
-    def construct_esdb_client(self) -> None:
-        qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
+    def construct_esdb_client(self, qs: str = "") -> None:
+        if self.ESDB_CLUSTER_SIZE > 1:
+            qs = f"MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1&{qs}"
         if self.ESDB_TLS:
             uri = f"esdb://admin:changeit@{self.ESDB_TARGET}?{qs}"
             root_certificates = self.get_root_certificates()
@@ -336,7 +348,7 @@ class TestEventStoreDBClient(TimedTestCase):
 
     def get_root_certificates(self) -> str:
         if self.ESDB_CLUSTER_SIZE == 1:
-            return get_server_certificate(self.ESDB_TARGET)
+            return get_server_certificate(self.ESDB_TARGET.split(",")[0])
         elif self.ESDB_CLUSTER_SIZE == 3:
             return get_ca_certificate()
         else:
@@ -349,6 +361,8 @@ class TestEventStoreDBClient(TimedTestCase):
         if hasattr(self, "client"):
             self.client.close()
 
+
+class TestEventStoreDBClient(EventStoreDBClientTestCase):
     def test_close(self) -> None:
         self.construct_esdb_client()
         self.client.close()
@@ -357,87 +371,6 @@ class TestEventStoreDBClient(TimedTestCase):
         self.construct_esdb_client()
         self.client.close()
         self.client.close()
-
-    def test_constructor_with_tls_true_but_no_root_certificates(self) -> None:
-        if self.ESDB_TLS:
-            qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
-            uri = f"esdb://admin:changeit@{self.ESDB_TARGET}?{qs}"
-            try:
-                EventStoreDBClient(uri)
-            except DiscoveryFailed:
-                tb = traceback.format_exc()
-                self.assertIn("Ssl handshake failed", tb)
-                self.assertIn("routines:OPENSSL_internal:CERTIFICATE_VERIFY_FAILED", tb)
-            else:
-                self.fail("Didn't raise DiscoveryFailed exception")
-        else:
-            self.skipTest("Skipping for insecure server")
-
-    def test_constructor_raises_value_errors(self) -> None:
-        # Secure URI without username or password.
-        with self.assertRaises(ValueError) as cm0:
-            EventStoreDBClient("esdb://localhost:2222")
-        self.assertIn(
-            "username and password are required",
-            cm0.exception.args[0],
-        )
-
-        # Scheme must be 'esdb'.
-        with self.assertRaises(ValueError) as cm1:
-            EventStoreDBClient(uri="http://localhost:2222")
-        self.assertIn("Invalid URI scheme:", cm1.exception.args[0])
-
-    def test_constructor_raises_gossip_seed_error(self) -> None:
-        # Needs at least one target.
-        with self.assertRaises(GossipSeedError):
-            EventStoreDBClient(uri="esdb://")
-
-    def test_raises_discovery_failed_exception(self) -> None:
-        self.construct_esdb_client()
-
-        # Reconstruct connection with wrong port.
-        self.client._esdb.close()
-        self.client._esdb = self.client._construct_esdb_connection("localhost:2222")
-        self.client.connection_spec._targets = ["localhost:2222"]
-
-        cm: _AssertRaisesContext[Any]
-
-        with self.assertRaises(DiscoveryFailed):
-            self.client.get_stream(str(uuid4()))
-
-        # Todo: Maybe other methods here...?
-
-        # Reconstruct client with wrong port.
-        esdb_target = "localhost:2222"
-
-        qs = "MaxDiscoverAttempts=2&DiscoveryInterval=0&GossipTimeout=1"
-        if self.ESDB_TLS:
-            uri = f"esdb://admin:changeit@{esdb_target}?{qs}"
-            root_certificates = self.get_root_certificates()
-        else:
-            uri = f"esdb://{esdb_target}?Tls=false&{qs}"
-            root_certificates = None
-
-        with self.assertRaises(DiscoveryFailed):
-            EventStoreDBClient(uri, root_certificates=root_certificates)
-
-    def test_constructor_connects_despite_bad_target_in_gossip_seed(self) -> None:
-        # Reconstruct connection with wrong port.
-        esdb_target = f"localhost:2222,{self.ESDB_TARGET}"
-
-        if self.ESDB_TLS:
-            uri = f"esdb://admin:changeit@{esdb_target}"
-            root_certificates = self.get_root_certificates()
-        else:
-            uri = f"esdb://{esdb_target}?Tls=false"
-            root_certificates = None
-
-        try:
-            client = EventStoreDBClient(uri, root_certificates=root_certificates)
-        except Exception:
-            self.fail("Failed to connect")
-        else:
-            client.close()
 
     def test_stream_read_raises_not_found(self) -> None:
         # Note, we never get a NotFound from subscribe_to_stream(), which is
@@ -5277,27 +5210,49 @@ class TestEventStoreDBClientWithInsecureConnection(TestEventStoreDBClient):
     ESDB_TARGET = "localhost:2113"
     ESDB_TLS = False
 
-    def test_raises_service_unavailable_exception(self) -> None:
-        # Getting DeadlineExceeded as __cause__ with "insecure" server.
-        pass
-
-    def test_raises_discovery_failed_exception(self) -> None:
-        super().test_raises_discovery_failed_exception()
-
 
 class TestESDBClusterNode1(TestEventStoreDBClient):
-    ESDB_TARGET = "127.0.0.1:2110"
+    ESDB_TARGET = "127.0.0.1:2110,127.0.0.1:2110"  # make it do discovery
     ESDB_CLUSTER_SIZE = 3
 
 
 class TestESDBClusterNode2(TestEventStoreDBClient):
-    ESDB_TARGET = "127.0.0.1:2111"
+    ESDB_TARGET = "127.0.0.1:2111,127.0.0.1:2111"  # make it do discovery
     ESDB_CLUSTER_SIZE = 3
 
 
 class TestESDBClusterNode3(TestEventStoreDBClient):
-    ESDB_TARGET = "127.0.0.1:2112"
+    ESDB_TARGET = "127.0.0.1:2112,127.0.0.1:2112"  # make it do discovery
     ESDB_CLUSTER_SIZE = 3
+
+
+class TestRootCertificatesAreRequired(TimedTestCase):
+    def test_tls_true_no_root_certificates(self) -> None:
+        uri = "esdb://admin:changeit@127.0.0.1:2110"
+        with self.assertRaises(ValueError) as cm:
+            EventStoreDBClient(uri)
+        self.assertIn("Root certificate(s) are required", str(cm.exception))
+
+    def test_one_target_tls_true_invalid_root_certificates(self) -> None:
+        uri = "esdb://admin:changeit@127.0.0.1:2110"
+        client = EventStoreDBClient(uri, root_certificates="blah")
+
+        with self.assertRaises(ServiceUnavailable):
+            client.get_commit_position()
+
+        # # Todo: Wanted to do something like this:
+        # with self.assertRaises(ServiceUnavailable) as cm:
+        #     client.get_commit_position()
+        # s = str(cm)
+        # self.assertIn("Ssl handshake failed", s)
+        # self.assertIn("routines:OPENSSL_internal:CERTIFICATE_VERIFY_FAILED", s)
+
+    def test_two_targets_tls_true_invalid_root_certificates(self) -> None:
+        uri = "esdb://admin:changeit@127.0.0.1:2110,127.0.0.1:2111"
+        uri += "?MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
+
+        with self.assertRaises(DiscoveryFailed):
+            EventStoreDBClient(uri, root_certificates="blah")
 
 
 class TestESDBDiscoverScheme(TestCase):
@@ -5318,10 +5273,6 @@ class TestESDBDiscoverScheme(TestCase):
             EventStoreDBClient(uri)
         self.assertIn(":9898", str(cm.exception))
 
-    def test_raises_dns_error(self) -> None:
-        with self.assertRaises(DNSError):
-            EventStoreDBClient("esdb+discover://xxxxxxxxxxxxxx")
-
 
 class TestGrpcOptions(TestCase):
     def setUp(self) -> None:
@@ -5337,7 +5288,8 @@ class TestGrpcOptions(TestCase):
     def test(self) -> None:
         options_dict = dict(self.client.grpc_options)
         self.assertEqual(
-            options_dict["grpc.max_receive_message_length"], 17 * 1024 * 1024,
+            options_dict["grpc.max_receive_message_length"],
+            17 * 1024 * 1024,
         )
         self.assertEqual(options_dict["grpc.keepalive_ms"], 1234)
         self.assertEqual(options_dict["grpc.keepalive_timeout_ms"], 5678)
@@ -5815,20 +5767,38 @@ class TestAutoReconnectAfterServiceUnavailable(TimedTestCase):
     #     self.client.read_cluster_gossip()
 
 
-class TestConnectToPreferredNode(TimedTestCase):
+class TestRaisesDiscoveryFailed(EventStoreDBClientTestCase):
+    ESDB_TARGET = "localhost:2222,localhost:2222"  # make it do discovery
+    ESDB_TLS = False
+
+    def test(self) -> None:
+        with self.assertRaises(DiscoveryFailed):
+            self.construct_esdb_client()
+
+
+class TestConnectsDespiteBadTarget(EventStoreDBClientTestCase):
+    ESDB_TARGET = "localhost:2222,localhost:2113"  # make it do discovery
+    ESDB_TLS = False
+
+    def test(self) -> None:
+        self.construct_esdb_client()
+        self.client.get_commit_position()
+
+
+class TestConnectToPreferredNode(EventStoreDBClientTestCase):
+    ESDB_TARGET = "localhost:2114,localhost:2114"  # make it do discovery
+    ESDB_CLUSTER_SIZE = 1
+
     def test_no_followers(self) -> None:
-        uri = "esdb://admin:changeit@127.0.0.1:2113?Tls=false&NodePreference=follower"
         with self.assertRaises(FollowerNotFound):
-            EventStoreDBClient(uri)
+            self.construct_esdb_client("NodePreference=follower")
 
     def test_no_read_only_replicas(self) -> None:
-        uri = "esdb://admin:changeit@127.0.0.1:2113?Tls=false&NodePreference=readonlyreplica"
         with self.assertRaises(ReadOnlyReplicaNotFound):
-            EventStoreDBClient(uri)
+            self.construct_esdb_client("NodePreference=readonlyreplica")
 
     def test_random(self) -> None:
-        uri = "esdb://admin:changeit@127.0.0.1:2113?Tls=false&NodePreference=random"
-        EventStoreDBClient(uri)
+        self.construct_esdb_client("NodePreference=random")
 
 
 class TestSubscriptionReadRequest(TimedTestCase):
@@ -6273,3 +6243,6 @@ class FakeUnknownRpcError(FakeRpcError):
 
 def random_data() -> bytes:
     return os.urandom(16)
+
+
+del EventStoreDBClientTestCase

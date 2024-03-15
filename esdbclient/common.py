@@ -48,6 +48,9 @@ DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY = 0.2
 DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE = 0.2
 DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT = 5
 
+GrpcOption = Tuple[str, Union[str, int]]
+GrpcOptions = Tuple[GrpcOption, ...]
+
 
 class GrpcStreamer(ABC):
     @abstractmethod
@@ -118,6 +121,9 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
         elif e.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
             return GrpcDeadlineExceeded(e)
         elif e.code() == grpc.StatusCode.UNAVAILABLE:
+            details = e.details()
+            # if "SSL_ERROR" in details:
+            #     return SSLError(e)
             return ServiceUnavailable(e)
         elif (
             e.code() == grpc.StatusCode.NOT_FOUND
@@ -232,6 +238,15 @@ def construct_recorded_event(
             commit_position=None if ignore_commit_position else link.commit_position,
             retry_count=retry_count,
         )
+
+    # Todo: Maybe include this in RecordedEvent? It's generated bu the server.
+    # try:
+    #     created_timestamp = datetime.datetime.fromtimestamp(
+    #         int(event.metadata.get("created", "")) / 10000000.0,
+    #         tz=datetime.timezone.utc,
+    #     )
+    # except (TypeError, ValueError):
+    #     created_timestamp = None
 
     recorded_event = RecordedEvent(
         id=UUID(event.id.string),

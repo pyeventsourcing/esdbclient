@@ -265,7 +265,16 @@ class ConnectionSpec:
         else:
             targets = self._netloc
         self._targets = [t.strip() for t in targets.split(",") if t.strip()]
+        if len(self._targets) == 0:
+            raise ValueError(f"No targets specified: {uri}")
+        if self._scheme == URI_SCHEME_ESDB_DISCOVER:
+            if len(self._targets) > 1:
+                raise ValueError(f"More than one target specified: {uri}")
+
         self._options = ConnectionOptions(parse_result.query)
+        if self._options.Tls is True:
+            if not self._username or not self._password:
+                raise ValueError(f"Username and password are required: {uri}")
 
     @property
     def uri(self) -> str:
@@ -274,10 +283,6 @@ class ConnectionSpec:
     @property
     def scheme(self) -> str:
         return self._scheme
-
-    @property
-    def netloc(self) -> str:
-        return self._netloc
 
     @property
     def username(self) -> Optional[str]:
