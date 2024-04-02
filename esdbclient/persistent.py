@@ -16,9 +16,11 @@ from esdbclient.common import (
     DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
     DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
     DEFAULT_WINDOW_SIZE,
     ESDBService,
@@ -181,6 +183,8 @@ class BasePersistentSubscriptionsService(ESDBService):
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
     ) -> persistent_pb2.CreateReq:
@@ -189,8 +193,8 @@ class BasePersistentSubscriptionsService(ESDBService):
             resolve_links=resolve_links,
             extra_statistics=False,
             max_retry_count=max_retry_count,
-            min_checkpoint_count=10,  # server recorded position
-            max_checkpoint_count=10,  # server recorded position
+            min_checkpoint_count=min_checkpoint_count,  # server recorded position
+            max_checkpoint_count=max_checkpoint_count,  # server recorded position
             max_subscriber_count=max_subscriber_count,
             live_buffer_size=1000,  # how many new events to hold in memory?
             read_batch_size=8,  # how many events to read from DB records?
@@ -316,6 +320,8 @@ class BasePersistentSubscriptionsService(ESDBService):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
     ) -> persistent_pb2.UpdateReq:
         # Construct 'settings'.
@@ -323,8 +329,8 @@ class BasePersistentSubscriptionsService(ESDBService):
             resolve_links=resolve_links,
             extra_statistics=False,
             max_retry_count=max_retry_count,
-            min_checkpoint_count=10,  # server recorded position
-            max_checkpoint_count=10,  # server recorded position
+            min_checkpoint_count=min_checkpoint_count,  # server recorded position
+            max_checkpoint_count=max_checkpoint_count,  # server recorded position
             max_subscriber_count=max_subscriber_count,
             live_buffer_size=1000,  # how many new events to hold in memory?
             read_batch_size=8,  # how many events to read from DB records?
@@ -744,6 +750,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -765,6 +773,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -790,6 +800,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -810,6 +822,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
             consumer_strategy=consumer_strategy,
             message_timeout=message_timeout,
             max_retry_count=max_retry_count,
+            min_checkpoint_count=min_checkpoint_count,
+            max_checkpoint_count=max_checkpoint_count,
             max_subscriber_count=max_subscriber_count,
         )
         # Call 'Create' RPC.
@@ -928,6 +942,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -948,6 +964,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -967,6 +985,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
         resolve_links: bool = False,
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -981,6 +1001,8 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
             resolve_links=resolve_links,
             message_timeout=message_timeout,
             max_retry_count=max_retry_count,
+            min_checkpoint_count=min_checkpoint_count,
+            max_checkpoint_count=max_checkpoint_count,
             max_subscriber_count=max_subscriber_count,
         )
         # Call 'Update' RPC.
