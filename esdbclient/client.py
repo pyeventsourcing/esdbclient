@@ -42,7 +42,6 @@ from esdbclient.connection_spec import (
     NODE_PREFERENCE_RANDOM,
     NODE_PREFERENCE_REPLICA,
     URI_SCHEME_ESDB,
-    URI_SCHEME_ESDB_DISCOVER,
     ConnectionSpec,
 )
 from esdbclient.events import NewEvent, RecordedEvent
@@ -87,9 +86,15 @@ def autoreconnect(f: _TCallable) -> _TCallable:
         try:
             return f(client, *args, **kwargs)
 
-        except NodeIsNotLeader:
-            if client.connection_spec.options.NodePreference == NODE_PREFERENCE_LEADER:
-                client.reconnect()
+        except NodeIsNotLeader as e:
+            if (
+                client.connection_spec.options.NodePreference == NODE_PREFERENCE_LEADER
+                and not (
+                    client.connection_spec.scheme == URI_SCHEME_ESDB
+                    and len(client.connection_spec.targets) == 1
+                )
+            ):
+                client.reconnect(e.leader_grpc_target)
                 sleep(0.1)
                 return f(client, *args, **kwargs)
             else:
@@ -170,6 +175,33 @@ class BaseEventStoreDBClient:
         else:
             return None
 
+    def _select_preferred_member(
+        self, cluster_members: Sequence[ClusterMember]
+    ) -> ClusterMember:
+        node_preference = self.connection_spec.options.NodePreference
+        if node_preference == NODE_PREFERENCE_LEADER:
+            leaders = [c for c in cluster_members if c.state == NODE_STATE_LEADER]
+            if len(leaders) != 1:  # pragma: no cover
+                # Todo: Cover this with a test.
+                raise LeaderNotFound(f"Expected one leader, discovered {len(leaders)}")
+            preferred_member = leaders[0]
+        elif node_preference == NODE_PREFERENCE_FOLLOWER:
+            followers = [c for c in cluster_members if c.state == NODE_STATE_FOLLOWER]
+            if len(followers) == 0:
+                raise FollowerNotFound()
+            preferred_member = random.choice(followers)
+        elif node_preference == NODE_PREFERENCE_REPLICA:
+            replicas = [c for c in cluster_members if c.state == NODE_STATE_REPLICA]
+            if len(replicas) == 0:
+                raise ReadOnlyReplicaNotFound()
+            # Todo: Cover this with a test.
+            preferred_member = random.choice(replicas)  # pragma: no cover
+        else:
+            assert node_preference == NODE_PREFERENCE_RANDOM
+            assert len(cluster_members) > 0
+            preferred_member = random.choice(cluster_members)
+        return preferred_member
+
 
 class EventStoreDBClient(BaseEventStoreDBClient):
     """
@@ -195,52 +227,41 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         # )
         # self._batch_append_thread.start()
 
-    def _connect(self) -> ESDBConnection:
-        if self.connection_spec.scheme == URI_SCHEME_ESDB_DISCOVER:
-            cluster_fqdn, _, port = self.connection_spec.targets[0].partition(":")
-            if port == "":
-                port = "2113"
-            return self._discover_preferred_node(
-                gossip_seed=[f"{cluster_fqdn}:{port}"],
+    @property
+    def is_closed(self) -> bool:
+        return self._is_closed
+
+    def _connect(self, grpc_target: Optional[str] = None) -> ESDBConnection:
+        if grpc_target:
+            # Just connect to the given target.
+            return self._construct_esdb_connection(grpc_target)
+        if (
+            self.connection_spec.scheme == URI_SCHEME_ESDB
+            and len(self.connection_spec.targets) == 1
+        ):
+            # Just connect to the specified target.
+            return self._construct_esdb_connection(
+                grpc_target=self.connection_spec.targets[0],
             )
+        # Discover preferred node in cluster.
+        return self._discover_preferred_node()
 
-        else:
-            assert self.connection_spec.scheme == URI_SCHEME_ESDB
-            if len(self.connection_spec.targets) == 1:
-                # Just connect to the specified target.
-                return self._construct_esdb_connection(
-                    grpc_target=self.connection_spec.targets[0],
-                )
-
-            else:
-                # Discover preferred node in cluster.
-                return self._discover_preferred_node(
-                    gossip_seed=self.connection_spec.targets,
-                )
-
-    def _discover_preferred_node(
-        self,
-        gossip_seed: Sequence[str],
-    ) -> ESDBConnection:
+    def _discover_preferred_node(self) -> ESDBConnection:
+        attempts = self.connection_spec.options.MaxDiscoverAttempts
+        assert attempts > 0
         if self.connection_spec.scheme == URI_SCHEME_ESDB:
             grpc_options: GrpcOptions = ()
         else:
             grpc_options = (("grpc.lb_policy_name", "round_robin"),)
-
-        attempts = self.connection_spec.options.MaxDiscoverAttempts
-        assert attempts > 0
         while True:
+            # Attempt to discover preferred node.
             try:
-                # Iterate through the gossip seed...
                 last_exception: Optional[Exception] = None
-                for grpc_target in gossip_seed:
-                    # Construct a connection for reading Gossip API.
+                for grpc_target in self.connection_spec.targets:
                     connection = self._construct_esdb_connection(
                         grpc_target=grpc_target,
                         grpc_options=grpc_options,
                     )
-
-                    # Read Gossip API (get cluster members).
                     try:
                         cluster_members = connection.gossip.read(
                             timeout=self.connection_spec.options.GossipTimeout,
@@ -253,40 +274,15 @@ class EventStoreDBClient(BaseEventStoreDBClient):
                     else:
                         break
                 else:
-                    msg = f"Failed to obtain cluster info: {gossip_seed}"
+                    msg = (
+                        "Failed to obtain cluster info from"
+                        f" '{','.join(self.connection_spec.targets)}':"
+                        f" {str(last_exception)}"
+                    )
                     raise DiscoveryFailed(msg) from last_exception
 
-                # Select a node according to node preference.
-                node_preference = self.connection_spec.options.NodePreference
-                if node_preference == NODE_PREFERENCE_LEADER:
-                    leaders = [
-                        c for c in cluster_members if c.state == NODE_STATE_LEADER
-                    ]
-                    if len(leaders) != 1:  # pragma: no cover
-                        # Todo: Somehow cover this with a test.
-                        raise LeaderNotFound(
-                            f"Expected one leader, discovered {len(leaders)}"
-                        )
-                    preferred_member = leaders[0]
-                elif node_preference == NODE_PREFERENCE_FOLLOWER:
-                    followers = [
-                        c for c in cluster_members if c.state == NODE_STATE_FOLLOWER
-                    ]
-                    if len(followers) == 0:
-                        raise FollowerNotFound()
-                    preferred_member = random.choice(followers)
-                elif node_preference == NODE_PREFERENCE_REPLICA:
-                    replicas = [
-                        c for c in cluster_members if c.state == NODE_STATE_REPLICA
-                    ]
-                    if len(replicas) == 0:
-                        raise ReadOnlyReplicaNotFound()
-                    # Todo: Somehow cover this with a test (how to setup a read-only replica?)
-                    preferred_member = random.choice(replicas)  # pragma: no cover
-                else:
-                    assert node_preference == NODE_PREFERENCE_RANDOM
-                    assert len(cluster_members) > 0
-                    preferred_member = random.choice(cluster_members)
+                preferred_member = self._select_preferred_member(cluster_members)
+
             except DiscoveryFailed:
                 attempts -= 1
                 if attempts == 0:
@@ -296,7 +292,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             else:
                 break
 
-        # Maybe close connection and connect to preferred target.
+        # Maybe close connection and connect to preferred node.
         if len(cluster_members) > 1:  # forgive not "advertising" single node
             preferred_target = f"{preferred_member.address}:{preferred_member.port}"
             if preferred_target != connection.grpc_target:
@@ -305,11 +301,11 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
         return connection
 
-    def reconnect(self) -> None:
+    def reconnect(self, grpc_target: Optional[str] = None) -> None:
         self._is_reconnection_required.set()
         with self._reconnection_lock:
             if self._is_reconnection_required.is_set():
-                new_conn = self._connect()
+                new_conn = self._connect(grpc_target)
                 old_conn, self._esdb = self._esdb, new_conn
                 old_conn.close()
                 self._is_reconnection_required.clear()
@@ -1385,6 +1381,12 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             else:
                 esdb_connection.close()
                 self._is_closed = True
+
+    def __enter__(self) -> "EventStoreDBClient":
+        return self
+
+    def __exit__(self, *args: Any, **kwargs: Any) -> None:
+        self.close()
 
     def __del__(self) -> None:
         self.close()

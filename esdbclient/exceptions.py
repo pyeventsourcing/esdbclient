@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+from typing import Dict, Optional, Union
+
+import grpc
+
+
 class EventStoreDBClientException(Exception):
     """
     Base class for exceptions raised by the client.
@@ -64,6 +69,35 @@ class NodeIsNotLeader(EventStoreDBClientException):
     """
     Raised when client attempts to write to a node that is not a leader.
     """
+
+    @property
+    def leader_grpc_target(self) -> Optional[str]:
+        if (
+            self.args
+            and isinstance(self.args[0], (grpc.Call, grpc.aio.AioRpcError))
+            and self.args[0].code() == grpc.StatusCode.NOT_FOUND
+            and self.args[0].details() == "Leader info available"
+        ):
+            # The typing of trailing_metadata is a mess.
+            rpc_error = self.args[0]
+            trailing_metadata: Dict[str, Union[str, bytes]]
+            if isinstance(rpc_error, grpc.Call):
+                trailing_metadata = {
+                    m.key: m.value for m in rpc_error.trailing_metadata()  # type: ignore[attr-defined]
+                }
+            else:
+                assert isinstance(rpc_error, grpc.aio.AioRpcError)
+                trailing_metadata = rpc_error.trailing_metadata()  # type: ignore[assignment]
+
+            host = trailing_metadata["leader-endpoint-host"]
+            port = trailing_metadata["leader-endpoint-port"]
+            if isinstance(host, bytes):
+                host = host.decode("utf-8")  # pragma: no cover
+            if isinstance(port, bytes):
+                port = port.decode("utf-8")  # pragma: no cover
+            return f"{host}:{port}"
+        else:
+            return None
 
 
 class NotFound(EventStoreDBClientException):

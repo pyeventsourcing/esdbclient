@@ -124,7 +124,7 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
             details = e.details()
             # if "SSL_ERROR" in details:
             #     return SSLError(e)
-            return ServiceUnavailable(e)
+            return ServiceUnavailable(details)
         elif (
             e.code() == grpc.StatusCode.NOT_FOUND
             and e.details() == "Leader info available"
@@ -139,9 +139,9 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
             if details is not None and details.startswith(
                 "Maximum subscriptions reached"
             ):
-                return MaximumSubscriptionsReached(e)
+                return MaximumSubscriptionsReached(details)
             else:  # pragma: no cover
-                return FailedPrecondition(e)
+                return FailedPrecondition(details)
     return GrpcError(e)
 
 

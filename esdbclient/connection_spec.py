@@ -265,11 +265,18 @@ class ConnectionSpec:
         else:
             targets = self._netloc
         self._targets = [t.strip() for t in targets.split(",") if t.strip()]
+
         if len(self._targets) == 0:
             raise ValueError(f"No targets specified: {uri}")
         if self._scheme == URI_SCHEME_ESDB_DISCOVER:
             if len(self._targets) > 1:
                 raise ValueError(f"More than one target specified: {uri}")
+
+        for i, target in enumerate(self._targets):
+            host, _, port = target.partition(":")
+            if port == "":
+                port = "2113"
+                self._targets[i] = f"{host}:{port}"
 
         self._options = ConnectionOptions(parse_result.query)
         if self._options.Tls is True:

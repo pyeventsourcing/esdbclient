@@ -882,7 +882,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
                 e.code() == grpc.StatusCode.UNAVAILABLE
                 and e.details() == "Server Is Not Ready"
             ):
-                raise NodeIsNotLeader() from e
+                raise NodeIsNotLeader(e) from None
             raise handle_rpc_error(e) from None
 
         else:
@@ -911,7 +911,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService):
                 e.code() == grpc.StatusCode.UNAVAILABLE
                 and e.details() == "Server Is Not Ready"
             ):
-                raise NodeIsNotLeader() from e
+                raise NodeIsNotLeader(e) from None
             else:
                 raise handle_rpc_error(e) from None
 

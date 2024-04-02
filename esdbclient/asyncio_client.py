@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import asyncio
-import random
 import sys
 from asyncio import Event, Lock
 from functools import wraps
@@ -15,25 +14,15 @@ from esdbclient.common import (
     GrpcOptions,
 )
 from esdbclient.connection import AsyncioESDBConnection
-from esdbclient.connection_spec import (
-    NODE_PREFERENCE_FOLLOWER,
-    NODE_PREFERENCE_LEADER,
-    NODE_PREFERENCE_RANDOM,
-    NODE_PREFERENCE_REPLICA,
-    URI_SCHEME_ESDB,
-    URI_SCHEME_ESDB_DISCOVER,
-)
+from esdbclient.connection_spec import NODE_PREFERENCE_LEADER, URI_SCHEME_ESDB
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import (
+    DeadlineExceeded,
     DiscoveryFailed,
-    FollowerNotFound,
     GrpcError,
-    LeaderNotFound,
     NodeIsNotLeader,
-    ReadOnlyReplicaNotFound,
     ServiceUnavailable,
 )
-from esdbclient.gossip import NODE_STATE_FOLLOWER, NODE_STATE_LEADER, NODE_STATE_REPLICA
 from esdbclient.streams import (
     AsyncioCatchupSubscription,
     AsyncioReadResponse,
@@ -51,9 +40,15 @@ def autoreconnect(f: _TCallable) -> _TCallable:
         try:
             return await f(client, *args, **kwargs)
 
-        except NodeIsNotLeader:
-            if client.connection_spec.options.NodePreference == NODE_PREFERENCE_LEADER:
-                await client.reconnect()
+        except NodeIsNotLeader as e:
+            if (
+                client.connection_spec.options.NodePreference == NODE_PREFERENCE_LEADER
+                and not (
+                    client.connection_spec.scheme == URI_SCHEME_ESDB
+                    and len(client.connection_spec.targets) == 1
+                )
+            ):
+                await client.reconnect(e.leader_grpc_target)
                 await asyncio.sleep(0.1)
                 return await f(client, *args, **kwargs)
             else:
@@ -104,11 +99,11 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
     async def connect(self) -> None:
         self._connection = await self._connect()
 
-    async def reconnect(self) -> None:
+    async def reconnect(self, grpc_target: Optional[str] = None) -> None:
         self._is_reconnection_required.set()
         async with self._reconnection_lock:
             if self._is_reconnection_required.is_set():
-                new = await self._connect()
+                new = await self._connect(grpc_target)
                 old, self._connection = self._connection, new
                 await old.close()
                 self._is_reconnection_required.clear()
@@ -116,97 +111,60 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
                 # Todo: Test with concurrent writes to wrong node state.
                 pass
 
-    async def _connect(self) -> AsyncioESDBConnection:
-        if self.connection_spec.scheme == URI_SCHEME_ESDB_DISCOVER:
-            cluster_fqdn, _, port = self.connection_spec.targets[0].partition(":")
-            if port == "":
-                port = "2113"
-            return await self._discover_preferred_node(
-                gossip_seed=[f"{cluster_fqdn}:{port}"],
-            )
-
-        else:
-            assert self.connection_spec.scheme == URI_SCHEME_ESDB
-            if len(self.connection_spec.targets) == 1:
-                # Just connect to the specified target.
-                return self._construct_esdb_connection(
-                    grpc_target=self.connection_spec.targets[0],
-                )
-
-            else:
-                # Discover preferred node in cluster.
-                return await self._discover_preferred_node(
-                    gossip_seed=self.connection_spec.targets,
-                )
-
-    async def _discover_preferred_node(
-        self, gossip_seed: Sequence[str]
+    async def _connect(
+        self, grpc_target: Optional[str] = None
     ) -> AsyncioESDBConnection:
+        if grpc_target:
+            # Just connect to the given target.
+            return self._construct_esdb_connection(grpc_target)
+        if (
+            self.connection_spec.scheme == URI_SCHEME_ESDB
+            and len(self.connection_spec.targets) == 1
+        ):
+            # Just connect to the specified target.
+            return self._construct_esdb_connection(
+                grpc_target=self.connection_spec.targets[0],
+            )
+        # Discover preferred node in cluster.
+        return await self._discover_preferred_node()
+
+    async def _discover_preferred_node(self) -> AsyncioESDBConnection:
+        attempts = self.connection_spec.options.MaxDiscoverAttempts
+        assert attempts > 0
         if self.connection_spec.scheme == URI_SCHEME_ESDB:
             grpc_options: GrpcOptions = ()
         else:
             grpc_options = (("grpc.lb_policy_name", "round_robin"),)
-
-        attempts = self.connection_spec.options.MaxDiscoverAttempts
-        assert attempts > 0
         while True:
+            # Attempt to discover preferred node.
             try:
-                # Iterate through the gossip seed...
                 last_exception: Optional[Exception] = None
-                for grpc_target in gossip_seed:
-                    # Construct a connection for reading Gossip API.
+                for grpc_target in self.connection_spec.targets:
                     connection = self._construct_esdb_connection(
                         grpc_target=grpc_target,
                         grpc_options=grpc_options,
                     )
-
-                    # Read Gossip API (get cluster members).
                     try:
                         cluster_members = await connection.gossip.read(
                             timeout=self.connection_spec.options.GossipTimeout,
                             metadata=self._call_metadata,
                             credentials=self._call_credentials,
                         )
-                    except GrpcError as e:
+                    except (GrpcError, DeadlineExceeded) as e:
                         last_exception = e
                         await connection.close()
                     else:
                         break
                 else:
-                    msg = f"Failed to obtain cluster info: {gossip_seed}"
+                    msg = (
+                        "Failed to obtain cluster info from"
+                        f" '{','.join(self.connection_spec.targets)}':"
+                        f" {str(last_exception)}"
+                    )
                     raise DiscoveryFailed(msg) from last_exception
 
-                # Select a node according to node preference.
-                node_preference = self.connection_spec.options.NodePreference
-                if node_preference == NODE_PREFERENCE_LEADER:
-                    leaders = [
-                        c for c in cluster_members if c.state == NODE_STATE_LEADER
-                    ]
-                    if len(leaders) != 1:  # pragma: no cover
-                        # Todo: Somehow cover this with a test.
-                        raise LeaderNotFound(
-                            f"Expected one leader, discovered {len(leaders)}"
-                        )
-                    preferred_member = leaders[0]
-                elif node_preference == NODE_PREFERENCE_FOLLOWER:
-                    followers = [
-                        c for c in cluster_members if c.state == NODE_STATE_FOLLOWER
-                    ]
-                    if len(followers) == 0:
-                        raise FollowerNotFound()
-                    preferred_member = random.choice(followers)
-                elif node_preference == NODE_PREFERENCE_REPLICA:
-                    replicas = [
-                        c for c in cluster_members if c.state == NODE_STATE_REPLICA
-                    ]
-                    if len(replicas) == 0:
-                        raise ReadOnlyReplicaNotFound()
-                    # Todo: Somehow cover this with a test (how to setup a read-only replica?)
-                    preferred_member = random.choice(replicas)  # pragma: no cover
-                else:
-                    assert node_preference == NODE_PREFERENCE_RANDOM
-                    assert len(cluster_members) > 0
-                    preferred_member = random.choice(cluster_members)
+                preferred_member = self._select_preferred_member(cluster_members)
+
             except DiscoveryFailed:
                 attempts -= 1
                 if attempts == 0:
@@ -218,7 +176,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             else:
                 break
 
-        # Maybe close connection and connect to preferred target.
+        # Maybe close connection and connect to preferred node.
         if len(cluster_members) > 1:  # forgive not "advertising" single node
             preferred_target = f"{preferred_member.address}:{preferred_member.port}"
             if preferred_target != connection.grpc_target:

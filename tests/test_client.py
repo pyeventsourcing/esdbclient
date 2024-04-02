@@ -364,14 +364,27 @@ class EventStoreDBClientTestCase(TimedTestCase):
 
 
 class TestEventStoreDBClient(EventStoreDBClientTestCase):
+    def test_context_manager(self) -> None:
+        self.construct_esdb_client()
+        self.assertFalse(self.client.is_closed)
+        with self.client:
+            self.assertFalse(self.client.is_closed)
+        self.assertTrue(self.client.is_closed)
+
     def test_close(self) -> None:
         self.construct_esdb_client()
+        self.assertFalse(self.client.is_closed)
         self.client.close()
+        self.assertTrue(self.client.is_closed)
         self.client.close()
+        self.assertTrue(self.client.is_closed)
 
         self.construct_esdb_client()
+        self.assertFalse(self.client.is_closed)
         self.client.close()
+        self.assertTrue(self.client.is_closed)
         self.client.close()
+        self.assertTrue(self.client.is_closed)
 
     def test_stream_read_raises_not_found(self) -> None:
         # Note, we never get a NotFound from subscribe_to_stream(), which is
@@ -5266,21 +5279,178 @@ class TestRootCertificatesAreRequired(TimedTestCase):
 
 class TestESDBDiscoverScheme(TestCase):
     def test_calls_dns_and_uses_given_port_number_or_default(self) -> None:
-        uri = (
-            "esdb+discover://example.com"
-            "?Tls=false&GossipTimeout=0&DiscoveryInterval=0&MaxDiscoverAttempts=2"
-        )
-        with self.assertRaises(DiscoveryFailed) as cm:
+        # Cluster name not configured in DNS, default port.
+        with self.assertRaises(DiscoveryFailed) as cm1:
+            uri = (
+                "esdb+discover://my-unresolvable-cluster"
+                "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1"
+            )
             EventStoreDBClient(uri)
-        self.assertIn(":2113", str(cm.exception))
+        self.assertIn(":2113", str(cm1.exception))
+        self.assertIn("DNS resolution failed", str(cm1.exception))
+        self.assertNotIn("Deadline Exceeded", str(cm1.exception))
 
-        uri = (
-            "esdb+discover://example.com:9898"
-            "?Tls=false&GossipTimeout=0&DiscoveryInterval=0&MaxDiscoverAttempts=2"
-        )
-        with self.assertRaises(DiscoveryFailed) as cm:
+        # Cluster name not configured in DNS, non-default port.
+        with self.assertRaises(DiscoveryFailed) as cm2:
+            uri = (
+                "esdb+discover://my-unresolvable-cluster:9898"
+                "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1"
+            )
             EventStoreDBClient(uri)
-        self.assertIn(":9898", str(cm.exception))
+        self.assertIn(":9898", str(cm2.exception))
+        self.assertIn("DNS resolution failed", str(cm2.exception))
+        self.assertNotIn("Deadline Exceeded", str(cm2.exception))
+
+        # Name is resolvable but 'service not available' on port 2222.
+        with self.assertRaises(ServiceUnavailable) as cm3:
+            uri = "esdb://localhost:2222?Tls=false"
+            client = EventStoreDBClient(uri)
+            client.read_gossip()
+        self.assertIn("Failed to connect to remote host", str(cm3.exception))
+
+        with self.assertRaises(DiscoveryFailed) as cm4:
+            uri = (
+                "esdb+discover://localhost:2222"
+                "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1"
+            )
+            EventStoreDBClient(uri)
+        self.assertIn(":2222", str(cm4.exception))
+        self.assertIn("Failed to connect to remote host", str(cm4.exception))
+
+        # # Name is resolvable but get no response from example.com:2222.
+        # with self.assertRaises(GrpcDeadlineExceeded) as cm:
+        #     uri = (
+        #         "esdb://example.com:2222"
+        #         "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1&GossipTimeout=1"
+        #     )
+        #     client = EventStoreDBClient(uri)
+        #     client.read_gossip()
+        # self.assertIn("Deadline Exceeded", str(cm.exception))
+        # with self.assertRaises(DiscoveryFailed) as cm:
+        #     uri = (
+        #         "esdb+discover://example.com:2222"
+        #         "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1&GossipTimeout=1"
+        #     )
+        #     EventStoreDBClient(uri)
+        # self.assertIn(":2222", str(cm.exception))
+        # self.assertIn("Deadline Exceeded", str(cm.exception))
+
+        # # Name is resolvable but get no response from example.com:80.
+        # with self.assertRaises(ServiceUnavailable) as cm:
+        #     uri = (
+        #         "esdb://example.com:80"
+        #         "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1&GossipTimeout=1"
+        #     )
+        #     with EventStoreDBClient(uri) as client:
+        #         client.read_gossip()
+        # self.assertIn("No route to host", str(cm.exception))
+        # # self.assertIn("Trying to connect an http1.x server", str(cm.exception))
+        # with self.assertRaises(DiscoveryFailed) as cm:
+        #     uri = (
+        #         "esdb+discover://example.com:80"
+        #         "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1&GossipTimeout=1"
+        #     )
+        #     EventStoreDBClient(uri)
+        #
+        # self.assertIn(":80", str(cm.exception))
+        # # self.assertIn("No route to host", str(cm.exception))
+        # self.assertIn("Trying to connect an http1.x server", str(cm.exception))
+
+        # Discover insecure single-node cluster, connect to leader.
+        uri = (
+            "esdb+discover://localhost:2113"
+            "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1"
+        )
+        client = EventStoreDBClient(uri)
+        stream_name = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        client.append_events(
+            stream_name=stream_name,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2],
+        )
+        self.assertEqual(len(client.get_stream(stream_name)), 2)
+
+        # Discover insecure single-node cluster, but fail to connect to follower.
+        with self.assertRaises(FollowerNotFound):
+            EventStoreDBClient(uri + "&NodePreference=follower")
+
+        # Discover secure single-node cluster, connect to leader.
+        uri = (
+            "esdb+discover://admin:changeit@localhost:2114"
+            "?DiscoveryInterval=0&MaxDiscoverAttempts=1"
+        )
+        root_certificates = get_server_certificate("localhost:2114")
+        client = EventStoreDBClient(uri, root_certificates=root_certificates)
+        stream_name = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        client.append_events(
+            stream_name=stream_name,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2],
+        )
+        self.assertEqual(len(client.get_stream(stream_name)), 2)
+
+        # Discover secure single-node cluster, but fail to connect to follower.
+        with self.assertRaises(FollowerNotFound):
+            EventStoreDBClient(
+                uri + "&NodePreference=follower", root_certificates=root_certificates
+            )
+
+        # In three-node cluster, check at least one node is a follower (not a leader).
+        root_certificates = get_ca_certificate()
+        ports = ["2110", "2111", "2112"]
+        with self.assertRaises(NodeIsNotLeader) as cm5:
+            for port in ports:
+                uri = (
+                    f"esdb://admin:changeit@localhost:{port}?"
+                    "DiscoveryInterval=0&MaxDiscoverAttempts=1&NodePreference=leader"
+                )
+                client = EventStoreDBClient(uri, root_certificates=root_certificates)
+                stream_name = str(uuid4())
+                event1 = NewEvent(type="OrderCreated", data=random_data())
+                event2 = NewEvent(type="OrderUpdated", data=random_data())
+                # The follower will fail to append events, raising NodeIsNotLeader.
+                client.append_events(
+                    stream_name=stream_name,
+                    current_version=StreamState.NO_STREAM,
+                    events=[event1, event2],
+                )
+                self.assertEqual(len(client.get_stream(stream_name)), 2)
+        self.assertIsNotNone(cm5.exception.leader_grpc_target)
+
+        # Discover three-node cluster, getting cluster info from each node in turn,
+        # connect to the leader and connect to a follower, then write to the leader
+        # and read from the follower. Should work for all nodes.
+        for port in ports:
+            uri = (
+                f"esdb+discover://admin:changeit@localhost:{port}?"
+                "DiscoveryInterval=0&MaxDiscoverAttempts=1"
+            )
+            leader = EventStoreDBClient(
+                uri + "&NodePreference=leader", root_certificates=root_certificates
+            )
+            follower = EventStoreDBClient(
+                uri + "&NodePreference=follower", root_certificates=root_certificates
+            )
+            # Write to leader.
+            stream_name = str(uuid4())
+            event1 = NewEvent(type="OrderCreated", data=random_data())
+            event2 = NewEvent(type="OrderUpdated", data=random_data())
+            leader.append_events(
+                stream_name=stream_name,
+                current_version=StreamState.NO_STREAM,
+                events=[event1, event2],
+            )
+            # Read from follower.
+            self.assertEqual(len(follower.get_stream(stream_name)), 2)
+
+    # Todo: Elsewhere, exercise code path where we try to connect to a secure server
+    #  with Tls=false and insecure with Tls=true, and maybe wrap the errors better
+    #  (probably 'socket closed' in description). This is different from getting
+    #  the root certificate wrong, or failing to provide a root certificate.
 
 
 class TestGrpcOptions(TestCase):
