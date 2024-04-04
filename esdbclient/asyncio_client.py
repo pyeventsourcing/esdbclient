@@ -3,13 +3,33 @@ import asyncio
 import sys
 from asyncio import Event, Lock
 from functools import wraps
-from typing import Any, Callable, Iterable, Optional, Sequence, TypeVar, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    Optional,
+    Sequence,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 
 import grpc.aio
+from typing_extensions import Literal
 
 from esdbclient.client import DEFAULT_EXCLUDE_FILTER, BaseEventStoreDBClient
 from esdbclient.common import (
     DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
     DEFAULT_WINDOW_SIZE,
     GrpcOptions,
 )
@@ -22,6 +42,11 @@ from esdbclient.exceptions import (
     GrpcError,
     NodeIsNotLeader,
     ServiceUnavailable,
+)
+from esdbclient.persistent import (
+    AsyncioPersistentSubscription,
+    ConsumerStrategy,
+    SubscriptionInfo,
 )
 from esdbclient.streams import (
     AsyncioCatchupSubscription,
@@ -329,7 +354,10 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
     @autoreconnect
     async def subscribe_to_all(
         self,
+        *,
         commit_position: Optional[int] = None,
+        from_end: bool = False,
+        resolve_links: bool = False,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
@@ -345,6 +373,8 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         """
         return await self._connection.streams.read(
             commit_position=commit_position,
+            from_end=from_end,
+            resolve_links=resolve_links,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
@@ -352,6 +382,74 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             include_checkpoints=include_checkpoints,
             window_size=window_size,
             checkpoint_interval_multiplier=checkpoint_interval_multiplier,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @overload
+    async def subscribe_to_stream(
+        self,
+        stream_name: str,
+        *,
+        resolve_links: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> AsyncioCatchupSubscription:
+        """
+        Signature to start catch-up subscription from the start of the stream.
+        """
+
+    @overload
+    async def subscribe_to_stream(
+        self,
+        stream_name: str,
+        *,
+        stream_position: int,
+        resolve_links: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> AsyncioCatchupSubscription:
+        """
+        Signature to start catch-up subscription from a particular stream position.
+        """
+
+    @overload
+    async def subscribe_to_stream(
+        self,
+        stream_name: str,
+        *,
+        from_end: Literal[True] = True,
+        resolve_links: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> AsyncioCatchupSubscription:
+        """
+        Signature to start catch-up subscription from the end of the stream.
+        """
+
+    @retrygrpc
+    @autoreconnect
+    async def subscribe_to_stream(
+        self,
+        stream_name: str,
+        *,
+        stream_position: Optional[int] = None,
+        from_end: bool = False,
+        resolve_links: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> AsyncioCatchupSubscription:
+        """
+        Starts a catch-up subscription from which
+        recorded events in a stream can be received.
+        """
+        return await self._connection.streams.read(
+            stream_name=stream_name,
+            stream_position=stream_position,
+            from_end=from_end,
+            resolve_links=resolve_links,
+            subscribe=True,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -396,3 +494,568 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
 
     async def close(self) -> None:
         await self._connection.close()
+
+    @overload
+    async def create_subscription_to_all(
+        self,
+        group_name: str,
+        *,
+        resolve_links: bool = False,
+        filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
+        filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for creating persistent subscription from start of database.
+        """
+
+    @overload
+    async def create_subscription_to_all(
+        self,
+        group_name: str,
+        *,
+        commit_position: int,
+        resolve_links: bool = False,
+        filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
+        filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for creating persistent subscription from a commit position.
+        """
+
+    @overload
+    async def create_subscription_to_all(
+        self,
+        group_name: str,
+        *,
+        from_end: bool = True,
+        resolve_links: bool = False,
+        filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
+        filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for creating persistent subscription from end of database.
+        """
+
+    @retrygrpc
+    @autoreconnect
+    async def create_subscription_to_all(
+        self,
+        group_name: str,
+        *,
+        from_end: bool = False,
+        commit_position: Optional[int] = None,
+        resolve_links: bool = False,
+        filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
+        filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
+        window_size: int = DEFAULT_WINDOW_SIZE,
+        checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Creates a persistent subscription on all streams.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        await self._connection.persistent_subscriptions.create(
+            group_name=group_name,
+            from_end=from_end,
+            commit_position=commit_position,
+            resolve_links=resolve_links,
+            consumer_strategy=consumer_strategy,
+            filter_exclude=filter_exclude,
+            filter_include=filter_include,
+            filter_by_stream_name=filter_by_stream_name,
+            window_size=window_size,
+            checkpoint_interval_multiplier=checkpoint_interval_multiplier,
+            message_timeout=message_timeout,
+            max_retry_count=max_retry_count,
+            min_checkpoint_count=min_checkpoint_count,
+            max_checkpoint_count=max_checkpoint_count,
+            max_subscriber_count=max_subscriber_count,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @overload
+    async def create_subscription_to_stream(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        resolve_links: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for creating stream subscription from start of stream.
+        """
+
+    @overload
+    async def create_subscription_to_stream(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        stream_position: int,
+        resolve_links: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for creating stream subscription from stream position.
+        """
+
+    @overload
+    async def create_subscription_to_stream(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        from_end: bool = True,
+        resolve_links: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for creating stream subscription from end of stream.
+        """
+
+    @retrygrpc
+    @autoreconnect
+    async def create_subscription_to_stream(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        from_end: bool = False,
+        stream_position: Optional[int] = None,
+        resolve_links: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Creates a persistent subscription on one stream.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        await self._connection.persistent_subscriptions.create(
+            group_name=group_name,
+            stream_name=stream_name,
+            from_end=from_end,
+            stream_position=stream_position,
+            resolve_links=resolve_links,
+            consumer_strategy=consumer_strategy,
+            message_timeout=message_timeout,
+            max_retry_count=max_retry_count,
+            min_checkpoint_count=min_checkpoint_count,
+            max_checkpoint_count=max_checkpoint_count,
+            max_subscriber_count=max_subscriber_count,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    async def read_subscription_to_all(
+        self,
+        group_name: str,
+        *,
+        event_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE,
+        max_ack_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
+        max_ack_delay: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
+        stopping_grace: float = DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> AsyncioPersistentSubscription:
+        """
+        Reads a persistent subscription on all streams.
+        """
+        return await self._connection.persistent_subscriptions.read(
+            group_name=group_name,
+            event_buffer_size=event_buffer_size,
+            max_ack_batch_size=max_ack_batch_size,
+            max_ack_delay=max_ack_delay,
+            stopping_grace=stopping_grace,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    async def read_subscription_to_stream(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        event_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE,
+        max_ack_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
+        max_ack_delay: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
+        stopping_grace: float = DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> AsyncioPersistentSubscription:
+        """
+        Reads a persistent subscription on one stream.
+        """
+        return await self._connection.persistent_subscriptions.read(
+            group_name=group_name,
+            stream_name=stream_name,
+            event_buffer_size=event_buffer_size,
+            max_ack_batch_size=max_ack_batch_size,
+            max_ack_delay=max_ack_delay,
+            stopping_grace=stopping_grace,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    async def get_subscription_info(
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        *,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> SubscriptionInfo:
+        """
+        Gets info for a persistent subscription.
+        """
+        return await self._connection.persistent_subscriptions.get_info(
+            group_name=group_name,
+            stream_name=stream_name,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    async def list_subscriptions(
+        self,
+        *,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> Sequence[SubscriptionInfo]:
+        """
+        Lists all persistent subscriptions.
+        """
+        return await self._connection.persistent_subscriptions.list(
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    async def list_subscriptions_to_stream(
+        self,
+        stream_name: str,
+        *,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> Sequence[SubscriptionInfo]:
+        """
+        Lists persistent stream subscriptions.
+        """
+        return await self._connection.persistent_subscriptions.list(
+            stream_name=stream_name,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @overload
+    async def update_subscription_to_all(
+        self,
+        group_name: str,
+        *,
+        resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for updating persistent subscription from start of database.
+        """
+
+    @overload
+    async def update_subscription_to_all(
+        self,
+        group_name: str,
+        *,
+        commit_position: int,
+        resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for updating persistent subscription from a commit position.
+        """
+
+    @overload
+    async def update_subscription_to_all(
+        self,
+        group_name: str,
+        *,
+        from_end: bool = True,
+        resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for updating persistent subscription from end of database.
+        """
+
+    @retrygrpc
+    @autoreconnect
+    async def update_subscription_to_all(
+        self,
+        group_name: str,
+        from_end: bool = False,
+        commit_position: Optional[int] = None,
+        resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Updates a persistent subscription on all streams.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        await self._connection.persistent_subscriptions.update(
+            group_name=group_name,
+            from_end=from_end,
+            commit_position=commit_position,
+            resolve_links=resolve_links,
+            message_timeout=message_timeout,
+            max_retry_count=max_retry_count,
+            min_checkpoint_count=min_checkpoint_count,
+            max_checkpoint_count=max_checkpoint_count,
+            max_subscriber_count=max_subscriber_count,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @overload
+    async def update_subscription_to_stream(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for updating stream subscription from start of stream.
+        """
+
+    @overload
+    async def update_subscription_to_stream(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        stream_position: int,
+        resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for updating stream subscription from stream position.
+        """
+
+    @overload
+    async def update_subscription_to_stream(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        from_end: bool = True,
+        resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for updating stream subscription from end of stream.
+        """
+
+    @retrygrpc
+    @autoreconnect
+    async def update_subscription_to_stream(
+        self,
+        group_name: str,
+        stream_name: str,
+        from_end: bool = False,
+        stream_position: Optional[int] = None,
+        resolve_links: bool = False,
+        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Updates a persistent subscription on one stream.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        await self._connection.persistent_subscriptions.update(
+            group_name=group_name,
+            stream_name=stream_name,
+            from_end=from_end,
+            stream_position=stream_position,
+            resolve_links=resolve_links,
+            message_timeout=message_timeout,
+            max_retry_count=max_retry_count,
+            min_checkpoint_count=min_checkpoint_count,
+            max_checkpoint_count=max_checkpoint_count,
+            max_subscriber_count=max_subscriber_count,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    async def replay_parked_events(
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        await self._connection.persistent_subscriptions.replay_parked(
+            group_name=group_name,
+            stream_name=stream_name,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    async def delete_subscription(
+        self,
+        group_name: str,
+        stream_name: Optional[str] = None,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Deletes a persistent subscription.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        await self._connection.persistent_subscriptions.delete(
+            group_name=group_name,
+            stream_name=stream_name,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )

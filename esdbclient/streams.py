@@ -27,10 +27,13 @@ from esdbclient.common import (
     DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
     DEFAULT_WINDOW_SIZE,
     PROTOBUF_MAX_DEADLINE_SECONDS,
+    AsyncGrpcStreamer,
+    AsyncGrpcStreamers,
     ESDBService,
-    GrpcStreamer,
-    GrpcStreamers,
     Metadata,
+    SyncGrpcStreamer,
+    SyncGrpcStreamers,
+    TGrpcStreamers,
     construct_filter_exclude_regex,
     construct_filter_include_regex,
     construct_recorded_event,
@@ -75,7 +78,7 @@ class StreamState(Enum):
     EXISTS = "EXISTS"
 
 
-class BaseReadResponse(GrpcStreamer):
+class BaseReadResponse:
     def __init__(
         self,
         stream_name: Optional[str],
@@ -118,15 +121,21 @@ class BaseReadResponse(GrpcStreamer):
             #   last_stream_position, first_all_stream_position.
 
 
-class AsyncioReadResponse(AsyncIterator[RecordedEvent], BaseReadResponse):
+class AsyncioReadResponse(
+    BaseReadResponse, AsyncGrpcStreamer, AsyncIterator[RecordedEvent]
+):
     def __init__(
         self,
         aio_call: grpc.aio.UnaryStreamCall[streams_pb2.ReadReq, streams_pb2.ReadResp],
         stream_name: Optional[str],
+        grpc_streamers: AsyncGrpcStreamers,
     ):
         super().__init__(stream_name=stream_name)
+        self._is_stopped = False
         self.aio_call = aio_call
         self.read_resp_iter = aio_call.__aiter__()
+        self._grpc_streamers = grpc_streamers
+        self._grpc_streamers[id(self)] = self
 
     def __aiter__(self) -> AsyncIterator[RecordedEvent]:
         return self
@@ -145,7 +154,7 @@ class AsyncioReadResponse(AsyncIterator[RecordedEvent], BaseReadResponse):
                     else:  # pragma: no cover
                         pass
             except Exception:
-                self.stop()
+                await self.stop()
                 raise
 
     async def _get_next_read_resp(self) -> streams_pb2.ReadResp:
@@ -159,8 +168,14 @@ class AsyncioReadResponse(AsyncIterator[RecordedEvent], BaseReadResponse):
             assert isinstance(read_resp, streams_pb2.ReadResp)
             return read_resp
 
-    def stop(self) -> None:
-        self.aio_call.cancel()
+    async def stop(self) -> None:
+        if not self._is_stopped:
+            self.aio_call.cancel()
+            try:
+                self._grpc_streamers.pop(id(self))
+            except KeyError:  # pragma: no cover
+                pass
+            self._is_stopped = True
 
 
 class AsyncioCatchupSubscription(AsyncioReadResponse):
@@ -168,9 +183,12 @@ class AsyncioCatchupSubscription(AsyncioReadResponse):
         self,
         aio_call: grpc.aio.UnaryStreamCall[streams_pb2.ReadReq, streams_pb2.ReadResp],
         stream_name: Optional[str],
+        grpc_streamers: AsyncGrpcStreamers,
         include_checkpoints: bool = False,
     ):
-        super().__init__(aio_call=aio_call, stream_name=stream_name)
+        super().__init__(
+            aio_call=aio_call, stream_name=stream_name, grpc_streamers=grpc_streamers
+        )
         self.include_checkpoints = include_checkpoints
 
     async def check_confirmation(self) -> None:
@@ -188,12 +206,12 @@ class AsyncioCatchupSubscription(AsyncioReadResponse):
                 return recorded_event
 
 
-class ReadResponse(BaseReadResponse, Iterator[RecordedEvent]):
+class ReadResponse(Iterator[RecordedEvent], BaseReadResponse, SyncGrpcStreamer):
     def __init__(
         self,
         read_resps: _ReadResps,
         stream_name: Optional[str],
-        grpc_streamers: GrpcStreamers,
+        grpc_streamers: SyncGrpcStreamers,
     ):
         super().__init__(stream_name=stream_name)
         self._is_stopped = False
@@ -249,7 +267,7 @@ class CatchupSubscription(ReadResponse):
         self,
         read_resps: _ReadResps,
         stream_name: Optional[str],
-        grpc_streamers: GrpcStreamers,
+        grpc_streamers: SyncGrpcStreamers,
         include_checkpoints: bool = False,
     ):
         super().__init__(
@@ -372,12 +390,12 @@ class BatchAppendResponse:
 #         del self
 
 
-class BaseStreamsService(ESDBService):
+class BaseStreamsService(ESDBService[TGrpcStreamers]):
     def __init__(
         self,
         grpc_channel: Union[grpc.Channel, grpc.aio.Channel],
         connection_spec: ConnectionSpec,
-        grpc_streamers: GrpcStreamers,
+        grpc_streamers: TGrpcStreamers,
     ):
         super().__init__(connection_spec=connection_spec, grpc_streamers=grpc_streamers)
         self._stub = streams_pb2_grpc.StreamsStub(grpc_channel)
@@ -708,7 +726,7 @@ class BaseStreamsService(ESDBService):
         return streams_pb2.TombstoneReq(options=options)
 
 
-class AsyncioStreamsService(BaseStreamsService):
+class AsyncioStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
     async def batch_append(
         self,
         stream_name: str,
@@ -769,6 +787,8 @@ class AsyncioStreamsService(BaseStreamsService):
         *,
         stream_name: Optional[str] = None,
         stream_position: Optional[int] = None,
+        from_end: bool = False,
+        resolve_links: bool = False,
         subscribe: Literal[True],
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -784,6 +804,7 @@ class AsyncioStreamsService(BaseStreamsService):
         *,
         commit_position: Optional[int] = None,
         backwards: bool = False,
+        resolve_links: bool = False,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
@@ -801,6 +822,8 @@ class AsyncioStreamsService(BaseStreamsService):
         self,
         *,
         commit_position: Optional[int] = None,
+        from_end: bool = False,
+        resolve_links: bool = False,
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
@@ -822,6 +845,7 @@ class AsyncioStreamsService(BaseStreamsService):
         stream_name: Optional[str] = None,
         stream_position: Optional[int] = None,
         commit_position: Optional[int] = None,
+        from_end: bool = False,
         backwards: bool = False,
         resolve_links: bool = False,
         filter_exclude: Sequence[str] = (),
@@ -847,6 +871,7 @@ class AsyncioStreamsService(BaseStreamsService):
             stream_name=stream_name,
             stream_position=stream_position,
             commit_position=commit_position,
+            from_end=from_end,
             backwards=backwards,
             resolve_links=resolve_links,
             filter_exclude=filter_exclude,
@@ -872,12 +897,14 @@ class AsyncioStreamsService(BaseStreamsService):
             response = AsyncioReadResponse(
                 aio_call=unary_stream_call,
                 stream_name=stream_name,
+                grpc_streamers=self._grpc_streamers,
             )
         else:
             response = AsyncioCatchupSubscription(
                 aio_call=unary_stream_call,
                 stream_name=stream_name,
                 include_checkpoints=include_checkpoints,
+                grpc_streamers=self._grpc_streamers,
             )
             await response.check_confirmation()
         return response
@@ -951,7 +978,7 @@ class AsyncioStreamsService(BaseStreamsService):
             assert isinstance(tombstone_resp, streams_pb2.TombstoneResp)
 
 
-class StreamsService(BaseStreamsService):
+class StreamsService(BaseStreamsService[SyncGrpcStreamers]):
     """
     Encapsulates the 'streams.Streams' gRPC service.
     """

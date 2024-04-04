@@ -10,6 +10,12 @@ class EventStoreDBClientException(Exception):
     """
 
 
+class ProgrammingError(Exception):
+    """
+    Raised when programming errors are encountered.
+    """
+
+
 class GrpcError(EventStoreDBClientException):
     """
     Base class for exceptions raised by gRPC.

@@ -6093,10 +6093,11 @@ class TestConnectToPreferredNode(EventStoreDBClientTestCase):
 class TestSubscriptionReadRequest(TimedTestCase):
     def test_request_ack_after_100_acks(self) -> None:
         read_request = SubscriptionReadReqs("group1")
-        read_request_iter = read_request
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req.options.buffer_size, 100)
+        self.assertEqual(read_request._max_ack_batch_size, 50)
+
+        grpc_read_req_options = next(read_request)
+        self.assertIsInstance(grpc_read_req_options, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req_options.options.buffer_size, 150)
 
         event_ids: List[UUID] = []
         for _ in range(102):
@@ -6104,25 +6105,26 @@ class TestSubscriptionReadRequest(TimedTestCase):
             event_ids.append(event_id)
             read_request.ack(event_id)
         sleep(read_request._max_ack_delay)
-        grpc_read_req1 = next(read_request_iter)
-        grpc_read_req2 = next(read_request_iter)
-        grpc_read_req3 = next(read_request_iter)
+        grpc_read_req1 = next(read_request)
+        grpc_read_req2 = next(read_request)
+        grpc_read_req3 = next(read_request)
         self.assertIsInstance(grpc_read_req1, persistent_pb2.ReadReq)
-        self.assertEqual(len(grpc_read_req1.ack.ids), 1)
+        self.assertEqual(len(grpc_read_req1.ack.ids), 50)
         self.assertEqual(len(grpc_read_req1.nack.ids), 0)
         self.assertIsInstance(grpc_read_req2, persistent_pb2.ReadReq)
-        self.assertEqual(len(grpc_read_req2.ack.ids), 100)
+        self.assertEqual(len(grpc_read_req2.ack.ids), 50)
         self.assertEqual(len(grpc_read_req2.nack.ids), 0)
         self.assertIsInstance(grpc_read_req3, persistent_pb2.ReadReq)
-        self.assertEqual(len(grpc_read_req3.ack.ids), 1)
+        self.assertEqual(len(grpc_read_req3.ack.ids), 2)
         self.assertEqual(len(grpc_read_req3.nack.ids), 0)
 
     def test_request_nack_after_100_nacks(self) -> None:
         read_request = SubscriptionReadReqs("group1")
-        read_request_iter = read_request
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req.options.buffer_size, 100)
+        self.assertEqual(read_request._max_ack_batch_size, 50)
+
+        grpc_read_req_options = next(read_request)
+        self.assertIsInstance(grpc_read_req_options, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req_options.options.buffer_size, 150)
 
         event_ids: List[UUID] = []
         for _ in range(102):
@@ -6130,35 +6132,34 @@ class TestSubscriptionReadRequest(TimedTestCase):
             event_ids.append(event_id)
             read_request.nack(event_id, "park")
         sleep(read_request._max_ack_delay)
-        grpc_read_req1 = next(read_request_iter)
-        grpc_read_req2 = next(read_request_iter)
-        grpc_read_req3 = next(read_request_iter)
+        grpc_read_req1 = next(read_request)
+        grpc_read_req2 = next(read_request)
+        grpc_read_req3 = next(read_request)
         self.assertIsInstance(grpc_read_req1, persistent_pb2.ReadReq)
         self.assertEqual(len(grpc_read_req1.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req1.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req1.nack.ids), 50)
         self.assertIsInstance(grpc_read_req2, persistent_pb2.ReadReq)
         self.assertEqual(len(grpc_read_req2.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req2.nack.ids), 100)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 50)
         self.assertIsInstance(grpc_read_req3, persistent_pb2.ReadReq)
         self.assertEqual(len(grpc_read_req3.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req3.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req3.nack.ids), 2)
 
     def test_request_ack_ack_ack(self) -> None:
         read_request = SubscriptionReadReqs("group1")
         read_request_iter = read_request
         grpc_read_req1 = next(read_request_iter)
         self.assertIsInstance(grpc_read_req1, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req1.options.buffer_size, 100)
+        self.assertEqual(grpc_read_req1.options.buffer_size, 150)
 
         # Do three acks.
         event_id1 = uuid4()
         event_id2 = uuid4()
         event_id3 = uuid4()
         read_request.ack(event_id1)
+        grpc_read_req2 = next(read_request_iter)
         read_request.ack(event_id2)
         read_request.ack(event_id3)
-        sleep(read_request._max_ack_delay)
-        grpc_read_req2 = next(read_request_iter)
         grpc_read_req3 = next(read_request_iter)
         self.assertEqual(len(grpc_read_req2.ack.ids), 1)
         self.assertEqual(len(grpc_read_req2.nack.ids), 0)
@@ -6171,132 +6172,124 @@ class TestSubscriptionReadRequest(TimedTestCase):
     def test_request_nack_unknown_after_max_delay(self) -> None:
         read_request = SubscriptionReadReqs("group1")
         read_request_iter = read_request
-        grpc_read_req1 = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req1, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req1.options.buffer_size, 100)
+        grpc_read_options = next(read_request_iter)
+        self.assertIsInstance(grpc_read_options, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_options.options.buffer_size, 150)
 
         # Do three nack unknown.
         event_id1 = uuid4()
         event_id2 = uuid4()
         event_id3 = uuid4()
         read_request.nack(event_id1, "unknown")
+        grpc_read_req1 = next(read_request_iter)
         read_request.nack(event_id2, "unknown")
         read_request.nack(event_id3, "unknown")
-        sleep(read_request._max_ack_delay)
         grpc_read_req2 = next(read_request_iter)
-        grpc_read_req3 = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req2.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req1.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req1.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 2)
         self.assertEqual(len(grpc_read_req2.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req3.nack.ids), 2)
-        self.assertEqual(len(grpc_read_req3.ack.ids), 0)
-        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id1))
-        self.assertEqual(grpc_read_req3.nack.ids[0].string, str(event_id2))
-        self.assertEqual(grpc_read_req3.nack.ids[1].string, str(event_id3))
+        self.assertEqual(grpc_read_req1.nack.ids[0].string, str(event_id1))
+        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id2))
+        self.assertEqual(grpc_read_req2.nack.ids[1].string, str(event_id3))
         self.assertEqual(
-            grpc_read_req2.nack.action, persistent_pb2.ReadReq.Nack.Unknown
+            grpc_read_req1.nack.action, persistent_pb2.ReadReq.Nack.Unknown
         )
         self.assertEqual(
-            grpc_read_req3.nack.action, persistent_pb2.ReadReq.Nack.Unknown
+            grpc_read_req2.nack.action, persistent_pb2.ReadReq.Nack.Unknown
         )
 
     def test_request_nack_park_after_delay(self) -> None:
         read_request = SubscriptionReadReqs("group1")
-        read_request_iter = read_request
-        grpc_read_req1 = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req1, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req1.options.buffer_size, 100)
+        grpc_read_req_options = next(read_request)
+        self.assertIsInstance(grpc_read_req_options, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req_options.options.buffer_size, 150)
 
         # Do three nack park.
         event_id1 = uuid4()
         event_id2 = uuid4()
         event_id3 = uuid4()
         read_request.nack(event_id1, "park")
+        grpc_read_req1 = next(read_request)
         read_request.nack(event_id2, "park")
         read_request.nack(event_id3, "park")
-        sleep(read_request._max_ack_delay)
-        grpc_read_req2 = next(read_request_iter)
-        grpc_read_req3 = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req2.nack.ids), 1)
+        grpc_read_req2 = next(read_request)
+        self.assertEqual(len(grpc_read_req1.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req1.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 2)
         self.assertEqual(len(grpc_read_req2.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req3.nack.ids), 2)
-        self.assertEqual(len(grpc_read_req3.ack.ids), 0)
-        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id1))
-        self.assertEqual(grpc_read_req3.nack.ids[0].string, str(event_id2))
-        self.assertEqual(grpc_read_req3.nack.ids[1].string, str(event_id3))
+        self.assertEqual(grpc_read_req1.nack.ids[0].string, str(event_id1))
+        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id2))
+        self.assertEqual(grpc_read_req2.nack.ids[1].string, str(event_id3))
+        self.assertEqual(grpc_read_req1.nack.action, persistent_pb2.ReadReq.Nack.Park)
         self.assertEqual(grpc_read_req2.nack.action, persistent_pb2.ReadReq.Nack.Park)
-        self.assertEqual(grpc_read_req3.nack.action, persistent_pb2.ReadReq.Nack.Park)
 
     def test_request_nack_retry_after_max_delay(self) -> None:
         read_request = SubscriptionReadReqs("group1")
-        read_request_iter = read_request
-        grpc_read_req1 = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req1, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req1.options.buffer_size, 100)
+        grpc_read_req_options = next(read_request)
+        self.assertIsInstance(grpc_read_req_options, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req_options.options.buffer_size, 150)
 
         # Do three nack park.
         event_id1 = uuid4()
         event_id2 = uuid4()
         event_id3 = uuid4()
         read_request.nack(event_id1, "retry")
+        grpc_read_req1 = next(read_request)
         read_request.nack(event_id2, "retry")
         read_request.nack(event_id3, "retry")
-        sleep(read_request._max_ack_delay)
-        grpc_read_req2 = next(read_request_iter)
-        grpc_read_req3 = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req2.nack.ids), 1)
+        grpc_read_req2 = next(read_request)
+        self.assertEqual(len(grpc_read_req1.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req1.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 2)
         self.assertEqual(len(grpc_read_req2.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req3.nack.ids), 2)
-        self.assertEqual(len(grpc_read_req3.ack.ids), 0)
-        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id1))
-        self.assertEqual(grpc_read_req3.nack.ids[0].string, str(event_id2))
-        self.assertEqual(grpc_read_req3.nack.ids[1].string, str(event_id3))
+        self.assertEqual(grpc_read_req1.nack.ids[0].string, str(event_id1))
+        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id2))
+        self.assertEqual(grpc_read_req2.nack.ids[1].string, str(event_id3))
+        self.assertEqual(grpc_read_req1.nack.action, persistent_pb2.ReadReq.Nack.Retry)
         self.assertEqual(grpc_read_req2.nack.action, persistent_pb2.ReadReq.Nack.Retry)
-        self.assertEqual(grpc_read_req3.nack.action, persistent_pb2.ReadReq.Nack.Retry)
 
     def test_request_nack_skip_after_100ms(self) -> None:
         read_request = SubscriptionReadReqs("group1")
-        read_request_iter = read_request
-        grpc_read_req1 = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req1, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req1.options.buffer_size, 100)
+        grpc_read_req_options = next(read_request)
+        self.assertIsInstance(grpc_read_req_options, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req_options.options.buffer_size, 150)
 
         # Do three nack park.
         event_id1 = uuid4()
         event_id2 = uuid4()
         event_id3 = uuid4()
         read_request.nack(event_id1, "skip")
+        grpc_read_req1 = next(read_request)
         read_request.nack(event_id2, "skip")
         read_request.nack(event_id3, "skip")
         sleep(read_request._max_ack_delay)
-        grpc_read_req2 = next(read_request_iter)
-        grpc_read_req3 = next(read_request_iter)
-        self.assertEqual(len(grpc_read_req2.nack.ids), 1)
+        grpc_read_req2 = next(read_request)
+        self.assertEqual(len(grpc_read_req1.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req1.ack.ids), 0)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 2)
         self.assertEqual(len(grpc_read_req2.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req3.nack.ids), 2)
-        self.assertEqual(len(grpc_read_req3.ack.ids), 0)
-        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id1))
-        self.assertEqual(grpc_read_req3.nack.ids[0].string, str(event_id2))
-        self.assertEqual(grpc_read_req3.nack.ids[1].string, str(event_id3))
+        self.assertEqual(grpc_read_req1.nack.ids[0].string, str(event_id1))
+        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id2))
+        self.assertEqual(grpc_read_req2.nack.ids[1].string, str(event_id3))
+        self.assertEqual(grpc_read_req1.nack.action, persistent_pb2.ReadReq.Nack.Skip)
         self.assertEqual(grpc_read_req2.nack.action, persistent_pb2.ReadReq.Nack.Skip)
-        self.assertEqual(grpc_read_req3.nack.action, persistent_pb2.ReadReq.Nack.Skip)
 
     def test_request_nack_stop_after_max_delay(self) -> None:
         read_request = SubscriptionReadReqs("group1")
-        read_request_iter = read_request
-        grpc_read_req1 = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req1, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req1.options.buffer_size, 100)
+        grpc_read_options = next(read_request)
+        self.assertIsInstance(grpc_read_options, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_options.options.buffer_size, 150)
 
         # Do three nack park.
         event_id1 = uuid4()
         event_id2 = uuid4()
         event_id3 = uuid4()
         read_request.nack(event_id1, "stop")
+        grpc_read_req2 = next(read_request)
         read_request.nack(event_id2, "stop")
         read_request.nack(event_id3, "stop")
-        sleep(read_request._max_ack_delay)
-        grpc_read_req2 = next(read_request_iter)
-        grpc_read_req3 = next(read_request_iter)
+        grpc_read_req3 = next(read_request)
         self.assertEqual(len(grpc_read_req2.nack.ids), 1)
         self.assertEqual(len(grpc_read_req2.ack.ids), 0)
         self.assertEqual(len(grpc_read_req3.nack.ids), 2)
@@ -6309,23 +6302,20 @@ class TestSubscriptionReadRequest(TimedTestCase):
 
     def test_request_ack_ack_nack(self) -> None:
         read_request = SubscriptionReadReqs("group1")
-        read_request_iter = read_request
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req.options.buffer_size, 100)
+        grpc_read_req_options = next(read_request)
+        self.assertIsInstance(grpc_read_req_options, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req_options.options.buffer_size, 150)
 
         event_id1 = uuid4()
         event_id2 = uuid4()
         event_id3 = uuid4()
         read_request.ack(event_id1)
+        grpc_read_req1 = next(read_request)
         read_request.ack(event_id2)
         read_request.nack(event_id3, "park")
 
-        sleep(read_request._max_ack_delay)
-
-        grpc_read_req1 = next(read_request_iter)
-        grpc_read_req2 = next(read_request_iter)
-        grpc_read_req3 = next(read_request_iter)
+        grpc_read_req2 = next(read_request)
+        grpc_read_req3 = next(read_request)
         self.assertEqual(len(grpc_read_req1.ack.ids), 1)
         self.assertEqual(len(grpc_read_req1.nack.ids), 0)
         self.assertEqual(grpc_read_req1.ack.ids[0].string, str(event_id1))
@@ -6340,10 +6330,9 @@ class TestSubscriptionReadRequest(TimedTestCase):
 
     def test_request_nack_nack_ack(self) -> None:
         read_request = SubscriptionReadReqs("group1")
-        read_request_iter = read_request
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req.options.buffer_size, 100)
+        grpc_read_req_options = next(read_request)
+        self.assertIsInstance(grpc_read_req_options, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req_options.options.buffer_size, 150)
 
         event_id1 = uuid4()
         event_id2 = uuid4()
@@ -6352,29 +6341,22 @@ class TestSubscriptionReadRequest(TimedTestCase):
         read_request.nack(event_id2, "park")
         read_request.ack(event_id3)
 
-        sleep(read_request._max_ack_delay)
-
-        grpc_read_req1 = next(read_request_iter)
-        grpc_read_req2 = next(read_request_iter)
-        grpc_read_req3 = next(read_request_iter)
+        grpc_read_req1 = next(read_request)
+        grpc_read_req2 = next(read_request)
         self.assertEqual(len(grpc_read_req1.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req1.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req1.nack.ids), 2)
         self.assertEqual(grpc_read_req1.nack.ids[0].string, str(event_id1))
+        self.assertEqual(grpc_read_req1.nack.ids[1].string, str(event_id2))
 
-        self.assertEqual(len(grpc_read_req2.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req2.nack.ids), 1)
-        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id2))
-
-        self.assertEqual(len(grpc_read_req3.ack.ids), 1)
-        self.assertEqual(len(grpc_read_req3.nack.ids), 0)
-        self.assertEqual(grpc_read_req3.ack.ids[0].string, str(event_id3))
+        self.assertEqual(len(grpc_read_req2.ack.ids), 1)
+        self.assertEqual(len(grpc_read_req2.nack.ids), 0)
+        self.assertEqual(grpc_read_req2.ack.ids[0].string, str(event_id3))
 
     def test_request_nack_after_nack_followed_by_nack_with_other_action(self) -> None:
         read_request = SubscriptionReadReqs("group1")
-        read_request_iter = read_request
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req.options.buffer_size, 100)
+        grpc_read_req_options = next(read_request)
+        self.assertIsInstance(grpc_read_req_options, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req_options.options.buffer_size, 150)
 
         event_id1 = uuid4()
         event_id2 = uuid4()
@@ -6383,32 +6365,24 @@ class TestSubscriptionReadRequest(TimedTestCase):
         read_request.nack(event_id2, "park")
         read_request.nack(event_id3, "skip")
 
-        sleep(read_request._max_ack_delay)
-
-        grpc_read_req1 = next(read_request_iter)
-        grpc_read_req2 = next(read_request_iter)
-        grpc_read_req3 = next(read_request_iter)
+        grpc_read_req1 = next(read_request)
+        grpc_read_req2 = next(read_request)
         self.assertEqual(len(grpc_read_req1.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req1.nack.ids), 1)
+        self.assertEqual(len(grpc_read_req1.nack.ids), 2)
         self.assertEqual(grpc_read_req1.nack.ids[0].string, str(event_id1))
+        self.assertEqual(grpc_read_req1.nack.ids[1].string, str(event_id2))
         self.assertEqual(grpc_read_req1.nack.action, persistent_pb2.ReadReq.Nack.Park)
 
         self.assertEqual(len(grpc_read_req2.ack.ids), 0)
         self.assertEqual(len(grpc_read_req2.nack.ids), 1)
-        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id2))
-        self.assertEqual(grpc_read_req2.nack.action, persistent_pb2.ReadReq.Nack.Park)
-
-        self.assertEqual(len(grpc_read_req3.ack.ids), 0)
-        self.assertEqual(len(grpc_read_req3.nack.ids), 1)
-        self.assertEqual(grpc_read_req3.nack.ids[0].string, str(event_id3))
-        self.assertEqual(grpc_read_req3.nack.action, persistent_pb2.ReadReq.Nack.Skip)
+        self.assertEqual(grpc_read_req2.nack.ids[0].string, str(event_id3))
+        self.assertEqual(grpc_read_req2.nack.action, persistent_pb2.ReadReq.Nack.Skip)
 
     def test_request_iter_stop(self) -> None:
         read_request = SubscriptionReadReqs("group1")
-        read_request_iter = read_request
-        grpc_read_req = next(read_request_iter)
-        self.assertIsInstance(grpc_read_req, grpc_persistent.ReadReq)
-        self.assertEqual(grpc_read_req.options.buffer_size, 100)
+        grpc_read_req_options = next(read_request)
+        self.assertIsInstance(grpc_read_req_options, grpc_persistent.ReadReq)
+        self.assertEqual(grpc_read_req_options.options.buffer_size, 150)
 
         event_id1 = uuid4()
         event_id2 = uuid4()
@@ -6423,13 +6397,13 @@ class TestSubscriptionReadRequest(TimedTestCase):
 
         while True:
             try:
-                grpc_read_req1 = next(read_request_iter)
+                grpc_read_req1 = next(read_request)
             except StopIteration:
                 break
 
         thread.join()
 
-        self.assertEqual(len(grpc_read_req1.ack.ids), 2)
+        self.assertEqual(len(grpc_read_req1.ack.ids), 3)
         self.assertEqual(len(grpc_read_req1.nack.ids), 0)
 
 

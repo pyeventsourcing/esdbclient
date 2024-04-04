@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import datetime
 from dataclasses import dataclass, field
 from typing import Optional
 from uuid import UUID, uuid4
@@ -40,6 +41,7 @@ class RecordedEvent:
     commit_position: Optional[int]
     retry_count: Optional[int] = None
     link: Optional["RecordedEvent"] = None
+    recorded_at: Optional[datetime.datetime] = None
 
     @property
     def ack_id(self) -> UUID:

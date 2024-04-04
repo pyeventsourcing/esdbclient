@@ -2280,7 +2280,9 @@ has an `item` argument which can be either a `RecordedEvent` or a `UUID`. If you
 in a `RecordedEvent`, the value of its `ack_id` attribute will be used to acknowledge
 the event to the server. If you pass in a UUID, then used the value of the `ack_id`
 of the `RecordedEvent` that is being acknowledged, in case the event has been resolved
-from a link event.
+from a link event (which can happen both when persistent subscription setting
+`resolve_links` is `True` and also when replaying parked events regardless of the
+`resolve_links` setting).
 
 The example below iterates over the subscription object, and calls `ack()` with the
 received `RecordedEvent` objects. The subscription's `stop()` method is called when

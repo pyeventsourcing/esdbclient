@@ -3,6 +3,7 @@ import asyncio
 import sys
 from typing import Optional
 
+from esdbclient.persistent import AsyncioSubscriptionReadReqs
 from esdbclient.streams import AsyncioCatchupSubscription
 from tests.test_client import TimedTestCase, get_ca_certificate, random_data
 
@@ -20,10 +21,12 @@ from esdbclient.asyncio_client import (
 )
 from esdbclient.exceptions import (
     DiscoveryFailed,
+    ExceptionIteratingRequests,
     FollowerNotFound,
     GrpcDeadlineExceeded,
     NodeIsNotLeader,
     NotFound,
+    ProgrammingError,
     ReadOnlyReplicaNotFound,
     ServiceUnavailable,
     StreamIsDeleted,
@@ -490,7 +493,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         async for event in catchup_subscription:
             events.append(event)
             if event.id == event2.id:
-                catchup_subscription.stop()
+                await catchup_subscription.stop()
         self.assertEqual(events[-2].id, event1.id)
         self.assertEqual(events[-1].id, event2.id)
 
@@ -522,19 +525,589 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 async for event in catchup_subscription:
                     events.append(event)
                     if event.id == event2.id:
-                        catchup_subscription.stop()
+                        await catchup_subscription.stop()
 
         await asyncio.gather(Worker(self.client).run(), Worker(self.client).run())
 
     async def test_subscribe_to_all_reconnects(self) -> None:
-        # Reconstruct connection with wrong port (to inspire ServiceUnavailble).
-        await self.client._connection.close()
-        self.client._connection = self.client._construct_esdb_connection(
-            "localhost:2222"
-        )
-
+        # Reconstruct connection with wrong port (to inspire UsageError).
+        await self.client.close()
         catchup_subscription = await self.client.subscribe_to_all()
         self.assertIsInstance(catchup_subscription, AsyncioCatchupSubscription)
+
+        # Reconstruct connection with wrong port (to inspire ServiceUnavailble).
+        self.client._connection = self.client._construct_esdb_connection(
+            "localhost:22222"
+        )
+        catchup_subscription = await self.client.subscribe_to_all()
+        self.assertIsInstance(catchup_subscription, AsyncioCatchupSubscription)
+
+    async def test_subscribe_to_stream(self) -> None:
+        # Append events.
+        stream_name1 = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=b"{}")
+        await self.client.append_events(
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        stream_name2 = str(uuid4())
+        event2 = NewEvent(type="OrderCreated", data=b"{}")
+        await self.client.append_events(
+            stream_name=stream_name2,
+            events=[event2],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        # Subscribe to stream1.
+        catchup_subscription = await self.client.subscribe_to_stream(stream_name1)
+        events = []
+        async for event in catchup_subscription:
+            events.append(event)
+            if event.id == event1.id:
+                await catchup_subscription.stop()
+        self.assertEqual(events[-1].id, event1.id)
+
+        # Subscribe to stream2.
+        catchup_subscription = await self.client.subscribe_to_stream(stream_name2)
+        events = []
+        async for event in catchup_subscription:
+            events.append(event)
+            if event.id == event2.id:
+                await catchup_subscription.stop()
+        self.assertEqual(events[-1].id, event2.id)
+
+    async def test_persistent_subscription_to_all(self) -> None:
+        # Check subscription does not exist.
+        group_name = str(uuid4())
+        with self.assertRaises(NotFound):
+            await self.client.get_subscription_info(group_name)
+
+        # Create subscription.
+        await self.client.create_subscription_to_all(group_name, from_end=True)
+
+        # Append events.
+        stream_name1 = str(uuid4())
+        event1 = NewEvent(type="OrderCreated1", data=b"{}")
+        # print("Event1: ", event1.id)
+        await self.client.append_events(
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        stream_name2 = str(uuid4())
+        event2 = NewEvent(type="OrderCreated2", data=b"{}")
+        #         print("Event2: ", event2.id)
+        await self.client.append_events(
+            stream_name=stream_name2,
+            events=[event2],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        # Read subscription - error iterating requests is propagated.
+        persistent_subscription = await self.client.read_subscription_to_all(group_name)
+        with self.assertRaises(ExceptionIteratingRequests):
+            async for event in persistent_subscription:
+                #                 print(event.id, event.retry_count, event.recorded_at)
+                await persistent_subscription.ack("a")  # type: ignore[arg-type]
+                # await persistent_subscription.ack(event)
+                # if event.id == event2.id:
+                #     await persistent_subscription.stop()
+
+        # Read subscription - success.
+        persistent_subscription = await self.client.read_subscription_to_all(group_name)
+        events = []
+        async for event in persistent_subscription:
+            #             print(event.id, event.retry_count, event.recorded_at)
+            events.append(event)
+            await persistent_subscription.ack(event)
+            if event.id == event2.id:
+                await persistent_subscription.stop()
+
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[-2].id, event1.id)
+        self.assertEqual(events[-1].id, event2.id)
+
+        # Replay parked.
+        # - append more events
+        stream_name3 = str(uuid4())
+        event3 = NewEvent(type="OrderCreated3", data=b"{}")
+        #         print("Event3: ", event3.id)
+        await self.client.append_events(
+            stream_name=stream_name3,
+            events=[event3],
+            current_version=StreamState.NO_STREAM,
+        )
+        stream_name4 = str(uuid4())
+        event4 = NewEvent(type="OrderCreated4", data=b"{}")
+        #         print("Event4: ", event4.id)
+        await self.client.append_events(
+            stream_name=stream_name4,
+            events=[event4],
+            current_version=StreamState.NO_STREAM,
+        )
+        # - retry events
+        #         print("Nack with retry")
+        events = []
+        persistent_subscription = await self.client.read_subscription_to_all(group_name)
+        async for event in persistent_subscription:
+            #             print(event.id, event.retry_count, event.recorded_at)
+            events.append(event)
+            if event.id in [event3.id, event4.id]:
+                await persistent_subscription.nack(event, "retry")
+            else:
+                await persistent_subscription.ack(event)
+            if event.id == event4.id:
+                await persistent_subscription.stop()
+
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[-2].id, event3.id)
+        self.assertEqual(events[-1].id, event4.id)
+
+        # - park events
+        #         print("Nack with park")
+        events = []
+        persistent_subscription = await self.client.read_subscription_to_all(group_name)
+        async for event in persistent_subscription:
+            #             print(event.id, event.retry_count, event.recorded_at)
+            events.append(event)
+            if event.id in [event3.id, event4.id]:
+                await persistent_subscription.nack(event, "park")
+            else:
+                await persistent_subscription.ack(event)
+            if event.id == event4.id:
+                await persistent_subscription.stop()
+
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[-2].id, event3.id)
+        self.assertEqual(events[-1].id, event4.id)
+
+        # - call replay_parked_events()
+        await self.client.replay_parked_events(group_name=group_name)
+
+        # - continue iterating over subscription
+        #         print("Sleeping")
+        await asyncio.sleep(1)
+        #         print("Blah blah blah")
+        events = []
+        persistent_subscription = await self.client.read_subscription_to_all(group_name)
+        async for event in persistent_subscription:
+            #             print(event.id, event.retry_count, event.recorded_at)
+            events.append(event)
+            await persistent_subscription.ack(event)
+            if event.id == event4.id:
+                # break
+                await persistent_subscription.stop()
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[-2].id, event3.id)
+        self.assertEqual(events[-1].id, event4.id)
+
+        # Get subscription info.
+        info = await self.client.get_subscription_info(group_name)
+        self.assertEqual(info.group_name, group_name)
+        self.assertFalse(info.resolve_link_tos)
+
+        # Update subscription.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, resolve_links=True
+        )
+        info = await self.client.get_subscription_info(group_name)
+        self.assertTrue(info.resolve_link_tos)
+
+        # List subscriptions.
+        subscription_infos = await self.client.list_subscriptions()
+        for subscription_info in subscription_infos:
+            if subscription_info.group_name == group_name:
+                break
+        else:
+            self.fail("Subscription not found in list")
+
+        # Delete subscription.
+        await self.client.delete_subscription(group_name=group_name)
+        with self.assertRaises(NotFound):
+            await self.client.read_subscription_to_all(group_name)
+
+        subscription_infos = await self.client.list_subscriptions()
+        for subscription_info in subscription_infos:
+            if subscription_info.group_name == group_name:
+                self.fail("Subscription found in list")
+
+        # - raises NotFound
+        with self.assertRaises(NotFound):
+            await self.client.read_subscription_to_all(group_name)
+        with self.assertRaises(NotFound):
+            await self.client.update_subscription_to_all(group_name)
+        with self.assertRaises(NotFound):
+            await self.client.get_subscription_info(group_name)
+        with self.assertRaises(NotFound):
+            await self.client.replay_parked_events(group_name)
+
+    async def test_persistent_subscription_to_stream(self) -> None:
+        # Check subscription does not exist.
+        group_name = str(uuid4())
+        stream_name1 = str(uuid4())
+        stream_name2 = str(uuid4())
+        with self.assertRaises(NotFound):
+            await self.client.get_subscription_info(group_name, stream_name1)
+
+        # Create subscription.
+        await self.client.create_subscription_to_stream(group_name, stream_name1)
+        await self.client.create_subscription_to_stream(group_name, stream_name2)
+
+        # Append events.
+        event1 = NewEvent(type="OrderCreated1", data=b"{}")
+        await self.client.append_events(
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        event2 = NewEvent(type="OrderCreated2", data=b"{}")
+        await self.client.append_events(
+            stream_name=stream_name2,
+            events=[event2],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        # Read subscription - error iterating requests is propagated.
+        subscription = await self.client.read_subscription_to_stream(
+            group_name, stream_name1
+        )
+        with self.assertRaises(ExceptionIteratingRequests):
+            async for _ in subscription:
+                #                 print(event.id, event.retry_count, event.recorded_at)
+                await subscription.ack("a")  # type: ignore[arg-type]
+                # await persistent_subscription.ack(event)
+                # if event.id == event2.id:
+                #     await persistent_subscription.stop()
+
+        # Read subscription - success.
+        subscription = await self.client.read_subscription_to_stream(
+            group_name, stream_name1
+        )
+        events = []
+        async for event in subscription:
+            #             print(event.id, event.retry_count, event.recorded_at)
+            events.append(event)
+            await subscription.ack(event)
+            if event.id == event1.id:
+                await subscription.stop()
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[-1].id, event1.id)
+
+        subscription = await self.client.read_subscription_to_stream(
+            group_name, stream_name2
+        )
+        events = []
+        async for event in subscription:
+            #             print(event.id, event.retry_count, event.recorded_at)
+            events.append(event)
+            await subscription.ack(event)
+            if event.id == event2.id:
+                await subscription.stop()
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[-1].id, event2.id)
+
+        # Replay parked.
+        # - append more events
+        event3 = NewEvent(type="OrderCreated3", data=b"{}")
+        await self.client.append_events(
+            stream_name=stream_name1,
+            events=[event3],
+            current_version=0,
+        )
+        event4 = NewEvent(type="OrderCreated4", data=b"{}")
+        await self.client.append_events(
+            stream_name=stream_name2,
+            events=[event4],
+            current_version=0,
+        )
+        # - retry events
+        #         print("Nack with retry")
+        events = []
+        subscription = await self.client.read_subscription_to_stream(
+            group_name, stream_name1
+        )
+        async for event in subscription:
+            #             print(event.id, event.retry_count, event.recorded_at)
+            events.append(event)
+            if event.id == event3.id:
+                await subscription.nack(event, "retry")
+                await subscription.stop()
+            else:
+                await subscription.ack(event)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[-1].id, event3.id)
+
+        # - park events
+        events = []
+        subscription = await self.client.read_subscription_to_stream(
+            group_name, stream_name1
+        )
+        async for event in subscription:
+            events.append(event)
+            if event.id == event3.id:
+                await subscription.nack(event, "park")
+                await subscription.stop()
+            else:
+                await subscription.ack(event)
+
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[-1].id, event3.id)
+
+        # - call replay_parked_events()
+        await self.client.replay_parked_events(group_name, stream_name1)
+
+        # - continue iterating over subscription
+        events = []
+        subscription = await self.client.read_subscription_to_stream(
+            group_name, stream_name1
+        )
+        async for event in subscription:
+            events.append(event)
+            await subscription.ack(event)
+            if event.id == event3.id:
+                await subscription.stop()
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[-1].id, event3.id)
+
+        # Get subscription info.
+        info = await self.client.get_subscription_info(group_name, stream_name1)
+        self.assertEqual(info.group_name, group_name)
+        self.assertEqual(info.event_source, stream_name1)
+        self.assertFalse(info.resolve_link_tos)
+
+        # Update subscription.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name1, resolve_links=True
+        )
+        info = await self.client.get_subscription_info(group_name, stream_name1)
+        self.assertTrue(info.resolve_link_tos)
+
+        # List subscriptions.
+        subscription_infos = await self.client.list_subscriptions()
+        for subscription_info in subscription_infos:
+            if (
+                subscription_info.group_name == group_name
+                and subscription_info.event_source == stream_name1
+            ):
+                break
+        else:
+            self.fail("Subscription not found in list")
+
+        # Delete subscription.
+        await self.client.delete_subscription(group_name, stream_name1)
+
+        subscription_infos = await self.client.list_subscriptions()
+        for subscription_info in subscription_infos:
+            if (
+                subscription_info.group_name == group_name
+                and subscription_info.event_source == stream_name1
+            ):
+                self.fail("Subscription found in list")
+
+        # - raises NotFound
+        with self.assertRaises(NotFound):
+            await self.client.read_subscription_to_stream(group_name, stream_name1)
+        with self.assertRaises(NotFound):
+            await self.client.update_subscription_to_stream(group_name, stream_name1)
+        with self.assertRaises(NotFound):
+            await self.client.get_subscription_info(group_name, stream_name1)
+        with self.assertRaises(NotFound):
+            await self.client.replay_parked_events(group_name, stream_name1)
+        subscription_infos = await self.client.list_subscriptions_to_stream(
+            str(uuid4())
+        )
+        self.assertEqual(subscription_infos, [])
+
+    async def test_persistent_subscription_raises_node_is_not_leader(self) -> None:
+        await self.setup_reader()
+        await self.setup_writer()
+
+        group_name = str(uuid4())
+        stream_name1 = str(uuid4())
+        with self.assertRaises(NodeIsNotLeader):
+            await self.reader.get_subscription_info(group_name, stream_name1)
+
+        with self.assertRaises(NodeIsNotLeader):
+            await self.reader.list_subscriptions()
+
+        with self.assertRaises(NodeIsNotLeader):
+            await self.reader.list_subscriptions_to_stream(stream_name1)
+
+        with self.assertRaises(NodeIsNotLeader):
+            await self.reader.create_subscription_to_stream(group_name, stream_name1)
+
+        with self.assertRaises(NodeIsNotLeader):
+            await self.reader.create_subscription_to_all(group_name)
+
+        with self.assertRaises(NodeIsNotLeader):
+            await self.reader.update_subscription_to_stream(group_name, stream_name1)
+
+        with self.assertRaises(NodeIsNotLeader):
+            await self.reader.read_subscription_to_all(group_name)
+
+        with self.assertRaises(NodeIsNotLeader):
+            await self.reader.read_subscription_to_stream(group_name, stream_name1)
+
+        with self.assertRaises(NodeIsNotLeader):
+            await self.reader.update_subscription_to_all(group_name)
+
+        # Todo: This doesn't hang...
+        await self.writer.create_subscription_to_all(group_name)
+        await self.writer.replay_parked_events(group_name)
+        # Todo: ...but this just hangs?
+        # with self.assertRaises(NodeIsNotLeader):
+        #     await self.reader.replay_parked_events(group_name)
+
+        with self.assertRaises(NodeIsNotLeader):
+            await self.reader.delete_subscription(group_name)
+
+    async def test_persistent_subscription_raises_deadline_exceeded(self) -> None:
+        group_name = str(uuid4())
+        stream_name1 = str(uuid4())
+
+        await self.client.create_subscription_to_all(group_name)
+        await self.client.create_subscription_to_stream(group_name, stream_name1)
+
+        with self.assertRaises(GrpcDeadlineExceeded):
+            await self.client.get_subscription_info(group_name, stream_name1, timeout=0)
+
+        with self.assertRaises(GrpcDeadlineExceeded):
+            await self.client.list_subscriptions(timeout=0)
+
+        with self.assertRaises(GrpcDeadlineExceeded):
+            await self.client.list_subscriptions_to_stream(stream_name1, timeout=0)
+
+        with self.assertRaises(GrpcDeadlineExceeded):
+            await self.client.create_subscription_to_stream(
+                group_name, stream_name1, timeout=0
+            )
+
+        with self.assertRaises(GrpcDeadlineExceeded):
+            await self.client.create_subscription_to_all(group_name, timeout=0)
+
+        with self.assertRaises(GrpcDeadlineExceeded):
+            await self.client.update_subscription_to_stream(
+                group_name, stream_name1, timeout=0
+            )
+
+        # Todo: This hangs....
+        # with self.assertRaises(GrpcDeadlineExceeded):
+        #     await self.client.read_subscription_to_all(group_name, timeout=0)
+        #
+        # Todo: This hangs....
+        # with self.assertRaises(GrpcDeadlineExceeded):
+        #     await self.client.read_subscription_to_stream(group_name, stream_name1, timeout=0)
+
+        with self.assertRaises(GrpcDeadlineExceeded):
+            await self.client.update_subscription_to_all(group_name, timeout=0)
+
+        with self.assertRaises(GrpcDeadlineExceeded):
+            await self.client.replay_parked_events(group_name, timeout=0)
+
+        with self.assertRaises(GrpcDeadlineExceeded):
+            await self.client.delete_subscription(group_name, timeout=0)
+
+    async def test_persistent_subscription_reconnects_closed_connection(self) -> None:
+        group_name = str(uuid4())
+        stream_name1 = str(uuid4())
+        await self.client._connection.close()
+        await self.client.create_subscription_to_all(group_name)
+
+        await self.client._connection.close()
+        await self.client.create_subscription_to_stream(group_name, stream_name1)
+
+        await self.client._connection.close()
+        await self.client.get_subscription_info(group_name, stream_name1)
+
+        await self.client._connection.close()
+        await self.client.list_subscriptions()
+
+        await self.client._connection.close()
+        await self.client.list_subscriptions_to_stream(stream_name1)
+
+        await self.client._connection.close()
+        await self.client.update_subscription_to_all(group_name)
+
+        await self.client._connection.close()
+        await self.client.update_subscription_to_stream(group_name, stream_name1)
+
+        await self.client._connection.close()
+        await self.client.replay_parked_events(group_name)
+
+        await self.client._connection.close()
+        s = await self.client.read_subscription_to_all(group_name)
+        await s.stop()
+
+        await self.client._connection.close()
+        s = await self.client.read_subscription_to_stream(group_name, stream_name1)
+        await s.stop()
+
+        await self.client._connection.close()
+        await self.client.delete_subscription(group_name)
+
+        await self.client._connection.close()
+        await self.client.delete_subscription(group_name, stream_name1)
+
+    async def test_persistent_subscription_stop_called_twice(self) -> None:
+        group_name = str(uuid4())
+        await self.client._connection.close()
+        await self.client.create_subscription_to_all(group_name)
+        s = await self.client.read_subscription_to_all(group_name)
+        await s.stop()
+        self.assertTrue(s._is_stopped)
+        await s.stop()
+        self.assertTrue(s._is_stopped)
+
+    async def test_persistent_subscription_raises_programming_error(self) -> None:
+        group_name = str(uuid4())
+        await self.client._connection.close()
+        await self.client.create_subscription_to_all(group_name)
+        s = await self.client.read_subscription_to_all(group_name)
+        await s.stop()
+        with self.assertRaises(ProgrammingError):
+            await s.ack(uuid4())
+        with self.assertRaises(ProgrammingError):
+            await s.nack(uuid4(), "retry")
+
+    async def test_persistent_subscription_sends_acks(self) -> None:
+        reqs = AsyncioSubscriptionReadReqs("group1", max_ack_batch_size=3)
+        await reqs.__anext__()  # options req
+        await reqs.ack(uuid4())
+        req1 = await reqs.__anext__()  # send after queue timeout
+        self.assertEqual(len(req1.ack.ids), 1)
+        await reqs.ack(uuid4())
+        await reqs.ack(uuid4())
+        await reqs.ack(uuid4())
+        req2 = await reqs.__anext__()  # send when batch full
+        self.assertEqual(len(req2.ack.ids), 3)
+        await reqs.ack(uuid4())
+        await reqs.nack(uuid4(), "retry")
+        req3 = await reqs.__anext__()  # send non-full batch because action has changed
+        self.assertEqual(len(req3.ack.ids), 1)
+        req4 = await reqs.__anext__()
+        self.assertEqual(len(req4.nack.ids), 1)
+        await reqs.ack(uuid4())
+        await reqs.ack(uuid4())
+        reqs._is_stopped.set()
+        await reqs.stop()
+        req5 = await reqs.__anext__()
+        self.assertEqual(len(req5.ack.ids), 2)
+
+    async def test_persistent_subscription_context_manager(self) -> None:
+        group_name = str(uuid4())
+        await self.client._connection.close()
+        await self.client.create_subscription_to_all(group_name)
+        s = await self.client.read_subscription_to_all(group_name)
+        async with s as s:
+            pass
+        self.assertTrue(s._is_stopped)
 
     # async def test_subscribe_to_all_raises_discovery_failed(self) -> None:
     #     await self.client._connection.close()

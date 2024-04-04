@@ -2,14 +2,9 @@
 
 import grpc.aio
 
-from esdbclient.common import GrpcStreamers
+from esdbclient.common import AsyncGrpcStreamers, SyncGrpcStreamers
 from esdbclient.connection_spec import ConnectionSpec
-from esdbclient.gossip import (
-    AsyncioClusterGossipService,
-    AsyncioGossipService,
-    ClusterGossipService,
-    GossipService,
-)
+from esdbclient.gossip import AsyncioGossipService, GossipService
 from esdbclient.persistent import (
     AsyncioPersistentSubscriptionsService,
     PersistentSubscriptionsService,
@@ -26,7 +21,7 @@ class ESDBConnection:
     ) -> None:
         self._grpc_channel = grpc_channel
         self._grpc_target = grpc_target
-        self._grpc_streamers = GrpcStreamers()
+        self._grpc_streamers = SyncGrpcStreamers()
         self.streams = StreamsService(
             grpc_channel=grpc_channel,
             connection_spec=connection_spec,
@@ -42,11 +37,11 @@ class ESDBConnection:
             connection_spec=connection_spec,
             grpc_streamers=self._grpc_streamers,
         )
-        self.cluster_gossip = ClusterGossipService(
-            channel=grpc_channel,
-            connection_spec=connection_spec,
-            grpc_streamers=self._grpc_streamers,
-        )
+        # self.cluster_gossip = ClusterGossipService(
+        #     channel=grpc_channel,
+        #     connection_spec=connection_spec,
+        #     grpc_streamers=self._grpc_streamers,
+        # )
         # self._channel_connectivity_state: Optional[ChannelConnectivity] = None
         # self.grpc_channel.subscribe(self._receive_channel_connectivity_state)
 
@@ -78,7 +73,7 @@ class AsyncioESDBConnection:
     ) -> None:
         self._grpc_channel = grpc_channel
         self._grpc_target = grpc_target
-        self._grpc_streamers = GrpcStreamers()
+        self._grpc_streamers = AsyncGrpcStreamers()
         self.streams = AsyncioStreamsService(
             grpc_channel,
             connection_spec=connection_spec,
@@ -94,15 +89,16 @@ class AsyncioESDBConnection:
             connection_spec=connection_spec,
             grpc_streamers=self._grpc_streamers,
         )
-        self.cluster_gossip = AsyncioClusterGossipService(
-            grpc_channel,
-            connection_spec=connection_spec,
-            grpc_streamers=self._grpc_streamers,
-        )
+        # self.cluster_gossip = AsyncioClusterGossipService(
+        #     grpc_channel,
+        #     connection_spec=connection_spec,
+        #     grpc_streamers=self._grpc_streamers,
+        # )
 
     @property
     def grpc_target(self) -> str:
         return self._grpc_target
 
     async def close(self) -> None:
+        await self._grpc_streamers.close()
         await self._grpc_channel.close(grace=5)

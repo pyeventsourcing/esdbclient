@@ -1,8 +1,19 @@
 # -*- coding: utf-8 -*-
+import datetime
 from abc import ABC, abstractmethod
 from base64 import b64encode
 from threading import Lock
-from typing import TYPE_CHECKING, Iterator, Optional, Sequence, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    Iterator,
+    Optional,
+    Sequence,
+    Tuple,
+    TypeVar,
+    Union,
+)
 from uuid import UUID
 from weakref import WeakValueDictionary
 
@@ -44,8 +55,8 @@ DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT = 30.0
 DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT = 10
 DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT = 10
 DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT = 10
-DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE = 100
-DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE = 100
+DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE = 150
+DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE = 50
 DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY = 0.2
 DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE = 0.2
 DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT = 5
@@ -55,6 +66,10 @@ GrpcOptions = Tuple[GrpcOption, ...]
 
 
 class GrpcStreamer(ABC):
+    pass
+
+
+class SyncGrpcStreamer(GrpcStreamer):
     @abstractmethod
     def stop(self) -> None:
         """
@@ -62,28 +77,52 @@ class GrpcStreamer(ABC):
         """
 
 
-class GrpcStreamers:
+class AsyncGrpcStreamer(GrpcStreamer):
+    @abstractmethod
+    async def stop(self) -> None:
+        """
+        Stops the iterator(s) of streaming call.
+        """
+
+
+TGrpcStreamer = TypeVar("TGrpcStreamer", bound=GrpcStreamer)
+
+
+class GrpcStreamers(Generic[TGrpcStreamer]):
     def __init__(self) -> None:
-        self.map: WeakValueDictionary[int, GrpcStreamer] = WeakValueDictionary()
+        self.map: WeakValueDictionary[int, TGrpcStreamer] = WeakValueDictionary()
         self.lock = Lock()
 
-    def __setitem__(self, key: int, value: GrpcStreamer) -> None:
+    def __setitem__(self, key: int, value: TGrpcStreamer) -> None:
         with self.lock:
             self.map[key] = value
 
-    def __iter__(self) -> Iterator[GrpcStreamer]:
+    def __iter__(self) -> Iterator[TGrpcStreamer]:
         with self.lock:
             return iter(tuple(self.map.values()))
 
-    def pop(self, key: int) -> GrpcStreamer:
+    def pop(self, key: int) -> TGrpcStreamer:
         with self.lock:
             return self.map.pop(key)
 
+
+class SyncGrpcStreamers(GrpcStreamers[SyncGrpcStreamer]):
     def close(self) -> None:
         for grpc_streamer in self:
             # print("closing streamer")
             grpc_streamer.stop()
             # print("closed streamer")
+
+
+class AsyncGrpcStreamers(GrpcStreamers[AsyncGrpcStreamer]):
+    async def close(self) -> None:
+        for async_grpc_streamer in self:
+            # print("closing streamer")
+            await async_grpc_streamer.stop()
+            # print("closed streamer")
+
+
+TGrpcStreamers = TypeVar("TGrpcStreamers", bound=GrpcStreamers[Any])
 
 
 class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
@@ -147,11 +186,11 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
     return GrpcError(e)
 
 
-class ESDBService:
+class ESDBService(Generic[TGrpcStreamers]):
     def __init__(
         self,
         connection_spec: ConnectionSpec,
-        grpc_streamers: GrpcStreamers,
+        grpc_streamers: TGrpcStreamers,
     ):
         self._connection_spec = connection_spec
         self._grpc_streamers = grpc_streamers
@@ -229,6 +268,14 @@ def construct_recorded_event(
     if link.id.string == "":
         recorded_event_link: Optional[RecordedEvent] = None
     else:
+        try:
+            recorded_at = datetime.datetime.fromtimestamp(
+                int(event.metadata.get("created", "")) / 10000000.0,
+                tz=datetime.timezone.utc,
+            )
+        except (TypeError, ValueError):  # pragma: no cover
+            recorded_at = None
+
         recorded_event_link = RecordedEvent(
             id=UUID(link.id.string),
             type=link.metadata.get("type", ""),
@@ -239,16 +286,16 @@ def construct_recorded_event(
             stream_position=link.stream_revision,
             commit_position=None if ignore_commit_position else link.commit_position,
             retry_count=retry_count,
+            recorded_at=recorded_at,
         )
 
-    # Todo: Maybe include this in RecordedEvent? It's generated bu the server.
-    # try:
-    #     created_timestamp = datetime.datetime.fromtimestamp(
-    #         int(event.metadata.get("created", "")) / 10000000.0,
-    #         tz=datetime.timezone.utc,
-    #     )
-    # except (TypeError, ValueError):
-    #     created_timestamp = None
+    try:
+        recorded_at = datetime.datetime.fromtimestamp(
+            int(event.metadata.get("created", "")) / 10000000.0,
+            tz=datetime.timezone.utc,
+        )
+    except (TypeError, ValueError):  # pragma: no cover
+        recorded_at = None
 
     recorded_event = RecordedEvent(
         id=UUID(event.id.string),
@@ -261,5 +308,6 @@ def construct_recorded_event(
         commit_position=None if ignore_commit_position else event.commit_position,
         retry_count=retry_count,
         link=recorded_event_link,
+        recorded_at=recorded_at,
     )
     return recorded_event
