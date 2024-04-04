@@ -452,10 +452,6 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
         else:  # pragma: no cover
             pass
 
-    def __del__(self) -> None:
-        pass
-        # print({self}, "__del__ called")
-
 
 class BasePersistentSubscription:
     pass
@@ -581,10 +577,6 @@ class AsyncioPersistentSubscription(
             return item.ack_id
         else:
             return item
-
-    def __del__(self) -> None:
-        pass
-        # self.stop()
 
 
 class PersistentSubscription(

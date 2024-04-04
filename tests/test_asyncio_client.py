@@ -64,10 +64,14 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self) -> None:
         await self.client.close()
+        del self.client
         if self._reader is not None:
             await self._reader.close()
+            del self._reader
+
         if self._writer is not None:
             await self._writer.close()
+            del self._writer
 
     async def test_esdb_scheme_discovery_single_node_cluster(self) -> None:
         await AsyncioEventStoreDBClient(
@@ -531,7 +535,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
     async def test_subscribe_to_all_reconnects(self) -> None:
         # Reconstruct connection with wrong port (to inspire UsageError).
-        await self.client.close()
+        await self.client._connection.close()
         catchup_subscription = await self.client.subscribe_to_all()
         self.assertIsInstance(catchup_subscription, AsyncioCatchupSubscription)
 
@@ -608,13 +612,15 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         # Read subscription - error iterating requests is propagated.
         persistent_subscription = await self.client.read_subscription_to_all(group_name)
-        with self.assertRaises(ExceptionIteratingRequests):
-            async for event in persistent_subscription:
-                #                 print(event.id, event.retry_count, event.recorded_at)
-                await persistent_subscription.ack("a")  # type: ignore[arg-type]
-                # await persistent_subscription.ack(event)
-                # if event.id == event2.id:
-                #     await persistent_subscription.stop()
+
+        async with persistent_subscription:
+            with self.assertRaises(ExceptionIteratingRequests):
+                async for event in persistent_subscription:
+                    #                 print(event.id, event.retry_count, event.recorded_at)
+                    await persistent_subscription.ack("a")  # type: ignore[arg-type]
+                    # await persistent_subscription.ack(event)
+                    # if event.id == event2.id:
+                    #     await persistent_subscription.stop()
 
         # Read subscription - success.
         persistent_subscription = await self.client.read_subscription_to_all(group_name)

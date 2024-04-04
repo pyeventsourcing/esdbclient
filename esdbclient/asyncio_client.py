@@ -494,6 +494,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
 
     async def close(self) -> None:
         await self._connection.close()
+        del self._connection
 
     @overload
     async def create_subscription_to_all(

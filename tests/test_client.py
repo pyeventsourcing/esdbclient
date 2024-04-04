@@ -5949,7 +5949,7 @@ class TestAutoReconnectAfterServiceUnavailable(TimedTestCase):
         server_certificate = get_server_certificate("localhost:2114")
         self.client = EventStoreDBClient(uri=uri, root_certificates=server_certificate)
 
-        # Reconstruct connection with wrong port (to inspire ServiceUnavailble).
+        # Reconstruct connection with wrong port (to inspire ServiceUnavailable).
         self.client._esdb.close()
         self.client._esdb = self.client._construct_esdb_connection("localhost:2222")
 
