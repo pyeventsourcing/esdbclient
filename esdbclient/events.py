@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-import datetime
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -39,9 +39,9 @@ class RecordedEvent:
     stream_name: str
     stream_position: int
     commit_position: Optional[int]
-    retry_count: Optional[int] = None
+    recorded_at: Optional[datetime] = None
     link: Optional["RecordedEvent"] = None
-    recorded_at: Optional[datetime.datetime] = None
+    retry_count: Optional[int] = None
 
     @property
     def ack_id(self) -> UUID:

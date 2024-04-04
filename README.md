@@ -641,12 +641,13 @@ database. The client will return event objects of this type from all methods
 that return recorded events, such as `get_stream()`, `subscribe_to_all()`,
 and `read_subscription_to_all()`. You do not need to construct recorded event objects.
 
-Like `NewEvent`, the `RecordedEvent` class is also a frozen Python dataclass. It has
+Like `NewEvent`, the `RecordedEvent` class is a frozen Python dataclass. It has
 all the attributes that `NewEvent` has (`type`, `data`, `metadata`, `content_type`, `id`)
-and some additional attributes that follow from the fact that an event was recorded
-(`stream_name`, `stream_position`, `commit_position`). It has a `retry_count`
-which is set only when reading persistence subscriptions. It also has a `link`
-attribute, which is set only when resolving "link events".
+that follow from an event that was recorded, and some additional attributes that follow
+from the recording of an event (`stream_name`, `stream_position`, `commit_position`,
+`recorded_at`). It also has a `link` attribute, which is set only when "link events"
+are "resolved". And it has a `retry_count` which is set only when reading persistence
+subscriptions.
 
 The `type` attribute is a Python `str`, used to indicate the type of an event
 that was recorded.
@@ -692,17 +693,27 @@ that event objects obtained from both `get_stream()` and `read_all()` have the a
 commit position. The `commit_position` attribute of the `RecordedEvent` class is
 annotated with the type `Optional[int]` for this reason only.
 
-The `retry_count` is a Python `int`, used to indicate the number of times a persistent
-subscription has retried sending the event to a consumer.
+The `recorded_at` attribute is a Python `datetime`, used to indicate when an event was
+recorded by the database.
 
 The `link` attribute is an optional `RecordedEvent` that carries information about
-a "link event" that has been resolved. This allows link events to be acknowledged or
-negatively acknowledged when using persistence subscriptions with the `resolve_links`
-argument set to `True`. See the `ack_id` property.
+a "link event" that has been "resolved" to the linked event. This allows access to
+the link event attributes when link events have been resolved, for example access
+to the correct event ID to be used when acknowledging or negatively acknowledging
+link events. Link events are "resolved" when the `resolve_links` argument is `True`
+and when replaying parked events (negatively acknowledging an event received from
+a persistent subscription with the `'park'` action will create a link event, and
+when parked event are replayed they are received as resolved events). The
+`ack_id` property helps with obtaining the correct event ID to use when acknowledging
+or negatively acknowledging events received from persistent subscriptions.
+
+The `retry_count` is a Python `int`, used to indicate the number of times a persistent
+subscription has retried sending the event to a consumer.
 
 
 ```python
 from dataclasses import dataclass
+from datetime import datetime
 
 @dataclass(frozen=True)
 class RecordedEvent:
@@ -718,8 +729,9 @@ class RecordedEvent:
     stream_name: str
     stream_position: int
     commit_position: Optional[int]
-    retry_count: Optional[int] = None
+    recorded_at: Optional[datetime] = None
     link: Optional["RecordedEvent"] = None
+    retry_count: Optional[int] = None
 
     @property
     def ack_id(self) -> UUID:
