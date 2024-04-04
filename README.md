@@ -3075,7 +3075,7 @@ behaviours have to do with methods that return iterators. For example, consider
 the "read response" iterator returned from the `read_all()` method. The
 `read_all()` method will have returned, and the method decorators will therefore
 have exited, before iterating over the "read response" begins. Therefore, if a
-connection issues occurs whilst iterating over the "read response", it isn't possible
+connection issue occurs whilst iterating over the "read response", it isn't possible
 for any decorator on the `read_all()` method to trigger a reconnection.
 
 With the "catch-up subscription" objects, there is an initial "confirmation" response
