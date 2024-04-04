@@ -2911,13 +2911,26 @@ from esdbclient import AsyncioEventStoreDBClient
 ```
 
 The asynchronous I/O client has the following methods: `append_to_stream()`,
-`get_stream()`, `read_all()`, `subscribe_to_all()`,
-`delete_stream()`, `tombstone_stream()`, and `reconnect()`.
+`get_stream()`, `read_stream()`, `delete_stream()`, `tombstone_stream()`, `read_all()`,
+`subscribe_to_all()`, `subscribe_to_stream()`, `create_subscription_to_all()`,
+`create_subscription_to_stream()`, `read_subscription_to_all()`,
+`read_subscription_to_stream()`, `update_subscription_to_all()`,
+`update_subscription_to_stream()`, `replay_parked_events()`, `list_subscriptions()`,
+`get_subscription_info()`, `delete_subscription()`, `reconnect()`, `close()`.
 
 These methods are equivalent to the methods on `EventStoreDBClient`. They have the same
-method signatures, and can be called with the same arguments, to the same effect.
-The methods which appear on `EventStoreDBClient` but not on `AsyncioEventStoreDBClient` will be
-added soon.
+method signatures, and can be called with the same arguments, to the same effect. The
+difference is that these methods are defined as `async def` methods and so return
+awaitables that you must `await` before obtaining expected results. The methods
+`read_all()`, `read_stream()`, `subscribe_to_all()`, `subscribe_to_stream()`,
+`read_subscription_to_all()` and `read_subscription_to_stream()` return asyncio iterables,
+which you can iterate over with Python's `async for` syntax to obtain `RecordedEvent`
+objects. The methods `read_subscription_to_all()` and `read_subscription_to_stream()`
+return instances of the class `AsyncioPersistentSubscription`, which has async methods
+`ack()`, `nack()` and `stop()` that return awaitables but otherwise work in a similar
+way to the methods on `PersistentSubscription` (see above). The methods which are
+implemented on `EventStoreDBClient` but not yet on `AsyncioEventStoreDBClient`
+will be implemented soon.
 
 ### Synopsis<a id="synopsis-1"></a>
 

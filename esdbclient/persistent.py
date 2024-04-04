@@ -194,7 +194,7 @@ class AsyncioSubscriptionReadReqs(
     async def __anext__(self) -> persistent_pb2.ReadReq:
         try:
             # First return read request with options, then return read request
-            # with batch of n/acks whenever the buffer is full, or when the n/ack
+            # with batch of n/acks whenever the batch is full, or when the n/ack
             # actions changes, or periodically, or when stopping.
 
             if not self._has_requested_options:
