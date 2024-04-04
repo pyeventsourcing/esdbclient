@@ -21,7 +21,7 @@ building and publishing distributions to [PyPI](https://pypi.org/project/esdbcli
 
 You can connect and interact with an EventStoreDB server using either the
 `EventStoreDBClient` class or the `AsyncioEventStoreDBClient`. See below
-for information about `AsyncioEventStoreDBClient`.
+for <a href="#asyncio-client">information</a> about `AsyncioEventStoreDBClient`.
 
 The `EventStoreDBClient` class can be imported from the `esdbclient` package.
 
