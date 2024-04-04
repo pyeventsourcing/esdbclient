@@ -8,6 +8,7 @@ from asyncio import CancelledError
 from dataclasses import dataclass
 from enum import Enum
 from typing import (
+    Any,
     AsyncIterator,
     Iterable,
     Iterator,
@@ -177,6 +178,12 @@ class AsyncioReadResponse(
                 pass
             self._is_stopped = True
 
+    async def __aenter__(self) -> "AsyncioReadResponse":
+        return self
+
+    async def __aexit__(self, *args: Any, **kwargs: Any) -> None:
+        await self.stop()
+
 
 class AsyncioCatchupSubscription(AsyncioReadResponse):
     def __init__(
@@ -204,6 +211,9 @@ class AsyncioCatchupSubscription(AsyncioReadResponse):
             recorded_event = await super().__anext__()
             if self.include_checkpoints or not isinstance(recorded_event, Checkpoint):
                 return recorded_event
+
+    async def __aenter__(self) -> "AsyncioCatchupSubscription":
+        return self
 
 
 class ReadResponse(Iterator[RecordedEvent], BaseReadResponse, SyncGrpcStreamer):
@@ -257,6 +267,12 @@ class ReadResponse(Iterator[RecordedEvent], BaseReadResponse, SyncGrpcStreamer):
                 pass
             self._is_stopped = True
 
+    def __enter__(self) -> "ReadResponse":
+        return self
+
+    def __exit__(self, *args: Any, **kwargs: Any) -> None:
+        self.stop()
+
     def __del__(self) -> None:
         self.stop()
         del self
@@ -296,6 +312,9 @@ class CatchupSubscription(ReadResponse):
             recorded_event = super().__next__()
             if self._include_checkpoints or not isinstance(recorded_event, Checkpoint):
                 return recorded_event
+
+    def __enter__(self) -> "CatchupSubscription":
+        return self
 
 
 @dataclass

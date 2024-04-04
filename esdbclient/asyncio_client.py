@@ -316,15 +316,15 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         """
         Lists recorded events from the named stream.
         """
-        events = await self.read_stream(
+        async with await self.read_stream(
             stream_name=stream_name,
             stream_position=stream_position,
             backwards=backwards,
             limit=limit,
             timeout=timeout,
             credentials=credentials or self._call_credentials,
-        )
-        return tuple([e async for e in events])
+        ) as events:
+            return tuple([e async for e in events])
 
     async def read_stream(
         self,

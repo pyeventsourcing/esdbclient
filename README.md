@@ -32,7 +32,7 @@ Probably the three most useful methods of `EventStoreDBClient` are:
 that mutates an aggregate. This method is "atomic" in that either all or none of
 the events will be recorded.
 
-* `read_stream()` This method can be used to retrieve all the recorded
+* `get_stream()` This method can be used to retrieve all the recorded
 events in a "stream". This is useful, for example, when reconstructing
 an aggregate from recorded events before executing a command in an
 application that creates new events.
@@ -110,20 +110,15 @@ commit_position2 = client.append_to_stream(
 assert commit_position2 > commit_position1
 
 
-# Read events from a stream. This method returns a
-# "read response" iterator, which returns recorded
-# events. The iterator will stop when there are no
-# more events to be returned.
+# Get events recorded in a stream. This method returns
+# a sequence of recorded event objects. The recorded
+# event objects may be deserialized to domain event
+# objects of different types and used to reconstruct
+# an aggregate in a domain model.
 
-read_response = client.read_stream(
+recorded_events = client.get_stream(
     stream_name=stream_name1
 )
-
-# Iterate over "read response" to get recorded events.
-# The recorded events may be deserialized to domain event
-# objects of different types and used to reconstruct an
-# aggregate in a domain model.
-recorded_events = tuple(read_response)
 
 # - stream 'stream_name1' now has three events
 assert len(recorded_events) == 3
@@ -148,27 +143,29 @@ assert recorded_events[2].id == event3.id
 
 
 # Start a catch-up subscription from last recorded position.
-# This method returns a "catch-up subscription" iterator,
-# which returns recorded events. The iterator will not stop
-# when there are no more recorded events to be returned, but
-# will block, and continue when further events are recorded.
-
-catchup_subscription = client.subscribe_to_all()
-
-
-# Iterate over the catch-up subscription. Process each recorded
-# event in turn. Within an atomic database transaction, record
-# the event's "commit position" along with any new state generated
-# by processing the event. Use the component's last recorded commit
-# position when restarting the catch-up subscription.
+# This method returns a "catch-up subscription" object,
+# which can be iterated over to obtain recorded events.
+# The iterator will not stop when there are no more recorded
+# events to be returned, but instead will block, and then continue
+# when further events are recorded. It can be used as a context
+# manager so that the underlying streaming gRPC call to the database
+# can be cancelled cleanly in case of any error.
 
 received_events = []
-for event in catchup_subscription:
-    received_events.append(event)
+with client.subscribe_to_all(commit_position=0) as subscription:
 
-    if event.commit_position == commit_position2:
-        # Break so we can continue with the example.
-        break
+    # Iterate over the catch-up subscription. Process each recorded
+    # event in turn. Within an atomic database transaction, record
+    # the event's "commit position" along with any new state generated
+    # by processing the event. Use the component's last recorded commit
+    # position when restarting the catch-up subscription.
+
+    for event in subscription:
+        received_events.append(event)
+
+        if event.commit_position == commit_position2:
+            # Break so we can continue with the example.
+            break
 
 
 # - events are received in the order they were recorded
@@ -183,11 +180,6 @@ assert received_events[-2].id == event2.id
 assert received_events[-1].type == "OrderCancelled"
 assert received_events[-1].data == b'{}'
 assert received_events[-1].id == event3.id
-
-
-# Stop the catch-up subscription iterator.
-
-catchup_subscription.stop()
 
 
 # Close the client's gRPC connection.
@@ -2288,7 +2280,8 @@ from a link event (which can happen both when persistent subscription setting
 
 The example below iterates over the subscription object, and calls `ack()` with the
 received `RecordedEvent` objects. The subscription's `stop()` method is called when
-we have received `event9`, so that we can continue with the examples below.
+we have received `event9`, stopping the iteration, so that we can continue with the
+examples below.
 
 ```python
 received_events = []
@@ -2338,7 +2331,7 @@ class ExampleConsumer:
         self.error = None
 
     def run(self):
-        try:
+        with self.subscription:
             for event in self.subscription:
                 try:
                     self.policy(event)
@@ -2352,9 +2345,6 @@ class ExampleConsumer:
                 else:
                     self.subscription.ack(event)
                     self.after_ack(event)
-        except Exception:
-            self.stop()
-            raise
 
     def stop(self):
         self.subscription.stop()
@@ -2580,8 +2570,8 @@ subscription = client.read_subscription_to_stream(
 ```
 
 The example below iterates over the subscription object, and calls `ack()`.
-The for loop breaks when we have received the last event in the stream, so
-that we can finish the examples in this documentation.
+The subscription's `stop()` method is called when we have received `event6`,
+stopping the iteration, so that we can continue with the examples below.
 
 ```python
 events = []
@@ -2967,7 +2957,7 @@ async def demonstrate_asyncio_client():
         events=[event1, event2, event3]
     )
 
-    # Read stream events.
+    # Get stream events.
     recorded = await client.get_stream(stream_name)
     assert len(recorded) == 3
     assert recorded[0] == event1
@@ -2975,12 +2965,13 @@ async def demonstrate_asyncio_client():
     assert recorded[2] == event3
 
 
-    # Subscribe all events.
+    # Subscribe to all events.
     received = []
-    async for event in await client.subscribe_to_all():
-        received.append(event)
-        if event.commit_position == commit_position:
-            break
+    async with await client.subscribe_to_all(commit_position=0) as subscription:
+        async for event in subscription:
+            received.append(event)
+            if event.commit_position == commit_position:
+                break
     assert received[-3] == event1
     assert received[-2] == event2
     assert received[-1] == event3

@@ -594,7 +594,6 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         # Append events.
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated1", data=b"{}")
-        # print("Event1: ", event1.id)
         await self.client.append_events(
             stream_name=stream_name1,
             events=[event1],
@@ -603,7 +602,6 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         stream_name2 = str(uuid4())
         event2 = NewEvent(type="OrderCreated2", data=b"{}")
-        #         print("Event2: ", event2.id)
         await self.client.append_events(
             stream_name=stream_name2,
             events=[event2],
@@ -615,18 +613,13 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         async with persistent_subscription:
             with self.assertRaises(ExceptionIteratingRequests):
-                async for event in persistent_subscription:
-                    #                 print(event.id, event.retry_count, event.recorded_at)
+                async for _ in persistent_subscription:
                     await persistent_subscription.ack("a")  # type: ignore[arg-type]
-                    # await persistent_subscription.ack(event)
-                    # if event.id == event2.id:
-                    #     await persistent_subscription.stop()
 
         # Read subscription - success.
         persistent_subscription = await self.client.read_subscription_to_all(group_name)
         events = []
         async for event in persistent_subscription:
-            #             print(event.id, event.retry_count, event.recorded_at)
             events.append(event)
             await persistent_subscription.ack(event)
             if event.id == event2.id:
@@ -640,7 +633,6 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         # - append more events
         stream_name3 = str(uuid4())
         event3 = NewEvent(type="OrderCreated3", data=b"{}")
-        #         print("Event3: ", event3.id)
         await self.client.append_events(
             stream_name=stream_name3,
             events=[event3],
@@ -648,18 +640,15 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         )
         stream_name4 = str(uuid4())
         event4 = NewEvent(type="OrderCreated4", data=b"{}")
-        #         print("Event4: ", event4.id)
         await self.client.append_events(
             stream_name=stream_name4,
             events=[event4],
             current_version=StreamState.NO_STREAM,
         )
         # - retry events
-        #         print("Nack with retry")
         events = []
         persistent_subscription = await self.client.read_subscription_to_all(group_name)
         async for event in persistent_subscription:
-            #             print(event.id, event.retry_count, event.recorded_at)
             events.append(event)
             if event.id in [event3.id, event4.id]:
                 await persistent_subscription.nack(event, "retry")
@@ -673,11 +662,9 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         self.assertEqual(events[-1].id, event4.id)
 
         # - park events
-        #         print("Nack with park")
         events = []
         persistent_subscription = await self.client.read_subscription_to_all(group_name)
         async for event in persistent_subscription:
-            #             print(event.id, event.retry_count, event.recorded_at)
             events.append(event)
             if event.id in [event3.id, event4.id]:
                 await persistent_subscription.nack(event, "park")
@@ -694,17 +681,13 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         await self.client.replay_parked_events(group_name=group_name)
 
         # - continue iterating over subscription
-        #         print("Sleeping")
         await asyncio.sleep(1)
-        #         print("Blah blah blah")
         events = []
         persistent_subscription = await self.client.read_subscription_to_all(group_name)
         async for event in persistent_subscription:
-            #             print(event.id, event.retry_count, event.recorded_at)
             events.append(event)
             await persistent_subscription.ack(event)
             if event.id == event4.id:
-                # break
                 await persistent_subscription.stop()
         self.assertEqual(len(events), 2)
         self.assertEqual(events[-2].id, event3.id)
@@ -783,11 +766,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         )
         with self.assertRaises(ExceptionIteratingRequests):
             async for _ in subscription:
-                #                 print(event.id, event.retry_count, event.recorded_at)
                 await subscription.ack("a")  # type: ignore[arg-type]
-                # await persistent_subscription.ack(event)
-                # if event.id == event2.id:
-                #     await persistent_subscription.stop()
 
         # Read subscription - success.
         subscription = await self.client.read_subscription_to_stream(
@@ -795,7 +774,6 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         )
         events = []
         async for event in subscription:
-            #             print(event.id, event.retry_count, event.recorded_at)
             events.append(event)
             await subscription.ack(event)
             if event.id == event1.id:
@@ -809,7 +787,6 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         )
         events = []
         async for event in subscription:
-            #             print(event.id, event.retry_count, event.recorded_at)
             events.append(event)
             await subscription.ack(event)
             if event.id == event2.id:
@@ -833,13 +810,11 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             current_version=0,
         )
         # - retry events
-        #         print("Nack with retry")
         events = []
         subscription = await self.client.read_subscription_to_stream(
             group_name, stream_name1
         )
         async for event in subscription:
-            #             print(event.id, event.retry_count, event.recorded_at)
             events.append(event)
             if event.id == event3.id:
                 await subscription.nack(event, "retry")

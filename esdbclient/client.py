@@ -521,17 +521,16 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Returns a sequence of recorded events from the named stream.
         """
-        return tuple(
-            self.read_stream(
-                stream_name=stream_name,
-                stream_position=stream_position,
-                backwards=backwards,
-                resolve_links=resolve_links,
-                limit=limit,
-                timeout=timeout,
-                credentials=credentials or self._call_credentials,
-            )
-        )
+        with self.read_stream(
+            stream_name=stream_name,
+            stream_position=stream_position,
+            backwards=backwards,
+            resolve_links=resolve_links,
+            limit=limit,
+            timeout=timeout,
+            credentials=credentials or self._call_credentials,
+        ) as events:
+            return tuple(events)
 
     def read_stream(
         self,
