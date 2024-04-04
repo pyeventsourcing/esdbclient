@@ -913,7 +913,7 @@ can be sure the events have been recorded.
 The example below shows the `append_to_stream()` method being called again with events
 `event2` and `event3`, and with `current_version=0`. We can see that repeating the call
 to `append_to_stream()` returns successfully without raising a `WrongCurrentVersion`
-exception, as it would if the `append_to_stream() operation were not idempotent.
+exception, as it would if the `append_to_stream()` operation were not idempotent.
 
 ```python
 # Retry appending event3.
@@ -1018,8 +1018,9 @@ that will be returned. The default value of `limit` is `sys.maxint`.
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
 
-This method has an optional `credentials` argument, which can be used to
-override call credentials derived from the connection string URI.
+The optional `credentials` argument can be used to override call credentials derived
+from the connection string URI. A suitable value for this argument can be constructed
+by calling the client method `construct_call_credentials()`.
 
 The example below shows the default behavior, which is to return all the recorded
 events of a stream forwards from the first recorded events to the last.
@@ -2916,20 +2917,21 @@ The asynchronous I/O client has the following methods: `append_to_stream()`,
 `create_subscription_to_stream()`, `read_subscription_to_all()`,
 `read_subscription_to_stream()`, `update_subscription_to_all()`,
 `update_subscription_to_stream()`, `replay_parked_events()`, `list_subscriptions()`,
-`get_subscription_info()`, `delete_subscription()`, `reconnect()`, `close()`.
+`get_subscription_info()`, `delete_subscription()`, `reconnect()`, `close()`, and
+`construct_call_credentials()`.
 
 These methods are equivalent to the methods on `EventStoreDBClient`. They have the same
 method signatures, and can be called with the same arguments, to the same effect. The
-difference is that these methods are defined as `async def` methods and so return
-awaitables that you must `await` before obtaining expected results. The methods
-`read_all()`, `read_stream()`, `subscribe_to_all()`, `subscribe_to_stream()`,
-`read_subscription_to_all()` and `read_subscription_to_stream()` return asyncio iterables,
-which you can iterate over with Python's `async for` syntax to obtain `RecordedEvent`
-objects. The methods `read_subscription_to_all()` and `read_subscription_to_stream()`
-return instances of the class `AsyncioPersistentSubscription`, which has async methods
-`ack()`, `nack()` and `stop()` that return awaitables but otherwise work in a similar
-way to the methods on `PersistentSubscription` (see above). The methods which are
-implemented on `EventStoreDBClient` but not yet on `AsyncioEventStoreDBClient`
+difference is that (excepting `construct_call_credentials()`), these methods are defined
+as `async def` methods and so return awaitables that you must `await` before obtaining
+expected results. The methods `read_all()`, `read_stream()`, `subscribe_to_all()`,
+`subscribe_to_stream()`, `read_subscription_to_all()` and `read_subscription_to_stream()`
+return asyncio iterables, which you can iterate over with Python's `async for` syntax to
+obtain `RecordedEvent` objects. The methods `read_subscription_to_all()` and
+`read_subscription_to_stream()` return instances of the class `AsyncioPersistentSubscription`,
+which has async methods `ack()`, `nack()` and `stop()` that return awaitables but otherwise
+work in a similar way to the methods on `PersistentSubscription` (see above). The methods
+which are implemented on `EventStoreDBClient` but not yet on `AsyncioEventStoreDBClient`
 will be implemented soon.
 
 ### Synopsis<a id="synopsis-1"></a>
