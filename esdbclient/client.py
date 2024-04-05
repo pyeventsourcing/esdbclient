@@ -137,6 +137,7 @@ class BaseEventStoreDBClient:
         *,
         root_certificates: Optional[str] = None,
     ) -> None:
+        self._is_closed = False
         self.root_certificates = root_certificates
         self.connection_spec = ConnectionSpec(uri)
         if self.connection_spec.options.Tls and self.root_certificates is None:
@@ -166,6 +167,10 @@ class BaseEventStoreDBClient:
         self._call_credentials = self.construct_call_credentials(
             self.connection_spec.username, self.connection_spec.password
         )
+
+    @property
+    def is_closed(self) -> bool:
+        return self._is_closed
 
     def construct_call_credentials(
         self, username: Optional[str], password: Optional[str]
@@ -216,7 +221,6 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         *,
         root_certificates: Optional[str] = None,
     ) -> None:
-        self._is_closed = False
         super().__init__(uri, root_certificates=root_certificates)
         self._is_reconnection_required = Event()
         self._reconnection_lock = Lock()
@@ -228,10 +232,6 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         #     target=self._batch_append_future_result_loop, daemon=True
         # )
         # self._batch_append_thread.start()
-
-    @property
-    def is_closed(self) -> bool:
-        return self._is_closed
 
     def _connect(self, grpc_target: Optional[str] = None) -> ESDBConnection:
         if grpc_target:
@@ -1204,6 +1204,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def update_subscription_to_all(
         self,
         group_name: str,
+        *,
         from_end: bool = False,
         commit_position: Optional[int] = None,
         resolve_links: bool = False,
@@ -1300,6 +1301,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         group_name: str,
         stream_name: str,
+        *,
         from_end: bool = False,
         stream_position: Optional[int] = None,
         resolve_links: bool = False,
@@ -1338,6 +1340,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         group_name: str,
         stream_name: Optional[str] = None,
+        *,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1357,6 +1360,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         group_name: str,
         stream_name: Optional[str] = None,
+        *,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1377,6 +1381,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     @autoreconnect
     def read_gossip(
         self,
+        *,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> Sequence[ClusterMember]:

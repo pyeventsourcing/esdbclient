@@ -152,6 +152,11 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             await AsyncioEventStoreDBClient("esdb://localhost:2114")
         self.assertIn("Username and password are required", cm.exception.args[0])
 
+    async def test_context_manager(self) -> None:
+        async with self.client:
+            self.assertFalse(self.client.is_closed)
+        self.assertTrue(self.client.is_closed)
+
     async def test_append_events_and_get_stream(self) -> None:
         # Append events.
         stream_name1 = str(uuid4())

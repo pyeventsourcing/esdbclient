@@ -241,6 +241,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
     async def append_events(
         self,
         stream_name: str,
+        *,
         current_version: Union[int, StreamState],
         events: Iterable[NewEvent],
         timeout: Optional[float] = None,
@@ -259,8 +260,9 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
     async def append_to_stream(
         self,
         stream_name: str,
+        *,
         current_version: Union[int, StreamState],
-        events: Union[NewEvent, Iterable[NewEvent]],
+        events: Union[NewEvent, Sequence[NewEvent]],
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> int:
@@ -278,8 +280,10 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
     @autoreconnect
     async def read_all(
         self,
+        *,
         commit_position: Optional[int] = None,
         backwards: bool = False,
+        resolve_links: bool = False,
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
@@ -293,6 +297,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         return await self._connection.streams.read(
             commit_position=commit_position,
             backwards=backwards,
+            resolve_links=resolve_links,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
@@ -307,8 +312,10 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
     async def get_stream(
         self,
         stream_name: str,
+        *,
         stream_position: Optional[int] = None,
         backwards: bool = False,
+        resolve_links: bool = False,
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -320,6 +327,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             stream_name=stream_name,
             stream_position=stream_position,
             backwards=backwards,
+            resolve_links=resolve_links,
             limit=limit,
             timeout=timeout,
             credentials=credentials or self._call_credentials,
@@ -329,6 +337,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
     async def read_stream(
         self,
         stream_name: str,
+        *,
         stream_position: Optional[int] = None,
         backwards: bool = False,
         resolve_links: bool = False,
@@ -460,6 +469,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
     async def delete_stream(
         self,
         stream_name: str,
+        *,
         current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -479,6 +489,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
     async def tombstone_stream(
         self,
         stream_name: str,
+        *,
         current_version: Union[int, StreamState],
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -491,10 +502,6 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
         )
-
-    async def close(self) -> None:
-        await self._connection.close()
-        del self._connection
 
     @overload
     async def create_subscription_to_all(
@@ -892,6 +899,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
     async def update_subscription_to_all(
         self,
         group_name: str,
+        *,
         from_end: bool = False,
         commit_position: Optional[int] = None,
         resolve_links: bool = False,
@@ -988,6 +996,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         self,
         group_name: str,
         stream_name: str,
+        *,
         from_end: bool = False,
         stream_position: Optional[int] = None,
         resolve_links: bool = False,
@@ -1026,6 +1035,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         self,
         group_name: str,
         stream_name: Optional[str] = None,
+        *,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1045,6 +1055,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         self,
         group_name: str,
         stream_name: Optional[str] = None,
+        *,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1060,3 +1071,20 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
         )
+
+    async def close(self) -> None:
+        if not self._is_closed:
+            try:
+                esdb_connection = self._connection
+                del self._connection
+            except AttributeError:  # pragma: no cover
+                pass
+            else:
+                await esdb_connection.close()
+                self._is_closed = True
+
+    async def __aenter__(self) -> "_AsyncioEventStoreDBClient":
+        return self
+
+    async def __aexit__(self, *args: Any, **kwargs: Any) -> None:
+        await self.close()
