@@ -221,7 +221,6 @@ class AsyncioSubscriptionReadReqs(
                         # Allow time for server to process last n/acks.
                         await asyncio.sleep(self._stopping_grace)
                         self._ack_queue.task_done()
-                        self._is_stopped.set()
                         raise StopAsyncIteration() from None
 
                     try:
@@ -502,12 +501,12 @@ class AsyncioPersistentSubscription(
                 raise EventStoreDBClientException(
                     f"Expected subscription confirmation, got: {first_read_resp}"
                 )
-        except Exception:
-            await self._abort()
+        except BaseException:
+            await self.stop()
             raise
 
-    # def __aiter__(self) -> AsyncIterator[RecordedEvent]:
-    #     return self
+    def __aiter__(self) -> AsyncIterator[RecordedEvent]:
+        return self
 
     async def __anext__(self) -> RecordedEvent:
         try:
@@ -524,34 +523,28 @@ class AsyncioPersistentSubscription(
                         pass
                 else:  # pragma: no cover
                     pass
-        except BaseException as e:
-            await self._read_reqs.stop()
-            if self._read_reqs.errored:
-                raise ExceptionIteratingRequests() from self._read_reqs.errored
-            if isinstance(e, CancelledByClient):
-                raise StopAsyncIteration() from e
-            raise  # pragma: no cover
+        except BaseException:
+            await self.stop()
+            raise
 
     async def _get_next_read_resp(self) -> persistent_pb2.ReadResp:
         try:
             return await self._stream_stream_call_iter.__anext__()
         except asyncio.CancelledError as e:
-            raise CancelledByClient() from e
+            if self._read_reqs.errored:
+                raise ExceptionIteratingRequests() from self._read_reqs.errored
+            else:
+                raise StopAsyncIteration() from e
         except grpc.aio.AioRpcError as e:
             raise handle_rpc_error(e) from None
 
-    async def _abort(self) -> None:
-        await self._read_reqs.stop()
-        self._stream_stream_call.cancel()
-        self._grpc_streamers.pop(id(self))
-        self._is_stopped = True
-
     async def stop(self) -> None:
         if not self._is_stopped:
+            self._is_stopped = True
             await self._read_reqs.stop()
             self._stream_stream_call.cancel()
+            await asyncio.sleep(0.05)
             self._grpc_streamers.pop(id(self))
-            self._is_stopped = True
 
     async def __aenter__(
         self, *args: Any, **kwargs: Any

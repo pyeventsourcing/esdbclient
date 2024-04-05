@@ -615,11 +615,9 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         # Read subscription - error iterating requests is propagated.
         persistent_subscription = await self.client.read_subscription_to_all(group_name)
-
-        async with persistent_subscription:
-            with self.assertRaises(ExceptionIteratingRequests):
-                async for _ in persistent_subscription:
-                    await persistent_subscription.ack("a")  # type: ignore[arg-type]
+        with self.assertRaises(ExceptionIteratingRequests):
+            async for _ in persistent_subscription:
+                await persistent_subscription.ack("a")  # type: ignore[arg-type]
 
         # Read subscription - success.
         persistent_subscription = await self.client.read_subscription_to_all(group_name)
@@ -686,7 +684,6 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         await self.client.replay_parked_events(group_name=group_name)
 
         # - continue iterating over subscription
-        await asyncio.sleep(1)
         events = []
         persistent_subscription = await self.client.read_subscription_to_all(group_name)
         async for event in persistent_subscription:
