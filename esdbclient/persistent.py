@@ -269,9 +269,9 @@ class AsyncioSubscriptionReadReqs(
                                     action=batch_action,
                                 )
                     except asyncio.TimeoutError:
+                        self._update_last_ack_batch_time()  # positive next get_timeout
                         # Send a non-empty batch at least every "max ack delay".
                         if len(self._batch_ids) > 0:
-                            self._update_last_ack_batch_time()
                             assert batch_action is not None
                             return self._construct_ack_or_nack_read_req(
                                 subscription_id=self.subscription_id,
@@ -413,9 +413,9 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                                     action=batch_action,
                                 )
                     except queue.Empty:
+                        self._update_last_ack_batch_time()  # positive next get_timeout
                         # Send a non-empty batch at least every "max ack delay".
                         if len(batch_ids) > 0:
-                            self._update_last_ack_batch_time()
                             assert batch_action is not None
                             return self._construct_ack_or_nack_read_req(
                                 subscription_id=self.subscription_id,
