@@ -4307,6 +4307,29 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         info = self.client.get_subscription_info(group_name=group_name)
         self.assertEqual(info.max_check_point_count, 1)
 
+    def test_subscription_to_all_checkpoint_after_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_all(
+            group_name=group_name,
+            checkpoint_after=60,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.check_point_after_milliseconds, 60 * 1000)
+
+        # Update subscription.
+        self.client.update_subscription_to_all(
+            group_name=group_name,
+            checkpoint_after=1,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.check_point_after_milliseconds, 1000)
+
     def test_subscription_delete(self) -> None:
         self.construct_esdb_client()
 
@@ -4922,6 +4945,38 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
             stream_name=stream_name,
         )
         self.assertEqual(info.max_check_point_count, 1)
+
+    def test_subscription_to_stream_checkpoint_after_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+        stream_name = f"my-stream-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            checkpoint_after=60,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.check_point_after_milliseconds, 60 * 1000)
+
+        # Update subscription.
+        self.client.update_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            checkpoint_after=1,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.check_point_after_milliseconds, 1000)
 
     def test_subscription_to_stream_max_subscriber_count(self) -> None:
         self.construct_esdb_client()

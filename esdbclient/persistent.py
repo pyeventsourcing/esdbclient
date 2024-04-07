@@ -25,6 +25,7 @@ from typing_extensions import Literal, Protocol, runtime_checkable
 
 from esdbclient.common import (
     DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
     DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
@@ -750,6 +751,7 @@ class BasePersistentSubscriptionsService(ESDBService[TGrpcStreamers]):
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
     ) -> persistent_pb2.CreateReq:
@@ -765,7 +767,7 @@ class BasePersistentSubscriptionsService(ESDBService[TGrpcStreamers]):
             read_batch_size=8,  # how many events to read from DB records?
             history_buffer_size=200,  # how many recorded events to hold in memory?
             message_timeout_ms=int(round(1000 * message_timeout)),  # time before retry
-            checkpoint_after_ms=100,
+            checkpoint_after_ms=int(round(1000 * checkpoint_after)),
             consumer_strategy=consumer_strategy,
         )
         # Construct CreateReq.Options.
@@ -887,6 +889,7 @@ class BasePersistentSubscriptionsService(ESDBService[TGrpcStreamers]):
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
     ) -> persistent_pb2.UpdateReq:
         # Construct 'settings'.
@@ -901,7 +904,7 @@ class BasePersistentSubscriptionsService(ESDBService[TGrpcStreamers]):
             read_batch_size=8,  # how many events to read from DB records?
             history_buffer_size=200,  # how many recorded events to hold in memory?
             message_timeout_ms=int(round(1000 * message_timeout)),  # time before retry
-            checkpoint_after_ms=100,
+            checkpoint_after_ms=int(round(1000 * checkpoint_after)),
         )
         # Construct UpdateReq.Options.
         options = persistent_pb2.UpdateReq.Options(
@@ -1043,6 +1046,7 @@ class AsyncioPersistentSubscriptionsService(
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1066,6 +1070,7 @@ class AsyncioPersistentSubscriptionsService(
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1093,6 +1098,7 @@ class AsyncioPersistentSubscriptionsService(
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1115,6 +1121,7 @@ class AsyncioPersistentSubscriptionsService(
             max_retry_count=max_retry_count,
             min_checkpoint_count=min_checkpoint_count,
             max_checkpoint_count=max_checkpoint_count,
+            checkpoint_after=checkpoint_after,
             max_subscriber_count=max_subscriber_count,
         )
         # Call 'Create' RPC.
@@ -1236,6 +1243,7 @@ class AsyncioPersistentSubscriptionsService(
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1258,6 +1266,7 @@ class AsyncioPersistentSubscriptionsService(
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1279,6 +1288,7 @@ class AsyncioPersistentSubscriptionsService(
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1295,6 +1305,7 @@ class AsyncioPersistentSubscriptionsService(
             max_retry_count=max_retry_count,
             min_checkpoint_count=min_checkpoint_count,
             max_checkpoint_count=max_checkpoint_count,
+            checkpoint_after=checkpoint_after,
             max_subscriber_count=max_subscriber_count,
         )
         # Call 'Update' RPC.
@@ -1375,6 +1386,7 @@ class PersistentSubscriptionsService(
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1398,6 +1410,7 @@ class PersistentSubscriptionsService(
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1425,6 +1438,7 @@ class PersistentSubscriptionsService(
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1447,6 +1461,7 @@ class PersistentSubscriptionsService(
             max_retry_count=max_retry_count,
             min_checkpoint_count=min_checkpoint_count,
             max_checkpoint_count=max_checkpoint_count,
+            checkpoint_after=checkpoint_after,
             max_subscriber_count=max_subscriber_count,
         )
         # Call 'Create' RPC.
@@ -1567,6 +1582,7 @@ class PersistentSubscriptionsService(
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1589,6 +1605,7 @@ class PersistentSubscriptionsService(
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1610,6 +1627,7 @@ class PersistentSubscriptionsService(
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
@@ -1626,6 +1644,7 @@ class PersistentSubscriptionsService(
             max_retry_count=max_retry_count,
             min_checkpoint_count=min_checkpoint_count,
             max_checkpoint_count=max_checkpoint_count,
+            checkpoint_after=checkpoint_after,
             max_subscriber_count=max_subscriber_count,
         )
         # Call 'Update' RPC.

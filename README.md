@@ -2162,10 +2162,10 @@ to all the recorded events in the database across all streams.
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
 
-This method has fourteen optional arguments, `from_end`, `commit_position`, `resolve_links`,
+This method has fifteen optional arguments, `from_end`, `commit_position`, `resolve_links`,
 `filter_exclude`, `filter_include`, `filter_by_stream_name`, `consumer_strategy`,
 `message_timeout`, `max_retry_count`, `min_checkpoint_count`, `max_checkpoint_count`,
-`max_subscriber_count`, `timeout` and `credentials`.
+`checkpoint_after`, `max_subscriber_count`, `timeout` and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
@@ -2215,21 +2215,17 @@ The default value of `message_timeout` is `30.0`.
 The optional `max_retry_count` argument is a Python `int` which sets the number of times
 the server will retry to send an event. The default value of `max_retry_count` is `10`.
 
-The optional `min_checkpoint_count` argument is a Python `int` which sets a lower limit
-for recording acknowledgements and negative acknowledgements on the server. The default
-value of `min_checkpoint_count` is `10`.
+The optional `min_checkpoint_count` argument is a Python `int` which sets the minimum
+number of "acknowledgements" (acks) received by the server before the server may record
+the acknowledgements. The default value of `min_checkpoint_count` is `10`.
 
-The optional `max_checkpoint_count` argument is a Python `int` which sets an upper limit
-for recording acknowledgements and negative acknowledgements on the server. The default
-value of `max_checkpoint_count` is `10`.
+The optional `max_checkpoint_count` argument is a Python `int` which sets the maximum
+number of "acknowledgements" (acks) received by the server before the server must
+record the acknowledgements. The default value of `max_checkpoint_count` is `1000`.
 
-The optional `min_checkpoint_count` argument is a Python `int` which sets a lower limit
-for recording acknowledgements and negative acknowledgements on the server. The default
-value of `min_checkpoint_count` is `10`.
-
-The optional `max_checkpoint_count` argument is a Python `int` which sets an upper limit
-for recording acknowledgements and negative acknowledgements on the server. The default
-value of `max_checkpoint_count` is `10`.
+The optional `checkpoint_after` argument is a Python `float` which sets the maximum
+duration in seconds between recording "acknowledgements" (acks). The default value of
+`checkpoint_after` is `2.0`.
 
 The optional `max_subscriber_count` argument is a Python `int` which sets the maximum
 number of concurrent readers of the persistent subscription, beyond which attempts to
@@ -2417,16 +2413,16 @@ strategy cannot be adjusted.
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
 
-This method also has ten optional arguments, `from_end`, `commit_position`,
+This method also has eleven optional arguments, `from_end`, `commit_position`,
 `resolve_links`, `message_timeout`, `max_retry_count`, `min_checkpoint_count`,
-`max_checkpoint_count`, `max_subscriber_count`, `timeout` and `credentials`.
+`max_checkpoint_count`, `checkpoint_after`, `max_subscriber_count`, `timeout` and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
 was updated.
 
 Alternatively, the optional `commit_position` argument can be used to specify a commit
-position from which commit position the group of consumers of the subscription should
+position from which the group of consumers of the subscription should
 receive events. Please note, the recorded event at the specified commit position might
 be included in the recorded events received by the group of consumers.
 
@@ -2447,13 +2443,17 @@ The default value of `message_timeout` is `30.0`.
 The optional `max_retry_count` argument is a Python `int` which sets the number of times
 the server will retry to send an event. The default value of `max_retry_count` is `10`.
 
-The optional `min_checkpoint_count` argument is a Python `int` which sets a lower limit
-for recording acknowledgements and negative acknowledgements on the server. The default
-value of `min_checkpoint_count` is `10`.
+The optional `min_checkpoint_count` argument is a Python `int` which sets the minimum
+number of "acknowledgements" (acks) received by the server before the server may record
+the acknowledgements. The default value of `min_checkpoint_count` is `10`.
 
-The optional `max_checkpoint_count` argument is a Python `int` which sets an upper limit
-for recording acknowledgements and negative acknowledgements on the server. The default
-value of `max_checkpoint_count` is `10`.
+The optional `max_checkpoint_count` argument is a Python `int` which sets the maximum
+number of "acknowledgements" (acks) received by the server before the server must
+record the acknowledgements. The default value of `max_checkpoint_count` is `1000`.
+
+The optional `checkpoint_after` argument is a Python `float` which sets the maximum
+duration in seconds between recording "acknowledgements" (acks). The default value of
+`checkpoint_after` is `2.0`.
 
 The optional `max_subscriber_count` argument is a Python `int` which sets the maximum
 number of concurrent readers of the persistent subscription, beyond which attempts to
@@ -2488,10 +2488,10 @@ from this subscription. The `stream_name` argument specifies which stream
 the subscription will follow. The values of both these arguments are expected
 to be Python `str` objects.
 
-This method also has eleven optional arguments, `stream_position`, `from_end`,
+This method also has twelve optional arguments, `stream_position`, `from_end`,
 `resolve_links`, `consumer_strategy`, `message_timeout`, `max_retry_count`,
-`min_checkpoint_count`, `max_checkpoint_count`, `max_subscriber_count`, `timeout`
-and `credentials`.
+`min_checkpoint_count`, `max_checkpoint_count`, `checkpoint_after`,
+`max_subscriber_count`, `timeout` and `credentials`.
 
 The optional `stream_position` argument specifies a stream position from
 which to subscribe. The recorded event at this stream
@@ -2522,13 +2522,17 @@ The default value of `message_timeout` is `30.0`.
 The optional `max_retry_count` argument is a Python `int` which sets the number of times
 the server will retry to send an event. The default value of `max_retry_count` is `10`.
 
-The optional `min_checkpoint_count` argument is a Python `int` which sets a lower limit
-for recording acknowledgements and negative acknowledgements on the server. The default
-value of `min_checkpoint_count` is `10`.
+The optional `min_checkpoint_count` argument is a Python `int` which sets the minimum
+number of "acknowledgements" (acks) received by the server before the server may record
+the acknowledgements. The default value of `min_checkpoint_count` is `10`.
 
-The optional `max_checkpoint_count` argument is a Python `int` which sets an upper limit
-for recording acknowledgements and negative acknowledgements on the server. The default
-value of `max_checkpoint_count` is `10`.
+The optional `max_checkpoint_count` argument is a Python `int` which sets the maximum
+number of "acknowledgements" (acks) received by the server before the server must
+record the acknowledgements. The default value of `max_checkpoint_count` is `1000`.
+
+The optional `checkpoint_after` argument is a Python `float` which sets the maximum
+duration in seconds between recording "acknowledgements" (acks). The default value of
+`checkpoint_after` is `2.0`.
 
 The optional `max_subscriber_count` argument is a Python `int` which sets the maximum
 number of concurrent readers of the persistent subscription, beyond which attempts to
@@ -2619,18 +2623,19 @@ This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription, and a required
 `stream_name` argument, which is the name of a stream.
 
-This method also has ten optional arguments, `from_end`, `stream_position`,
+This method also has eleven optional arguments, `from_end`, `stream_position`,
 `resolve_links`, `message_timeout`, `max_retry_count`, `max_subscriber_count`,
-`min_checkpoint_count`, `max_checkpoint_count`, `timeout` and `credentials`.
+`min_checkpoint_count`, `max_checkpoint_count`, `checkpoint_after`, `timeout`
+and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
 was updated.
 
 Alternatively, the optional `stream_position` argument can be used to specify a stream
-position from which commit position the group of consumers of the subscription should
-receive events. Please note, the recorded event at the specified stream position might
-be included in the recorded events received by the group of consumers.
+position from which the group of consumers of the subscription should receive events.
+Please note, the recorded event at the specified stream position might be included in
+the recorded events received by the group of consumers.
 
 If neither `from_end` nor `commit_position` are specified, the group of consumers
 of the subscription will potentially receive all recorded events in the stream.
@@ -2649,13 +2654,17 @@ The default value of `message_timeout` is `30.0`.
 The optional `max_retry_count` argument is a Python `int` which sets the number of times
 the server will retry to send an event. The default value of `max_retry_count` is `10`.
 
-The optional `min_checkpoint_count` argument is a Python `int` which sets a lower limit
-for recording acknowledgements and negative acknowledgements on the server. The default
-value of `min_checkpoint_count` is `10`.
+The optional `min_checkpoint_count` argument is a Python `int` which sets the minimum
+number of "acknowledgements" (acks) received by the server before the server may record
+the acknowledgements. The default value of `min_checkpoint_count` is `10`.
 
-The optional `max_checkpoint_count` argument is a Python `int` which sets an upper limit
-for recording acknowledgements and negative acknowledgements on the server. The default
-value of `max_checkpoint_count` is `10`.
+The optional `max_checkpoint_count` argument is a Python `int` which sets the maximum
+number of "acknowledgements" (acks) received by the server before the server must
+record the acknowledgements. The default value of `max_checkpoint_count` is `1000`.
+
+The optional `checkpoint_after` argument is a Python `float` which sets the maximum
+duration in seconds between recording "acknowledgements" (acks). The default value of
+`checkpoint_after` is `2.0`.
 
 The optional `max_subscriber_count` argument is a Python `int` which sets the maximum
 number of concurrent readers of the persistent subscription, beyond which attempts to
