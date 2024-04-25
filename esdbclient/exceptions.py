@@ -35,9 +35,9 @@ class ServiceUnavailable(GrpcError):
     """
 
 
-class SSLError(GrpcError):
+class SSLError(ServiceUnavailable):
     """
-    Raised when gRPC service is unavailable.
+    Raised when gRPC service is unavailable due to SSL error.
     """
 
 

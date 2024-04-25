@@ -141,8 +141,6 @@ class BaseEventStoreDBClient:
         self._is_closed = False
         self.root_certificates = root_certificates
         self.connection_spec = ConnectionSpec(uri)
-        if self.connection_spec.options.Tls and self.root_certificates is None:
-            raise ValueError("Root certificate(s) are required")
 
         self._default_deadline = self.connection_spec.options.DefaultDeadline
 
@@ -330,8 +328,10 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     ) -> grpc.Channel:
         grpc_options = self.grpc_options + grpc_options
         if self.connection_spec.options.Tls is True:
-            assert self.root_certificates is not None
-            root_certificates = self.root_certificates.encode()
+            if self.root_certificates is not None:
+                root_certificates = self.root_certificates.encode()
+            else:
+                root_certificates = None
             channel_credentials = grpc.ssl_channel_credentials(
                 root_certificates=root_certificates
             )
@@ -642,10 +642,12 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             timeout=timeout,
             credentials=credentials,
         )
-        commit_position = 0
         for ev in recorded_events:
             assert ev.commit_position is not None
             commit_position = ev.commit_position
+            break
+        else:
+            commit_position = 0
         return commit_position
 
     @retrygrpc

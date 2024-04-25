@@ -29,6 +29,7 @@ from esdbclient.exceptions import (
     ProgrammingError,
     ReadOnlyReplicaNotFound,
     ServiceUnavailable,
+    SSLError,
     StreamIsDeleted,
     WrongCurrentVersion,
 )
@@ -128,24 +129,34 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 "esdb://localhost:2113,localhost:2113?Tls=False&NodePreference=readonlyreplica"
             )
 
-    async def test_constructor_with_tls_true_but_no_root_certificates(self) -> None:
+    async def test_raises_ssl_error_with_tls_true_but_no_root_certificates(
+        self,
+    ) -> None:
+        # NB Client can work with Tls=True without setting 'root_certificates'
+        # if grpc lib can verify server cert using locally installed CA certs.
         qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
         uri = f"esdb://admin:changeit@localhost:2114?{qs}"
-        with self.assertRaises(ValueError) as cm:
-            await AsyncioEventStoreDBClient(uri)
-        self.assertIn("Root certificate(s) are required", str(cm.exception))
+        client = await AsyncioEventStoreDBClient(uri)
+        with self.assertRaises(SSLError):
+            await client.get_commit_position()
 
-    # async def test_constructor_with_tls_true_but_no_root_certificates(self) -> None:
-    #     qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
-    #     uri = f"esdb://admin:changeit@localhost:2114?{qs}"
-    #     try:
-    #         await AsyncioEventStoreDBClient(uri)
-    #     except DiscoveryFailed:
-    #         tb = traceback.format_exc()
-    #         self.assertIn("Ssl handshake failed", tb)
-    #         self.assertIn("routines:OPENSSL_internal:CERTIFICATE_VERIFY_FAILED", tb)
-    #     else:
-    #         self.fail("Didn't raise DiscoveryFailed exception")
+    async def test_raises_ssl_error_with_tls_true_broken_root_certificates(
+        self,
+    ) -> None:
+        qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
+        uri = f"esdb://admin:changeit@localhost:2114?{qs}"
+        client = await AsyncioEventStoreDBClient(uri, root_certificates="blah")
+        with self.assertRaises(SSLError):
+            await client.get_commit_position()
+
+    async def test_raises_discovery_failed_with_tls_true_but_no_root_certificate(
+        self,
+    ) -> None:
+        uri = "esdb://admin:changeit@127.0.0.1:2110,127.0.0.1:2111"
+        uri += "?MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
+
+        with self.assertRaises(DiscoveryFailed):
+            await AsyncioEventStoreDBClient(uri, root_certificates="blah")
 
     async def test_username_and_password_required_for_secure_connection(self) -> None:
         with self.assertRaises(ValueError) as cm:
@@ -197,6 +208,23 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         event_ids = [e.id async for e in events_iter]
         self.assertIn(event1.id, event_ids)
         self.assertIn(event2.id, event_ids)
+
+    async def test_get_commit_position(self) -> None:
+        # Append events.
+        stream_name1 = str(uuid4())
+        event1 = NewEvent(type="OrderCreated", data=b"{}")
+        commit_position1 = await self.client.append_events(
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        # Get commit position.
+        commit_position2 = await self.client.get_commit_position()
+        self.assertEqual(commit_position1, commit_position2)
+
+        commit_position3 = await self.client.get_commit_position(filter_exclude=[".*"])
+        self.assertEqual(0, commit_position3)
 
     async def test_append_events_raises_not_found(self) -> None:
         stream_name1 = str(uuid4())

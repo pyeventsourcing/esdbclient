@@ -36,6 +36,7 @@ from esdbclient.exceptions import (
     NodeIsNotLeader,
     NotFound,
     ServiceUnavailable,
+    SSLError,
 )
 from esdbclient.protos.Grpc import persistent_pb2, streams_pb2
 
@@ -163,9 +164,13 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
         elif e.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
             return GrpcDeadlineExceeded(e)
         elif e.code() == grpc.StatusCode.UNAVAILABLE:
-            details = e.details()
-            # if "SSL_ERROR" in details:
-            #     return SSLError(e)
+            details = e.details() or ""
+            if "SSL_ERROR" in details:
+                # root_certificates is None and CA cert not installed
+                return SSLError(e)
+            if "empty address list:" in details:
+                # given root_certificates is invalid
+                return SSLError(e)
             return ServiceUnavailable(details)
         elif (
             e.code() == grpc.StatusCode.NOT_FOUND

@@ -216,8 +216,10 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
     ) -> AsyncioESDBConnection:
         grpc_options = self.grpc_options + grpc_options
         if self.connection_spec.options.Tls is True:
-            assert self.root_certificates is not None
-            root_certificates = self.root_certificates.encode()
+            if self.root_certificates is not None:
+                root_certificates = self.root_certificates.encode()
+            else:
+                root_certificates = None
             channel_credentials = grpc.ssl_channel_credentials(
                 root_certificates=root_certificates
             )
@@ -307,6 +309,37 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
         )
+
+    @retrygrpc
+    @autoreconnect
+    async def get_commit_position(
+        self,
+        *,
+        filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
+        filter_include: Sequence[str] = (),
+        filter_by_stream_name: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> int:
+        """
+        Returns the current commit position of the database.
+        """
+        recorded_events = await self.read_all(
+            backwards=True,
+            filter_exclude=filter_exclude,
+            filter_include=filter_include,
+            filter_by_stream_name=filter_by_stream_name,
+            limit=1,
+            timeout=timeout,
+            credentials=credentials,
+        )
+        async for ev in recorded_events:
+            assert ev.commit_position is not None
+            commit_position = ev.commit_position
+            break
+        else:
+            commit_position = 0
+        return commit_position
 
     @retrygrpc
     @autoreconnect

@@ -298,12 +298,12 @@ is "changeit".
 
 When connecting to a "secure" server, you may also need to provide an SSL/TLS certificate
 as the value of the `root_certificates` constructor argument. If the server certificate
-is publicly signed, the root certificates may be picked up by the grpc package from a
-default location. The client uses the root SSL/TLS certificate to authenticate the server.
-For development, you can either use the SSL/TLS certificate of a self-signing certificate
-authority used to create the server's certificate. Or, when using a single-node cluster,
-you can just use the server certificate itself, getting the server certificate with
-the following Python code.
+is publicly signed, the root certificates of the certificate authority may be installed
+locally and picked up by the grpc package from a default location. The client uses the
+root SSL/TLS certificate to authenticate the server. For development, you can either
+use the SSL/TLS certificate of a self-signing certificate authority used to create the
+server's certificate. Or, when using a single-node cluster, you can just use the server
+certificate itself, getting the server certificate with the following Python code.
 
 ```python
 import ssl
@@ -381,9 +381,7 @@ so that usernames and passwords are not sent over an "insecure" connection.
     esdb://localhost:2113?Tls=false
 
 Please note, the "insecure" connection string uses a query string with the field-value
-`Tls=false`. The value of this field is by default `true`. Unless the connection string
-URI includes the field-value `Tls=false` in the query string, the `root_certificates`
-constructor argument can be used to supply SSL/TLS root certificate(s).
+`Tls=false`. The value of this field is by default `true`.
 
 When connecting to a "secure" server, the `root_certificates` argument can be
 a Python `str` containing PEM encoded SSL/TLS root certificates. This value is
@@ -395,9 +393,7 @@ locally in a such a way that the Python grpc library can pick them up from a def
 location. Alternatively, for development, you can use the server's certificate itself.
 
 In the example below, the constructor argument values are taken from the operating
-system environment. This is a typical arrangement in a production environment. It is
-done this way here so that the code in this documentation can be tested with both
-a "secure" and an "insecure" server.
+system environment.
 
 ```python
 import os
@@ -2925,12 +2921,12 @@ from esdbclient import AsyncioEventStoreDBClient
 
 The asynchronous I/O client has the following methods: `append_to_stream()`,
 `get_stream()`, `read_stream()`, `delete_stream()`, `tombstone_stream()`, `read_all()`,
-`subscribe_to_all()`, `subscribe_to_stream()`, `create_subscription_to_all()`,
-`create_subscription_to_stream()`, `read_subscription_to_all()`,
-`read_subscription_to_stream()`, `update_subscription_to_all()`,
-`update_subscription_to_stream()`, `replay_parked_events()`, `list_subscriptions()`,
-`get_subscription_info()`, `delete_subscription()`, `reconnect()`, `close()`, and
-`construct_call_credentials()`.
+`get_commit_position()`, `subscribe_to_all()`, `subscribe_to_stream()`,
+`create_subscription_to_all()`, `create_subscription_to_stream()`,
+`read_subscription_to_all()`, `read_subscription_to_stream()`,
+`update_subscription_to_all()`, `update_subscription_to_stream()`,
+`replay_parked_events()`, `list_subscriptions()`, `get_subscription_info()`,
+`delete_subscription()`, `reconnect()`, `close()`, and `construct_call_credentials()`.
 
 These methods are equivalent to the methods on `EventStoreDBClient`. They have the same
 method signatures, and can be called with the same arguments, to the same effect. The

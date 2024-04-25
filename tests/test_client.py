@@ -40,6 +40,7 @@ from esdbclient.exceptions import (
     NotFound,
     ReadOnlyReplicaNotFound,
     ServiceUnavailable,
+    SSLError,
     StreamIsDeleted,
     WrongCurrentVersion,
 )
@@ -1954,6 +1955,25 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         read_response.stop()
         events = list(read_response)
         self.assertEqual(0, len(events))
+
+    def test_get_commit_position(self) -> None:
+        self.construct_esdb_client()
+
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        commit_position1 = self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1],
+        )
+
+        commit_position2 = self.client.get_commit_position()
+        self.assertEqual(commit_position1, commit_position2)
+
+        commit_position3 = self.client.get_commit_position(filter_exclude=[".*"])
+        self.assertEqual(0, commit_position3)
 
     def test_stream_delete_with_any_current_version(self) -> None:
         self.construct_esdb_client()
@@ -5415,16 +5435,18 @@ class TestESDBClusterNode3(TestEventStoreDBClient):
 
 class TestRootCertificatesAreRequired(TimedTestCase):
     def test_tls_true_no_root_certificates(self) -> None:
+        # NB Client can work with Tls=True without setting 'root_certificates'
+        # if grpc lib can verify server cert using locally installed CA certs.
         uri = "esdb://admin:changeit@127.0.0.1:2110"
-        with self.assertRaises(ValueError) as cm:
-            EventStoreDBClient(uri)
-        self.assertIn("Root certificate(s) are required", str(cm.exception))
+        with self.assertRaises(SSLError):
+            client = EventStoreDBClient(uri)
+            client.get_commit_position()
 
     def test_one_target_tls_true_invalid_root_certificates(self) -> None:
         uri = "esdb://admin:changeit@127.0.0.1:2110"
         client = EventStoreDBClient(uri, root_certificates="blah")
 
-        with self.assertRaises(ServiceUnavailable):
+        with self.assertRaises(SSLError):
             client.get_commit_position()
 
         # # Todo: Wanted to do something like this:
