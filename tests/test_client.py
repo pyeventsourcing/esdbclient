@@ -4552,6 +4552,29 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         info = self.client.get_subscription_info(group_name=group_name)
         self.assertEqual(info.extra_statistics, False)
 
+    def test_subscription_to_all_consumer_strategy_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_all(
+            group_name=group_name,
+            consumer_strategy="RoundRobin",
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.named_consumer_strategy, "RoundRobin")
+
+        # Update subscription.
+        self.client.update_subscription_to_all(
+            group_name=group_name,
+            consumer_strategy="Pinned",
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.named_consumer_strategy, "Pinned")
+
     def test_subscription_delete(self) -> None:
         self.construct_esdb_client()
 
@@ -5359,6 +5382,38 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
             stream_name=stream_name,
         )
         self.assertEqual(info.extra_statistics, False)
+
+    def test_subscription_to_stream_consumer_strategy_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+        stream_name = f"my-stream-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            consumer_strategy="RoundRobin",
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.named_consumer_strategy, "RoundRobin")
+
+        # Update subscription.
+        self.client.update_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            consumer_strategy="Pinned",
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.named_consumer_strategy, "Pinned")
 
     def test_subscription_to_stream_max_subscriber_count(self) -> None:
         self.construct_esdb_client()

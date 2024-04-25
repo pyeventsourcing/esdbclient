@@ -2,7 +2,6 @@
 import asyncio
 import sys
 from typing import Optional
-from unittest import skipIf
 
 from esdbclient.events import CaughtUp
 from esdbclient.persistent import AsyncioSubscriptionReadReqs

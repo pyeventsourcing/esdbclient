@@ -9,6 +9,7 @@ from time import sleep
 from typing import (
     Any,
     AsyncIterator,
+    Dict,
     Iterator,
     List,
     Optional,
@@ -81,6 +82,14 @@ class _AsyncioReadResps(Iterator[persistent_pb2.ReadResp], Protocol):
 ConsumerStrategy = Literal[
     "DispatchToSingle", "RoundRobin", "Pinned", "PinnedByCorrelation"
 ]
+
+CONSUMER_STRATEGIES: Dict[
+    ConsumerStrategy, persistent_pb2.UpdateReq.ConsumerStrategy.ValueType
+] = {
+    "DispatchToSingle": persistent_pb2.UpdateReq.ConsumerStrategy.DispatchToSingle,
+    "RoundRobin": persistent_pb2.UpdateReq.ConsumerStrategy.DispatchToSingle,
+    "Pinned": persistent_pb2.UpdateReq.ConsumerStrategy.Pinned,
+}
 
 
 class BaseSubscriptionReadReqs:
@@ -892,6 +901,7 @@ class BasePersistentSubscriptionsService(ESDBService[TGrpcStreamers]):
         commit_position: Optional[int] = None,
         stream_position: Optional[int] = None,
         resolve_links: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
@@ -903,9 +913,11 @@ class BasePersistentSubscriptionsService(ESDBService[TGrpcStreamers]):
         history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
         extra_statistics: bool = False,
     ) -> persistent_pb2.UpdateReq:
-        # Construct 'settings'.
+        # Construct UpdateReq.Settings.
+        named_consumer_strategy = CONSUMER_STRATEGIES[consumer_strategy]
         settings = persistent_pb2.UpdateReq.Settings(
             resolve_links=resolve_links,
+            named_consumer_strategy=named_consumer_strategy,
             extra_statistics=extra_statistics,
             max_retry_count=max_retry_count,
             min_checkpoint_count=min_checkpoint_count,
@@ -1266,6 +1278,7 @@ class AsyncioPersistentSubscriptionsService(
         from_end: bool = False,
         commit_position: Optional[int] = None,
         resolve_links: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
@@ -1293,6 +1306,7 @@ class AsyncioPersistentSubscriptionsService(
         from_end: bool = False,
         stream_position: Optional[int] = None,
         resolve_links: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
@@ -1319,6 +1333,7 @@ class AsyncioPersistentSubscriptionsService(
         commit_position: Optional[int] = None,
         stream_position: Optional[int] = None,
         resolve_links: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
@@ -1340,6 +1355,7 @@ class AsyncioPersistentSubscriptionsService(
             commit_position=commit_position,
             stream_position=stream_position,
             resolve_links=resolve_links,
+            consumer_strategy=consumer_strategy,
             message_timeout=message_timeout,
             max_retry_count=max_retry_count,
             min_checkpoint_count=min_checkpoint_count,
@@ -1637,6 +1653,7 @@ class PersistentSubscriptionsService(
         from_end: bool = False,
         commit_position: Optional[int] = None,
         resolve_links: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
@@ -1664,6 +1681,7 @@ class PersistentSubscriptionsService(
         from_end: bool = False,
         stream_position: Optional[int] = None,
         resolve_links: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
@@ -1690,6 +1708,7 @@ class PersistentSubscriptionsService(
         commit_position: Optional[int] = None,
         stream_position: Optional[int] = None,
         resolve_links: bool = False,
+        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
         max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
         min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
@@ -1711,6 +1730,7 @@ class PersistentSubscriptionsService(
             commit_position=commit_position,
             stream_position=stream_position,
             resolve_links=resolve_links,
+            consumer_strategy=consumer_strategy,
             message_timeout=message_timeout,
             max_retry_count=max_retry_count,
             min_checkpoint_count=min_checkpoint_count,

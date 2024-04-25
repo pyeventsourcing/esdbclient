@@ -2433,10 +2433,11 @@ strategy cannot be adjusted.
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
 
-This method also has fifteen optional arguments, `from_end`, `commit_position`,
-`resolve_links`, `message_timeout`, `max_retry_count`, `min_checkpoint_count`,
-`max_checkpoint_count`, `checkpoint_after`, `max_subscriber_count`, `live_buffer_size`,
-`read_batch_size`, `history_buffer_size`, `extra_statistics`, `timeout` and `credentials`.
+This method also has sixteen optional arguments, `from_end`, `commit_position`,
+`resolve_links`, `consumer_strategy`, `message_timeout`, `max_retry_count`,
+`min_checkpoint_count`, `max_checkpoint_count`, `checkpoint_after`,
+`max_subscriber_count`, `live_buffer_size`, `read_batch_size`, `history_buffer_size`,
+`extra_statistics`, `timeout` and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
@@ -2454,6 +2455,13 @@ The optional `resolve_links` argument is a Python `bool`. The default value of `
 is `False`, which means any event links will not be resolved, so that the events that are
 returned may represent event links. If `resolve_links` is `True`, any event links will
 be resolved, so that the linked events will be returned instead of the event links.
+
+The optional `consumer_strategy` argument is a Python `str` that defines
+the consumer strategy for this persistent subscription. The value of this argument
+can be `'DispatchToSingle'`, `'RoundRobin'`, `'Pinned'`, or `'PinnedByCorrelation'`. The
+default value is `'DispatchToSingle'`. (Please note, due to a limitation in the
+underlying gRPC API, setting the value of this argument to `'PinnedByCorrelation'` will
+cause an error.)
 
 The optional `message_timeout` argument is a Python `float` which sets a maximum duration,
 in seconds, from the server sending a recorded event to a consumer of the persistent
@@ -2675,11 +2683,11 @@ This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription, and a required
 `stream_name` argument, which is the name of a stream.
 
-This method also has fifteen optional arguments, `from_end`, `stream_position`,
-`resolve_links`, `message_timeout`, `max_retry_count`, `max_subscriber_count`,
-`live_buffer_size`, `read_batch_size`, `history_buffer_size`, `extra_statistics`,
-`min_checkpoint_count`, `max_checkpoint_count`, `checkpoint_after`, `timeout`
-and `credentials`.
+This method also has sixteen optional arguments, `from_end`, `stream_position`,
+`resolve_links`, `consumer_strategy`, `message_timeout`, `max_retry_count`,
+`max_subscriber_count`, `live_buffer_size`, `read_batch_size`, `history_buffer_size`,
+`extra_statistics`, `min_checkpoint_count`, `max_checkpoint_count`, `checkpoint_after`,
+`timeout` and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
@@ -2697,6 +2705,13 @@ The optional `resolve_links` argument is a Python `bool`. The default value of `
 is `False`, which means any event links will not be resolved, so that the events that are
 returned may represent event links. If `resolve_links` is `True`, any event links will
 be resolved, so that the linked events will be returned instead of the event links.
+
+The optional `consumer_strategy` argument is a Python `str` that defines
+the consumer strategy for this persistent subscription. The value of this argument
+can be `'DispatchToSingle'`, `'RoundRobin'`, `'Pinned'`, or `'PinnedByCorrelation'`. The
+default value is `'DispatchToSingle'`. (Please note, due to a limitation in the
+underlying gRPC API, setting the value of this argument to `'PinnedByCorrelation'` will
+cause an error.)
 
 The optional `message_timeout` argument is a Python `float` which sets a maximum duration,
 in seconds, from the server sending a recorded event to a consumer of the persistent
