@@ -3,6 +3,7 @@ from unittest import TestCase
 from uuid import UUID, uuid4
 
 from esdbclient import Checkpoint, NewEvent, RecordedEvent
+from esdbclient.events import CaughtUp, FellBehind
 from tests.test_client import random_data
 
 
@@ -163,6 +164,22 @@ class TestCheckpoint(TestCase):
 
         checkpoint = Checkpoint(commit_position=67890)
         self.assertEqual(checkpoint.commit_position, 67890)
+
+
+class TestCaughtUp(TestCase):
+    def test(self) -> None:
+        caught_up = CaughtUp()
+        self.assertFalse(caught_up.is_checkpoint)
+        self.assertTrue(caught_up.is_caught_up)
+        self.assertFalse(caught_up.is_fell_behind)
+
+
+class TestFellBehind(TestCase):
+    def test(self) -> None:
+        fell_behind = FellBehind()
+        self.assertFalse(fell_behind.is_checkpoint)
+        self.assertFalse(fell_behind.is_caught_up)
+        self.assertTrue(fell_behind.is_fell_behind)
 
 
 class TestEquality(TestCase):

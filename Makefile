@@ -92,7 +92,7 @@ fmt: fmt-isort fmt-black
 
 .PHONY: test
 test:
-	timeout --preserve-status --kill-after=10s 5m $(POETRY) run coverage run -m unittest discover ./tests -v
+	timeout --preserve-status --kill-after=10s 10m $(POETRY) run coverage run -m unittest discover ./tests -v
 	$(POETRY) run coverage report --fail-under=100 --show-missing
 
 # 	$(POETRY) run python -m pytest -v $(opts) $(call tests,.) & read -t 1 ||

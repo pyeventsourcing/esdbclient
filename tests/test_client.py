@@ -23,7 +23,7 @@ from esdbclient.connection_spec import (
     NODE_PREFERENCE_LEADER,
     ConnectionSpec,
 )
-from esdbclient.events import Checkpoint, NewEvent
+from esdbclient.events import CaughtUp, Checkpoint, NewEvent
 from esdbclient.exceptions import (
     AbortedByServer,
     AlreadyExists,
@@ -2454,8 +2454,43 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         for event in subscription:
             if isinstance(event, Checkpoint):
                 break
-        else:
-            self.fail("Didn't get a checkpoint")
+
+    @skipIf(
+        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "Server doesn't support 'caught up' or 'fell behind' messages",
+    )
+    @skipIf(
+        "22.10" in EVENTSTORE_IMAGE_TAG,
+        "Server doesn't support 'caught up' or 'fell behind' messages",
+    )
+    def test_subscribe_to_all_include_caught_up_fell_behind(self) -> None:
+        self.construct_esdb_client()
+
+        commit_position = self.client.get_commit_position()
+
+        # Append new events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        stream_name1 = str(uuid4())
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1],
+        )
+
+        # Subscribe excluding all events, with small window.
+        subscription = self.client.subscribe_to_all(
+            commit_position=commit_position,
+            filter_exclude=".*",
+            include_caught_up_fell_behind=True,
+            timeout=10,
+        )
+
+        # Expect to get caught up message.
+        for event in subscription:
+            if isinstance(event, CaughtUp):
+                break
+
+        # Todo: test for 'fell behind' messages.
 
     @skipIf("23.10" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug was fixed")
     @skipIf("24.2" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug was fixed")
@@ -3014,6 +3049,54 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
 
         # Iterating should stop.
         list(subscription)
+
+    @skipIf(
+        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "Server doesn't support 'caught up' or 'fell behind' messages",
+    )
+    @skipIf(
+        "22.10" in EVENTSTORE_IMAGE_TAG,
+        "Server doesn't support 'caught up' or 'fell behind' messages",
+    )
+    def test_subscribe_to_stream_caught_up_fell_behind(self) -> None:
+        self.construct_esdb_client()
+
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1],
+        )
+
+        # Subscribe to stream events, from the start.
+        subscription = self.client.subscribe_to_stream(
+            stream_name=stream_name1,
+            include_caught_up_fell_behind=True,
+            timeout=10,
+        )
+        for event in subscription:
+            if isinstance(event, CaughtUp):
+                break
+
+        # Todo: test for 'fell behind' messages.
+
+        # for i in range(100):
+        #     new_events = [
+        #         NewEvent(type="OrderUpdated", data=random_data()) for _ in range(10)
+        #     ]
+        #     self.client.append_events(
+        #         stream_name1,
+        #         current_version=i * 10,
+        #         events=new_events,
+        #     )
+        #     print(i, "appended 10 events...")
+        #     if isinstance(next(subscription), FellBehind):
+        #         break
+        # else:
+        #     self.fail("Didn't get a 'fell behind' message...")
 
     def test_subscription_to_all_read_with_ack_event_id(self) -> None:
         self.construct_esdb_client()

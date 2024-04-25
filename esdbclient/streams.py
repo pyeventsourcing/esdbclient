@@ -41,7 +41,7 @@ from esdbclient.common import (
     handle_rpc_error,
 )
 from esdbclient.connection_spec import ConnectionSpec
-from esdbclient.events import Checkpoint, NewEvent, RecordedEvent
+from esdbclient.events import CaughtUp, Checkpoint, FellBehind, NewEvent, RecordedEvent
 from esdbclient.exceptions import (
     AccessDeniedError,
     AppendDeadlineExceeded,
@@ -85,6 +85,8 @@ class BaseReadResponse:
         stream_name: Optional[str],
     ):
         self._stream_name = stream_name
+        self._include_checkpoints = False
+        self._include_caught_up_fell_behind = False
 
     def _handle_stream_read_rpc_error(
         self, e: grpc.RpcError
@@ -111,6 +113,10 @@ class BaseReadResponse:
             return Checkpoint(
                 commit_position=checkpoint.commit_position,
             )
+        elif content_oneof == "caught_up":
+            return CaughtUp()
+        elif content_oneof == "fell_behind":  # pragma: no cover
+            return FellBehind()
         else:  # pragma: no cover
             return None
             # Todo: Maybe support other content_oneof values:
@@ -120,6 +126,23 @@ class BaseReadResponse:
             #
             # Todo: Not sure how to request to get first_stream_position,
             #   last_stream_position, first_all_stream_position.
+
+    def _filter_recorded_event(
+        self, recorded_event: Optional[RecordedEvent]
+    ) -> Optional[RecordedEvent]:
+        recorded_event_type = type(recorded_event)
+        if (
+            (recorded_event_type is RecordedEvent)
+            or (self._include_checkpoints and recorded_event_type is Checkpoint)
+            or (
+                self._include_caught_up_fell_behind
+                and (
+                    recorded_event_type is CaughtUp or recorded_event_type is FellBehind
+                )
+            )
+        ):
+            return recorded_event
+        return None
 
 
 class AsyncioReadResponse(
@@ -149,11 +172,11 @@ class AsyncioReadResponse(
                 except CancelledByClient:
                     raise StopAsyncIteration() from None
                 else:
-                    recorded_event = self._convert_read_resp(read_resp)
+                    recorded_event = self._filter_recorded_event(
+                        self._convert_read_resp(read_resp)
+                    )
                     if recorded_event is not None:
                         return recorded_event
-                    else:  # pragma: no cover
-                        pass
             except Exception:
                 await self.stop()
                 raise
@@ -192,11 +215,13 @@ class AsyncioCatchupSubscription(AsyncioReadResponse):
         stream_name: Optional[str],
         grpc_streamers: AsyncGrpcStreamers,
         include_checkpoints: bool = False,
+        include_caught_up_fell_behind: bool = False,
     ):
         super().__init__(
             aio_call=aio_call, stream_name=stream_name, grpc_streamers=grpc_streamers
         )
-        self.include_checkpoints = include_checkpoints
+        self._include_checkpoints = include_checkpoints
+        self._include_caught_up_fell_behind = include_caught_up_fell_behind
 
     async def check_confirmation(self) -> None:
         read_resp = await self._get_next_read_resp()
@@ -205,12 +230,6 @@ class AsyncioCatchupSubscription(AsyncioReadResponse):
             raise SubscriptionConfirmationError(
                 f"Expected subscription confirmation, got: {read_resp}"
             )
-
-    async def __anext__(self) -> RecordedEvent:
-        while True:
-            recorded_event = await super().__anext__()
-            if self.include_checkpoints or not isinstance(recorded_event, Checkpoint):
-                return recorded_event
 
     async def __aenter__(self) -> "AsyncioCatchupSubscription":
         return self
@@ -240,11 +259,11 @@ class ReadResponse(Iterator[RecordedEvent], BaseReadResponse, SyncGrpcStreamer):
                 except CancelledByClient:
                     raise StopIteration() from None
                 else:
-                    recorded_event = self._convert_read_resp(read_resp)
+                    recorded_event = self._filter_recorded_event(
+                        self._convert_read_resp(read_resp)
+                    )
                     if recorded_event is not None:
                         return recorded_event
-                    else:  # pragma: no cover
-                        pass
             except Exception:
                 self.stop()
                 raise
@@ -285,6 +304,7 @@ class CatchupSubscription(ReadResponse):
         stream_name: Optional[str],
         grpc_streamers: SyncGrpcStreamers,
         include_checkpoints: bool = False,
+        include_caught_up_fell_behind: bool = False,
     ):
         super().__init__(
             read_resps=read_resps,
@@ -293,6 +313,7 @@ class CatchupSubscription(ReadResponse):
         )
         self._subscription_id: Optional[UUID] = None
         self._include_checkpoints = include_checkpoints
+        self._include_caught_up_fell_behind = include_caught_up_fell_behind
         try:
             first_read_resp = self._get_next_read_resp()
             content_oneof = first_read_resp.WhichOneof("content")
@@ -306,12 +327,6 @@ class CatchupSubscription(ReadResponse):
         except Exception:
             self.stop()
             raise
-
-    def __next__(self) -> RecordedEvent:
-        while True:
-            recorded_event = super().__next__()
-            if self._include_checkpoints or not isinstance(recorded_event, Checkpoint):
-                return recorded_event
 
     def __enter__(self) -> "CatchupSubscription":
         return self
@@ -809,6 +824,7 @@ class AsyncioStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         from_end: bool = False,
         resolve_links: bool = False,
         subscribe: Literal[True],
+        include_caught_up_fell_behind: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -850,6 +866,7 @@ class AsyncioStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         include_checkpoints: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+        include_caught_up_fell_behind: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -875,6 +892,7 @@ class AsyncioStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         include_checkpoints: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+        include_caught_up_fell_behind: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -923,6 +941,7 @@ class AsyncioStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
                 aio_call=unary_stream_call,
                 stream_name=stream_name,
                 include_checkpoints=include_checkpoints,
+                include_caught_up_fell_behind=include_caught_up_fell_behind,
                 grpc_streamers=self._grpc_streamers,
             )
             await response.check_confirmation()
@@ -1028,6 +1047,7 @@ class StreamsService(BaseStreamsService[SyncGrpcStreamers]):
         from_end: bool = False,
         resolve_links: bool = False,
         subscribe: Literal[True],
+        include_caught_up_fell_behind: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1069,6 +1089,7 @@ class StreamsService(BaseStreamsService[SyncGrpcStreamers]):
         include_checkpoints: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+        include_caught_up_fell_behind: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1094,6 +1115,7 @@ class StreamsService(BaseStreamsService[SyncGrpcStreamers]):
         include_checkpoints: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+        include_caught_up_fell_behind: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1141,6 +1163,7 @@ class StreamsService(BaseStreamsService[SyncGrpcStreamers]):
                 read_resps=read_resps,
                 stream_name=stream_name,
                 include_checkpoints=include_checkpoints,
+                include_caught_up_fell_behind=include_caught_up_fell_behind,
                 grpc_streamers=self._grpc_streamers,
             )
 

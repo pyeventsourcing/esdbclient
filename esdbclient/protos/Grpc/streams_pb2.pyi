@@ -690,6 +690,22 @@ class ReadResp(google.protobuf.message.Message):
         ) -> None: ...
 
     @typing_extensions.final
+    class CaughtUp(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        def __init__(
+            self,
+        ) -> None: ...
+
+    @typing_extensions.final
+    class FellBehind(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        def __init__(
+            self,
+        ) -> None: ...
+
+    @typing_extensions.final
     class StreamNotFound(google.protobuf.message.Message):
         DESCRIPTOR: google.protobuf.descriptor.Descriptor
 
@@ -724,6 +740,8 @@ class ReadResp(google.protobuf.message.Message):
     FIRST_STREAM_POSITION_FIELD_NUMBER: builtins.int
     LAST_STREAM_POSITION_FIELD_NUMBER: builtins.int
     LAST_ALL_STREAM_POSITION_FIELD_NUMBER: builtins.int
+    CAUGHT_UP_FIELD_NUMBER: builtins.int
+    FELL_BEHIND_FIELD_NUMBER: builtins.int
     @property
     def event(self) -> global___ReadResp.ReadEvent: ...
     @property
@@ -738,6 +756,10 @@ class ReadResp(google.protobuf.message.Message):
     def last_all_stream_position(
         self,
     ) -> esdbclient.protos.Grpc.shared_pb2.AllStreamPosition: ...
+    @property
+    def caught_up(self) -> global___ReadResp.CaughtUp: ...
+    @property
+    def fell_behind(self) -> global___ReadResp.FellBehind: ...
     def __init__(
         self,
         *,
@@ -749,10 +771,14 @@ class ReadResp(google.protobuf.message.Message):
         last_stream_position: builtins.int = ...,
         last_all_stream_position: esdbclient.protos.Grpc.shared_pb2.AllStreamPosition
         | None = ...,
+        caught_up: global___ReadResp.CaughtUp | None = ...,
+        fell_behind: global___ReadResp.FellBehind | None = ...,
     ) -> None: ...
     def HasField(
         self,
         field_name: typing_extensions.Literal[
+            "caught_up",
+            b"caught_up",
             "checkpoint",
             b"checkpoint",
             "confirmation",
@@ -761,6 +787,8 @@ class ReadResp(google.protobuf.message.Message):
             b"content",
             "event",
             b"event",
+            "fell_behind",
+            b"fell_behind",
             "first_stream_position",
             b"first_stream_position",
             "last_all_stream_position",
@@ -774,6 +802,8 @@ class ReadResp(google.protobuf.message.Message):
     def ClearField(
         self,
         field_name: typing_extensions.Literal[
+            "caught_up",
+            b"caught_up",
             "checkpoint",
             b"checkpoint",
             "confirmation",
@@ -782,6 +812,8 @@ class ReadResp(google.protobuf.message.Message):
             b"content",
             "event",
             b"event",
+            "fell_behind",
+            b"fell_behind",
             "first_stream_position",
             b"first_stream_position",
             "last_all_stream_position",
@@ -803,6 +835,8 @@ class ReadResp(google.protobuf.message.Message):
             "first_stream_position",
             "last_stream_position",
             "last_all_stream_position",
+            "caught_up",
+            "fell_behind",
         ]
         | None
     ): ...

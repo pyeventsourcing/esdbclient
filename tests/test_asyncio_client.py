@@ -3,18 +3,24 @@ import asyncio
 import sys
 from typing import Optional
 
+from esdbclient.events import CaughtUp
 from esdbclient.persistent import AsyncioSubscriptionReadReqs
 from esdbclient.streams import AsyncioCatchupSubscription
-from tests.test_client import TimedTestCase, get_ca_certificate, random_data
+from tests.test_client import (
+    EVENTSTORE_IMAGE_TAG,
+    TimedTestCase,
+    get_ca_certificate,
+    random_data,
+)
 
 if sys.version_info[0:2] > (3, 7):
-    from unittest import IsolatedAsyncioTestCase
+    from unittest import IsolatedAsyncioTestCase, skipIf
 else:
     from async_case import IsolatedAsyncioTestCase
 
 from uuid import uuid4
 
-from esdbclient import NewEvent, StreamState
+from esdbclient import Checkpoint, NewEvent, StreamState
 from esdbclient.asyncio_client import (
     AsyncioEventStoreDBClient,
     _AsyncioEventStoreDBClient,
@@ -579,6 +585,66 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         catchup_subscription = await self.client.subscribe_to_all()
         self.assertIsInstance(catchup_subscription, AsyncioCatchupSubscription)
 
+    async def test_subscribe_to_all_include_checkpoints(self) -> None:
+        # Append new events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        event3 = NewEvent(type="OrderDeleted", data=random_data())
+        stream_name1 = str(uuid4())
+        await self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        # Subscribe excluding all events, with small window.
+        subscription = await self.client.subscribe_to_all(
+            filter_exclude=".*",
+            include_checkpoints=True,
+            window_size=1,
+            checkpoint_interval_multiplier=1,
+        )
+
+        # Expect to get checkpoints.
+        async for event in subscription:
+            if isinstance(event, Checkpoint):
+                break
+
+    @skipIf(
+        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "Server doesn't support 'caught up' or 'fell behind' messages",
+    )
+    @skipIf(
+        "22.10" in EVENTSTORE_IMAGE_TAG,
+        "Server doesn't support 'caught up' or 'fell behind' messages",
+    )
+    async def test_subscribe_to_all_include_caught_up_fell_behind(self) -> None:
+        commit_position = await self.client.get_commit_position()
+
+        # Append new events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        stream_name1 = str(uuid4())
+        await self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1],
+        )
+
+        # Subscribe excluding all events, with small window.
+        subscription = await self.client.subscribe_to_all(
+            commit_position=commit_position,
+            filter_exclude=".*",
+            include_caught_up_fell_behind=True,
+            timeout=10,
+        )
+
+        # Expect to get caught up message.
+        async for event in subscription:
+            if isinstance(event, CaughtUp):
+                break
+
+        # Todo: test for 'fell behind' messages.
+
     async def test_subscribe_to_stream(self) -> None:
         # Append events.
         stream_name1 = str(uuid4())
@@ -614,6 +680,37 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             if event.id == event2.id:
                 await catchup_subscription.stop()
         self.assertEqual(events[-1].id, event2.id)
+
+    @skipIf(
+        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "Server doesn't support 'caught up' or 'fell behind' messages",
+    )
+    @skipIf(
+        "22.10" in EVENTSTORE_IMAGE_TAG,
+        "Server doesn't support 'caught up' or 'fell behind' messages",
+    )
+    async def test_subscribe_to_stream_caught_up_fell_behind(self) -> None:
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+
+        # Append new events.
+        stream_name1 = str(uuid4())
+        await self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1],
+        )
+
+        # Subscribe to stream events, from the start.
+        subscription = await self.client.subscribe_to_stream(
+            stream_name=stream_name1,
+            include_caught_up_fell_behind=True,
+            timeout=10,
+        )
+        async for event in subscription:
+            if isinstance(event, CaughtUp):
+                break
+
+        # Todo: test for 'fell behind' messages.
 
     async def test_persistent_subscription_to_all(self) -> None:
         # Check subscription does not exist.

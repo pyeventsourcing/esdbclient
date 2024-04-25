@@ -99,6 +99,8 @@ message ReadResp {
 		uint64 first_stream_position = 5;
 		uint64 last_stream_position = 6;
 		AllStreamPosition last_all_stream_position = 7;
+		CaughtUp caught_up = 8;
+		FellBehind fell_behind = 9;
 	}
 
 	message ReadEvent {
@@ -127,7 +129,9 @@ message ReadResp {
 		uint64 commit_position = 1;
 		uint64 prepare_position = 2;
 	}
-	message StreamNotFound {
+	message CaughtUp {}
+	message FellBehind {}
+  message StreamNotFound {
 		event_store.client.StreamIdentifier stream_identifier = 1;
 	}
 }
