@@ -2166,10 +2166,11 @@ to all the recorded events in the database across all streams.
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
 
-This method has fifteen optional arguments, `from_end`, `commit_position`, `resolve_links`,
+This method has nineteen optional arguments, `from_end`, `commit_position`, `resolve_links`,
 `filter_exclude`, `filter_include`, `filter_by_stream_name`, `consumer_strategy`,
 `message_timeout`, `max_retry_count`, `min_checkpoint_count`, `max_checkpoint_count`,
-`checkpoint_after`, `max_subscriber_count`, `timeout` and `credentials`.
+`checkpoint_after`, `max_subscriber_count`, `live_buffer_size`, `read_batch_size`,
+`history_buffer_size`, `extra_statistics`, `timeout` and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
@@ -2234,6 +2235,21 @@ duration in seconds between recording "acknowledgements" (acks). The default val
 The optional `max_subscriber_count` argument is a Python `int` which sets the maximum
 number of concurrent readers of the persistent subscription, beyond which attempts to
 read the persistent subscription will raise a `MaximumSubscriptionsReached` error.
+
+The optional `live_buffer_size` argument is a Python `int` which sets the size of the
+buffer (in-memory) holding newly recorded events. The default value of `live_buffer_size`
+is 500.
+
+The optional `read_batch_size` argument is a Python `int` which sets the number of
+recorded events read from disk when catching up. The default value of `read_batch_size`
+is 200.
+
+The optional `history_buffer_size` argument is a Python `int` which sets the number of
+recorded events to cache in memory when catching up. The default value of `history_buffer_size`
+is 500.
+
+The optional `extra_statistics` argument is a Python `bool` which enables tracking of
+extra statistics on this subscription. The default value of `extra_statistics` is `False`.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
@@ -2417,9 +2433,10 @@ strategy cannot be adjusted.
 This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription.
 
-This method also has eleven optional arguments, `from_end`, `commit_position`,
+This method also has fifteen optional arguments, `from_end`, `commit_position`,
 `resolve_links`, `message_timeout`, `max_retry_count`, `min_checkpoint_count`,
-`max_checkpoint_count`, `checkpoint_after`, `max_subscriber_count`, `timeout` and `credentials`.
+`max_checkpoint_count`, `checkpoint_after`, `max_subscriber_count`, `live_buffer_size`,
+`read_batch_size`, `history_buffer_size`, `extra_statistics`, `timeout` and `credentials`.
 
 The optional `from_end` argument can be used to specify that the group of consumers
 of the subscription should only receive events that were recorded after the subscription
@@ -2463,6 +2480,21 @@ The optional `max_subscriber_count` argument is a Python `int` which sets the ma
 number of concurrent readers of the persistent subscription, beyond which attempts to
 read the persistent subscription will raise a `MaximumSubscriptionsReached` error.
 
+The optional `live_buffer_size` argument is a Python `int` which sets the size of the
+buffer (in-memory) holding newly recorded events. The default value of `live_buffer_size`
+is 500.
+
+The optional `read_batch_size` argument is a Python `int` which sets the number of
+recorded events read from disk when catching up. The default value of `read_batch_size`
+is 200.
+
+The optional `history_buffer_size` argument is a Python `int` which sets the number of
+recorded events to cache in memory when catching up. The default value of `history_buffer_size`
+is 500.
+
+The optional `extra_statistics` argument is a Python `bool` which enables tracking of
+extra statistics on this subscription. The default value of `extra_statistics` is `False`.
+
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
 
@@ -2492,10 +2524,11 @@ from this subscription. The `stream_name` argument specifies which stream
 the subscription will follow. The values of both these arguments are expected
 to be Python `str` objects.
 
-This method also has twelve optional arguments, `stream_position`, `from_end`,
+This method also has sixteen optional arguments, `stream_position`, `from_end`,
 `resolve_links`, `consumer_strategy`, `message_timeout`, `max_retry_count`,
 `min_checkpoint_count`, `max_checkpoint_count`, `checkpoint_after`,
-`max_subscriber_count`, `timeout` and `credentials`.
+`max_subscriber_count`, `live_buffer_size`, `read_batch_size`, `history_buffer_size`,
+`extra_statistics`, `timeout` and `credentials`.
 
 The optional `stream_position` argument specifies a stream position from
 which to subscribe. The recorded event at this stream
@@ -2541,6 +2574,21 @@ duration in seconds between recording "acknowledgements" (acks). The default val
 The optional `max_subscriber_count` argument is a Python `int` which sets the maximum
 number of concurrent readers of the persistent subscription, beyond which attempts to
 read the persistent subscription will raise a `MaximumSubscriptionsReached` error.
+
+The optional `live_buffer_size` argument is a Python `int` which sets the size of the
+buffer (in-memory) holding newly recorded events. The default value of `live_buffer_size`
+is 500.
+
+The optional `read_batch_size` argument is a Python `int` which sets the number of
+recorded events read from disk when catching up. The default value of `read_batch_size`
+is 200.
+
+The optional `history_buffer_size` argument is a Python `int` which sets the number of
+recorded events to cache in memory when catching up. The default value of `history_buffer_size`
+is 500.
+
+The optional `extra_statistics` argument is a Python `bool` which enables tracking of
+extra statistics on this subscription. The default value of `extra_statistics` is `False`.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
@@ -2627,8 +2675,9 @@ This method has a required `group_name` argument, which is the
 name of a "group" of consumers of the subscription, and a required
 `stream_name` argument, which is the name of a stream.
 
-This method also has eleven optional arguments, `from_end`, `stream_position`,
+This method also has fifteen optional arguments, `from_end`, `stream_position`,
 `resolve_links`, `message_timeout`, `max_retry_count`, `max_subscriber_count`,
+`live_buffer_size`, `read_batch_size`, `history_buffer_size`, `extra_statistics`,
 `min_checkpoint_count`, `max_checkpoint_count`, `checkpoint_after`, `timeout`
 and `credentials`.
 
@@ -2673,6 +2722,21 @@ duration in seconds between recording "acknowledgements" (acks). The default val
 The optional `max_subscriber_count` argument is a Python `int` which sets the maximum
 number of concurrent readers of the persistent subscription, beyond which attempts to
 read the persistent subscription will raise a `MaximumSubscriptionsReached` error.
+
+The optional `live_buffer_size` argument is a Python `int` which sets the size of the
+buffer (in-memory) holding newly recorded events. The default value of `live_buffer_size`
+is 500.
+
+The optional `read_batch_size` argument is a Python `int` which sets the number of
+recorded events read from disk when catching up. The default value of `read_batch_size`
+is 200.
+
+The optional `history_buffer_size` argument is a Python `int` which sets the number of
+recorded events to cache in memory when catching up. The default value of `history_buffer_size`
+is 500.
+
+The optional `extra_statistics` argument is a Python `bool` which enables tracking of
+extra statistics on this subscription. The default value of `extra_statistics` is `False`.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.

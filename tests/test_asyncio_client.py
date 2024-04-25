@@ -70,15 +70,40 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         )
 
     async def asyncTearDown(self) -> None:
-        await self.client.close()
-        del self.client
-        if self._reader is not None:
-            await self._reader.close()
-            del self._reader
+        try:
+            if hasattr(self, "client") and not self.client.is_closed:
+                for subscription in await self.client.list_subscriptions():
+                    await self.client.delete_subscription(
+                        group_name=subscription.group_name,
+                        stream_name=(
+                            None
+                            if subscription.event_source == "$all"
+                            else subscription.event_source
+                        ),
+                    )
+            await self.client.close()
+            del self.client
 
-        if self._writer is not None:
-            await self._writer.close()
-            del self._writer
+            if self._reader is not None:
+                await self._reader.close()
+                del self._reader
+
+            if self._writer is not None and self._writer.is_closed:
+                for subscription in await self._writer.list_subscriptions():
+                    await self.client.delete_subscription(
+                        group_name=subscription.group_name,
+                        stream_name=(
+                            None
+                            if subscription.event_source == "$all"
+                            else subscription.event_source
+                        ),
+                    )
+                await self._writer.close()
+                del self._writer
+        except (ServiceUnavailable, DiscoveryFailed):
+            pass
+        finally:
+            await super().asyncTearDown()
 
     async def test_esdb_scheme_discovery_single_node_cluster(self) -> None:
         await AsyncioEventStoreDBClient(
@@ -610,15 +635,20 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             if isinstance(event, Checkpoint):
                 break
 
-    @skipIf(
-        "21.10" in EVENTSTORE_IMAGE_TAG,
-        "Server doesn't support 'caught up' or 'fell behind' messages",
-    )
-    @skipIf(
-        "22.10" in EVENTSTORE_IMAGE_TAG,
-        "Server doesn't support 'caught up' or 'fell behind' messages",
-    )
+    # @skipIf(
+    #     "21.10" in EVENTSTORE_IMAGE_TAG,
+    #     "Server doesn't support 'caught up' or 'fell behind' messages",
+    # )
+    # @skipIf(
+    #     "22.10" in EVENTSTORE_IMAGE_TAG,
+    #     "Server doesn't support 'caught up' or 'fell behind' messages",
+    # )
     async def test_subscribe_to_all_include_caught_up_fell_behind(self) -> None:
+        if "22.10" in EVENTSTORE_IMAGE_TAG or "21.10" in EVENTSTORE_IMAGE_TAG:
+            self.skipTest(
+                "Server doesn't support 'caught up' or 'fell behind' messages"
+            )
+
         commit_position = await self.client.get_commit_position()
 
         # Append new events.
@@ -681,15 +711,20 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 await catchup_subscription.stop()
         self.assertEqual(events[-1].id, event2.id)
 
-    @skipIf(
-        "21.10" in EVENTSTORE_IMAGE_TAG,
-        "Server doesn't support 'caught up' or 'fell behind' messages",
-    )
-    @skipIf(
-        "22.10" in EVENTSTORE_IMAGE_TAG,
-        "Server doesn't support 'caught up' or 'fell behind' messages",
-    )
+    # @skipIf(
+    #     "21.10" in EVENTSTORE_IMAGE_TAG,
+    #     "Server doesn't support 'caught up' or 'fell behind' messages",
+    # )
+    # @skipIf(
+    #     "22.10" in EVENTSTORE_IMAGE_TAG,
+    #     "Server doesn't support 'caught up' or 'fell behind' messages",
+    # )
     async def test_subscribe_to_stream_caught_up_fell_behind(self) -> None:
+        if "22.10" in EVENTSTORE_IMAGE_TAG or "21.10" in EVENTSTORE_IMAGE_TAG:
+            self.skipTest(
+                "Server doesn't support 'caught up' or 'fell behind' messages"
+            )
+
         event1 = NewEvent(type="OrderCreated", data=random_data())
 
         # Append new events.

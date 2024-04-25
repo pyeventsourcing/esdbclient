@@ -27,6 +27,8 @@ from esdbclient.common import (
     DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
     DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
     DEFAULT_PERSISTENT_SUBSCRIPTION_EVENT_BUFFER_SIZE,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
@@ -34,6 +36,7 @@ from esdbclient.common import (
     DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
     DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
     DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
     DEFAULT_WINDOW_SIZE,
     AsyncGrpcStreamer,
@@ -754,19 +757,23 @@ class BasePersistentSubscriptionsService(ESDBService[TGrpcStreamers]):
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
     ) -> persistent_pb2.CreateReq:
         # Construct 'settings'.
         settings = persistent_pb2.CreateReq.Settings(
             resolve_links=resolve_links,
-            extra_statistics=False,
+            extra_statistics=extra_statistics,
             max_retry_count=max_retry_count,
-            min_checkpoint_count=min_checkpoint_count,  # server recorded position
-            max_checkpoint_count=max_checkpoint_count,  # server recorded position
+            min_checkpoint_count=min_checkpoint_count,
+            max_checkpoint_count=max_checkpoint_count,
             max_subscriber_count=max_subscriber_count,
-            live_buffer_size=1000,  # how many new events to hold in memory?
-            read_batch_size=8,  # how many events to read from DB records?
-            history_buffer_size=200,  # how many recorded events to hold in memory?
-            message_timeout_ms=int(round(1000 * message_timeout)),  # time before retry
+            live_buffer_size=live_buffer_size,
+            read_batch_size=read_batch_size,
+            history_buffer_size=history_buffer_size,
+            message_timeout_ms=int(round(1000 * message_timeout)),
             checkpoint_after_ms=int(round(1000 * checkpoint_after)),
             consumer_strategy=consumer_strategy,
         )
@@ -891,19 +898,23 @@ class BasePersistentSubscriptionsService(ESDBService[TGrpcStreamers]):
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
     ) -> persistent_pb2.UpdateReq:
         # Construct 'settings'.
         settings = persistent_pb2.UpdateReq.Settings(
             resolve_links=resolve_links,
-            extra_statistics=False,
+            extra_statistics=extra_statistics,
             max_retry_count=max_retry_count,
-            min_checkpoint_count=min_checkpoint_count,  # server recorded position
-            max_checkpoint_count=max_checkpoint_count,  # server recorded position
+            min_checkpoint_count=min_checkpoint_count,
+            max_checkpoint_count=max_checkpoint_count,
             max_subscriber_count=max_subscriber_count,
-            live_buffer_size=1000,  # how many new events to hold in memory?
-            read_batch_size=8,  # how many events to read from DB records?
-            history_buffer_size=200,  # how many recorded events to hold in memory?
-            message_timeout_ms=int(round(1000 * message_timeout)),  # time before retry
+            live_buffer_size=live_buffer_size,
+            read_batch_size=read_batch_size,
+            history_buffer_size=history_buffer_size,
+            message_timeout_ms=int(round(1000 * message_timeout)),
             checkpoint_after_ms=int(round(1000 * checkpoint_after)),
         )
         # Construct UpdateReq.Options.
@@ -1048,6 +1059,10 @@ class AsyncioPersistentSubscriptionsService(
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1072,6 +1087,10 @@ class AsyncioPersistentSubscriptionsService(
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1100,6 +1119,10 @@ class AsyncioPersistentSubscriptionsService(
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1123,6 +1146,10 @@ class AsyncioPersistentSubscriptionsService(
             max_checkpoint_count=max_checkpoint_count,
             checkpoint_after=checkpoint_after,
             max_subscriber_count=max_subscriber_count,
+            live_buffer_size=live_buffer_size,
+            read_batch_size=read_batch_size,
+            history_buffer_size=history_buffer_size,
+            extra_statistics=extra_statistics,
         )
         # Call 'Create' RPC.
         try:
@@ -1245,6 +1272,10 @@ class AsyncioPersistentSubscriptionsService(
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1268,6 +1299,10 @@ class AsyncioPersistentSubscriptionsService(
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1290,6 +1325,10 @@ class AsyncioPersistentSubscriptionsService(
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1307,6 +1346,10 @@ class AsyncioPersistentSubscriptionsService(
             max_checkpoint_count=max_checkpoint_count,
             checkpoint_after=checkpoint_after,
             max_subscriber_count=max_subscriber_count,
+            live_buffer_size=live_buffer_size,
+            read_batch_size=read_batch_size,
+            history_buffer_size=history_buffer_size,
+            extra_statistics=extra_statistics,
         )
         # Call 'Update' RPC.
         try:
@@ -1388,6 +1431,10 @@ class PersistentSubscriptionsService(
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1412,6 +1459,10 @@ class PersistentSubscriptionsService(
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1440,6 +1491,10 @@ class PersistentSubscriptionsService(
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1463,6 +1518,10 @@ class PersistentSubscriptionsService(
             max_checkpoint_count=max_checkpoint_count,
             checkpoint_after=checkpoint_after,
             max_subscriber_count=max_subscriber_count,
+            live_buffer_size=live_buffer_size,
+            read_batch_size=read_batch_size,
+            history_buffer_size=history_buffer_size,
+            extra_statistics=extra_statistics,
         )
         # Call 'Create' RPC.
         try:
@@ -1584,6 +1643,10 @@ class PersistentSubscriptionsService(
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1607,6 +1670,10 @@ class PersistentSubscriptionsService(
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1629,6 +1696,10 @@ class PersistentSubscriptionsService(
         max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
         checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
         max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        extra_statistics: bool = False,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -1646,6 +1717,10 @@ class PersistentSubscriptionsService(
             max_checkpoint_count=max_checkpoint_count,
             checkpoint_after=checkpoint_after,
             max_subscriber_count=max_subscriber_count,
+            live_buffer_size=live_buffer_size,
+            read_batch_size=read_batch_size,
+            history_buffer_size=history_buffer_size,
+            extra_statistics=extra_statistics,
         )
         # Call 'Update' RPC.
         try:

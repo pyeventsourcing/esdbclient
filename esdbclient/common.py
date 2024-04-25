@@ -32,6 +32,7 @@ from esdbclient.exceptions import (
     FailedPrecondition,
     GrpcDeadlineExceeded,
     GrpcError,
+    InternalError,
     MaximumSubscriptionsReached,
     NodeIsNotLeader,
     NotFound,
@@ -62,6 +63,10 @@ DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_BATCH_SIZE = 50
 DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_ACK_DELAY = 0.2
 DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE = 0.2
 DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT = 5
+DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE = 500
+DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE = 200
+DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE = 500
+
 
 GrpcOption = Tuple[str, Union[str, int]]
 GrpcOptions = Tuple[GrpcOption, ...]
@@ -189,6 +194,8 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
                 return MaximumSubscriptionsReached(details)
             else:  # pragma: no cover
                 return FailedPrecondition(details)
+        elif e.code() == grpc.StatusCode.INTERNAL:  # pragma: no cover
+            return InternalError(e.details())
     return GrpcError(e)
 
 

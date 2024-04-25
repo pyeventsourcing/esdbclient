@@ -17,7 +17,11 @@ from grpc._cython.cygrpc import IntegratedCall
 import esdbclient.protos.Grpc.persistent_pb2 as grpc_persistent
 from esdbclient import ESDB_SYSTEM_EVENTS_REGEX, RecordedEvent, StreamState
 from esdbclient.client import EventStoreDBClient
-from esdbclient.common import handle_rpc_error
+from esdbclient.common import (
+    DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+    handle_rpc_error,
+)
 from esdbclient.connection_spec import (
     NODE_PREFERENCE_FOLLOWER,
     NODE_PREFERENCE_LEADER,
@@ -35,6 +39,7 @@ from esdbclient.exceptions import (
     FollowerNotFound,
     GrpcDeadlineExceeded,
     GrpcError,
+    InternalError,
     MaximumSubscriptionsReached,
     NodeIsNotLeader,
     NotFound,
@@ -359,9 +364,20 @@ class EventStoreDBClientTestCase(TimedTestCase):
             )
 
     def tearDown(self) -> None:
-        super().tearDown()
-        if hasattr(self, "client"):
-            self.client.close()
+        try:
+            if hasattr(self, "client") and not self.client.is_closed:
+                for subscription in self.client.list_subscriptions():
+                    self.client.delete_subscription(
+                        group_name=subscription.group_name,
+                        stream_name=(
+                            None
+                            if subscription.event_source == "$all"
+                            else subscription.event_source
+                        ),
+                    )
+                self.client.close()
+        finally:
+            super().tearDown()
 
 
 class TestEventStoreDBClient(EventStoreDBClientTestCase):
@@ -2494,7 +2510,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
 
     @skipIf("23.10" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug was fixed")
     @skipIf("24.2" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug was fixed")
-    def test_demonstrate_checkpoint_has_unused_commit_position(self) -> None:
+    def test_demonstrate_extra_checkpoint_bug(self) -> None:
         self.construct_esdb_client()
 
         # Append new events.
@@ -4201,6 +4217,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
 
         info = self.client.get_subscription_info(group_name)
         self.assertEqual(info.group_name, group_name)
+        self.assertEqual(info.event_source, "$all")
 
     def test_subscriptions_list(self) -> None:
         self.construct_esdb_client()
@@ -4432,6 +4449,104 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
 
         info = self.client.get_subscription_info(group_name=group_name)
         self.assertEqual(info.check_point_after_milliseconds, 1000)
+
+    def test_subscription_to_all_live_buffer_size_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_all(
+            group_name=group_name,
+            live_buffer_size=100,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.live_buffer_size, 100)
+
+        # Update subscription.
+        self.client.update_subscription_to_all(
+            group_name=group_name,
+            live_buffer_size=200,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.live_buffer_size, 200)
+
+    def test_subscription_to_all_read_batch_size_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_all(
+            group_name=group_name,
+            read_batch_size=100,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.read_batch_size, 100)
+
+        # Update subscription.
+        self.client.update_subscription_to_all(
+            group_name=group_name,
+            read_batch_size=200,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.read_batch_size, 200)
+
+    def test_subscription_to_all_history_buffer_size_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+
+        with self.assertRaises(InternalError):
+            self.client.create_subscription_to_all(
+                group_name=group_name,
+                history_buffer_size=100,
+            )
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_all(
+            group_name=group_name,
+            history_buffer_size=2000,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.buffer_size, 2000)
+
+        # Update subscription.
+        self.client.update_subscription_to_all(
+            group_name=group_name,
+            history_buffer_size=3000,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.buffer_size, 3000)
+
+    def test_subscription_to_all_extra_statistics_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_all(
+            group_name=group_name,
+            extra_statistics=True,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.extra_statistics, True)
+
+        # Update subscription.
+        self.client.update_subscription_to_all(
+            group_name=group_name,
+            extra_statistics=False,
+        )
+
+        info = self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.extra_statistics, False)
 
     def test_subscription_delete(self) -> None:
         self.construct_esdb_client()
@@ -5080,6 +5195,166 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
             stream_name=stream_name,
         )
         self.assertEqual(info.check_point_after_milliseconds, 1000)
+
+    @skipIf(
+        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "21.10 server hangs for some reason with this test",
+    )
+    def test_subscription_to_stream_live_buffer_size_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+        stream_name = f"my-stream-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            live_buffer_size=100,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.live_buffer_size, 100)
+
+        # Update subscription.
+        self.client.update_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            live_buffer_size=200,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.live_buffer_size, 200)
+
+    @skipIf(
+        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "21.10 server hangs for some reason with this test",
+    )
+    def test_subscription_to_stream_read_batch_size_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+        stream_name = f"my-stream-{uuid4().hex}"
+
+        # Read batch size must be less than history buffer size.
+        with self.assertRaises(InternalError):
+            self.client.create_subscription_to_stream(
+                group_name=group_name,
+                stream_name=stream_name,
+                read_batch_size=DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE + 1,
+            )
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            read_batch_size=100,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.read_batch_size, 100)
+
+        # Update subscription.
+        self.client.update_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            read_batch_size=200,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.read_batch_size, 200)
+
+    @skipIf(
+        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "21.10 server hangs for some reason with this test",
+    )
+    def test_subscription_to_stream_history_buffer_size_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+        stream_name = f"my-stream-{uuid4().hex}"
+
+        # History buffer size must be greater than read batch size.
+        with self.assertRaises(InternalError):
+            self.client.create_subscription_to_stream(
+                group_name=group_name,
+                stream_name=stream_name,
+                history_buffer_size=DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE - 1,
+            )
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            history_buffer_size=2000,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.buffer_size, 2000)
+
+        # Update subscription.
+        self.client.update_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            history_buffer_size=3000,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.buffer_size, 3000)
+
+    @skipIf(
+        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "21.10 server hangs for some reason with this test",
+    )
+    def test_subscription_to_stream_extra_statistics_setting(self) -> None:
+        self.construct_esdb_client()
+
+        group_name = f"my-group-{uuid4().hex}"
+        stream_name = f"my-stream-{uuid4().hex}"
+
+        # Create persistent subscription.
+        self.client.create_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            extra_statistics=True,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.extra_statistics, True)
+
+        # Update subscription.
+        self.client.update_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            extra_statistics=False,
+        )
+
+        info = self.client.get_subscription_info(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+        self.assertEqual(info.extra_statistics, False)
 
     def test_subscription_to_stream_max_subscriber_count(self) -> None:
         self.construct_esdb_client()
@@ -5757,9 +6032,20 @@ class TestRequiresLeaderHeader(TimedTestCase):
         )
 
     def tearDown(self) -> None:
-        self.writer.close()
-        self.reader.close()
-        super().tearDown()
+        try:
+            for subscription in self.writer.list_subscriptions():
+                self.writer.delete_subscription(
+                    group_name=subscription.group_name,
+                    stream_name=(
+                        None
+                        if subscription.event_source == "$all"
+                        else subscription.event_source
+                    ),
+                )
+            self.writer.close()
+            self.reader.close()
+        finally:
+            super().tearDown()
 
     def test_can_subscribe_to_all_on_follower(self) -> None:
         # Subscribe to follower.
@@ -6114,8 +6400,19 @@ class TestAutoReconnectAfterServiceUnavailable(TimedTestCase):
         self.client._esdb = self.client._construct_esdb_connection("localhost:2222")
 
     def tearDown(self) -> None:
-        self.client.close()
-        super().tearDown()
+        try:
+            for subscription in self.client.list_subscriptions():
+                self.client.delete_subscription(
+                    group_name=subscription.group_name,
+                    stream_name=(
+                        None
+                        if subscription.event_source == "$all"
+                        else subscription.event_source
+                    ),
+                )
+            self.client.close()
+        finally:
+            super().tearDown()
 
     def test_append_events(self) -> None:
         self.client.append_events(

@@ -222,3 +222,9 @@ class MaximumSubscriptionsReached(FailedPrecondition):
     Raised when trying to read from a persistent subscription that
     is already being read by the maximum number of subscribers.
     """
+
+
+class InternalError(GrpcError):
+    """
+    Raised when a grpc INTERNAL error is encountered.
+    """
