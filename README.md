@@ -2992,8 +2992,9 @@ from esdbclient import AsyncioEventStoreDBClient
 ```
 
 The asynchronous I/O client has the following methods: `append_to_stream()`,
-`get_stream()`, `read_stream()`, `delete_stream()`, `tombstone_stream()`, `read_all()`,
-`get_commit_position()`, `subscribe_to_all()`, `subscribe_to_stream()`,
+`get_stream()`, `read_stream()`, `get_current_version()`, `delete_stream()`,
+`tombstone_stream()`, `get_stream_metadata()`, `set_stream_metadata()`,
+`read_all()`, `get_commit_position()`, `subscribe_to_all()`, `subscribe_to_stream()`,
 `create_subscription_to_all()`, `create_subscription_to_stream()`,
 `read_subscription_to_all()`, `read_subscription_to_stream()`,
 `update_subscription_to_all()`, `update_subscription_to_stream()`,

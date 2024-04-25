@@ -667,14 +667,12 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         metadata_stream_name = f"$${stream_name}"
         try:
-            metadata_events = list(
-                self.get_stream(
-                    stream_name=metadata_stream_name,
-                    backwards=True,
-                    limit=1,
-                    timeout=timeout,
-                    credentials=credentials or self._call_credentials,
-                )
+            metadata_events = self.get_stream(
+                stream_name=metadata_stream_name,
+                backwards=True,
+                limit=1,
+                timeout=timeout,
+                credentials=credentials or self._call_credentials,
             )
         except NotFound:
             return {}, StreamState.NO_STREAM

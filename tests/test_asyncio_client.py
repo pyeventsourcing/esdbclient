@@ -2,6 +2,7 @@
 import asyncio
 import sys
 from typing import Optional
+from unittest import skipIf
 
 from esdbclient.events import CaughtUp
 from esdbclient.persistent import AsyncioSubscriptionReadReqs
@@ -14,7 +15,7 @@ from tests.test_client import (
 )
 
 if sys.version_info[0:2] > (3, 7):
-    from unittest import IsolatedAsyncioTestCase, skipIf
+    from unittest import IsolatedAsyncioTestCase
 else:
     from async_case import IsolatedAsyncioTestCase
 
@@ -256,6 +257,125 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         commit_position3 = await self.client.get_commit_position(filter_exclude=[".*"])
         self.assertEqual(0, commit_position3)
+
+    async def test_get_current_version(self) -> None:
+        # Append events.
+        stream_name1 = str(uuid4())
+        current_version = await self.client.get_current_version(stream_name1)
+        self.assertEqual(StreamState.NO_STREAM, current_version)
+
+        event1 = NewEvent(type="OrderCreated", data=b"{}")
+        await self.client.append_events(
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        # Get current version.
+        current_version = await self.client.get_current_version(stream_name1)
+        self.assertEqual(0, current_version)
+
+    async def test_stream_metadata_get_and_set(self) -> None:
+        stream_name = str(uuid4())
+
+        # Append batch of new events.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
+        await self.client.append_events(
+            stream_name, current_version=StreamState.NO_STREAM, events=[event1, event2]
+        )
+        self.assertEqual(2, len(await self.client.get_stream(stream_name)))
+
+        # Get stream metadata (should be empty).
+        metadata, version = await self.client.get_stream_metadata(stream_name)
+        self.assertEqual(metadata, {})
+
+        # Delete stream.
+        await self.client.delete_stream(stream_name, current_version=StreamState.EXISTS)
+        with self.assertRaises(NotFound):
+            await self.client.get_stream(stream_name)
+
+        # Get stream metadata (should have "$tb").
+        metadata, version = await self.client.get_stream_metadata(stream_name)
+        self.assertIsInstance(metadata, dict)
+        self.assertIn("$tb", metadata)
+        max_long = 9223372036854775807
+        self.assertEqual(metadata["$tb"], max_long)
+
+        # Set stream metadata.
+        metadata["foo"] = "bar"
+        await self.client.set_stream_metadata(
+            stream_name=stream_name,
+            metadata=metadata,
+            current_version=version,
+        )
+
+        # Check the metadata has "foo".
+        metadata, version = await self.client.get_stream_metadata(stream_name)
+        self.assertEqual(metadata["foo"], "bar")
+
+        # For some reason "$tb" is now (most often) 2 rather than max_long.
+        # Todo: Why is this?
+        self.assertIn(metadata["$tb"], [2, max_long])
+
+        # Get and set metadata for a stream that does not exist.
+        stream_name = str(uuid4())
+        metadata, version = await self.client.get_stream_metadata(stream_name)
+        self.assertEqual(metadata, {})
+
+        metadata["foo"] = "baz"
+        await self.client.set_stream_metadata(
+            stream_name=stream_name, metadata=metadata, current_version=version
+        )
+        metadata, version = await self.client.get_stream_metadata(stream_name)
+        self.assertEqual(metadata["foo"], "baz")
+
+        # Set ACL.
+        self.assertNotIn("$acl", metadata)
+        acl = {
+            "$w": "$admins",
+            "$r": "$all",
+            "$d": "$admins",
+            "$mw": "$admins",
+            "$mr": "$admins",
+        }
+        metadata["$acl"] = acl
+        await self.client.set_stream_metadata(
+            stream_name, metadata=metadata, current_version=version
+        )
+        metadata, version = await self.client.get_stream_metadata(stream_name)
+        self.assertEqual(metadata["$acl"], acl)
+
+        with self.assertRaises(WrongCurrentVersion):
+            await self.client.set_stream_metadata(
+                stream_name=stream_name,
+                metadata=metadata,
+                current_version=10,
+            )
+
+        await self.client.tombstone_stream(stream_name, current_version=StreamState.ANY)
+
+        # Can't get metadata after tombstoning stream, because stream is deleted.
+        with self.assertRaises(StreamIsDeleted):
+            await self.client.get_stream_metadata(stream_name)
+
+        # For some reason, we can set stream metadata, even though the stream
+        # has been tombstoned, and even though we can't get stream metadata.
+        # Todo: Ask ESDB team why this is?
+        await self.client.set_stream_metadata(
+            stream_name=stream_name,
+            metadata=metadata,
+            current_version=1,
+        )
+
+        await self.client.set_stream_metadata(
+            stream_name=stream_name,
+            metadata=metadata,
+            current_version=StreamState.ANY,
+        )
+
+        with self.assertRaises(StreamIsDeleted):
+            await self.client.get_stream_metadata(stream_name)
 
     async def test_append_events_raises_not_found(self) -> None:
         stream_name1 = str(uuid4())

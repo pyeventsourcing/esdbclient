@@ -4496,6 +4496,10 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         info = self.client.get_subscription_info(group_name=group_name)
         self.assertEqual(info.read_batch_size, 200)
 
+    @skipIf(
+        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "v21.10 server becomes unresponsive with this test",
+    )
     def test_subscription_to_all_history_buffer_size_setting(self) -> None:
         self.construct_esdb_client()
 

@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import json
 import sys
 from asyncio import Event, Lock
 from functools import wraps
 from typing import (
     Any,
     Callable,
+    Dict,
     Iterable,
     Optional,
     Sequence,
+    Tuple,
     TypeVar,
     Union,
     cast,
@@ -45,6 +48,7 @@ from esdbclient.exceptions import (
     DiscoveryFailed,
     GrpcError,
     NodeIsNotLeader,
+    NotFound,
     ServiceUnavailable,
 )
 from esdbclient.persistent import (
@@ -398,6 +402,60 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
 
     @retrygrpc
     @autoreconnect
+    async def get_stream_metadata(
+        self,
+        stream_name: str,
+        *,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> Tuple[Dict[str, Any], Union[int, Literal[StreamState.NO_STREAM]]]:
+        """
+        Gets the stream metadata.
+        """
+        metadata_stream_name = f"$${stream_name}"
+        try:
+            metadata_events = await self.get_stream(
+                stream_name=metadata_stream_name,
+                backwards=True,
+                limit=1,
+                timeout=timeout,
+                credentials=credentials or self._call_credentials,
+            )
+        except NotFound:
+            return {}, StreamState.NO_STREAM
+        else:
+            metadata_event = metadata_events[0]
+            return json.loads(metadata_event.data), metadata_event.stream_position
+
+    async def set_stream_metadata(
+        self,
+        stream_name: str,
+        *,
+        metadata: Dict[str, Any],
+        current_version: Union[int, StreamState] = StreamState.ANY,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Sets the stream metadata.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        metadata_stream_name = f"$${stream_name}"
+        metadata_event = NewEvent(
+            type="$metadata",
+            data=json.dumps(metadata).encode("utf8"),
+        )
+        await self.append_events(
+            stream_name=metadata_stream_name,
+            current_version=current_version,
+            events=[metadata_event],
+            timeout=timeout,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
     async def subscribe_to_all(
         self,
         *,
@@ -546,6 +604,39 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
         )
+
+    @retrygrpc
+    @autoreconnect
+    async def get_current_version(
+        self,
+        stream_name: str,
+        *,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> Union[int, Literal[StreamState.NO_STREAM]]:
+        """
+        Returns the current position of the end of a stream.
+        """
+        try:
+            last_event = [
+                e
+                async for e in await self._connection.streams.read(
+                    stream_name=stream_name,
+                    backwards=True,
+                    limit=1,
+                    timeout=timeout,
+                    metadata=self._call_metadata,
+                    credentials=credentials or self._call_credentials,
+                )
+            ][0]
+        except NotFound:
+            # StreamState.NO_STREAM is the correct "current version" both when appending
+            # to a stream that never existed and when appending to a stream that has
+            # been deleted (in this case of a deleted stream, the "current version"
+            # before deletion is also correct).
+            return StreamState.NO_STREAM
+        else:
+            return last_event.stream_position
 
     @overload
     async def create_subscription_to_all(

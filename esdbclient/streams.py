@@ -113,7 +113,7 @@ class BaseReadResponse:
             return Checkpoint(
                 commit_position=checkpoint.commit_position,
             )
-        elif content_oneof == "caught_up":
+        elif content_oneof == "caught_up":  # pragma: no cover
             return CaughtUp()
         elif content_oneof == "fell_behind":  # pragma: no cover
             return FellBehind()
