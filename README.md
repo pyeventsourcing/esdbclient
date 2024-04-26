@@ -2990,21 +2990,20 @@ client.close()
 
 ## Asyncio client<a id="asyncio-client"></a>
 
-The `esdbclient` package also includes an early version of an asynchronous I/O
-gRPC Python client. It follows exactly the same behaviors as the multithreaded
-`EventStoreDBClient`, but uses the `grpc.aio` package and the `asyncio` module, instead of
-`grpc` and `threading`.
+The `esdbclient` package also an asynchronous I/O gRPC Python client for EventStoreDB.
+It uses the `grpc.aio` package and the `asyncio` module, instead of `grpc` and
+`threading`.
 
-The async function `AsyncioEventStoreDBClient` constructs the client, and connects to
-a server. It can be imported from `esdbclient`, and can be called with the same
-arguments as `EventStoreDBClient`. It supports both the "esdb" and the "esdb+discover"
-connection string URI schemes, and can connect to both "secure" and "insecure"
-EventStoreDB servers. It reconnects or retries when connection issues or server
-errors are encountered.
+It supports both the "esdb" and the "esdb+discover" connection string URI schemes,
+and can connect to both "secure" and "insecure" EventStoreDB servers.
 
-```python
-from esdbclient import AsyncioEventStoreDBClient
-```
+The async function `AsyncioEventStoreDBClient` constructs the client and connects to
+EventStoreDB. It can be imported from `esdbclient`.
+
+The asyncio client has exactly the same methods and follows exactly the same behaviors
+as the multithreaded `EventStoreDBClient`. The methods are decorated in the same way
+with reconnect and retry decorators, that will selectively reconnect and retry when
+connection issues or server errors are encountered.
 
 The asynchronous I/O client has the following methods: `append_to_stream()`,
 `get_stream()`, `read_stream()`, `get_current_version()`, `delete_stream()`,
@@ -3017,18 +3016,27 @@ The asynchronous I/O client has the following methods: `append_to_stream()`,
 `delete_subscription()`, `reconnect()`, `close()`, and `construct_call_credentials()`.
 
 These methods are equivalent to the methods on `EventStoreDBClient`. They have the same
-method signatures, and can be called with the same arguments, to the same effect. The
-difference is that (excepting `construct_call_credentials()`), these methods are defined
-as `async def` methods and so return awaitables that you must `await` before obtaining
-expected results. The methods `read_all()`, `read_stream()`, `subscribe_to_all()`,
-`subscribe_to_stream()`, `read_subscription_to_all()` and `read_subscription_to_stream()`
-return asyncio iterables, which you can iterate over with Python's `async for` syntax to
-obtain `RecordedEvent` objects. The methods `read_subscription_to_all()` and
-`read_subscription_to_stream()` return instances of the class `AsyncioPersistentSubscription`,
-which has async methods `ack()`, `nack()` and `stop()` that return awaitables but otherwise
-work in a similar way to the methods on `PersistentSubscription` (see above). The methods
-which are implemented on `EventStoreDBClient` but not yet on `AsyncioEventStoreDBClient`
-will be implemented soon.
+method signatures, and can be called with the same arguments, to the same effect.
+Excepting `construct_call_credentials()`, these methods are defined as `async def`
+methods, and so calls to these methods will return Python "awaitables" that must be
+awaited to obtain the method return values.
+
+When awaited, the methods `read_all()` and `read_stream()` return an `AsyncioReadResponse`
+object. The methods `subscribe_to_all()` and `subscribe_to_stream()` return an
+`AsyncioCatchupSubscription` object. The methods `read_subscription_to_all()` and
+`read_subscription_to_stream()` return an `AsyncioPersistentSubscription` object.
+These objects are asyncio iterables, which you can iterate over with Python's `async for`
+syntax to obtain `RecordedEvent` objects. They are also asyncio context managers,
+supporting the `async with` syntax. They also have a `stop()` method which can be
+used to terminate the iterator in a way that actively cancels the streaming gRPC call
+to the server. When used as a context manager, the `stop()` method will be called when
+the context manager exits.
+
+The methods `read_subscription_to_all()` and `read_subscription_to_stream()` return
+instances of the class `AsyncioPersistentSubscription`, which has async methods `ack()`,
+`nack()` that work in the same way as the methods on `PersistentSubscription`,
+supporting the acknowledgement and negative acknowledgement of recorded events that
+have been received from a persistent subscription. See above for details.
 
 ### Synopsis<a id="synopsis-1"></a>
 
@@ -3041,6 +3049,9 @@ semantics.
 
 ```python
 import asyncio
+
+from esdbclient import AsyncioEventStoreDBClient
+
 
 async def demonstrate_asyncio_client():
 
