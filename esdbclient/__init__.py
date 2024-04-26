@@ -6,7 +6,14 @@ from esdbclient.client import (
     ESDB_SYSTEM_EVENTS_REGEX,
     EventStoreDBClient,
 )
-from esdbclient.events import Checkpoint, ContentType, NewEvent, RecordedEvent
+from esdbclient.events import (
+    CaughtUp,
+    Checkpoint,
+    ContentType,
+    FellBehind,
+    NewEvent,
+    RecordedEvent,
+)
 from esdbclient.streams import StreamState
 
 __all__ = [
@@ -15,6 +22,8 @@ __all__ = [
     "ESDB_SYSTEM_EVENTS_REGEX",
     "AsyncioEventStoreDBClient",
     "Checkpoint",
+    "CaughtUp",
+    "FellBehind",
     "ContentType",
     "EventStoreDBClient",
     "NewEvent",
