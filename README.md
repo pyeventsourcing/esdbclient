@@ -2990,9 +2990,9 @@ client.close()
 
 ## Asyncio client<a id="asyncio-client"></a>
 
-The `esdbclient` package also an asynchronous I/O gRPC Python client for EventStoreDB.
-It uses the `grpc.aio` package and the `asyncio` module, instead of `grpc` and
-`threading`.
+The `esdbclient` package also provides an asynchronous I/O gRPC Python client for
+EventStoreDB. It is functionally equivalent to the multithreaded client. It uses
+the `grpc.aio` package and the `asyncio` module, instead of `grpc` and `threading`.
 
 It supports both the "esdb" and the "esdb+discover" connection string URI schemes,
 and can connect to both "secure" and "insecure" EventStoreDB servers.
