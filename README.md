@@ -1,14 +1,17 @@
 # Python gRPC Client for EventStoreDB
 
-This [Python package](https://pypi.org/project/esdbclient/) provides a Python
-gRPC client for the [EventStoreDB](https://www.eventstore.com/) database.
+This [Python package](https://pypi.org/project/esdbclient/) provides multithreaded and asyncio Python
+clients for the [EventStoreDB](https://www.eventstore.com/) database.
 
-This client has been developed in collaboration with the EventStoreDB
-team. Although not all the features of EventStoreDB are supported
-by this client, many of the most useful features are presented
-in an easy-to-use interface.
+The multithreaded `EventStoreDBClient` is described in detail below. Please scroll
+down for <a href="#asyncio-client">information</a> about `AsyncioEventStoreDBClient`.
 
-This client has been tested to work with EventStoreDB LTS versions 21.10,
+These clients have been developed and are being maintained in a collaboration
+with the EventStoreDB team, and are officially support by Event Store Ltd.
+Although not all the features of EventStoreDB are supported, many of the most
+useful features are presented in an easy-to-use interface.
+
+These clients have been tested to work with EventStoreDB LTS versions 21.10,
 22.10, 23.10, and version 24.2, without and without SSL/TLS, with single-server
 and cluster modes, and with Python versions 3.7, 3.8, 3.9, 3.10, 3.11 and 3.12.
 
@@ -17,11 +20,8 @@ checked strictly with mypy. The code is formatted with black and isort, and chec
 with flake8. Poetry is used for package management during development, and for
 building and publishing distributions to [PyPI](https://pypi.org/project/esdbclient/).
 
-## Synopsis
 
-You can connect and interact with an EventStoreDB server using either the
-`EventStoreDBClient` class or the `AsyncioEventStoreDBClient`. See below
-for <a href="#asyncio-client">information</a> about `AsyncioEventStoreDBClient`.
+## Synopsis
 
 The `EventStoreDBClient` class can be imported from the `esdbclient` package.
 
