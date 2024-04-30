@@ -1209,23 +1209,73 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         group_name: str,
         *,
-        resolve_links: bool = False,
-        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
-        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
-        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
-        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
-        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
-        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
-        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
-        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
-        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
-        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
-        extra_statistics: bool = False,
+        resolve_links: Optional[bool] = None,
+        consumer_strategy: Optional[ConsumerStrategy] = None,
+        message_timeout: Optional[float] = None,
+        max_retry_count: Optional[int] = None,
+        min_checkpoint_count: Optional[int] = None,
+        max_checkpoint_count: Optional[int] = None,
+        checkpoint_after: Optional[float] = None,
+        max_subscriber_count: Optional[int] = None,
+        live_buffer_size: Optional[int] = None,
+        read_batch_size: Optional[int] = None,
+        history_buffer_size: Optional[int] = None,
+        extra_statistics: Optional[bool] = None,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
-        Signature for updating persistent subscription from start of database.
+        Signature for updating subscription to run from same position.
+        """
+
+    @overload
+    def update_subscription_to_all(
+        self,
+        group_name: str,
+        *,
+        from_end: Literal[False],
+        resolve_links: Optional[bool] = None,
+        consumer_strategy: Optional[ConsumerStrategy] = None,
+        message_timeout: Optional[float] = None,
+        max_retry_count: Optional[int] = None,
+        min_checkpoint_count: Optional[int] = None,
+        max_checkpoint_count: Optional[int] = None,
+        checkpoint_after: Optional[float] = None,
+        max_subscriber_count: Optional[int] = None,
+        live_buffer_size: Optional[int] = None,
+        read_batch_size: Optional[int] = None,
+        history_buffer_size: Optional[int] = None,
+        extra_statistics: Optional[bool] = None,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for updating subscription to run from start of database.
+        """
+
+    @overload
+    def update_subscription_to_all(
+        self,
+        group_name: str,
+        *,
+        from_end: Literal[True],
+        resolve_links: Optional[bool] = None,
+        consumer_strategy: Optional[ConsumerStrategy] = None,
+        message_timeout: Optional[float] = None,
+        max_retry_count: Optional[int] = None,
+        min_checkpoint_count: Optional[int] = None,
+        max_checkpoint_count: Optional[int] = None,
+        checkpoint_after: Optional[float] = None,
+        max_subscriber_count: Optional[int] = None,
+        live_buffer_size: Optional[int] = None,
+        read_batch_size: Optional[int] = None,
+        history_buffer_size: Optional[int] = None,
+        extra_statistics: Optional[bool] = None,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for updating subscription to run from end of database.
         """
 
     @overload
@@ -1234,48 +1284,23 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         group_name: str,
         *,
         commit_position: int,
-        resolve_links: bool = False,
-        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
-        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
-        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
-        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
-        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
-        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
-        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
-        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
-        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
-        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
-        extra_statistics: bool = False,
+        resolve_links: Optional[bool] = None,
+        consumer_strategy: Optional[ConsumerStrategy] = None,
+        message_timeout: Optional[float] = None,
+        max_retry_count: Optional[int] = None,
+        min_checkpoint_count: Optional[int] = None,
+        max_checkpoint_count: Optional[int] = None,
+        checkpoint_after: Optional[float] = None,
+        max_subscriber_count: Optional[int] = None,
+        live_buffer_size: Optional[int] = None,
+        read_batch_size: Optional[int] = None,
+        history_buffer_size: Optional[int] = None,
+        extra_statistics: Optional[bool] = None,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
-        Signature for updating persistent subscription from a commit position.
-        """
-
-    @overload
-    def update_subscription_to_all(
-        self,
-        group_name: str,
-        *,
-        from_end: bool = True,
-        resolve_links: bool = False,
-        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
-        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
-        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
-        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
-        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
-        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
-        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
-        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
-        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
-        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
-        extra_statistics: bool = False,
-        timeout: Optional[float] = None,
-        credentials: Optional[grpc.CallCredentials] = None,
-    ) -> None:
-        """
-        Signature for updating persistent subscription from end of database.
+        Signature for updating persistent subscription to run from a commit position.
         """
 
     @retrygrpc
@@ -1284,30 +1309,31 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         group_name: str,
         *,
-        from_end: bool = False,
+        from_end: Optional[bool] = None,
         commit_position: Optional[int] = None,
-        resolve_links: bool = False,
-        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
-        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
-        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
-        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
-        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
-        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
-        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
-        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
-        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
-        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
-        extra_statistics: bool = False,
+        resolve_links: Optional[bool] = None,
+        consumer_strategy: Optional[ConsumerStrategy] = None,
+        message_timeout: Optional[float] = None,
+        max_retry_count: Optional[int] = None,
+        min_checkpoint_count: Optional[int] = None,
+        max_checkpoint_count: Optional[int] = None,
+        checkpoint_after: Optional[float] = None,
+        max_subscriber_count: Optional[int] = None,
+        live_buffer_size: Optional[int] = None,
+        read_batch_size: Optional[int] = None,
+        history_buffer_size: Optional[int] = None,
+        extra_statistics: Optional[bool] = None,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Updates a persistent subscription on all streams.
         """
-        timeout = timeout if timeout is not None else self._default_deadline
 
-        self._esdb.persistent_subscriptions.update(
-            group_name=group_name,
+        info = self.get_subscription_info(
+            group_name=group_name, timeout=timeout, credentials=credentials
+        )
+        kwargs = info.update_all_kwargs(
             from_end=from_end,
             commit_position=commit_position,
             resolve_links=resolve_links,
@@ -1322,7 +1348,12 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             read_batch_size=read_batch_size,
             history_buffer_size=history_buffer_size,
             extra_statistics=extra_statistics,
-            timeout=timeout,
+        )
+
+        self._esdb.persistent_subscriptions.update(
+            group_name=group_name,
+            **kwargs,
+            timeout=timeout if timeout is not None else self._default_deadline,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
         )
@@ -1333,23 +1364,75 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         group_name: str,
         stream_name: str,
         *,
-        resolve_links: bool = False,
-        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
-        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
-        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
-        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
-        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
-        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
-        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
-        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
-        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
-        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
-        extra_statistics: bool = False,
+        resolve_links: Optional[bool] = None,
+        consumer_strategy: Optional[ConsumerStrategy] = None,
+        message_timeout: Optional[float] = None,
+        max_retry_count: Optional[int] = None,
+        min_checkpoint_count: Optional[int] = None,
+        max_checkpoint_count: Optional[int] = None,
+        checkpoint_after: Optional[float] = None,
+        max_subscriber_count: Optional[int] = None,
+        live_buffer_size: Optional[int] = None,
+        read_batch_size: Optional[int] = None,
+        history_buffer_size: Optional[int] = None,
+        extra_statistics: Optional[bool] = None,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
-        Signature for updating stream subscription from start of stream.
+        Signature for updating subscription to run from same stream position.
+        """
+
+    @overload
+    def update_subscription_to_stream(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        from_end: Literal[False],
+        resolve_links: Optional[bool] = None,
+        consumer_strategy: Optional[ConsumerStrategy] = None,
+        message_timeout: Optional[float] = None,
+        max_retry_count: Optional[int] = None,
+        min_checkpoint_count: Optional[int] = None,
+        max_checkpoint_count: Optional[int] = None,
+        checkpoint_after: Optional[float] = None,
+        max_subscriber_count: Optional[int] = None,
+        live_buffer_size: Optional[int] = None,
+        read_batch_size: Optional[int] = None,
+        history_buffer_size: Optional[int] = None,
+        extra_statistics: Optional[bool] = None,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for updating subscription to run from start of stream.
+        """
+
+    @overload
+    def update_subscription_to_stream(
+        self,
+        group_name: str,
+        stream_name: str,
+        *,
+        from_end: Literal[True],
+        resolve_links: Optional[bool] = None,
+        consumer_strategy: Optional[ConsumerStrategy] = None,
+        message_timeout: Optional[float] = None,
+        max_retry_count: Optional[int] = None,
+        min_checkpoint_count: Optional[int] = None,
+        max_checkpoint_count: Optional[int] = None,
+        checkpoint_after: Optional[float] = None,
+        max_subscriber_count: Optional[int] = None,
+        live_buffer_size: Optional[int] = None,
+        read_batch_size: Optional[int] = None,
+        history_buffer_size: Optional[int] = None,
+        extra_statistics: Optional[bool] = None,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Signature for updating subscription to run from end of stream.
         """
 
     @overload
@@ -1359,49 +1442,23 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         stream_name: str,
         *,
         stream_position: int,
-        resolve_links: bool = False,
-        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
-        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
-        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
-        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
-        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
-        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
-        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
-        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
-        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
-        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
-        extra_statistics: bool = False,
+        resolve_links: Optional[bool] = None,
+        consumer_strategy: Optional[ConsumerStrategy] = None,
+        message_timeout: Optional[float] = None,
+        max_retry_count: Optional[int] = None,
+        min_checkpoint_count: Optional[int] = None,
+        max_checkpoint_count: Optional[int] = None,
+        checkpoint_after: Optional[float] = None,
+        max_subscriber_count: Optional[int] = None,
+        live_buffer_size: Optional[int] = None,
+        read_batch_size: Optional[int] = None,
+        history_buffer_size: Optional[int] = None,
+        extra_statistics: Optional[bool] = None,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
-        Signature for updating stream subscription from stream position.
-        """
-
-    @overload
-    def update_subscription_to_stream(
-        self,
-        group_name: str,
-        stream_name: str,
-        *,
-        from_end: bool = True,
-        resolve_links: bool = False,
-        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
-        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
-        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
-        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
-        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
-        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
-        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
-        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
-        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
-        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
-        extra_statistics: bool = False,
-        timeout: Optional[float] = None,
-        credentials: Optional[grpc.CallCredentials] = None,
-    ) -> None:
-        """
-        Signature for updating stream subscription from end of stream.
+        Signature for updating subscription to run from stream position.
         """
 
     @retrygrpc
@@ -1411,31 +1468,34 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         group_name: str,
         stream_name: str,
         *,
-        from_end: bool = False,
+        from_end: Optional[bool] = None,
         stream_position: Optional[int] = None,
-        resolve_links: bool = False,
-        consumer_strategy: ConsumerStrategy = "DispatchToSingle",
-        message_timeout: float = DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
-        max_retry_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
-        min_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
-        max_checkpoint_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
-        checkpoint_after: float = DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
-        max_subscriber_count: int = DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
-        live_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
-        read_batch_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
-        history_buffer_size: int = DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
-        extra_statistics: bool = False,
+        resolve_links: Optional[bool] = None,
+        consumer_strategy: Optional[ConsumerStrategy] = None,
+        message_timeout: Optional[float] = None,
+        max_retry_count: Optional[int] = None,
+        min_checkpoint_count: Optional[int] = None,
+        max_checkpoint_count: Optional[int] = None,
+        checkpoint_after: Optional[float] = None,
+        max_subscriber_count: Optional[int] = None,
+        live_buffer_size: Optional[int] = None,
+        read_batch_size: Optional[int] = None,
+        history_buffer_size: Optional[int] = None,
+        extra_statistics: Optional[bool] = None,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         """
         Updates a persistent subscription on one stream.
         """
-        timeout = timeout if timeout is not None else self._default_deadline
 
-        self._esdb.persistent_subscriptions.update(
+        info = self.get_subscription_info(
             group_name=group_name,
             stream_name=stream_name,
+            timeout=timeout,
+            credentials=credentials,
+        )
+        kwargs = info.update_stream_kwargs(
             from_end=from_end,
             stream_position=stream_position,
             resolve_links=resolve_links,
@@ -1450,7 +1510,13 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             read_batch_size=read_batch_size,
             history_buffer_size=history_buffer_size,
             extra_statistics=extra_statistics,
-            timeout=timeout,
+        )
+
+        self._esdb.persistent_subscriptions.update(
+            group_name=group_name,
+            stream_name=stream_name,
+            **kwargs,
+            timeout=timeout if timeout is not None else self._default_deadline,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
         )

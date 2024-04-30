@@ -16,13 +16,14 @@ from typing import (
     Sequence,
     Tuple,
     Union,
+    cast,
     overload,
 )
 from uuid import UUID
 
 import grpc
 from grpc.aio import StreamStreamCall
-from typing_extensions import Literal, Protocol, runtime_checkable
+from typing_extensions import Literal, Protocol, TypedDict, runtime_checkable
 
 from esdbclient.common import (
     DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
@@ -87,7 +88,7 @@ CONSUMER_STRATEGIES: Dict[
     ConsumerStrategy, persistent_pb2.UpdateReq.ConsumerStrategy.ValueType
 ] = {
     "DispatchToSingle": persistent_pb2.UpdateReq.ConsumerStrategy.DispatchToSingle,
-    "RoundRobin": persistent_pb2.UpdateReq.ConsumerStrategy.DispatchToSingle,
+    "RoundRobin": persistent_pb2.UpdateReq.ConsumerStrategy.RoundRobin,
     "Pinned": persistent_pb2.UpdateReq.ConsumerStrategy.Pinned,
 }
 
@@ -705,6 +706,30 @@ class PersistentSubscription(
         self.stop()
 
 
+class SubscriptionUpdateKwargs(TypedDict):
+    from_end: bool
+    resolve_links: bool
+    consumer_strategy: ConsumerStrategy
+    message_timeout: float
+    max_retry_count: int
+    min_checkpoint_count: int
+    max_checkpoint_count: int
+    checkpoint_after: float
+    max_subscriber_count: int
+    live_buffer_size: int
+    read_batch_size: int
+    history_buffer_size: int
+    extra_statistics: bool
+
+
+class SubscriptionUpdateAllKwargs(SubscriptionUpdateKwargs):
+    commit_position: Optional[int]
+
+
+class SubscriptionUpdateStreamKwargs(SubscriptionUpdateKwargs):
+    stream_position: Optional[int]
+
+
 @dataclass
 class SubscriptionInfo:
     event_source: str
@@ -715,25 +740,190 @@ class SubscriptionInfo:
     count_since_last_measurement: int
     last_checkpointed_event_position: str
     last_known_event_position: str
-    resolve_link_tos: bool
+    resolve_links: bool
     start_from: str
-    message_timeout_milliseconds: int
+    message_timeout: float
     extra_statistics: bool
     max_retry_count: int
     live_buffer_size: int
-    buffer_size: int
+    history_buffer_size: int
     read_batch_size: int
-    check_point_after_milliseconds: int
-    min_check_point_count: int
-    max_check_point_count: int
+    checkpoint_after: float
+    min_checkpoint_count: int
+    max_checkpoint_count: int
     read_buffer_count: int
     live_buffer_count: int
     retry_buffer_count: int
     total_in_flight_messages: int
     outstanding_messages_count: int
-    named_consumer_strategy: str
+    consumer_strategy: ConsumerStrategy
     max_subscriber_count: int
     parked_message_count: int
+
+    def update_all_kwargs(
+        self,
+        from_end: Optional[bool] = None,
+        commit_position: Optional[int] = None,
+        resolve_links: Optional[bool] = None,
+        consumer_strategy: Optional[ConsumerStrategy] = None,
+        message_timeout: Optional[float] = None,
+        max_retry_count: Optional[int] = None,
+        min_checkpoint_count: Optional[int] = None,
+        max_checkpoint_count: Optional[int] = None,
+        checkpoint_after: Optional[float] = None,
+        max_subscriber_count: Optional[int] = None,
+        live_buffer_size: Optional[int] = None,
+        read_batch_size: Optional[int] = None,
+        history_buffer_size: Optional[int] = None,
+        extra_statistics: Optional[bool] = None,
+    ) -> SubscriptionUpdateAllKwargs:
+        # Deal with 'start_from' conventions...
+        assert self.event_source == "$all"
+        if from_end is None and commit_position is None:
+            commit_position = int(self.start_from.split("/")[0].split(":")[1])
+            if commit_position == 0:
+                from_end = False
+                commit_position = None
+            elif commit_position == -1:
+                from_end = True
+                commit_position = None
+            else:
+                from_end = False
+                commit_position = commit_position
+
+        kwargs: SubscriptionUpdateAllKwargs = {
+            "from_end": from_end or False,
+            "commit_position": commit_position,
+            "resolve_links": (
+                self.resolve_links if resolve_links is None else resolve_links
+            ),
+            "consumer_strategy": (
+                self.consumer_strategy
+                if consumer_strategy is None
+                else consumer_strategy
+            ),
+            "message_timeout": (
+                self.message_timeout if message_timeout is None else message_timeout
+            ),
+            "max_retry_count": (
+                self.max_retry_count if max_retry_count is None else max_retry_count
+            ),
+            "min_checkpoint_count": (
+                self.min_checkpoint_count
+                if min_checkpoint_count is None
+                else min_checkpoint_count
+            ),
+            "max_checkpoint_count": (
+                self.max_checkpoint_count
+                if max_checkpoint_count is None
+                else max_checkpoint_count
+            ),
+            "checkpoint_after": (
+                self.checkpoint_after if checkpoint_after is None else checkpoint_after
+            ),
+            "max_subscriber_count": (
+                self.max_subscriber_count
+                if max_subscriber_count is None
+                else max_subscriber_count
+            ),
+            "live_buffer_size": (
+                self.live_buffer_size if live_buffer_size is None else live_buffer_size
+            ),
+            "read_batch_size": (
+                self.read_batch_size if read_batch_size is None else read_batch_size
+            ),
+            "history_buffer_size": (
+                self.history_buffer_size
+                if history_buffer_size is None
+                else history_buffer_size
+            ),
+            "extra_statistics": (
+                self.extra_statistics if extra_statistics is None else extra_statistics
+            ),
+        }
+
+        return kwargs
+
+    def update_stream_kwargs(
+        self,
+        from_end: Optional[bool] = None,
+        stream_position: Optional[int] = None,
+        resolve_links: Optional[bool] = None,
+        consumer_strategy: Optional[ConsumerStrategy] = None,
+        message_timeout: Optional[float] = None,
+        max_retry_count: Optional[int] = None,
+        min_checkpoint_count: Optional[int] = None,
+        max_checkpoint_count: Optional[int] = None,
+        checkpoint_after: Optional[float] = None,
+        max_subscriber_count: Optional[int] = None,
+        live_buffer_size: Optional[int] = None,
+        read_batch_size: Optional[int] = None,
+        history_buffer_size: Optional[int] = None,
+        extra_statistics: Optional[bool] = None,
+    ) -> SubscriptionUpdateStreamKwargs:
+        if from_end is None and stream_position is None:
+            stream_position = int(self.start_from)
+            if stream_position == 0:
+                from_end = False
+                stream_position = None
+            elif stream_position == -1:
+                from_end = True
+                stream_position = None
+            else:
+                from_end = False
+                stream_position = stream_position
+
+        kwargs: SubscriptionUpdateStreamKwargs = {
+            "from_end": from_end or False,
+            "stream_position": stream_position,
+            "resolve_links": (
+                self.resolve_links if resolve_links is None else resolve_links
+            ),
+            "consumer_strategy": (
+                self.consumer_strategy
+                if consumer_strategy is None
+                else consumer_strategy
+            ),
+            "message_timeout": (
+                self.message_timeout if message_timeout is None else message_timeout
+            ),
+            "max_retry_count": (
+                self.max_retry_count if max_retry_count is None else max_retry_count
+            ),
+            "min_checkpoint_count": (
+                self.min_checkpoint_count
+                if min_checkpoint_count is None
+                else min_checkpoint_count
+            ),
+            "max_checkpoint_count": (
+                self.max_checkpoint_count
+                if max_checkpoint_count is None
+                else max_checkpoint_count
+            ),
+            "checkpoint_after": (
+                self.checkpoint_after if checkpoint_after is None else checkpoint_after
+            ),
+            "max_subscriber_count": (
+                self.max_subscriber_count
+                if max_subscriber_count is None
+                else max_subscriber_count
+            ),
+            "live_buffer_size": (
+                self.live_buffer_size if live_buffer_size is None else live_buffer_size
+            ),
+            "read_batch_size": (
+                self.read_batch_size if read_batch_size is None else read_batch_size
+            ),
+            "history_buffer_size": (
+                self.history_buffer_size
+                if history_buffer_size is None
+                else history_buffer_size
+            ),
+            "extra_statistics": (
+                self.extra_statistics if extra_statistics is None else extra_statistics
+            ),
+        }
+        return kwargs
 
 
 class BasePersistentSubscriptionsService(ESDBService[TGrpcStreamers]):
@@ -1026,23 +1216,23 @@ class BasePersistentSubscriptionsService(ESDBService[TGrpcStreamers]):
             count_since_last_measurement=s.count_since_last_measurement,
             last_checkpointed_event_position=s.last_checkpointed_event_position,
             last_known_event_position=s.last_known_event_position,
-            resolve_link_tos=s.resolve_link_tos,
+            resolve_links=s.resolve_link_tos,
             start_from=s.start_from,
-            message_timeout_milliseconds=s.message_timeout_milliseconds,
+            message_timeout=s.message_timeout_milliseconds / 1000.0,
             extra_statistics=s.extra_statistics,
             max_retry_count=s.max_retry_count,
             live_buffer_size=s.live_buffer_size,
-            buffer_size=s.buffer_size,
+            history_buffer_size=s.buffer_size,
             read_batch_size=s.read_batch_size,
-            check_point_after_milliseconds=s.check_point_after_milliseconds,
-            min_check_point_count=s.min_check_point_count,
-            max_check_point_count=s.max_check_point_count,
+            checkpoint_after=s.check_point_after_milliseconds / 1000.0,
+            min_checkpoint_count=s.min_check_point_count,
+            max_checkpoint_count=s.max_check_point_count,
             read_buffer_count=s.read_buffer_count,
             live_buffer_count=s.live_buffer_count,
             retry_buffer_count=s.retry_buffer_count,
             total_in_flight_messages=s.total_in_flight_messages,
             outstanding_messages_count=s.outstanding_messages_count,
-            named_consumer_strategy=s.named_consumer_strategy,
+            consumer_strategy=cast(ConsumerStrategy, s.named_consumer_strategy),
             max_subscriber_count=s.max_subscriber_count,
             parked_message_count=s.parked_message_count,
         )

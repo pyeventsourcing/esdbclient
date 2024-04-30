@@ -177,14 +177,11 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
                 # given root_certificates is invalid
                 return SSLError(e)
             return ServiceUnavailable(details)
-        elif (
-            e.code() == grpc.StatusCode.NOT_FOUND
-            and e.details() == "Leader info available"
-        ):
-            return NodeIsNotLeader(e)
         elif e.code() == grpc.StatusCode.ALREADY_EXISTS:
             return AlreadyExists(e.details())
         elif e.code() == grpc.StatusCode.NOT_FOUND:
+            if e.details() == "Leader info available":
+                return NodeIsNotLeader(e)
             return NotFound()
         elif e.code() == grpc.StatusCode.FAILED_PRECONDITION:
             details = e.details()

@@ -2439,69 +2439,14 @@ This method also has sixteen optional arguments, `from_end`, `commit_position`,
 `max_subscriber_count`, `live_buffer_size`, `read_batch_size`, `history_buffer_size`,
 `extra_statistics`, `timeout` and `credentials`.
 
-The optional `from_end` argument can be used to specify that the group of consumers
-of the subscription should only receive events that were recorded after the subscription
-was updated.
-
-Alternatively, the optional `commit_position` argument can be used to specify a commit
-position from which the group of consumers of the subscription should
-receive events. Please note, the recorded event at the specified commit position might
-be included in the recorded events received by the group of consumers.
-
-If neither `from_end` nor `commit_position` are specified, the group of consumers
-of the subscription will potentially receive all recorded events in the database.
-
-The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
-is `False`, which means any event links will not be resolved, so that the events that are
-returned may represent event links. If `resolve_links` is `True`, any event links will
-be resolved, so that the linked events will be returned instead of the event links.
-
-The optional `consumer_strategy` argument is a Python `str` that defines
-the consumer strategy for this persistent subscription. The value of this argument
-can be `'DispatchToSingle'`, `'RoundRobin'`, `'Pinned'`, or `'PinnedByCorrelation'`. The
-default value is `'DispatchToSingle'`. (Please note, due to a limitation in the
-underlying gRPC API, setting the value of this argument to `'PinnedByCorrelation'` will
-cause an error.)
-
-The optional `message_timeout` argument is a Python `float` which sets a maximum duration,
-in seconds, from the server sending a recorded event to a consumer of the persistent
-subscription until either an "acknowledgement" (ack) or a "negative acknowledgement"
-(nack) is received by the server, after which the server will retry to send the event.
-The default value of `message_timeout` is `30.0`.
-
-The optional `max_retry_count` argument is a Python `int` which sets the number of times
-the server will retry to send an event. The default value of `max_retry_count` is `10`.
-
-The optional `min_checkpoint_count` argument is a Python `int` which sets the minimum
-number of "acknowledgements" (acks) received by the server before the server may record
-the acknowledgements. The default value of `min_checkpoint_count` is `10`.
-
-The optional `max_checkpoint_count` argument is a Python `int` which sets the maximum
-number of "acknowledgements" (acks) received by the server before the server must
-record the acknowledgements. The default value of `max_checkpoint_count` is `1000`.
-
-The optional `checkpoint_after` argument is a Python `float` which sets the maximum
-duration in seconds between recording "acknowledgements" (acks). The default value of
-`checkpoint_after` is `2.0`.
-
-The optional `max_subscriber_count` argument is a Python `int` which sets the maximum
-number of concurrent readers of the persistent subscription, beyond which attempts to
-read the persistent subscription will raise a `MaximumSubscriptionsReached` error.
-
-The optional `live_buffer_size` argument is a Python `int` which sets the size of the
-buffer (in-memory) holding newly recorded events. The default value of `live_buffer_size`
-is 500.
-
-The optional `read_batch_size` argument is a Python `int` which sets the number of
-recorded events read from disk when catching up. The default value of `read_batch_size`
-is 200.
-
-The optional `history_buffer_size` argument is a Python `int` which sets the number of
-recorded events to cache in memory when catching up. The default value of `history_buffer_size`
-is 500.
-
-The optional `extra_statistics` argument is a Python `bool` which enables tracking of
-extra statistics on this subscription. The default value of `extra_statistics` is `False`.
+The optional arguments `from_end`, `commit_position`,
+`resolve_links`, `consumer_strategy`, `message_timeout`, `max_retry_count`,
+`min_checkpoint_count`, `max_checkpoint_count`, `checkpoint_after`,
+`max_subscriber_count`, `live_buffer_size`, `read_batch_size`, `history_buffer_size`,
+amd `extra_statistics` can be used to adjust the values set on previous calls to
+`create_subscription_to_all()` and `update_subscription_to_all()`. If any of
+these arguments are not mentioned in a call to `update_subscription_to_all()`,
+the corresponding settings of the persistent subscription will be unchanged.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
@@ -2689,69 +2634,14 @@ This method also has sixteen optional arguments, `from_end`, `stream_position`,
 `extra_statistics`, `min_checkpoint_count`, `max_checkpoint_count`, `checkpoint_after`,
 `timeout` and `credentials`.
 
-The optional `from_end` argument can be used to specify that the group of consumers
-of the subscription should only receive events that were recorded after the subscription
-was updated.
-
-Alternatively, the optional `stream_position` argument can be used to specify a stream
-position from which the group of consumers of the subscription should receive events.
-Please note, the recorded event at the specified stream position might be included in
-the recorded events received by the group of consumers.
-
-If neither `from_end` nor `commit_position` are specified, the group of consumers
-of the subscription will potentially receive all recorded events in the stream.
-
-The optional `resolve_links` argument is a Python `bool`. The default value of `resolve_links`
-is `False`, which means any event links will not be resolved, so that the events that are
-returned may represent event links. If `resolve_links` is `True`, any event links will
-be resolved, so that the linked events will be returned instead of the event links.
-
-The optional `consumer_strategy` argument is a Python `str` that defines
-the consumer strategy for this persistent subscription. The value of this argument
-can be `'DispatchToSingle'`, `'RoundRobin'`, `'Pinned'`, or `'PinnedByCorrelation'`. The
-default value is `'DispatchToSingle'`. (Please note, due to a limitation in the
-underlying gRPC API, setting the value of this argument to `'PinnedByCorrelation'` will
-cause an error.)
-
-The optional `message_timeout` argument is a Python `float` which sets a maximum duration,
-in seconds, from the server sending a recorded event to a consumer of the persistent
-subscription until either an "acknowledgement" (ack) or a "negative acknowledgement"
-(nack) is received by the server, after which the server will retry to send the event.
-The default value of `message_timeout` is `30.0`.
-
-The optional `max_retry_count` argument is a Python `int` which sets the number of times
-the server will retry to send an event. The default value of `max_retry_count` is `10`.
-
-The optional `min_checkpoint_count` argument is a Python `int` which sets the minimum
-number of "acknowledgements" (acks) received by the server before the server may record
-the acknowledgements. The default value of `min_checkpoint_count` is `10`.
-
-The optional `max_checkpoint_count` argument is a Python `int` which sets the maximum
-number of "acknowledgements" (acks) received by the server before the server must
-record the acknowledgements. The default value of `max_checkpoint_count` is `1000`.
-
-The optional `checkpoint_after` argument is a Python `float` which sets the maximum
-duration in seconds between recording "acknowledgements" (acks). The default value of
-`checkpoint_after` is `2.0`.
-
-The optional `max_subscriber_count` argument is a Python `int` which sets the maximum
-number of concurrent readers of the persistent subscription, beyond which attempts to
-read the persistent subscription will raise a `MaximumSubscriptionsReached` error.
-
-The optional `live_buffer_size` argument is a Python `int` which sets the size of the
-buffer (in-memory) holding newly recorded events. The default value of `live_buffer_size`
-is 500.
-
-The optional `read_batch_size` argument is a Python `int` which sets the number of
-recorded events read from disk when catching up. The default value of `read_batch_size`
-is 200.
-
-The optional `history_buffer_size` argument is a Python `int` which sets the number of
-recorded events to cache in memory when catching up. The default value of `history_buffer_size`
-is 500.
-
-The optional `extra_statistics` argument is a Python `bool` which enables tracking of
-extra statistics on this subscription. The default value of `extra_statistics` is `False`.
+The optional arguments `from_end`, `stream_position`,
+`resolve_links`, `consumer_strategy`, `message_timeout`, `max_retry_count`,
+`min_checkpoint_count`, `max_checkpoint_count`, `checkpoint_after`,
+`max_subscriber_count`, `live_buffer_size`, `read_batch_size`, `history_buffer_size`,
+and `extra_statistics` can be used to adjust the values set on previous calls to
+`create_subscription_to_stream()` and `update_subscription_to_stream()`. If any of
+these arguments are not mentioned in a call to `update_subscription_to_stream()`,
+the corresponding settings of the persistent subscription will be unchanged.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.

@@ -2,7 +2,19 @@
 import asyncio
 import sys
 from typing import Optional
+from unittest import skipIf
 
+from esdbclient.common import (
+    DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+    DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
+)
 from esdbclient.events import CaughtUp
 from esdbclient.persistent import AsyncioSubscriptionReadReqs
 from esdbclient.streams import AsyncioCatchupSubscription
@@ -823,20 +835,591 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 await catchup_subscription.stop()
         self.assertEqual(events[-1].id, event2.id)
 
-    # @skipIf(
-    #     "21.10" in EVENTSTORE_IMAGE_TAG,
-    #     "Server doesn't support 'caught up' or 'fell behind' messages",
-    # )
-    # @skipIf(
-    #     "22.10" in EVENTSTORE_IMAGE_TAG,
-    #     "Server doesn't support 'caught up' or 'fell behind' messages",
-    # )
-    async def test_subscribe_to_stream_caught_up_fell_behind(self) -> None:
-        if "22.10" in EVENTSTORE_IMAGE_TAG or "21.10" in EVENTSTORE_IMAGE_TAG:
-            self.skipTest(
-                "Server doesn't support 'caught up' or 'fell behind' messages"
+    async def test_subscription_to_stream_update(self) -> None:
+        group_name = f"my-subscription-{uuid4().hex}"
+        stream_name = f"my-stream-{uuid4().hex}"
+
+        # Can't update subscription that doesn't exist.
+        with self.assertRaises(NotFound):
+            await self.client.update_subscription_to_stream(
+                group_name=group_name,
+                stream_name=stream_name,
             )
 
+        # Append an event.
+        event1 = NewEvent(type="OrderCreated", data=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}")
+        await self.client.append_events(
+            stream_name,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2],
+        )
+
+        # Create persistent subscription with defaults.
+        await self.client.create_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, False)
+        self.assertEqual(info.consumer_strategy, "DispatchToSingle")
+        self.assertEqual(
+            info.message_timeout, DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT
+        )
+        self.assertEqual(
+            info.max_retry_count, DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT
+        )
+        self.assertEqual(
+            info.min_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.max_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update to resolve links.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, resolve_links=True
+        )
+
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "DispatchToSingle")
+        self.assertEqual(
+            info.message_timeout, DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT
+        )
+        self.assertEqual(
+            info.max_retry_count, DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT
+        )
+        self.assertEqual(
+            info.min_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.max_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update consumer_strategy.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            consumer_strategy="RoundRobin",
+        )
+
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(
+            info.message_timeout, DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT
+        )
+        self.assertEqual(
+            info.max_retry_count, DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT
+        )
+        self.assertEqual(
+            info.min_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.max_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update message_timeout.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, message_timeout=15.0
+        )
+
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(
+            info.max_retry_count, DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT
+        )
+        self.assertEqual(
+            info.min_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.max_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update max_retry_count.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, max_retry_count=5
+        )
+
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(
+            info.min_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.max_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update min_checkpoint_count.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, min_checkpoint_count=7
+        )
+
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(
+            info.max_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update max_checkpoint_count.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, max_checkpoint_count=12
+        )
+
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update checkpoint_after.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, checkpoint_after=1.0
+        )
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update max_subscriber_count.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, max_subscriber_count=10
+        )
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update live_buffer_size.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, live_buffer_size=300
+        )
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update read_batch_size.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, read_batch_size=250
+        )
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update history_buffer_size.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, history_buffer_size=400
+        )
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update extra_statistics.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, extra_statistics=True
+        )
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, True)
+
+        # Update to run from end.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name, from_end=True
+        )
+
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "-1")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, True)
+
+        # Update to run from same position (the end).
+        await self.client.update_subscription_to_stream(
+            group_name=group_name, stream_name=stream_name
+        )
+
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "-1")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, True)
+
+        # Update to run from stream_position.
+        stream_position = await self.client.get_current_version(stream_name)
+        assert isinstance(stream_position, int)
+        await self.client.update_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            stream_position=stream_position,
+        )
+
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, f"{stream_position}")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, True)
+
+        # Update to run from same stream_position.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+        )
+
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, f"{stream_position}")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, True)
+
+        # Update to run from start.
+        await self.client.update_subscription_to_stream(
+            group_name=group_name,
+            stream_name=stream_name,
+            from_end=False,
+        )
+
+        info = await self.client.get_subscription_info(
+            group_name=group_name, stream_name=stream_name
+        )
+        self.assertEqual(info.start_from, "0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, True)
+
+    @skipIf(
+        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "Server doesn't support 'caught up' or 'fell behind' messages",
+    )
+    @skipIf(
+        "22.10" in EVENTSTORE_IMAGE_TAG,
+        "Server doesn't support 'caught up' or 'fell behind' messages",
+    )
+    async def test_subscribe_to_stream_include_caught_up(self) -> None:
         event1 = NewEvent(type="OrderCreated", data=random_data())
 
         # Append new events.
@@ -968,14 +1551,14 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         # Get subscription info.
         info = await self.client.get_subscription_info(group_name)
         self.assertEqual(info.group_name, group_name)
-        self.assertFalse(info.resolve_link_tos)
+        self.assertFalse(info.resolve_links)
 
         # Update subscription.
         await self.client.update_subscription_to_all(
             group_name=group_name, resolve_links=True
         )
         info = await self.client.get_subscription_info(group_name)
-        self.assertTrue(info.resolve_link_tos)
+        self.assertTrue(info.resolve_links)
 
         # List subscriptions.
         subscription_infos = await self.client.list_subscriptions()
@@ -1004,6 +1587,573 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             await self.client.get_subscription_info(group_name)
         with self.assertRaises(NotFound):
             await self.client.replay_parked_events(group_name)
+
+    async def test_subscription_to_all_update(self) -> None:
+        group_name = f"my-subscription-{uuid4().hex}"
+
+        # Can't update subscription that doesn't exist.
+        with self.assertRaises(NotFound):
+            # raises in get_info()
+            await self.client.update_subscription_to_all(group_name=group_name)
+        with self.assertRaises(NotFound):
+            # raises in update()
+            await self.client._connection.persistent_subscriptions.update(
+                group_name=group_name,
+                metadata=self.client._call_metadata,
+                credentials=self.client._call_credentials,
+            )
+
+        # Create persistent subscription with defaults.
+        await self.client.create_subscription_to_all(
+            group_name=group_name,
+        )
+
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, False)
+        self.assertEqual(info.consumer_strategy, "DispatchToSingle")
+        self.assertEqual(
+            info.message_timeout, DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT
+        )
+        self.assertEqual(
+            info.max_retry_count, DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT
+        )
+        self.assertEqual(
+            info.min_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.max_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update to resolve links.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, resolve_links=True
+        )
+
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "DispatchToSingle")
+        self.assertEqual(
+            info.message_timeout, DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT
+        )
+        self.assertEqual(
+            info.max_retry_count, DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT
+        )
+        self.assertEqual(
+            info.min_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.max_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update consumer_strategy.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, consumer_strategy="RoundRobin"
+        )
+
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "RoundRobin")
+        self.assertEqual(
+            info.message_timeout, DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT
+        )
+        self.assertEqual(
+            info.max_retry_count, DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT
+        )
+        self.assertEqual(
+            info.min_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.max_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        await self.client.update_subscription_to_all(
+            group_name=group_name, consumer_strategy="Pinned"
+        )
+
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(
+            info.message_timeout, DEFAULT_PERSISTENT_SUBSCRIPTION_MESSAGE_TIMEOUT
+        )
+        self.assertEqual(
+            info.max_retry_count, DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT
+        )
+        self.assertEqual(
+            info.min_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.max_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update message_timeout.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, message_timeout=15.0
+        )
+
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(
+            info.max_retry_count, DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_RETRY_COUNT
+        )
+        self.assertEqual(
+            info.min_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.max_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update max_retry_count.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, max_retry_count=5
+        )
+
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(
+            info.min_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MIN_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.max_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update min_checkpoint_count.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, min_checkpoint_count=7
+        )
+
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(
+            info.max_checkpoint_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_CHECKPOINT_COUNT,
+        )
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update max_checkpoint_count.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, max_checkpoint_count=12
+        )
+
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(
+            info.checkpoint_after, DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER
+        )
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update checkpoint_after.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, checkpoint_after=1.0
+        )
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(
+            info.max_subscriber_count,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_MAX_SUBSCRIBER_COUNT,
+        )
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update max_subscriber_count.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, max_subscriber_count=10
+        )
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(
+            info.live_buffer_size, DEFAULT_PERSISTENT_SUBSCRIPTION_LIVE_BUFFER_SIZE
+        )
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update live_buffer_size.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, live_buffer_size=300
+        )
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(
+            info.read_batch_size, DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE
+        )
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update read_batch_size.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, read_batch_size=250
+        )
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(
+            info.history_buffer_size,
+            DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
+        )
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update history_buffer_size.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, history_buffer_size=400
+        )
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, False)
+
+        # Update extra_statistics.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, extra_statistics=True
+        )
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, True)
+
+        # Update to run from end.
+        await self.client.update_subscription_to_all(
+            group_name=group_name, from_end=True
+        )
+
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:-1/P:-1")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, True)
+
+        # Update to run from same position (the end).
+        await self.client.update_subscription_to_all(group_name=group_name)
+
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:-1/P:-1")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, True)
+
+        # Update to run from stream_position.
+        commit_position = await self.client.get_commit_position()
+        await self.client.update_subscription_to_all(
+            group_name=group_name,
+            commit_position=commit_position,
+        )
+
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, f"C:{commit_position}/P:{commit_position}")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, True)
+
+        # Update to run from same stream_position.
+        await self.client.update_subscription_to_all(
+            group_name=group_name,
+        )
+
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, f"C:{commit_position}/P:{commit_position}")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, True)
+
+        # Update to run from start.
+        await self.client.update_subscription_to_all(
+            group_name=group_name,
+            from_end=False,
+        )
+
+        info = await self.client.get_subscription_info(group_name=group_name)
+        self.assertEqual(info.start_from, "C:0/P:0")
+        self.assertEqual(info.resolve_links, True)
+        self.assertEqual(info.consumer_strategy, "Pinned")
+        self.assertEqual(info.message_timeout, 15.0)
+        self.assertEqual(info.max_retry_count, 5)
+        self.assertEqual(info.min_checkpoint_count, 7)
+        self.assertEqual(info.max_checkpoint_count, 12)
+        self.assertEqual(info.checkpoint_after, 1.0)
+        self.assertEqual(info.max_subscriber_count, 10)
+        self.assertEqual(info.live_buffer_size, 300)
+        self.assertEqual(info.read_batch_size, 250)
+        self.assertEqual(info.history_buffer_size, 400)
+        self.assertEqual(info.extra_statistics, True)
 
     async def test_persistent_subscription_to_stream(self) -> None:
         # Check subscription does not exist.
@@ -1133,14 +2283,14 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         info = await self.client.get_subscription_info(group_name, stream_name1)
         self.assertEqual(info.group_name, group_name)
         self.assertEqual(info.event_source, stream_name1)
-        self.assertFalse(info.resolve_link_tos)
+        self.assertFalse(info.resolve_links)
 
         # Update subscription.
         await self.client.update_subscription_to_stream(
             group_name=group_name, stream_name=stream_name1, resolve_links=True
         )
         info = await self.client.get_subscription_info(group_name, stream_name1)
-        self.assertTrue(info.resolve_link_tos)
+        self.assertTrue(info.resolve_links)
 
         # List subscriptions.
         subscription_infos = await self.client.list_subscriptions()
