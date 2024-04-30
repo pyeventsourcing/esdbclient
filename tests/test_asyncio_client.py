@@ -754,20 +754,15 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             if isinstance(event, Checkpoint):
                 break
 
-    # @skipIf(
-    #     "21.10" in EVENTSTORE_IMAGE_TAG,
-    #     "Server doesn't support 'caught up' or 'fell behind' messages",
-    # )
-    # @skipIf(
-    #     "22.10" in EVENTSTORE_IMAGE_TAG,
-    #     "Server doesn't support 'caught up' or 'fell behind' messages",
-    # )
-    async def test_subscribe_to_all_include_caught_up_fell_behind(self) -> None:
-        if "22.10" in EVENTSTORE_IMAGE_TAG or "21.10" in EVENTSTORE_IMAGE_TAG:
-            self.skipTest(
-                "Server doesn't support 'caught up' or 'fell behind' messages"
-            )
-
+    @skipIf(
+        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "Server doesn't support 'caught up' or 'fell behind' messages",
+    )
+    @skipIf(
+        "22.10" in EVENTSTORE_IMAGE_TAG,
+        "Server doesn't support 'caught up' or 'fell behind' messages",
+    )
+    async def test_subscribe_to_all_include_caught_up(self) -> None:
         commit_position = await self.client.get_commit_position()
 
         # Append new events.
@@ -783,7 +778,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         subscription = await self.client.subscribe_to_all(
             commit_position=commit_position,
             filter_exclude=".*",
-            include_caught_up_fell_behind=True,
+            include_caught_up=True,
             timeout=10,
         )
 
@@ -791,8 +786,6 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         async for event in subscription:
             if isinstance(event, CaughtUp):
                 break
-
-        # Todo: test for 'fell behind' messages.
 
     async def test_subscribe_to_stream(self) -> None:
         # Append events.
@@ -857,14 +850,12 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         # Subscribe to stream events, from the start.
         subscription = await self.client.subscribe_to_stream(
             stream_name=stream_name1,
-            include_caught_up_fell_behind=True,
+            include_caught_up=True,
             timeout=10,
         )
         async for event in subscription:
             if isinstance(event, CaughtUp):
                 break
-
-        # Todo: test for 'fell behind' messages.
 
     async def test_persistent_subscription_to_all(self) -> None:
         # Check subscription does not exist.

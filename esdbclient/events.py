@@ -70,9 +70,9 @@ class RecordedEvent:
     def is_caught_up(self) -> bool:
         return False
 
-    @property
-    def is_fell_behind(self) -> bool:
-        return False
+    # @property
+    # def is_fell_behind(self) -> bool:
+    #     return False
 
 
 @dataclass(frozen=True)
@@ -117,22 +117,22 @@ class CaughtUp(RecordedEvent):
         return True
 
 
-@dataclass(frozen=True)
-class FellBehind(RecordedEvent):
-    FELL_BEHIND_ID = UUID("00000000-0000-0000-0000-000000000000")
-
-    def __init__(self) -> None:
-        super().__init__(
-            id=FellBehind.FELL_BEHIND_ID,
-            type="",
-            data=b"",
-            content_type="",
-            metadata=b"",
-            stream_name="",
-            stream_position=0,
-            commit_position=0,
-        )
-
-    @property
-    def is_fell_behind(self) -> bool:
-        return True
+# @dataclass(frozen=True)
+# class FellBehind(RecordedEvent):
+#     FELL_BEHIND_ID = UUID("00000000-0000-0000-0000-000000000000")
+#
+#     def __init__(self) -> None:
+#         super().__init__(
+#             id=FellBehind.FELL_BEHIND_ID,
+#             type="",
+#             data=b"",
+#             content_type="",
+#             metadata=b"",
+#             stream_name="",
+#             stream_position=0,
+#             commit_position=0,
+#         )
+#
+#     @property
+#     def is_fell_behind(self) -> bool:
+#         return True

@@ -2479,7 +2479,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         "22.10" in EVENTSTORE_IMAGE_TAG,
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
-    def test_subscribe_to_all_include_caught_up_fell_behind(self) -> None:
+    def test_subscribe_to_all_include_caught_up(self) -> None:
         self.construct_esdb_client()
 
         commit_position = self.client.get_commit_position()
@@ -2497,7 +2497,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         subscription = self.client.subscribe_to_all(
             commit_position=commit_position,
             filter_exclude=".*",
-            include_caught_up_fell_behind=True,
+            include_caught_up=True,
             timeout=10,
         )
 
@@ -2505,8 +2505,6 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         for event in subscription:
             if isinstance(event, CaughtUp):
                 break
-
-        # Todo: test for 'fell behind' messages.
 
     @skipIf("23.10" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug was fixed")
     @skipIf("24.2" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug was fixed")
@@ -3074,7 +3072,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         "22.10" in EVENTSTORE_IMAGE_TAG,
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
-    def test_subscribe_to_stream_caught_up_fell_behind(self) -> None:
+    def test_subscribe_to_stream_include_caught_up(self) -> None:
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -3090,29 +3088,12 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         # Subscribe to stream events, from the start.
         subscription = self.client.subscribe_to_stream(
             stream_name=stream_name1,
-            include_caught_up_fell_behind=True,
+            include_caught_up=True,
             timeout=10,
         )
         for event in subscription:
             if isinstance(event, CaughtUp):
                 break
-
-        # Todo: test for 'fell behind' messages.
-
-        # for i in range(100):
-        #     new_events = [
-        #         NewEvent(type="OrderUpdated", data=random_data()) for _ in range(10)
-        #     ]
-        #     self.client.append_events(
-        #         stream_name1,
-        #         current_version=i * 10,
-        #         events=new_events,
-        #     )
-        #     print(i, "appended 10 events...")
-        #     if isinstance(next(subscription), FellBehind):
-        #         break
-        # else:
-        #     self.fail("Didn't get a 'fell behind' message...")
 
     def test_subscription_to_all_read_with_ack_event_id(self) -> None:
         self.construct_esdb_client()

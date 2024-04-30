@@ -468,7 +468,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         include_checkpoints: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
-        include_caught_up_fell_behind: bool = False,
+        include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> AsyncioCatchupSubscription:
@@ -487,7 +487,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             include_checkpoints=include_checkpoints,
             window_size=window_size,
             checkpoint_interval_multiplier=checkpoint_interval_multiplier,
-            include_caught_up_fell_behind=include_caught_up_fell_behind,
+            include_caught_up=include_caught_up,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -499,7 +499,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         stream_name: str,
         *,
         resolve_links: bool = False,
-        include_caught_up_fell_behind: bool = False,
+        include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> AsyncioCatchupSubscription:
@@ -514,7 +514,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         *,
         stream_position: int,
         resolve_links: bool = False,
-        include_caught_up_fell_behind: bool = False,
+        include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> AsyncioCatchupSubscription:
@@ -529,7 +529,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         *,
         from_end: Literal[True] = True,
         resolve_links: bool = False,
-        include_caught_up_fell_behind: bool = False,
+        include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> AsyncioCatchupSubscription:
@@ -546,7 +546,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         stream_position: Optional[int] = None,
         from_end: bool = False,
         resolve_links: bool = False,
-        include_caught_up_fell_behind: bool = False,
+        include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> AsyncioCatchupSubscription:
@@ -560,7 +560,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
             from_end=from_end,
             resolve_links=resolve_links,
             subscribe=True,
-            include_caught_up_fell_behind=include_caught_up_fell_behind,
+            include_caught_up=include_caught_up,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,

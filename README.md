@@ -1840,7 +1840,7 @@ they were recorded. This method returns a "catch-up subscription" iterator.
 
 This method also has ten optional arguments, `commit_position`, `from_end`, `resolve_links`,
 `filter_exclude`, `filter_include`, `filter_by_stream_name`, `include_checkpoints`,
-`include_caught_up_fell_behind`, `timeout` and `credentials`.
+`include_caught_up`, `timeout` and `credentials`.
 
 The optional `commit_position` argument specifies a commit position. The default
 value of `commit_position` is `None`, which means the catch-up subscription will
@@ -1883,9 +1883,9 @@ update its recorded commit position value, so that, when lots of events are bein
 filter out, the subscriber does not have to start from the same old position when
 the event processing component is restarted.
 
-The optional `include_caught_up_fell_behind` argument is a Python `bool` which indicates
-whether "caught up" and "fell behind" messages should be included when recorded events are
-received. The default value of `include_caught_up_fell_behind` is `False`.
+The optional `include_caught_up` argument is a Python `bool` which indicates
+whether "caught up" messages should be included when recorded events are
+received. The default value of `include_caught_up` is `False`.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
@@ -2028,7 +2028,7 @@ This method has a required `stream_name` argument, which specifies the name of t
 stream from which recorded events will be received.
 
 This method also has six optional arguments, `stream_position`, `from_end`,
-`resolve_links`, `include_caught_up_fell_behind`, `timeout` and `credentials`.
+`resolve_links`, `include_caught_up`, `timeout` and `credentials`.
 
 The optional `stream_position` argument specifies a position in the stream from
 which to start subscribing. The default value of `stream_position` is `None`,
@@ -2046,9 +2046,9 @@ is `False`, which means any event links will not be resolved, so that the events
 returned may represent event links. If `resolve_links` is `True`, any event links will
 be resolved, so that the linked events will be returned instead of the event links.
 
-The optional `include_caught_up_fell_behind` argument is a Python `bool` which indicates
-whether "caught up" and "fell behind" messages should be included when recorded events are
-received. The default value of `include_caught_up_fell_behind` is `False`.
+The optional `include_caught_up` argument is a Python `bool` which indicates
+whether "caught up" messages should be included when recorded events are
+received. The default value of `include_caught_up` is `False`.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.

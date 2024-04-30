@@ -3,7 +3,7 @@ from unittest import TestCase
 from uuid import UUID, uuid4
 
 from esdbclient import Checkpoint, NewEvent, RecordedEvent
-from esdbclient.events import CaughtUp, FellBehind
+from esdbclient.events import CaughtUp
 from tests.test_client import random_data
 
 
@@ -79,6 +79,7 @@ class TestRecordedEvent(TestCase):
         self.assertFalse(recorded_event.is_link_event)
         self.assertFalse(recorded_event.is_resolved_event)
         self.assertFalse(recorded_event.is_checkpoint)
+        self.assertFalse(recorded_event.is_caught_up)
 
     def test_link_event(self) -> None:
         link_event_id = uuid4()
@@ -110,6 +111,7 @@ class TestRecordedEvent(TestCase):
         self.assertTrue(recorded_event.is_link_event)
         self.assertFalse(recorded_event.is_resolved_event)
         self.assertFalse(recorded_event.is_checkpoint)
+        self.assertFalse(recorded_event.is_caught_up)
 
     def test_resolved_event(self) -> None:
         normal_event_id = uuid4()
@@ -146,6 +148,7 @@ class TestRecordedEvent(TestCase):
         self.assertFalse(recorded_event.is_link_event)
         self.assertTrue(recorded_event.is_resolved_event)
         self.assertFalse(recorded_event.is_checkpoint)
+        self.assertFalse(recorded_event.is_caught_up)
 
         link = recorded_event.link
         assert link is not None  # For mypy.
@@ -154,6 +157,7 @@ class TestRecordedEvent(TestCase):
         self.assertTrue(link.is_link_event)
         self.assertFalse(link.is_resolved_event)
         self.assertFalse(link.is_checkpoint)
+        self.assertFalse(link.is_caught_up)
 
 
 class TestCheckpoint(TestCase):
@@ -161,6 +165,7 @@ class TestCheckpoint(TestCase):
         checkpoint = Checkpoint(commit_position=12345)
         self.assertEqual(checkpoint.commit_position, 12345)
         self.assertTrue(checkpoint.is_checkpoint)
+        self.assertFalse(checkpoint.is_caught_up)
 
         checkpoint = Checkpoint(commit_position=67890)
         self.assertEqual(checkpoint.commit_position, 67890)
@@ -171,15 +176,6 @@ class TestCaughtUp(TestCase):
         caught_up = CaughtUp()
         self.assertFalse(caught_up.is_checkpoint)
         self.assertTrue(caught_up.is_caught_up)
-        self.assertFalse(caught_up.is_fell_behind)
-
-
-class TestFellBehind(TestCase):
-    def test(self) -> None:
-        fell_behind = FellBehind()
-        self.assertFalse(fell_behind.is_checkpoint)
-        self.assertFalse(fell_behind.is_caught_up)
-        self.assertTrue(fell_behind.is_fell_behind)
 
 
 class TestEquality(TestCase):
