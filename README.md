@@ -241,6 +241,17 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [List subscriptions](#list-subscriptions)
   * [List subscriptions to stream](#list-subscriptions-to-stream)
   * [Delete subscription](#delete-subscription)
+* [Projections](#projections)
+  * [Create projection](#create-projection)
+  * [Update projection](#update-projection)
+  * [Get projection statistics](#get-projection-statistics)
+  * [Get projection state](#get-projection-state)
+  * [Get projection result](#get-projection-result)
+  * [Enable projection](#enable-projection)
+  * [Disable projection](#disable-projection)
+  * [Reset projection](#reset-projection)
+  * [Delete projection](#delete-projection)
+  * [Restart projections subsystem](#restart-projections-subsystem)
 * [Call credentials](#call-credentials)
   * [Construct call credentials](#construct-call-credentials)
 * [Connection](#connection)
@@ -834,7 +845,7 @@ does not yet exist, so `current_version` is `StreamState.NO_STREAM`.
 
 ```python
 # Construct a new event object.
-event1 = NewEvent(type='OrderCreated', data=b'data1')
+event1 = NewEvent(type='OrderCreated', data=b'{}')
 
 # Define a new stream name.
 stream_name1 = str(uuid.uuid4())
@@ -851,8 +862,8 @@ In the example below, two subsequent events are appended to an existing
 stream. The stream has one recorded event, so `current_version` is `0`.
 
 ```python
-event2 = NewEvent(type='OrderUpdated', data=b'data2')
-event3 = NewEvent(type='OrderDeleted', data=b'data3')
+event2 = NewEvent(type='OrderUpdated', data=b'{}')
+event3 = NewEvent(type='OrderDeleted', data=b'{}')
 
 commit_position2 = client.append_to_stream(
     stream_name=stream_name1,
@@ -1912,7 +1923,7 @@ from threading import Thread
 
 # Append a new event to a new stream.
 stream_name2 = str(uuid.uuid4())
-event4 = NewEvent(type='OrderCreated', data=b'data4')
+event4 = NewEvent(type='OrderCreated', data=b'{}')
 
 client.append_to_stream(
     stream_name=stream_name2,
@@ -1947,7 +1958,7 @@ thread.start()
 wait_for_event(event4)
 
 # Append another event whilst the subscription is running.
-event5 = NewEvent(type='OrderUpdated', data=b'data5')
+event5 = NewEvent(type='OrderUpdated', data=b'{}')
 client.append_to_stream(
     stream_name=stream_name2,
     current_version=0,
@@ -1973,7 +1984,7 @@ received in the order they were recorded.
 ```python
 
 # Append another event.
-event6 = NewEvent(type='OrderDeleted', data=b'data6')
+event6 = NewEvent(type='OrderDeleted', data=b'{}')
 client.append_to_stream(
     stream_name=stream_name2,
     current_version=1,
@@ -1994,9 +2005,9 @@ wait_for_event(event6)
 
 # Append three more events to a new stream.
 stream_name3 = str(uuid.uuid4())
-event7 = NewEvent(type='OrderCreated', data=b'data7')
-event8 = NewEvent(type='OrderUpdated', data=b'data8')
-event9 = NewEvent(type='OrderDeleted', data=b'data9')
+event7 = NewEvent(type='OrderCreated', data=b'{}')
+event8 = NewEvent(type='OrderUpdated', data=b'{}')
+event9 = NewEvent(type='OrderDeleted', data=b'{}')
 
 client.append_to_stream(
     stream_name=stream_name3,
@@ -2820,7 +2831,310 @@ client.delete_subscription(
 )
 ```
 
-### Call credentials<a id="call-credentials"></a>
+
+## Projections<a id="projections"></a>
+
+### Create projection<a id="create-projection"></a>
+
+The `create_projection()` method can be used to create a projection.
+
+This method has a required `query` argument, which is a Python `str` that
+defines what the projection will do.
+
+This method also has six optional arguments, `name`, `continuous`, `emit_enabled`,
+`track_emitted_streams`, `timeout`, and `credentials`.
+
+The optional `name` argument is a Python `str` which specifies the name of the projection.
+If a name is provided, the projection will either be a "transient" or a "continuous"
+projection. Otherwise, the projection will be a "one time" projection.
+
+The optional `continuous` argument is a Python `bool` which specifies whether a
+projection will be a "continuous" projection. If a `True` value is specified, the
+projection will be a "continuous" projection, otherwise the projection will be a
+"transient" projection. The default value of `continuous` is `False`.
+
+The optional `emit_enabled` argument is a Python `bool` which specifies whether a
+projection will be able to emit events. If a `True` value is specified, the projection
+will be able to emit events, otherwise the projection will not be able to emit events.
+The default value of `emit_enabled` is `False`.
+
+The optional `track_emitted_streams` argument is a Python `bool` which specifies whether
+a projection will have its emitted streams tracked. If a `True` value is specified, the
+projection will have its emitted streams tracked, otherwise the projection will not
+have its emitted streams tracked. The default value of `track_emitted_streams` is `False`.
+
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
+
+In the example below, a continuous projection is created that processes
+events appended to `stream_name2`. The "state" of the projection is
+initialised to have a "count" that is incremented once for each event.
+
+```python
+projection_name = str(uuid.uuid4())
+
+projection_query = """fromStream('%s')
+.when({
+  $init: function(){
+    return {
+      count: 0
+    };
+  },
+  OrderCreated: function(s,e){
+    s.count += 1;
+  },
+  OrderUpdated: function(s,e){
+    s.count += 1;
+  },
+  OrderDeleted: function(s,e){
+    s.count += 1;
+  }
+})
+.outputState()
+"""  % stream_name2
+
+client.create_projection(
+    name=projection_name,
+    query=projection_query,
+    continuous=True,
+)
+```
+
+### Get projection state<a id="get-projection-state"></a>
+
+The `get_projection_state()` method can be used to get a projection's state.
+
+This method has a required `name` argument, which is a Python `str` that
+specifies the name of a projection.
+
+This method also has three optional arguments, `partition`, `timeout`, and `credentials`.
+
+The optional `partition` argument is a Python `str` which specifies a partition...
+
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
+
+In the example below, after sleeping for 1 second to allow the projection
+to process all the recorded events, the projection "state" is obtained.
+We can see that the projection has processed three events.
+
+```python
+sleep(1)  # allow time for projection to process recorded events
+
+projection_state = client.get_projection_state(name=projection_name)
+
+assert projection_state.value == {'count': 3}
+```
+
+### Get projection result<a id="get-projection-result"></a>
+
+The `get_projection_result()` method can be used to get a projection's result.
+
+This method has a required `name` argument, which is a Python `str` that
+specifies the name of a projection.
+
+This method also has three optional arguments, `partition`, `timeout`, and `credentials`.
+
+The optional `partition` argument is a Python `str` which specifies a partition...
+
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
+
+In the example below, the projection "result" is obtained.
+We can see that the projection has processed three events.
+
+```python
+projection_result = client.get_projection_result(name=projection_name)
+
+assert projection_result.value == {'count': 3}
+```
+
+### Get projection statistics<a id="get-projection-statistics"></a>
+
+The `get_projection_statistucs()` method can be used to get projection statistics.
+
+This method also has seven optional arguments, `name`, `all`, `transient`,
+`continuous`, `one_time`, `timeout`, and `credentials`.
+
+The optional `name` argument is a Python `str` that specifies the name of a
+projection. If the name of a projection is specified, this method will return
+a single `ProjectionStatistics` object that represents that projection. Otherwise
+this method will return a sequence of `ProjectionStatistics` objects.
+
+The optional `all` argument is Python `bool` that can be used to request statistics
+for all projections.
+
+The optional `transient` argument is Python `bool` that can be used to request
+statistics for all "transient" projections.
+
+The optional `continuous` argument is Python `bool` that can be used to request
+statistics for all "continuous" projections.
+
+The optional `one_time` argument is Python `bool` that can be used to request
+statistics for all "one time" projections.
+
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
+
+```python
+statistics = client.get_projection_statistics(name=projection_name)
+```
+
+A `ProjectionStatistics` object is returned. The attributes of this object
+have values that represent the progress of the projection.
+
+### Update projection<a id="update-projection"></a>
+
+The `update_projection()` method can be used to update a projection.
+
+This method has two required arguments, `name` and `query`.
+
+The required `name` argument is a Python `str` which specifies the name of the projection
+to be updated.
+
+The required `query` argument is a Python `str` which defines what the projection will do.
+
+This method also has three optional arguments, `emit_enabled`, `timeout`, and `credentials`.
+
+The optional `emit_enabled` argument is a Python `bool` which specifies whether a
+projection will be able to emit events. If a `True` value is specified, the projection
+will be able to emit events. If a `False` value is specified, the projection will not
+be able to emit events. The default value of `emit_enabled` is `None`.
+
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
+
+```python
+client.update_projection(name=projection_name, query=projection_query)
+```
+
+### Enable projection<a id="enable-projection"></a>
+
+The `enable_projection()` method can be used to enable a projection that was previously
+disabled.
+
+This method has a required `name` argument, which is a Python `str` that
+specifies the name of the projection to be disabled.
+
+This method also has two optional arguments, `timeout` and `credentials`.
+
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
+
+```python
+client.enable_projection(name=projection_name)
+```
+
+### Disable projection<a id="disable-projection"></a>
+
+The `disable_projection()` method can be used to disable a projection.
+
+This method has a required `name` argument, which is a Python `str` that
+specifies the name of the projection to be disabled.
+
+This method also has three optional arguments, `write_checkpoint`, `timeout`, and `credentials`.
+
+The optional `write_checkpoint` argument is a Python `bool` which specifies whether
+a checkpoint will be written when the projection is disabled. If `write_checkpoint`
+is `True` a checkpoint will be written, otherwise a checkpoint will not be written.
+The default value of `write_checkpoint` is `False`.
+
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
+
+```python
+client.disable_projection(name=projection_name)
+```
+
+### Reset projection<a id="reset-projection"></a>
+
+The `reset_projection()` method can be used to reset a projection.
+
+This method has a required `name` argument, which is a Python `str` that
+specifies the name of the projection to be reset.
+
+This method also has three optional arguments, `write_checkpoint`, `timeout`, and `credentials`.
+
+The optional `write_checkpoint` argument is a Python `bool` which specifies whether
+a checkpoint will be written when the projection is reset. If `write_checkpoint`
+is `True` a checkpoint will be written, otherwise a checkpoint will not be written.
+The default value of `write_checkpoint` is `False`.
+
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
+
+```python
+client.reset_projection(name=projection_name)
+```
+
+### Delete projection<a id="delete-projection"></a>
+
+The `delete_projection()` method can be used to delete a projection.
+
+This method has a required `name` argument, which is a Python `str` that
+specifies the name of the projection to be deleted.
+
+This method also has five optional arguments, `delete_emitted_streams`,
+`delete_state_stream`, `delete_checkpoint_stream`, `timeout`, and `credentials`.
+
+The optional `delete_emitted_streams` argument is a Python `bool` which...
+
+The optional `delete_state_stream` argument is a Python `bool` which...
+
+The optional `delete_checkpoint_stream` argument is a Python `bool` which...
+
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
+
+```python
+client.delete_projection(name=projection_name)
+```
+
+### Restart projections subsystem<a id="restart-projections-subsystem"></a>
+
+The `restart_projections_subsystem()` method can be used to restart the projections subsystem.
+
+This method also has two optional arguments, `timeout` and `credentials`.
+
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
+
+```python
+client.restart_projections_subsystem()
+```
+
+
+## Call credentials<a id="call-credentials"></a>
 
 Default call credentials are derived by the client from the user info part of the
 connection string URI.
@@ -2890,26 +3204,13 @@ and can connect to both "secure" and "insecure" EventStoreDB servers.
 The async function `AsyncioEventStoreDBClient` constructs the client and connects to
 EventStoreDB. It can be imported from `esdbclient`.
 
-The asyncio client has exactly the same methods and follows exactly the same behaviors
-as the multithreaded `EventStoreDBClient`. The methods are decorated in the same way
-with reconnect and retry decorators, that will selectively reconnect and retry when
-connection issues or server errors are encountered.
-
-The asynchronous I/O client has the following methods: `append_to_stream()`,
-`get_stream()`, `read_stream()`, `get_current_version()`, `delete_stream()`,
-`tombstone_stream()`, `get_stream_metadata()`, `set_stream_metadata()`,
-`read_all()`, `get_commit_position()`, `subscribe_to_all()`, `subscribe_to_stream()`,
-`create_subscription_to_all()`, `create_subscription_to_stream()`,
-`read_subscription_to_all()`, `read_subscription_to_stream()`,
-`update_subscription_to_all()`, `update_subscription_to_stream()`,
-`replay_parked_events()`, `list_subscriptions()`, `get_subscription_info()`,
-`delete_subscription()`, `reconnect()`, `close()`, and `construct_call_credentials()`.
-
-These methods are equivalent to the methods on `EventStoreDBClient`. They have the same
-method signatures, and can be called with the same arguments, to the same effect.
-Excepting `construct_call_credentials()`, these methods are defined as `async def`
-methods, and so calls to these methods will return Python "awaitables" that must be
-awaited to obtain the method return values.
+The asyncio client has exactly the same methods as the multithreaded `EventStoreDBClient`.
+These methods are defined as `async def` methods, and so calls to these methods will
+return Python "awaitables" that must be awaited to obtain the method return values.
+The methods have the same behaviors, the same arguments and the same or equivalent
+return values. The methods are similarly decorated with reconnect and retry decorators,
+that selectively reconnect and retry when connection issues or server errors are
+encountered.
 
 When awaited, the methods `read_all()` and `read_stream()` return an `AsyncioReadResponse`
 object. The methods `subscribe_to_all()` and `subscribe_to_stream()` return an

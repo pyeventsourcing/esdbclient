@@ -38,6 +38,7 @@ from esdbclient.exceptions import (
     NotFound,
     ServiceUnavailable,
     SSLError,
+    UnknownError,
 )
 from esdbclient.protos.Grpc import persistent_pb2, streams_pb2
 
@@ -145,18 +146,49 @@ class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
         callback(self._metadata, None)
 
 
-def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
+def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:  # noqa: C901
     """
     Converts gRPC errors to client exceptions.
     """
     if isinstance(e, (grpc.Call, grpc.aio.AioRpcError)):
-        if (
-            e.code() == grpc.StatusCode.UNKNOWN
-            and "Exception was thrown by handler" in str(e.details())
-        ):
-            return ExceptionThrownByHandler(e)
+        if e.code() == grpc.StatusCode.UNKNOWN:
+            details = str(e.details())
+            if "Exception was thrown by handler" in details:
+                return ExceptionThrownByHandler(e)
+            elif (
+                "Envelope callback expected Updated, received Conflict instead"
+                in details
+            ):
+                # Projections.Create does this....
+                return AlreadyExists(e)
+            elif (
+                "Envelope callback expected Updated, received NotFound instead"
+                in details
+            ):
+                # Projections.Update and Projections.Delete does this....
+                return NotFound(e)
+            elif (
+                "Envelope callback expected Statistics, received NotFound instead"
+                in details
+            ):
+                # Projections.Statistics does this....
+                return NotFound(e)
+            elif (
+                "Envelope callback expected ProjectionState, received NotFound instead"
+                in details
+            ):
+                # Projections.State does this....
+                return NotFound(e)
+            elif (
+                "Envelope callback expected ProjectionResult, received NotFound instead"
+                in details
+            ):
+                # Projections.Result does this....
+                return NotFound(e)
+            else:  # pragma: no cover
+                return UnknownError(e)
         elif e.code() == grpc.StatusCode.ABORTED:
-            details = e.details()
+            details = str(e.details())
             if isinstance(details, str) and "Consumer too slow" in details:
                 return ConsumerTooSlow()
             else:
@@ -184,7 +216,7 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:
                 return NodeIsNotLeader(e)
             return NotFound()
         elif e.code() == grpc.StatusCode.FAILED_PRECONDITION:
-            details = e.details()
+            details = str(e.details())
             if details is not None and details.startswith(
                 "Maximum subscriptions reached"
             ):

@@ -2,8 +2,8 @@ syntax = "proto3";
 package event_store.client.projections;
 option java_package = "com.eventstore.dbclient.proto.projections";
 
+import "esdbclient/protos/Grpc/shared.proto";
 import "google/protobuf/struct.proto";
-import "shared.proto";
 
 service Projections {
 	rpc Create (CreateReq) returns (CreateResp);

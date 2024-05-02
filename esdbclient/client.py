@@ -72,6 +72,11 @@ from esdbclient.persistent import (
     PersistentSubscription,
     SubscriptionInfo,
 )
+from esdbclient.projections import (
+    ProjectionResult,
+    ProjectionState,
+    ProjectionStatistics,
+)
 from esdbclient.streams import CatchupSubscription, ReadResponse, StreamState
 
 # Matches the 'type' of "system" events.
@@ -1583,24 +1588,274 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             credentials=credentials or self._call_credentials,
         )
 
-    # Getting 'AccessDenied' with ESDB v23.10.
-    # @retrygrpc
-    # @autoreconnect
-    # def read_cluster_gossip(
-    #     self,
-    #     timeout: Optional[float] = None,
-    #     credentials: Optional[grpc.CallCredentials] = None,
-    # ) -> Sequence[ClusterMember]:
-    #     timeout = (
-    #         timeout
-    #         if timeout is not None
-    #         else self.connection_spec.options.GossipTimeout
-    #     )
-    #     return self._connection.cluster_gossip.read(
-    #         timeout=timeout,
-    #         metadata=self._call_metadata,
-    #         credentials=credentials or self._call_credentials,
-    #     )
+    @retrygrpc
+    @autoreconnect
+    def create_projection(
+        self,
+        *,
+        query: str,
+        name: str = "",
+        continuous: bool = False,
+        emit_enabled: bool = False,
+        track_emitted_streams: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Creates a projection.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        self._esdb.projections.create(
+            query=query,
+            name=name,
+            continuous=continuous,
+            emit_enabled=emit_enabled,
+            track_emitted_streams=track_emitted_streams,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    def update_projection(
+        self,
+        name: str,
+        *,
+        query: str,
+        emit_enabled: Optional[bool] = None,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Updates a projection.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        self._esdb.projections.update(
+            name=name,
+            query=query,
+            emit_enabled=emit_enabled,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    def delete_projection(
+        self,
+        name: str,
+        *,
+        delete_emitted_streams: bool = False,
+        delete_state_stream: bool = False,
+        delete_checkpoint_stream: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Deletes a projection.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        self._esdb.projections.delete(
+            name=name,
+            delete_emitted_streams=delete_emitted_streams,
+            delete_state_stream=delete_state_stream,
+            delete_checkpoint_stream=delete_checkpoint_stream,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @overload
+    def get_projection_statistics(
+        self,
+        *,
+        name: str,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> ProjectionStatistics:
+        """
+        Signature for returning statistics for named projection.
+        """
+
+    @overload
+    def get_projection_statistics(
+        self,
+        *,
+        all: bool = False,
+        transient: bool = False,
+        continuous: bool = False,
+        one_time: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> Sequence[ProjectionStatistics]:
+        """
+        Signature for returning collection of projection statistics.
+        """
+
+    @retrygrpc
+    @autoreconnect
+    def get_projection_statistics(
+        self,
+        *,
+        name: Optional[str] = None,
+        all: bool = False,
+        transient: bool = False,
+        continuous: bool = False,
+        one_time: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> Union[ProjectionStatistics, Sequence[ProjectionStatistics]]:
+        """
+        Gets projection statistics.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        return self._esdb.projections.get_projection_statistics(
+            name=name,
+            all=all,
+            transient=transient,
+            continuous=continuous,
+            one_time=one_time,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    def disable_projection(
+        self,
+        name: str,
+        *,
+        write_checkpoint: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Disables a projection.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        self._esdb.projections.disable(
+            name=name,
+            write_checkpoint=write_checkpoint,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    def enable_projection(
+        self,
+        name: str,
+        *,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Disables a projection.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        self._esdb.projections.enable(
+            name=name,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    def reset_projection(
+        self,
+        name: str,
+        *,
+        write_checkpoint: bool = False,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Resets a projection.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        self._esdb.projections.reset(
+            name=name,
+            write_checkpoint=write_checkpoint,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    def get_projection_state(
+        self,
+        name: str,
+        *,
+        partition: str = "",
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> ProjectionState:
+        """
+        Gets projection state.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        return self._esdb.projections.get_state(
+            name=name,
+            partition=partition,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    def get_projection_result(
+        self,
+        name: str,
+        *,
+        partition: str = "",
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> ProjectionResult:
+        """
+        Gets projection result.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        return self._esdb.projections.get_result(
+            name=name,
+            partition=partition,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    def restart_projections_subsystem(
+        self,
+        *,
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> None:
+        """
+        Restarts projections subsystem.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+
+        return self._esdb.projections.restart_subsystem(
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
 
     def close(self) -> None:
         """

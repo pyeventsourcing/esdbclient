@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import json
 import sys
 from typing import Optional
 from unittest import skipIf
@@ -20,8 +21,10 @@ from esdbclient.persistent import AsyncioSubscriptionReadReqs
 from esdbclient.streams import AsyncioCatchupSubscription
 from tests.test_client import (
     EVENTSTORE_IMAGE_TAG,
+    PROJECTION_QUERY_TEMPLATE1,
     TimedTestCase,
     get_ca_certificate,
+    get_server_certificate,
     random_data,
 )
 
@@ -38,8 +41,11 @@ from esdbclient.asyncio_client import (
     _AsyncioEventStoreDBClient,
 )
 from esdbclient.exceptions import (
+    AlreadyExists,
+    DeadlineExceeded,
     DiscoveryFailed,
     ExceptionIteratingRequests,
+    ExceptionThrownByHandler,
     FollowerNotFound,
     GrpcDeadlineExceeded,
     NodeIsNotLeader,
@@ -55,7 +61,10 @@ from esdbclient.exceptions import (
 
 class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.client = await AsyncioEventStoreDBClient("esdb://localhost:2113?Tls=False")
+        self.client = await AsyncioEventStoreDBClient(
+            uri="esdb://admin:changeit@localhost:2114",
+            root_certificates=get_server_certificate("localhost:2114"),
+        )
         self._reader: Optional[_AsyncioEventStoreDBClient] = None
         self._writer: Optional[_AsyncioEventStoreDBClient] = None
 
@@ -2520,3 +2529,367 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
     #
     #     await self.client.subscribe_to_all()
     #     # with self.assertRaises(ServiceUnavailable):
+
+    async def test_create_projection(self) -> None:
+        # Create "one_time" projection.
+        await self.client.create_projection(query="")
+
+        # Create "transient" projection.
+        transient_projection_name = str(uuid4())
+        await self.client.create_projection(query="", name=transient_projection_name)
+
+        # Create "continuous" projection.
+        continuous_projection_name = str(uuid4())
+        await self.client.create_projection(
+            query="", name=continuous_projection_name, continuous=True
+        )
+
+        # Create "continuous" projection (emit enabled).
+        continuous_projection_name = str(uuid4())
+        await self.client.create_projection(
+            query="",
+            name=continuous_projection_name,
+            continuous=True,
+            emit_enabled=True,
+        )
+
+        # Create "continuous" projection (track emitted streams).
+        continuous_projection_name = str(uuid4())
+        await self.client.create_projection(
+            query="",
+            name=continuous_projection_name,
+            continuous=True,
+            emit_enabled=True,
+            track_emitted_streams=True,
+        )
+
+        # Raises error if projection already exists.
+        with self.assertRaises(AlreadyExists):
+            await self.client.create_projection(
+                query="",
+                name=continuous_projection_name,
+                continuous=True,
+                emit_enabled=True,
+                track_emitted_streams=True,
+            )
+
+        # Raises error if track_emitted=True but emit_enabled=False...
+        with self.assertRaises(ExceptionThrownByHandler):
+            await self.client.create_projection(
+                query="",
+                name=continuous_projection_name,
+                continuous=True,
+                emit_enabled=False,
+                track_emitted_streams=True,
+            )
+
+    async def test_update_projection(self) -> None:
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            await self.client.update_projection(name=projection_name, query="")
+
+        # Create named projection.
+        await self.client.create_projection(
+            query="", name=projection_name, continuous=True
+        )
+
+        # Update projection.
+        await self.client.update_projection(name=projection_name, query="")
+        await self.client.update_projection(
+            name=projection_name, query="", emit_enabled=None
+        )
+        await self.client.update_projection(
+            name=projection_name, query="", emit_enabled=True
+        )
+        await self.client.update_projection(
+            name=projection_name, query="", emit_enabled=False
+        )
+
+    async def test_delete_projection(self) -> None:
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            await self.client.delete_projection(projection_name)
+
+        # Create named projection.
+        await self.client.create_projection(
+            query="", name=projection_name, continuous=True
+        )
+
+        # Delete projection.
+        await self.client.delete_projection(
+            name=projection_name,
+            delete_emitted_streams=True,
+            delete_state_stream=True,
+            delete_checkpoint_stream=True,
+        )
+
+        await asyncio.sleep(1)  # give server time to actually delete the projection....
+
+        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
+            # Can delete a projection that has been deleted ("idempotent").
+            await self.client.delete_projection(
+                name=projection_name,
+            )
+        else:
+            # Can't delete a projection that has been deleted.
+            with self.assertRaises(NotFound):
+                await self.client.delete_projection(
+                    name=projection_name,
+                )
+
+    async def test_get_projection_statistics(self) -> None:
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            await self.client.get_projection_statistics(name=projection_name)
+
+        # Create named projection.
+        await self.client.create_projection(
+            query=PROJECTION_QUERY_TEMPLATE1 % ("app-" + projection_name),
+            name=projection_name,
+            continuous=True,
+        )
+
+        statistics = await self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual(projection_name, statistics.name)
+
+        # Todo: Why does server throw an exception here?
+        with self.assertRaises(ExceptionThrownByHandler):
+            await self.client.get_projection_statistics(all=True)
+
+        # Todo: Why does server sometimes throw an exception here, sometimes not?
+        # with self.assertRaises(ExceptionThrownByHandler):
+        #     transient_statistics = self.client.get_projection_statistics(
+        #         transient=True
+        #     )
+        #     self.assertEqual(0, len(transient_statistics))
+
+        # Todo: Why does server throw an exception here?
+        with self.assertRaises(ExceptionThrownByHandler):
+            continuous_statistics = await self.client.get_projection_statistics(
+                continuous=True
+            )
+            self.assertEqual(0, len(continuous_statistics))
+
+        # Todo: Why does server throw an exception here?
+        with self.assertRaises(ExceptionThrownByHandler):
+            one_time_statistics = await self.client.get_projection_statistics(
+                one_time=True
+            )
+            self.assertEqual(0, len(one_time_statistics))
+
+    async def test_disable_projection(self) -> None:
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            await self.client.disable_projection(name=projection_name)
+
+        # Create named projection.
+        await self.client.create_projection(
+            query="", name=projection_name, continuous=True
+        )
+
+        # Disable projection.
+        await self.client.disable_projection(
+            name=projection_name, write_checkpoint=True
+        )
+
+    async def test_enable_projection(self) -> None:
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            await self.client.enable_projection(name=projection_name)
+
+        # Create named projection.
+        await self.client.create_projection(
+            query="", name=projection_name, continuous=True
+        )
+
+        # Disable projection.
+        await self.client.enable_projection(name=projection_name)
+
+    async def test_reset_projection(self) -> None:
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            await self.client.reset_projection(name=projection_name)
+
+        # Create named projection.
+        await self.client.create_projection(
+            query="", name=projection_name, continuous=True
+        )
+
+        # Reset projection.
+        await self.client.reset_projection(name=projection_name, write_checkpoint=True)
+
+    async def test_get_projection_state(self) -> None:
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            await self.client.get_projection_state(name=projection_name, partition="")
+
+        # Create named projection (query is an empty string).
+        await self.client.create_projection(
+            query="", name=projection_name, continuous=True
+        )
+
+        # Get projection state.
+        # Todo: Why does this just hang?
+        with self.assertRaises(DeadlineExceeded):
+            await self.client.get_projection_state(
+                name=projection_name, partition="", timeout=1
+            )
+
+        # Create named projection.
+        projection_name = str(uuid4())
+        await self.client.create_projection(
+            query=PROJECTION_QUERY_TEMPLATE1 % ("app-" + projection_name),
+            name=projection_name,
+            continuous=True,
+        )
+
+        # Get projection state.
+        state = await self.client.get_projection_state(
+            name=projection_name, partition="", timeout=1
+        )
+        self.assertEqual(state.value, {})
+
+    async def test_get_projection_result(self) -> None:
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            await self.client.get_projection_result(name=projection_name, partition="")
+
+        # Create named projection.
+        await self.client.create_projection(
+            query="", name=projection_name, continuous=True
+        )
+
+        # Reset projection.
+        # Todo: Why does this just hang?
+        with self.assertRaises(DeadlineExceeded):
+            await self.client.get_projection_result(
+                name=projection_name, partition="", timeout=1
+            )
+
+        # Create named projection.
+        projection_name = str(uuid4())
+        await self.client.create_projection(
+            query=PROJECTION_QUERY_TEMPLATE1 % ("app-" + projection_name),
+            name=projection_name,
+            continuous=True,
+        )
+
+        # Get projection result.
+        state = await self.client.get_projection_result(
+            name=projection_name, partition=""
+        )
+        self.assertEqual(state.value, {})
+
+    async def test_restart_projections_subsystem(self) -> None:
+        await self.client.restart_projections_subsystem()
+
+    async def test_projection_example(self) -> None:
+        application_stream_name = "account-" + str(uuid4())
+        emitted_stream_name = "emitted-" + str(uuid4())
+        projection_example = (
+            """
+        fromStream('"""
+            + application_stream_name
+            + """')
+        .when({
+          $init: function(){
+            return {
+              count: 0
+            };
+          },
+          SomethingHappened: function(s,e){
+            s.count += 1;
+            emit('"""
+            + emitted_stream_name
+            + """', 'Emitted', {}, {});
+          }
+        })
+        .outputState()
+        """
+        )
+
+        application_events = [
+            NewEvent(type="SomethingHappened", data=b"{}"),
+            NewEvent(type="SomethingElseHappened", data=b"{}"),
+            NewEvent(type="SomethingHappened", data=b"{}"),
+        ]
+        await self.client.append_events(
+            stream_name=application_stream_name,
+            events=application_events,
+            current_version=StreamState.ANY,
+        )
+
+        projection_name = "projection-" + str(uuid4())
+
+        await self.client.create_projection(
+            query=projection_example,
+            name=projection_name,
+            continuous=True,
+            emit_enabled=True,
+            # track_emitted_streams=True,
+        )
+
+        projection_statistics = await self.client.get_projection_statistics(
+            name=projection_name
+        )
+        self.assertEqual(projection_name, projection_statistics.name)
+
+        # Wait for two events to have been processed.
+        for _ in range(100):
+            if projection_statistics.events_processed_after_restart < 2:
+                await asyncio.sleep(0.1)
+                projection_statistics = await self.client.get_projection_statistics(
+                    name=projection_name
+                )
+                continue
+            break
+        else:
+            self.fail("Timed out waiting for two events to be processed by projection")
+
+        # Check projection state.
+        state = await self.client.get_projection_state(projection_name, partition="")
+        self.assertEqual(2, state.value["count"])
+
+        # Check projection result.
+        # Todo: What's the actual difference between "state" and "result"?
+        result = await self.client.get_projection_result(projection_name, partition="")
+        self.assertEqual(2, result.value["count"])
+
+        # Check project result stream.
+        projection_stream_name = f"$projections-{projection_name}-result"
+        projected_events = await self.client.get_stream(projection_stream_name)
+        self.assertEqual(2, len(projected_events))
+        self.assertEqual("Result", projected_events[0].type)
+        self.assertEqual("Result", projected_events[1].type)
+
+        self.assertEqual({"count": 1}, json.loads(projected_events[0].data))
+        self.assertEqual({"count": 2}, json.loads(projected_events[1].data))
+
+        self.assertEqual(
+            str(application_events[0].id),
+            json.loads(projected_events[0].metadata)["$causedBy"],
+        )
+        self.assertEqual(
+            str(application_events[2].id),
+            json.loads(projected_events[1].metadata)["$causedBy"],
+        )
+
+        # Check emitted event stream.
+        emitted_events = await self.client.get_stream(emitted_stream_name)
+        self.assertEqual(2, len(emitted_events))

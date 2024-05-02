@@ -9,6 +9,7 @@ from esdbclient.persistent import (
     AsyncioPersistentSubscriptionsService,
     PersistentSubscriptionsService,
 )
+from esdbclient.projections import AsyncioProjectionsService, ProjectionsService
 from esdbclient.streams import AsyncioStreamsService, StreamsService
 
 
@@ -44,6 +45,11 @@ class ESDBConnection:
         # )
         # self._channel_connectivity_state: Optional[ChannelConnectivity] = None
         # self.grpc_channel.subscribe(self._receive_channel_connectivity_state)
+        self.projections = ProjectionsService(
+            channel=grpc_channel,
+            connection_spec=connection_spec,
+            grpc_streamers=self._grpc_streamers,
+        )
 
     @property
     def grpc_target(self) -> str:
@@ -89,11 +95,11 @@ class AsyncioESDBConnection:
             connection_spec=connection_spec,
             grpc_streamers=self._grpc_streamers,
         )
-        # self.cluster_gossip = AsyncioClusterGossipService(
-        #     grpc_channel,
-        #     connection_spec=connection_spec,
-        #     grpc_streamers=self._grpc_streamers,
-        # )
+        self.projections = AsyncioProjectionsService(
+            grpc_channel,
+            connection_spec=connection_spec,
+            grpc_streamers=self._grpc_streamers,
+        )
 
     @property
     def grpc_target(self) -> str:

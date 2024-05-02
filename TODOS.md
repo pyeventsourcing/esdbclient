@@ -1,3 +1,11 @@
+Notes from implementing projections:
+
+- why all the "exception thrown by handler" errors? see tests
+- why some methods just hang? see tests
+- what if update_projection(emit_enabled=None)? leave the setting unchanged?
+- partitions, and the difference between partition 'state' and 'result'
+
+---
 Notes from meeting with Yves 2 Nov 2023:
 - can add "filter_regex" later if needed
 - can add "resolve_links" to read_all() and subscribe_all() later

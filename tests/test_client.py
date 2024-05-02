@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
+import json
 import os
 import ssl
 import sys
@@ -54,6 +55,7 @@ from esdbclient.exceptions import (
     ServiceUnavailable,
     SSLError,
     StreamIsDeleted,
+    UnknownError,
     WrongCurrentVersion,
 )
 from esdbclient.gossip import NODE_STATE_FOLLOWER, NODE_STATE_LEADER
@@ -6231,40 +6233,405 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         else:
             self.fail(f"Test doesn't work with cluster size {self.ESDB_CLUSTER_SIZE}")
 
-    # Getting 'AccessDenied' with ESDB v23.10.
-    # def test_gossip_cluster_read(self) -> None:
-    #     self.construct_esdb_client()
-    #     if self.ESDB_CLUSTER_SIZE == 1:
-    #         cluster_info = self.client.read_cluster_gossip()
-    #         self.assertEqual(len(cluster_info), 1)
-    #         self.assertEqual(cluster_info[0].state, NODE_STATE_LEADER)
-    #         self.assertEqual(cluster_info[0].address, "127.0.0.1")
-    #         self.assertEqual(cluster_info[0].port, 2113)
-    #     elif self.ESDB_CLUSTER_SIZE == 3:
-    #         retries = 10
-    #         while True:
-    #             retries -= 1
-    #             try:
-    #                 cluster_info = self.client.read_cluster_gossip()
-    #                 self.assertEqual(len(cluster_info), 3)
-    #                 num_leaders = 0
-    #                 num_followers = 0
-    #                 for member_info in cluster_info:
-    #                     if member_info.state == NODE_STATE_LEADER:
-    #                         num_leaders += 1
-    #                     elif member_info.state == NODE_STATE_FOLLOWER:
-    #                         num_followers += 1
-    #                 self.assertEqual(num_leaders, 1)
-    #                 # Todo: This is very occasionally 1... hence retries.
-    #                 self.assertEqual(num_followers, 2)
-    #                 break
-    #             except AssertionError:
-    #                 if retries:
-    #                     sleep(1)
-    #                 else:
-    #                     raise
-    #     else:
-    #         self.fail(f"Test doesn't work with cluster size {self.ESDB_CLUSTER_SIZE}")
+    def test_create_projection(self) -> None:
+        self.construct_esdb_client()
+        # Create "one_time" projection.
+        self.client.create_projection(query="")
+
+        # Create "transient" projection.
+        transient_projection_name = str(uuid4())
+        self.client.create_projection(query="", name=transient_projection_name)
+
+        # Create "continuous" projection.
+        continuous_projection_name = str(uuid4())
+        self.client.create_projection(
+            query="", name=continuous_projection_name, continuous=True
+        )
+
+        # Create "continuous" projection (emit enabled).
+        continuous_projection_name = str(uuid4())
+        self.client.create_projection(
+            query="",
+            name=continuous_projection_name,
+            continuous=True,
+            emit_enabled=True,
+        )
+
+        # Create "continuous" projection (track emitted streams).
+        continuous_projection_name = str(uuid4())
+        self.client.create_projection(
+            query="",
+            name=continuous_projection_name,
+            continuous=True,
+            emit_enabled=True,
+            track_emitted_streams=True,
+        )
+
+        # Raises error if projection already exists.
+        with self.assertRaises(AlreadyExists):
+            self.client.create_projection(
+                query="",
+                name=continuous_projection_name,
+                continuous=True,
+                emit_enabled=True,
+                track_emitted_streams=True,
+            )
+
+        # Raises error if track_emitted=True but emit_enabled=False...
+        with self.assertRaises(ExceptionThrownByHandler):
+            self.client.create_projection(
+                query="",
+                name=continuous_projection_name,
+                continuous=True,
+                emit_enabled=False,
+                track_emitted_streams=True,
+            )
+
+    def test_update_projection(self) -> None:
+        self.construct_esdb_client()
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            self.client.update_projection(name=projection_name, query="")
+
+        # Create named projection.
+        self.client.create_projection(query="", name=projection_name, continuous=True)
+
+        # Update projection.
+        self.client.update_projection(name=projection_name, query="")
+        self.client.update_projection(name=projection_name, query="", emit_enabled=None)
+        self.client.update_projection(name=projection_name, query="", emit_enabled=True)
+        self.client.update_projection(
+            name=projection_name, query="", emit_enabled=False
+        )
+
+    def test_delete_projection(self) -> None:
+        self.construct_esdb_client()
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            self.client.delete_projection(projection_name)
+
+        # Create named projection.
+        self.client.create_projection(query="", name=projection_name, continuous=True)
+
+        # Delete projection.
+        self.client.delete_projection(
+            name=projection_name,
+            delete_emitted_streams=True,
+            delete_state_stream=True,
+            delete_checkpoint_stream=True,
+        )
+
+        sleep(1)  # give server time to actually delete the projection....
+
+        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
+            # Can delete a projection that has been deleted ("idempotent").
+            self.client.delete_projection(
+                name=projection_name,
+            )
+        else:
+            # Can't delete a projection that has been deleted.
+            with self.assertRaises(NotFound):
+                self.client.delete_projection(
+                    name=projection_name,
+                )
+
+    def test_get_projection_statistics(self) -> None:
+        self.construct_esdb_client()
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            self.client.get_projection_statistics(name=projection_name)
+
+        # Create named projection.
+        self.client.create_projection(
+            query=PROJECTION_QUERY_TEMPLATE1 % ("app-" + projection_name),
+            name=projection_name,
+            continuous=True,
+        )
+
+        statistics = self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual(projection_name, statistics.name)
+
+        # Todo: Why does server throw an exception here?
+        with self.assertRaises(ExceptionThrownByHandler):
+            self.client.get_projection_statistics(all=True)
+
+        # Todo: Why does server sometimes throw an exception here, sometimes not?
+        # with self.assertRaises(ExceptionThrownByHandler):
+        #     transient_statistics = self.client.get_projection_statistics(
+        #         transient=True
+        #     )
+        #     self.assertEqual(0, len(transient_statistics))
+
+        # Todo: Why does server throw an exception here?
+        with self.assertRaises(ExceptionThrownByHandler):
+            continuous_statistics = self.client.get_projection_statistics(
+                continuous=True
+            )
+            self.assertEqual(0, len(continuous_statistics))
+
+        # Todo: Why does server throw an exception here?
+        with self.assertRaises(ExceptionThrownByHandler):
+            one_time_statistics = self.client.get_projection_statistics(one_time=True)
+            self.assertEqual(0, len(one_time_statistics))
+
+    def test_disable_projection(self) -> None:
+        self.construct_esdb_client()
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            self.client.disable_projection(name=projection_name)
+
+        # Create named projection.
+        self.client.create_projection(query="", name=projection_name, continuous=True)
+
+        # Disable projection.
+        self.client.disable_projection(name=projection_name, write_checkpoint=True)
+
+    def test_enable_projection(self) -> None:
+        self.construct_esdb_client()
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            self.client.enable_projection(name=projection_name)
+
+        # Create named projection.
+        self.client.create_projection(query="", name=projection_name, continuous=True)
+
+        # Disable projection.
+        self.client.enable_projection(name=projection_name)
+
+    def test_reset_projection(self) -> None:
+        self.construct_esdb_client()
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            self.client.reset_projection(name=projection_name)
+
+        # Create named projection.
+        self.client.create_projection(query="", name=projection_name, continuous=True)
+
+        # Reset projection.
+        self.client.reset_projection(name=projection_name, write_checkpoint=True)
+
+    def test_get_projection_state(self) -> None:
+        self.construct_esdb_client()
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            self.client.get_projection_state(name=projection_name, partition="")
+
+        # Create named projection (query is an empty string).
+        self.client.create_projection(query="", name=projection_name, continuous=True)
+
+        # Get projection state.
+        # Todo: Why does this just hang?
+        with self.assertRaises(DeadlineExceeded):
+            self.client.get_projection_state(
+                name=projection_name, partition="", timeout=1
+            )
+
+        # Create named projection.
+        projection_name = str(uuid4())
+        self.client.create_projection(
+            query=PROJECTION_QUERY_TEMPLATE1 % ("app-" + projection_name),
+            name=projection_name,
+            continuous=True,
+        )
+
+        # Get projection state.
+        state = self.client.get_projection_state(name=projection_name, partition="")
+        self.assertEqual(state.value, {})
+
+    def test_get_projection_result(self) -> None:
+        self.construct_esdb_client()
+        projection_name = str(uuid4())
+
+        # Raises NotFound unless projection exists.
+        with self.assertRaises(NotFound):
+            self.client.get_projection_result(name=projection_name, partition="")
+
+        # Create named projection.
+        self.client.create_projection(query="", name=projection_name, continuous=True)
+
+        # Reset projection.
+        # Todo: Why does this just hang?
+        with self.assertRaises(DeadlineExceeded):
+            self.client.get_projection_result(
+                name=projection_name, partition="", timeout=1
+            )
+
+        # Create named projection.
+        projection_name = str(uuid4())
+        self.client.create_projection(
+            query=PROJECTION_QUERY_TEMPLATE1 % ("app-" + projection_name),
+            name=projection_name,
+            continuous=True,
+        )
+
+        # Get projection result.
+        state = self.client.get_projection_result(name=projection_name, partition="")
+        self.assertEqual(state.value, {})
+
+    def test_restart_projections_subsystem(self) -> None:
+        self.construct_esdb_client()
+        self.client.restart_projections_subsystem()
+
+    def test_projection_example(self) -> None:
+        self.construct_esdb_client()
+
+        application_stream_name = "account-" + str(uuid4())
+        emitted_stream_name = "emitted-" + str(uuid4())
+        projection_example = (
+            """
+        fromStream('"""
+            + application_stream_name
+            + """')
+        .when({
+          $init: function(){
+            return {
+              count: 0
+            };
+          },
+          SomethingHappened: function(s,e){
+            s.count += 1;
+            emit('"""
+            + emitted_stream_name
+            + """', 'Emitted', {}, {});
+          }
+        })
+        .outputState()
+        """
+        )
+
+        application_events = [
+            NewEvent(type="SomethingHappened", data=b"{}"),
+            NewEvent(type="SomethingElseHappened", data=b"{}"),
+            NewEvent(type="SomethingHappened", data=b"{}"),
+        ]
+        self.client.append_events(
+            stream_name=application_stream_name,
+            events=application_events,
+            current_version=StreamState.ANY,
+        )
+
+        projection_name = "projection-" + str(uuid4())
+
+        self.client.create_projection(
+            query=projection_example,
+            name=projection_name,
+            continuous=True,
+            emit_enabled=True,
+            # track_emitted_streams=True,
+        )
+
+        projection_statistics = self.client.get_projection_statistics(
+            name=projection_name
+        )
+        self.assertEqual(projection_name, projection_statistics.name)
+
+        # Wait for two events to have been processed.
+        for _ in range(100):
+            if projection_statistics.events_processed_after_restart < 2:
+                sleep(0.1)
+                projection_statistics = self.client.get_projection_statistics(
+                    name=projection_name
+                )
+                continue
+            break
+        else:
+            self.fail("Timed out waiting for two events to be processed by projection")
+
+        # Check projection state.
+        state = self.client.get_projection_state(projection_name, partition="")
+        self.assertEqual(2, state.value["count"])
+
+        # Check projection result.
+        # Todo: What's the actual difference between "state" and "result"?
+        result = self.client.get_projection_result(projection_name, partition="")
+        self.assertEqual(2, result.value["count"])
+
+        # Check project result stream.
+        projection_stream_name = f"$projections-{projection_name}-result"
+        projected_events = self.client.get_stream(projection_stream_name)
+        self.assertEqual(2, len(projected_events))
+        self.assertEqual("Result", projected_events[0].type)
+        self.assertEqual("Result", projected_events[1].type)
+
+        self.assertEqual({"count": 1}, json.loads(projected_events[0].data))
+        self.assertEqual({"count": 2}, json.loads(projected_events[1].data))
+
+        self.assertEqual(
+            str(application_events[0].id),
+            json.loads(projected_events[0].metadata)["$causedBy"],
+        )
+        self.assertEqual(
+            str(application_events[2].id),
+            json.loads(projected_events[1].metadata)["$causedBy"],
+        )
+
+        # Check emitted event stream.
+        emitted_events = self.client.get_stream(emitted_stream_name)
+        self.assertEqual(2, len(emitted_events))
+
+        # sleep(1)
+        self.client.disable_projection(projection_name)
+        # sleep(1)
+        self.client.reset_projection(projection_name)
+        # Todo: Why projection can't be deleted without both disabling and resetting?
+        # sleep(1)
+        self.client.delete_projection(
+            projection_name,
+            delete_emitted_streams=True,
+            delete_state_stream=True,
+            delete_checkpoint_stream=True,
+        )
+
+        # Todo: docs say when 'track_emitted_stream' is True, emitted stream is deleted?
+
+        # emitted_events = self.client.get_stream(emitted_stream_name)
+        # self.assertEqual(2, len(emitted_events))
+
+        # Todo: What does "reset" actually do? it doesn't delete the result stream?
+        # self.client.disable_projection(projection_name)
+        # self.client.reset_projection(projection_name)
+        #
+        # sleep(1)
+        # state = self.client.get_projection_state(projection_name, partition="")
+        # self.assertNotIn("count", state.value)
+        #
+        # projected_events = self.client.get_stream(projection_stream_name)
+        # self.assertEqual(2, len(projected_events))
+        #
+        # self.client.enable_projection(projection_name)
+        #
+        # sleep(1)
+        # state = self.client.get_projection_state(projection_name, partition="")
+        # self.assertEqual(2, state.value["count"])
+        #
+        # projected_events = self.client.get_stream(projection_stream_name)
+        # self.assertEqual(2, len(projected_events))
+
+
+PROJECTION_QUERY_TEMPLATE1 = """fromStream('%s')
+.when({
+  $init: function(){
+    return {
+      count: 0
+    };
+  }
+})
+.outputState()
+"""
 
 
 class TestEventStoreDBClientWithInsecureConnection(TestEventStoreDBClient):
@@ -7385,10 +7752,10 @@ class TestHandleRpcError(TestCase):
         with self.assertRaises(AbortedByServer):
             raise handle_rpc_error(FakeAbortedByServerError()) from None
 
-    def test_handle_other_call_error(self) -> None:
-        with self.assertRaises(GrpcError) as cm:
+    def test_handle_unknown_error(self) -> None:
+        with self.assertRaises(UnknownError) as cm:
             raise handle_rpc_error(FakeUnknownRpcError()) from None
-        self.assertEqual(GrpcError, cm.exception.__class__)
+        self.assertEqual(UnknownError, cm.exception.__class__)
 
     def test_handle_non_call_rpc_error(self) -> None:
         # Check non-Call errors are handled.

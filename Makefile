@@ -124,13 +124,15 @@ grpc-stubs:
 	  protos/esdbclient/protos/Grpc/streams.proto  \
 	  protos/esdbclient/protos/Grpc/persistent.proto \
 	  protos/esdbclient/protos/Grpc/gossip.proto \
-	  protos/esdbclient/protos/Grpc/cluster.proto
+	  protos/esdbclient/protos/Grpc/cluster.proto \
+	  protos/esdbclient/protos/Grpc/projections.proto
 
 .PHONY: start-eventstoredb-insecure
 start-eventstoredb-insecure:
 	docker run -d -i -t -p 2113:2113 \
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
     --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2113" \
+    --env "EVENTSTORE_RUN_PROJECTIONS=All" \
     --name my-eventstoredb-insecure \
     $(EVENTSTORE_IMAGE_NAME):$(EVENTSTORE_IMAGE_TAG) \
     --insecure
@@ -141,6 +143,7 @@ start-eventstoredb-secure:
     --env "HOME=/tmp" \
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
     --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
+    --env "EVENTSTORE_RUN_PROJECTIONS=All" \
     --name my-eventstoredb-secure \
     $(EVENTSTORE_IMAGE_NAME):$(EVENTSTORE_IMAGE_TAG) \
     --dev
