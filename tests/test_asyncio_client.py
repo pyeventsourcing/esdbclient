@@ -2742,7 +2742,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             query="", name=projection_name, continuous=True
         )
 
-        # Get projection state.
+        # Try to get projection state.
         # Todo: Why does this just hang?
         with self.assertRaises(DeadlineExceeded):
             await self.client.get_projection_state(
@@ -2775,7 +2775,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             query="", name=projection_name, continuous=True
         )
 
-        # Reset projection.
+        # Try to get projection result.
         # Todo: Why does this just hang?
         with self.assertRaises(DeadlineExceeded):
             await self.client.get_projection_result(

@@ -6433,7 +6433,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         # Create named projection (query is an empty string).
         self.client.create_projection(query="", name=projection_name, continuous=True)
 
-        # Get projection state.
+        # Try to get projection state.
         # Todo: Why does this just hang?
         with self.assertRaises(DeadlineExceeded):
             self.client.get_projection_state(
@@ -6463,7 +6463,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         # Create named projection.
         self.client.create_projection(query="", name=projection_name, continuous=True)
 
-        # Reset projection.
+        # Try to get projection result.
         # Todo: Why does this just hang?
         with self.assertRaises(DeadlineExceeded):
             self.client.get_projection_result(
