@@ -112,6 +112,7 @@ class BaseReadResponse:
             checkpoint = read_resp.checkpoint
             return Checkpoint(
                 commit_position=checkpoint.commit_position,
+                prepare_position=checkpoint.prepare_position,
             )
         elif content_oneof == "caught_up":  # pragma: no cover
             return CaughtUp()

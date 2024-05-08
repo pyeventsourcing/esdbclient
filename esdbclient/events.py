@@ -39,6 +39,7 @@ class RecordedEvent:
     stream_name: str
     stream_position: int
     commit_position: Optional[int]
+    prepare_position: Optional[int]
     recorded_at: Optional[datetime] = None
     link: Optional["RecordedEvent"] = None
     retry_count: Optional[int] = None
@@ -79,7 +80,7 @@ class RecordedEvent:
 class Checkpoint(RecordedEvent):
     CHECKPOINT_ID = UUID("00000000-0000-0000-0000-000000000000")
 
-    def __init__(self, commit_position: int) -> None:
+    def __init__(self, commit_position: int, prepare_position: int) -> None:
         super().__init__(
             id=Checkpoint.CHECKPOINT_ID,
             type="",
@@ -89,6 +90,7 @@ class Checkpoint(RecordedEvent):
             stream_name="",
             stream_position=0,
             commit_position=commit_position,
+            prepare_position=prepare_position,
         )
 
     @property
@@ -110,6 +112,7 @@ class CaughtUp(RecordedEvent):
             stream_name="",
             stream_position=0,
             commit_position=0,
+            prepare_position=0,
         )
 
     @property

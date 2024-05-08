@@ -327,6 +327,7 @@ def construct_recorded_event(
             stream_name=link.stream_identifier.stream_name.decode("utf8"),
             stream_position=link.stream_revision,
             commit_position=None if ignore_commit_position else link.commit_position,
+            prepare_position=None if ignore_commit_position else link.prepare_position,
             retry_count=retry_count,
             recorded_at=recorded_at,
         )
@@ -348,6 +349,7 @@ def construct_recorded_event(
         stream_name=event.stream_identifier.stream_name.decode("utf8"),
         stream_position=event.stream_revision,
         commit_position=None if ignore_commit_position else event.commit_position,
+        prepare_position=None if ignore_commit_position else event.prepare_position,
         retry_count=retry_count,
         link=recorded_event_link,
         recorded_at=recorded_at,

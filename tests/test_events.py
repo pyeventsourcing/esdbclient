@@ -60,6 +60,7 @@ class TestRecordedEvent(TestCase):
             stream_name="stream1",
             stream_position=12,
             commit_position=12345,
+            prepare_position=12346,
             retry_count=5,
             link=None,
         )
@@ -71,6 +72,7 @@ class TestRecordedEvent(TestCase):
         self.assertEqual(recorded_event.stream_name, "stream1")
         self.assertEqual(recorded_event.stream_position, 12)
         self.assertEqual(recorded_event.commit_position, 12345)
+        self.assertEqual(recorded_event.prepare_position, 12346)
         self.assertEqual(recorded_event.retry_count, 5)
         self.assertEqual(recorded_event.link, None)
 
@@ -92,6 +94,7 @@ class TestRecordedEvent(TestCase):
             stream_name="stream1",
             stream_position=12,
             commit_position=12345,
+            prepare_position=12346,
             retry_count=5,
             link=None,
         )
@@ -103,6 +106,7 @@ class TestRecordedEvent(TestCase):
         self.assertEqual(recorded_event.stream_name, "stream1")
         self.assertEqual(recorded_event.stream_position, 12)
         self.assertEqual(recorded_event.commit_position, 12345)
+        self.assertEqual(recorded_event.prepare_position, 12346)
         self.assertEqual(recorded_event.retry_count, 5)
         self.assertEqual(recorded_event.link, None)
 
@@ -125,6 +129,7 @@ class TestRecordedEvent(TestCase):
             stream_name="stream1",
             stream_position=12,
             commit_position=12345,
+            prepare_position=12346,
             retry_count=5,
             link=None,
         )
@@ -137,6 +142,7 @@ class TestRecordedEvent(TestCase):
             stream_name="stream1",
             stream_position=12,
             commit_position=12345,
+            prepare_position=12346,
             retry_count=5,
             link=recorded_event,
         )
@@ -162,13 +168,15 @@ class TestRecordedEvent(TestCase):
 
 class TestCheckpoint(TestCase):
     def test(self) -> None:
-        checkpoint = Checkpoint(commit_position=12345)
+        checkpoint = Checkpoint(commit_position=12345, prepare_position=12346)
         self.assertEqual(checkpoint.commit_position, 12345)
+        self.assertEqual(checkpoint.prepare_position, 12346)
         self.assertTrue(checkpoint.is_checkpoint)
         self.assertFalse(checkpoint.is_caught_up)
 
-        checkpoint = Checkpoint(commit_position=67890)
+        checkpoint = Checkpoint(commit_position=67890, prepare_position=67891)
         self.assertEqual(checkpoint.commit_position, 67890)
+        self.assertEqual(checkpoint.prepare_position, 67891)
 
 
 class TestCaughtUp(TestCase):
@@ -191,6 +199,7 @@ class TestEquality(TestCase):
             stream_name="stream1",
             stream_position=12,
             commit_position=12345,
+            prepare_position=12346,
             retry_count=5,
             link=None,
         )
@@ -203,6 +212,7 @@ class TestEquality(TestCase):
             stream_name="stream1",
             stream_position=12,
             commit_position=12345,
+            prepare_position=12346,
             retry_count=5,
             link=None,
         )
