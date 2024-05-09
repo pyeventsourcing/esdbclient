@@ -6606,14 +6606,23 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
 
         sleep(1)
 
-        with self.assertRaises(NotFound):
+        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
             self.client.get_projection_statistics(name=projection_name)
+        else:
+            with self.assertRaises(NotFound):
+                self.client.get_projection_statistics(name=projection_name)
 
-        with self.assertRaises(NotFound):
+        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
             self.client.get_projection_state(projection_name)
+        else:
+            with self.assertRaises(NotFound):
+                self.client.get_projection_state(projection_name)
 
-        with self.assertRaises(NotFound):
+        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
             self.client.get_projection_result(projection_name)
+        else:
+            with self.assertRaises(NotFound):
+                self.client.get_projection_result(projection_name)
 
         result_events = self.client.get_stream(result_stream_name)
         self.assertEqual(2, len(result_events))
@@ -6621,11 +6630,17 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         with self.assertRaises(NotFound):
             self.client.get_stream(emitted_stream_name)
 
-        with self.assertRaises(NotFound):
+        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
             self.client.enable_projection(projection_name)
+        else:
+            with self.assertRaises(NotFound):
+                self.client.enable_projection(projection_name)
 
-        with self.assertRaises(NotFound):
+        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
             self.client.disable_projection(projection_name)
+        else:
+            with self.assertRaises(NotFound):
+                self.client.disable_projection(projection_name)
 
         # Todo: Recreate projection...
         # self.client.create_projection(name=projection_name, query=projection_query)
