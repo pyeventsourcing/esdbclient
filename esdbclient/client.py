@@ -1593,9 +1593,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     def create_projection(
         self,
         *,
+        name: str,
         query: str,
-        name: str = "",
-        continuous: bool = False,
         emit_enabled: bool = False,
         track_emitted_streams: bool = False,
         timeout: Optional[float] = None,
@@ -1609,7 +1608,6 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self._esdb.projections.create(
             query=query,
             name=name,
-            continuous=continuous,
             emit_enabled=emit_enabled,
             track_emitted_streams=track_emitted_streams,
             timeout=timeout,
@@ -1669,7 +1667,8 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             credentials=credentials or self._call_credentials,
         )
 
-    @overload
+    @retrygrpc
+    @autoreconnect
     def get_projection_statistics(
         self,
         *,
@@ -1678,48 +1677,12 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> ProjectionStatistics:
         """
-        Signature for returning statistics for named projection.
-        """
-
-    @overload
-    def get_projection_statistics(
-        self,
-        *,
-        all: bool = False,
-        transient: bool = False,
-        continuous: bool = False,
-        one_time: bool = False,
-        timeout: Optional[float] = None,
-        credentials: Optional[grpc.CallCredentials] = None,
-    ) -> Sequence[ProjectionStatistics]:
-        """
-        Signature for returning collection of projection statistics.
-        """
-
-    @retrygrpc
-    @autoreconnect
-    def get_projection_statistics(
-        self,
-        *,
-        name: Optional[str] = None,
-        all: bool = False,
-        transient: bool = False,
-        continuous: bool = False,
-        one_time: bool = False,
-        timeout: Optional[float] = None,
-        credentials: Optional[grpc.CallCredentials] = None,
-    ) -> Union[ProjectionStatistics, Sequence[ProjectionStatistics]]:
-        """
         Gets projection statistics.
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
         return self._esdb.projections.get_projection_statistics(
             name=name,
-            all=all,
-            transient=transient,
-            continuous=continuous,
-            one_time=one_time,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,

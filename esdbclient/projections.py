@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
-from typing import Any, List, Optional, Sequence, Union
+from typing import Any, Optional, Union
 
 import grpc
 import grpc.aio
@@ -15,6 +15,7 @@ from esdbclient.common import (
     handle_rpc_error,
 )
 from esdbclient.connection_spec import ConnectionSpec
+from esdbclient.exceptions import EventStoreDBClientException
 from esdbclient.protos.Grpc import projections_pb2, projections_pb2_grpc, shared_pb2
 
 
@@ -65,33 +66,17 @@ class BaseProjectionsService(ESDBService[TGrpcStreamers]):
     def _construct_create_req(
         query: str,
         name: str,
-        continuous: bool,
         emit_enabled: bool,
         track_emitted_streams: bool,
     ) -> projections_pb2.CreateReq:
-        # Decide "mode".
-        if not name:
-            options = projections_pb2.CreateReq.Options(
-                one_time=shared_pb2.Empty(),
-                query=query,
-            )
-        elif not continuous:
-            options = projections_pb2.CreateReq.Options(
-                transient=projections_pb2.CreateReq.Options.Transient(
-                    name=name,
-                ),
-                query=query,
-            )
-        else:
-            options = projections_pb2.CreateReq.Options(
-                continuous=projections_pb2.CreateReq.Options.Continuous(
-                    name=name,
-                    emit_enabled=emit_enabled,
-                    track_emitted_streams=track_emitted_streams,
-                ),
-                query=query,
-            )
-
+        options = projections_pb2.CreateReq.Options(
+            continuous=projections_pb2.CreateReq.Options.Continuous(
+                name=name,
+                emit_enabled=emit_enabled,
+                track_emitted_streams=track_emitted_streams,
+            ),
+            query=query,
+        )
         return projections_pb2.CreateReq(options=options)
 
     @staticmethod
@@ -133,31 +118,10 @@ class BaseProjectionsService(ESDBService[TGrpcStreamers]):
 
     @staticmethod
     def _construct_statistics_req(
-        name: Optional[str],
-        all: bool,
-        transient: bool,
-        continuous: bool,
-        one_time: bool,
+        name: str,
     ) -> projections_pb2.StatisticsReq:
-        # Decide "mode".
-        if name:
-            options = projections_pb2.StatisticsReq.Options(name=name)
-        # elif all:
-        #     options = projections_pb2.StatisticsReq.Options(all=shared_pb2.Empty())
-        elif transient:  # pragma: no cover
-            options = projections_pb2.StatisticsReq.Options(
-                transient=shared_pb2.Empty()
-            )
-        elif continuous:
-            options = projections_pb2.StatisticsReq.Options(
-                continuous=shared_pb2.Empty()
-            )
-        elif one_time:
-            options = projections_pb2.StatisticsReq.Options(one_time=shared_pb2.Empty())
-        else:
-            options = projections_pb2.StatisticsReq.Options(all=shared_pb2.Empty())
         return projections_pb2.StatisticsReq(
-            options=options,
+            options=projections_pb2.StatisticsReq.Options(name=name),
         )
 
     @staticmethod
@@ -283,7 +247,6 @@ class AsyncioProjectionsService(BaseProjectionsService[AsyncGrpcStreamers]):
         self,
         query: str,
         name: str,
-        continuous: bool,
         emit_enabled: bool,
         track_emitted_streams: bool,
         timeout: Optional[float] = None,
@@ -293,7 +256,6 @@ class AsyncioProjectionsService(BaseProjectionsService[AsyncGrpcStreamers]):
         create_req = self._construct_create_req(
             query=query,
             name=name,
-            continuous=continuous,
             emit_enabled=emit_enabled,
             track_emitted_streams=track_emitted_streams,
         )
@@ -362,22 +324,12 @@ class AsyncioProjectionsService(BaseProjectionsService[AsyncGrpcStreamers]):
 
     async def get_projection_statistics(
         self,
-        name: Optional[str],
-        all: bool,
-        transient: bool,
-        continuous: bool,
-        one_time: bool,
+        name: str,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> Union[ProjectionStatistics, Sequence[ProjectionStatistics]]:
-        statistics_req = self._construct_statistics_req(
-            name=name,
-            all=all,
-            transient=transient,
-            continuous=continuous,
-            one_time=one_time,
-        )
+    ) -> ProjectionStatistics:
+        statistics_req = self._construct_statistics_req(name=name)
         try:
             statistics_resps = self._stub.Statistics(
                 statistics_req,
@@ -385,7 +337,6 @@ class AsyncioProjectionsService(BaseProjectionsService[AsyncGrpcStreamers]):
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
-            projection_statistics_list: List[ProjectionStatistics] = []
             async for statistics_resp in statistics_resps:
                 assert isinstance(
                     statistics_resp, projections_pb2.StatisticsResp
@@ -393,11 +344,11 @@ class AsyncioProjectionsService(BaseProjectionsService[AsyncGrpcStreamers]):
                 projection_statistics = self._construct_projection_statistics(
                     statistics_resp
                 )
-                if name is not None:
-                    return projection_statistics
-                else:  # pragma: no cover
-                    projection_statistics_list.append(projection_statistics)
-            return tuple(projection_statistics_list)  # pragma: no cover
+                return projection_statistics
+            else:  # pragma: no cover
+                raise EventStoreDBClientException(
+                    "Statistics request didn't return any statistics"
+                )
         except grpc.RpcError as e:
             raise handle_rpc_error(e) from None
 
@@ -545,7 +496,6 @@ class ProjectionsService(BaseProjectionsService[SyncGrpcStreamers]):
         self,
         query: str,
         name: str,
-        continuous: bool,
         emit_enabled: bool,
         track_emitted_streams: bool,
         timeout: Optional[float] = None,
@@ -555,7 +505,6 @@ class ProjectionsService(BaseProjectionsService[SyncGrpcStreamers]):
         create_req = self._construct_create_req(
             query=query,
             name=name,
-            continuous=continuous,
             emit_enabled=emit_enabled,
             track_emitted_streams=track_emitted_streams,
         )
@@ -624,22 +573,12 @@ class ProjectionsService(BaseProjectionsService[SyncGrpcStreamers]):
 
     def get_projection_statistics(
         self,
-        name: Optional[str],
-        all: bool,
-        transient: bool,
-        continuous: bool,
-        one_time: bool,
+        name: str,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> Union[ProjectionStatistics, Sequence[ProjectionStatistics]]:
-        statistics_req = self._construct_statistics_req(
-            name=name,
-            all=all,
-            transient=transient,
-            continuous=continuous,
-            one_time=one_time,
-        )
+    ) -> ProjectionStatistics:
+        statistics_req = self._construct_statistics_req(name=name)
         try:
             statistics_resps = self._stub.Statistics(
                 statistics_req,
@@ -647,7 +586,6 @@ class ProjectionsService(BaseProjectionsService[SyncGrpcStreamers]):
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
             )
-            projection_statistics_list: List[ProjectionStatistics] = []
             for statistics_resp in statistics_resps:
                 assert isinstance(
                     statistics_resp, projections_pb2.StatisticsResp
@@ -655,11 +593,11 @@ class ProjectionsService(BaseProjectionsService[SyncGrpcStreamers]):
                 projection_statistics = self._construct_projection_statistics(
                     statistics_resp
                 )
-                if name is not None:
-                    return projection_statistics
-                else:  # pragma: no cover
-                    projection_statistics_list.append(projection_statistics)
-            return tuple(projection_statistics_list)  # pragma: no cover
+                return projection_statistics
+            else:  # pragma: no cover
+                raise EventStoreDBClientException(
+                    "Statistics request didn't return any statistics"
+                )
         except grpc.RpcError as e:
             raise handle_rpc_error(e) from None
 

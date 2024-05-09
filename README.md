@@ -243,10 +243,10 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Delete subscription](#delete-subscription)
 * [Projections](#projections)
   * [Create projection](#create-projection)
-  * [Update projection](#update-projection)
-  * [Get projection statistics](#get-projection-statistics)
   * [Get projection state](#get-projection-state)
   * [Get projection result](#get-projection-result)
+  * [Get projection statistics](#get-projection-statistics)
+  * [Update projection](#update-projection)
   * [Enable projection](#enable-projection)
   * [Disable projection](#disable-projection)
   * [Reset projection](#reset-projection)
@@ -2838,20 +2838,17 @@ client.delete_subscription(
 
 The `create_projection()` method can be used to create a projection.
 
-This method has a required `query` argument, which is a Python `str` that
-defines what the projection will do.
+This method has two required arguments, `name` and `query`.
 
-This method also has six optional arguments, `name`, `continuous`, `emit_enabled`,
+This required `name` argument is a Python `str` that specifies the name of the projection.
+
+This required `query` argument is a Python `str` that defines what the projection will do.
+
+Please refer to the EventStoreDB documentation for more information on defining
+projection queries.
+
+This method also has four optional arguments, `emit_enabled`,
 `track_emitted_streams`, `timeout`, and `credentials`.
-
-The optional `name` argument is a Python `str` which specifies the name of the projection.
-If a name is provided, the projection will either be a "transient" or a "continuous"
-projection. Otherwise, the projection will be a "one time" projection.
-
-The optional `continuous` argument is a Python `bool` which specifies whether a
-projection will be a "continuous" projection. If a `True` value is specified, the
-projection will be a "continuous" projection, otherwise the projection will be a
-"transient" projection. The default value of `continuous` is `False`.
 
 The optional `emit_enabled` argument is a Python `bool` which specifies whether a
 projection will be able to emit events. If a `True` value is specified, the projection
@@ -2863,15 +2860,18 @@ a projection will have its emitted streams tracked. If a `True` value is specifi
 projection will have its emitted streams tracked, otherwise the projection will not
 have its emitted streams tracked. The default value of `track_emitted_streams` is `False`.
 
+The purpose of tracking emitted streams is that they can optionally be deleted when
+a projection is deleted (see the `delete_projection()` method for more details).
+
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
 
 The optional `credentials` argument can be used to
 override call credentials derived from the connection string URI.
 
-In the example below, a continuous projection is created that processes
-events appended to `stream_name2`. The "state" of the projection is
-initialised to have a "count" that is incremented once for each event.
+In the example below, a projection is created that processes events appended to
+`stream_name2`. The "state" of the projection is initialised to have a "count" that
+is incremented once for each event.
 
 ```python
 projection_name = str(uuid.uuid4())
@@ -2899,9 +2899,18 @@ projection_query = """fromStream('%s')
 client.create_projection(
     name=projection_name,
     query=projection_query,
-    continuous=True,
 )
 ```
+
+Please note, the `outputState()` call is optional, and causes the state of the
+projection to be persisted in a "result" stream. The default name of the result stream
+is `$projections-{projection_name}-result`, and this name can be used to read from and
+subscribe to the results stream with the `get_stream()`, `read_stream()`,
+`subscribe_stream()`, `create_subscription_to_stream()` and `read_subscription_to_stream()`
+methods.
+
+The state of the subscription will be persisted in a "state" stream when a "checkpoint"
+for the projection is written.
 
 ### Get projection state<a id="get-projection-state"></a>
 
@@ -2941,7 +2950,7 @@ specifies the name of a projection.
 
 This method also has three optional arguments, `partition`, `timeout`, and `credentials`.
 
-The optional `partition` argument is a Python `str` which specifies a partition...
+The optional `partition` argument is a Python `str` which specifies a partition.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
@@ -2962,31 +2971,21 @@ assert projection_result.value == {'count': 3}
 
 The `get_projection_statistucs()` method can be used to get projection statistics.
 
-This method also has seven optional arguments, `name`, `all`, `transient`,
-`continuous`, `one_time`, `timeout`, and `credentials`.
+This method has a required `name` argument, which is a Python `str` that specifies the
+name of a projection.
 
-The optional `name` argument is a Python `str` that specifies the name of a
-projection. If the name of a projection is specified, this method will return
-a single `ProjectionStatistics` object that represents that projection. Otherwise
-this method will return a sequence of `ProjectionStatistics` objects.
+This method also has three optional arguments, `partition`, `timeout`, and `credentials`.
 
-The optional `all` argument is Python `bool` that can be used to request statistics
-for all projections.
-
-The optional `transient` argument is Python `bool` that can be used to request
-statistics for all "transient" projections.
-
-The optional `continuous` argument is Python `bool` that can be used to request
-statistics for all "continuous" projections.
-
-The optional `one_time` argument is Python `bool` that can be used to request
-statistics for all "one time" projections.
+The optional `partition` argument is a Python `str` which specifies a partition.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
 
 The optional `credentials` argument can be used to
 override call credentials derived from the connection string URI.
+
+This method returns a `ProjectionStatistics` object that represents
+the named projection.
 
 ```python
 statistics = client.get_projection_statistics(name=projection_name)
@@ -3029,7 +3028,7 @@ The `enable_projection()` method can be used to enable a projection that was pre
 disabled.
 
 This method has a required `name` argument, which is a Python `str` that
-specifies the name of the projection to be disabled.
+specifies the name of the projection to be enabled.
 
 This method also has two optional arguments, `timeout` and `credentials`.
 
@@ -3101,7 +3100,10 @@ specifies the name of the projection to be deleted.
 This method also has five optional arguments, `delete_emitted_streams`,
 `delete_state_stream`, `delete_checkpoint_stream`, `timeout`, and `credentials`.
 
-The optional `delete_emitted_streams` argument is a Python `bool` which...
+The optional `delete_emitted_streams` argument is a Python `bool` which specifies
+that the emitted streams will be deleted. For emitted streams to be deleted, they
+must have been tracked (see the `track_emitted_streams` argument of the `create_projection()`
+method.)
 
 The optional `delete_state_stream` argument is a Python `bool` which...
 

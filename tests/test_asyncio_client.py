@@ -50,6 +50,7 @@ from esdbclient.exceptions import (
     GrpcDeadlineExceeded,
     NodeIsNotLeader,
     NotFound,
+    OperationFailed,
     ProgrammingError,
     ReadOnlyReplicaNotFound,
     ServiceUnavailable,
@@ -2531,34 +2532,23 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
     #     # with self.assertRaises(ServiceUnavailable):
 
     async def test_create_projection(self) -> None:
-        # Create "one_time" projection.
-        await self.client.create_projection(query="")
-
-        # Create "transient" projection.
-        transient_projection_name = str(uuid4())
-        await self.client.create_projection(query="", name=transient_projection_name)
-
         # Create "continuous" projection.
-        continuous_projection_name = str(uuid4())
-        await self.client.create_projection(
-            query="", name=continuous_projection_name, continuous=True
-        )
+        projection_name = str(uuid4())
+        await self.client.create_projection(query="", name=projection_name)
 
         # Create "continuous" projection (emit enabled).
-        continuous_projection_name = str(uuid4())
+        projection_name = str(uuid4())
         await self.client.create_projection(
             query="",
-            name=continuous_projection_name,
-            continuous=True,
+            name=projection_name,
             emit_enabled=True,
         )
 
         # Create "continuous" projection (track emitted streams).
-        continuous_projection_name = str(uuid4())
+        projection_name = str(uuid4())
         await self.client.create_projection(
             query="",
-            name=continuous_projection_name,
-            continuous=True,
+            name=projection_name,
             emit_enabled=True,
             track_emitted_streams=True,
         )
@@ -2567,8 +2557,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         with self.assertRaises(AlreadyExists):
             await self.client.create_projection(
                 query="",
-                name=continuous_projection_name,
-                continuous=True,
+                name=projection_name,
                 emit_enabled=True,
                 track_emitted_streams=True,
             )
@@ -2577,8 +2566,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         with self.assertRaises(ExceptionThrownByHandler):
             await self.client.create_projection(
                 query="",
-                name=continuous_projection_name,
-                continuous=True,
+                name=projection_name,
                 emit_enabled=False,
                 track_emitted_streams=True,
             )
@@ -2591,9 +2579,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             await self.client.update_projection(name=projection_name, query="")
 
         # Create named projection.
-        await self.client.create_projection(
-            query="", name=projection_name, continuous=True
-        )
+        await self.client.create_projection(query="", name=projection_name)
 
         # Update projection.
         await self.client.update_projection(name=projection_name, query="")
@@ -2615,9 +2601,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             await self.client.delete_projection(projection_name)
 
         # Create named projection.
-        await self.client.create_projection(
-            query="", name=projection_name, continuous=True
-        )
+        await self.client.create_projection(query="", name=projection_name)
 
         # Delete projection.
         await self.client.delete_projection(
@@ -2652,36 +2636,10 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         await self.client.create_projection(
             query=PROJECTION_QUERY_TEMPLATE1 % ("app-" + projection_name),
             name=projection_name,
-            continuous=True,
         )
 
         statistics = await self.client.get_projection_statistics(name=projection_name)
         self.assertEqual(projection_name, statistics.name)
-
-        # Todo: Why does server throw an exception here?
-        with self.assertRaises(ExceptionThrownByHandler):
-            await self.client.get_projection_statistics(all=True)
-
-        # Todo: Why does server sometimes throw an exception here, sometimes not?
-        # with self.assertRaises(ExceptionThrownByHandler):
-        #     transient_statistics = self.client.get_projection_statistics(
-        #         transient=True
-        #     )
-        #     self.assertEqual(0, len(transient_statistics))
-
-        # Todo: Why does server throw an exception here?
-        with self.assertRaises(ExceptionThrownByHandler):
-            continuous_statistics = await self.client.get_projection_statistics(
-                continuous=True
-            )
-            self.assertEqual(0, len(continuous_statistics))
-
-        # Todo: Why does server throw an exception here?
-        with self.assertRaises(ExceptionThrownByHandler):
-            one_time_statistics = await self.client.get_projection_statistics(
-                one_time=True
-            )
-            self.assertEqual(0, len(one_time_statistics))
 
     async def test_disable_projection(self) -> None:
         projection_name = str(uuid4())
@@ -2691,9 +2649,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             await self.client.disable_projection(name=projection_name)
 
         # Create named projection.
-        await self.client.create_projection(
-            query="", name=projection_name, continuous=True
-        )
+        await self.client.create_projection(query="", name=projection_name)
 
         # Disable projection.
         await self.client.disable_projection(
@@ -2708,9 +2664,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             await self.client.enable_projection(name=projection_name)
 
         # Create named projection.
-        await self.client.create_projection(
-            query="", name=projection_name, continuous=True
-        )
+        await self.client.create_projection(query="", name=projection_name)
 
         # Disable projection.
         await self.client.enable_projection(name=projection_name)
@@ -2723,9 +2677,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             await self.client.reset_projection(name=projection_name)
 
         # Create named projection.
-        await self.client.create_projection(
-            query="", name=projection_name, continuous=True
-        )
+        await self.client.create_projection(query="", name=projection_name)
 
         # Reset projection.
         await self.client.reset_projection(name=projection_name, write_checkpoint=True)
@@ -2738,9 +2690,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             await self.client.get_projection_state(name=projection_name, partition="")
 
         # Create named projection (query is an empty string).
-        await self.client.create_projection(
-            query="", name=projection_name, continuous=True
-        )
+        await self.client.create_projection(query="", name=projection_name)
 
         # Try to get projection state.
         # Todo: Why does this just hang?
@@ -2754,7 +2704,6 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         await self.client.create_projection(
             query=PROJECTION_QUERY_TEMPLATE1 % ("app-" + projection_name),
             name=projection_name,
-            continuous=True,
         )
 
         # Get projection state.
@@ -2771,9 +2720,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             await self.client.get_projection_result(name=projection_name, partition="")
 
         # Create named projection.
-        await self.client.create_projection(
-            query="", name=projection_name, continuous=True
-        )
+        await self.client.create_projection(query="", name=projection_name)
 
         # Try to get projection result.
         # Todo: Why does this just hang?
@@ -2787,7 +2734,6 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         await self.client.create_projection(
             query=PROJECTION_QUERY_TEMPLATE1 % ("app-" + projection_name),
             name=projection_name,
-            continuous=True,
         )
 
         # Get projection result.
@@ -2802,7 +2748,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
     async def test_projection_example(self) -> None:
         application_stream_name = "account-" + str(uuid4())
         emitted_stream_name = "emitted-" + str(uuid4())
-        projection_example = (
+        projection_query = (
             """
         fromStream('"""
             + application_stream_name
@@ -2838,11 +2784,10 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         projection_name = "projection-" + str(uuid4())
 
         await self.client.create_projection(
-            query=projection_example,
+            query=projection_query,
             name=projection_name,
-            continuous=True,
             emit_enabled=True,
-            # track_emitted_streams=True,
+            track_emitted_streams=True,
         )
 
         projection_statistics = await self.client.get_projection_statistics(
@@ -2872,24 +2817,96 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         self.assertEqual(2, result.value["count"])
 
         # Check project result stream.
-        projection_stream_name = f"$projections-{projection_name}-result"
-        projected_events = await self.client.get_stream(projection_stream_name)
-        self.assertEqual(2, len(projected_events))
-        self.assertEqual("Result", projected_events[0].type)
-        self.assertEqual("Result", projected_events[1].type)
+        result_stream_name = f"$projections-{projection_name}-result"
+        result_events = await self.client.get_stream(result_stream_name)
+        self.assertEqual(2, len(result_events))
+        self.assertEqual("Result", result_events[0].type)
+        self.assertEqual("Result", result_events[1].type)
 
-        self.assertEqual({"count": 1}, json.loads(projected_events[0].data))
-        self.assertEqual({"count": 2}, json.loads(projected_events[1].data))
+        self.assertEqual({"count": 1}, json.loads(result_events[0].data))
+        self.assertEqual({"count": 2}, json.loads(result_events[1].data))
 
         self.assertEqual(
             str(application_events[0].id),
-            json.loads(projected_events[0].metadata)["$causedBy"],
+            json.loads(result_events[0].metadata)["$causedBy"],
         )
         self.assertEqual(
             str(application_events[2].id),
-            json.loads(projected_events[1].metadata)["$causedBy"],
+            json.loads(result_events[1].metadata)["$causedBy"],
         )
 
         # Check emitted event stream.
         emitted_events = await self.client.get_stream(emitted_stream_name)
         self.assertEqual(2, len(emitted_events))
+
+        projection_statistics = await self.client.get_projection_statistics(
+            name=projection_name
+        )
+        assert projection_statistics.status == "Running", projection_statistics.status
+
+        with self.assertRaises(OperationFailed):
+            await self.client.delete_projection(
+                projection_name,
+                delete_emitted_streams=True,
+                delete_state_stream=True,
+                delete_checkpoint_stream=True,
+            )
+
+        await self.client.disable_projection(projection_name)
+        await asyncio.sleep(1)
+        projection_statistics = await self.client.get_projection_statistics(
+            name=projection_name
+        )
+        assert (
+            projection_statistics.status == "Aborted/Stopped"
+        ), projection_statistics.status
+
+        await self.client.reset_projection(projection_name)
+        await asyncio.sleep(1)
+        projection_statistics = await self.client.get_projection_statistics(
+            name=projection_name
+        )
+        assert projection_statistics.status == "Stopped", projection_statistics.status
+
+        state = await self.client.get_projection_state(projection_name, partition="")
+        self.assertNotIn("count", state.value)
+
+        # Todo: Why projection can't be deleted without both disabling and resetting?
+        await self.client.delete_projection(
+            projection_name,
+            delete_emitted_streams=True,
+            delete_state_stream=True,
+            delete_checkpoint_stream=True,
+        )
+        projection_statistics = await self.client.get_projection_statistics(
+            name=projection_name
+        )
+        assert (
+            projection_statistics.status == "Deleting/Stopped"
+        ), projection_statistics.status
+
+        await asyncio.sleep(1)
+
+        with self.assertRaises(NotFound):
+            await self.client.get_projection_statistics(name=projection_name)
+
+        with self.assertRaises(NotFound):
+            await self.client.get_projection_state(projection_name)
+
+        with self.assertRaises(NotFound):
+            await self.client.get_projection_result(projection_name)
+
+        result_events = await self.client.get_stream(result_stream_name)
+        self.assertEqual(2, len(result_events))
+
+        with self.assertRaises(NotFound):
+            await self.client.get_stream(emitted_stream_name)
+
+        with self.assertRaises(NotFound):
+            await self.client.enable_projection(projection_name)
+
+        with self.assertRaises(NotFound):
+            await self.client.disable_projection(projection_name)
+
+        # Todo: Recreate projection...
+        # await self.client.create_projection(name=projection_name, query=projection_query)

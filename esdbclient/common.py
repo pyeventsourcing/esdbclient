@@ -36,6 +36,7 @@ from esdbclient.exceptions import (
     MaximumSubscriptionsReached,
     NodeIsNotLeader,
     NotFound,
+    OperationFailed,
     ServiceUnavailable,
     SSLError,
     UnknownError,
@@ -185,6 +186,12 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:  # noqa: 
             ):
                 # Projections.Result does this....
                 return NotFound(e)
+            elif (
+                "Envelope callback expected Updated, received OperationFailed instead"
+                in details
+            ):
+                # Projections.Delete does this....
+                return OperationFailed(e)
             else:  # pragma: no cover
                 return UnknownError(e)
         elif e.code() == grpc.StatusCode.ABORTED:

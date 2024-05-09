@@ -108,7 +108,7 @@ class NodeIsNotLeader(EventStoreDBClientException):
 
 class NotFound(EventStoreDBClientException):
     """
-    Raised when stream or subscription is not found.
+    Raised when stream or subscription or projection is not found.
     """
 
 
@@ -163,6 +163,12 @@ class UnknownError(EventStoreDBClientException):
 class InvalidTransactionError(EventStoreDBClientException):
     """
     Raised when append operation fails with an "invalid transaction" error.
+    """
+
+
+class OperationFailed(EventStoreDBClientException):
+    """
+    Raised when an operation fails (e.g. deleting a projection that isn't disabled).
     """
 
 
