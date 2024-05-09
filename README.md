@@ -2834,6 +2834,9 @@ client.delete_subscription(
 
 ## Projections<a id="projections"></a>
 
+Please refer to the [EventStoreDB documentation](https://developers.eventstore.com/server/v23.10/projections.html)
+for more information on projections in EventStoreDB.
+
 ### Create projection<a id="create-projection"></a>
 
 The `create_projection()` method can be used to create a projection.
@@ -2844,9 +2847,6 @@ This required `name` argument is a Python `str` that specifies the name of the p
 
 This required `query` argument is a Python `str` that defines what the projection will do.
 
-Please refer to the EventStoreDB documentation for more information on defining
-projection queries.
-
 This method also has four optional arguments, `emit_enabled`,
 `track_emitted_streams`, `timeout`, and `credentials`.
 
@@ -2855,6 +2855,9 @@ projection will be able to emit events. If a `True` value is specified, the proj
 will be able to emit events, otherwise the projection will not be able to emit events.
 The default value of `emit_enabled` is `False`.
 
+Please note, if your projection query includes a call to `emit()` then `emit_enabled`
+must be `True`, otherwise the projection will not run.
+
 The optional `track_emitted_streams` argument is a Python `bool` which specifies whether
 a projection will have its emitted streams tracked. If a `True` value is specified, the
 projection will have its emitted streams tracked, otherwise the projection will not
@@ -2862,6 +2865,9 @@ have its emitted streams tracked. The default value of `track_emitted_streams` i
 
 The purpose of tracking emitted streams is that they can optionally be deleted when
 a projection is deleted (see the `delete_projection()` method for more details).
+
+Please note, if you set `track_emitted_streams` to `True`, then you must also set
+`emit_enabled` to `True`, otherwise an error will be raised by this method.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
@@ -2909,8 +2915,6 @@ subscribe to the results stream with the `get_stream()`, `read_stream()`,
 `subscribe_stream()`, `create_subscription_to_stream()` and `read_subscription_to_stream()`
 methods.
 
-The state of the subscription will be persisted in a "state" stream when a "checkpoint"
-for the projection is written.
 
 ### Get projection state<a id="get-projection-state"></a>
 
@@ -3010,7 +3014,12 @@ This method also has three optional arguments, `emit_enabled`, `timeout`, and `c
 The optional `emit_enabled` argument is a Python `bool` which specifies whether a
 projection will be able to emit events. If a `True` value is specified, the projection
 will be able to emit events. If a `False` value is specified, the projection will not
-be able to emit events. The default value of `emit_enabled` is `None`.
+be able to emit events. The default value of `emit_enabled` is `False`.
+
+Please note, if your projection query includes a call to `emit()` then `emit_enabled`
+must be `True`, otherwise the projection will not run.
+
+Please note, it is not possible to update `track_emitted_streams` via the gRPC API.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.

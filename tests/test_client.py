@@ -6288,7 +6288,6 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
 
         # Update projection.
         self.client.update_projection(name=projection_name, query="")
-        self.client.update_projection(name=projection_name, query="", emit_enabled=None)
         self.client.update_projection(name=projection_name, query="", emit_enabled=True)
         self.client.update_projection(
             name=projection_name, query="", emit_enabled=False
@@ -6494,6 +6493,21 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
             emit_enabled=True,
             track_emitted_streams=True,
         )
+        self.client.disable_projection(name=projection_name)
+
+        self.client.update_projection(
+            query=projection_query,
+            name=projection_name,
+            emit_enabled=False,
+        )
+
+        self.client.update_projection(
+            query=projection_query,
+            name=projection_name,
+            emit_enabled=True,
+        )
+
+        self.client.enable_projection(name=projection_name)
 
         projection_statistics = self.client.get_projection_statistics(
             name=projection_name

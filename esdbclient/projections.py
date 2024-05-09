@@ -83,22 +83,15 @@ class BaseProjectionsService(ESDBService[TGrpcStreamers]):
     def _construct_update_req(
         name: str,
         query: str,
-        emit_enabled: Optional[bool],
+        emit_enabled: bool,
     ) -> projections_pb2.UpdateReq:
-        # Decide "emit_option".
-        if emit_enabled is None:
-            options = projections_pb2.UpdateReq.Options(
-                name=name,
-                query=query,
-                no_emit_options=shared_pb2.Empty(),
-            )
-        else:
-            options = projections_pb2.UpdateReq.Options(
+        return projections_pb2.UpdateReq(
+            options=projections_pb2.UpdateReq.Options(
                 name=name,
                 query=query,
                 emit_enabled=emit_enabled,
             )
-        return projections_pb2.UpdateReq(options=options)
+        )
 
     @staticmethod
     def _construct_delete_req(
@@ -274,7 +267,7 @@ class AsyncioProjectionsService(BaseProjectionsService[AsyncGrpcStreamers]):
         self,
         name: str,
         query: str,
-        emit_enabled: Optional[bool],
+        emit_enabled: bool,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
@@ -523,7 +516,7 @@ class ProjectionsService(BaseProjectionsService[SyncGrpcStreamers]):
         self,
         name: str,
         query: str,
-        emit_enabled: Optional[bool],
+        emit_enabled: bool,
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,

@@ -1622,7 +1622,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         name: str,
         *,
         query: str,
-        emit_enabled: Optional[bool] = None,
+        emit_enabled: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:

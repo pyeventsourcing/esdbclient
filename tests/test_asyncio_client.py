@@ -2584,9 +2584,6 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         # Update projection.
         await self.client.update_projection(name=projection_name, query="")
         await self.client.update_projection(
-            name=projection_name, query="", emit_enabled=None
-        )
-        await self.client.update_projection(
             name=projection_name, query="", emit_enabled=True
         )
         await self.client.update_projection(
