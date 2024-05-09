@@ -2875,12 +2875,17 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             delete_state_stream=True,
             delete_checkpoint_stream=True,
         )
-        projection_statistics = await self.client.get_projection_statistics(
-            name=projection_name
-        )
-        assert (
-            projection_statistics.status == "Deleting/Stopped"
-        ), projection_statistics.status
+
+        # Flaky: try/except because the projection might have been deleted already...
+        try:
+            projection_statistics = await self.client.get_projection_statistics(
+                name=projection_name
+            )
+            assert (
+                projection_statistics.status == "Deleting/Stopped"
+            ), projection_statistics.status
+        except NotFound:
+            pass
 
         await asyncio.sleep(1)
 
