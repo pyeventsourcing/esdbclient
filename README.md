@@ -666,11 +666,12 @@ and `read_subscription_to_all()`. You do not need to construct recorded event ob
 
 Like `NewEvent`, the `RecordedEvent` class is a frozen Python dataclass. It has
 all the attributes that `NewEvent` has (`type`, `data`, `metadata`, `content_type`, `id`)
-that follow from an event that was recorded, and some additional attributes that follow
+that follow from an event having been recorded, and some additional attributes that follow
 from the recording of an event (`stream_name`, `stream_position`, `commit_position`,
-`recorded_at`). It also has a `link` attribute, which is set only when "link events"
-are "resolved". And it has a `retry_count` which is set only when reading persistence
-subscriptions.
+`recorded_at`). It also has a `link` attribute, which is `None` unless the recorded
+event is a "link event" that has been "resolved" to the linked event. And it has a
+`retry_count` which has an integer value when receiving recorded events from persistence
+subscriptions, otherwise the value of `retry_count` is `None`.
 
 The `type` attribute is a Python `str`, used to indicate the type of an event
 that was recorded.
