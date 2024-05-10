@@ -8,8 +8,8 @@ down for <a href="#asyncio-client">information</a> about `AsyncioEventStoreDBCli
 
 These clients have been developed and are being maintained in a collaboration
 with the EventStoreDB team, and are officially support by Event Store Ltd.
-Although not all the features of EventStoreDB are supported, many of the most
-useful features are presented in an easy-to-use interface.
+Although not all aspects of the EventStoreDB gRPC API are implemented, many
+of the most useful features are presented in an easy-to-use interface.
 
 These clients have been tested to work with EventStoreDB LTS versions 21.10,
 22.10, 23.10, and version 24.2, without and without SSL/TLS, with single-server
@@ -444,10 +444,14 @@ If there is one gRPC target, the client will simply attempt to connect to this
 server, and it will use this connection when recording and retrieving events.
 
 If there are two or more gRPC targets, the client will attempt to connect to the
-Gossip API of each in turn, to obtain information about the whole cluster. A member
-of the cluster is then selected by the client according to the "node preference" option
-of the connection string. The client may then need to close its connection and reconnect
-to the selected node.
+Gossip API of each in turn, attempting to obtain information about the cluster from
+it, until information about the cluster is obtained. A member of the cluster is then
+selected by the client according to the "node preference" specified by the connection
+string URI. The client will then close its connection and connect to the selected node
+without the 'round robin' load balancing strategy. If the "node preference" is "leader",
+and after connecting to a leader, if the leader becomes a follower, the client will
+reconnect to the new leader.
+
 
 The "esdb+discover" URI scheme can be defined in the following way.
 
@@ -457,12 +461,14 @@ In the "esdb+discover" URI scheme, after the optional user info string, there sh
 a domain name which identifies a cluster of EventStoreDB servers. Individual nodes in
 the cluster should be declared with DNS 'A' records.
 
-The client will create a gRPC connection using the cluster's domain name, using the
-gRPC library's 'round robin' load balancing strategy to call the Gossip API of addresses
-to which this domain name resolves. Information about the EventStoreDB cluster is
-obtained from the Gossip API. A member of the cluster is then selected by the client
-according to the "node preference" option. The client may then need to close its
-connection and reconnect to the selected node.
+The client will use the cluster domain name with the gRPC library's 'round robin' load
+balancing strategy to call the Gossip APIs of addresses discovered from DNS 'A' records.
+Information about the EventStoreDB cluster is obtained from the Gossip API. A member of
+the cluster is then selected by the client according to the "node preference" option.
+The client will then close its connection and connect to the selected node without the
+'round robin' load balancing strategy. If the "node preference" is "leader",
+and after connecting to a leader, if the leader becomes a follower, the client will
+reconnect to the new leader.
 
 ### User info string<a id="user-info-string"></a>
 
@@ -511,51 +517,8 @@ The table below describes the query field-values supported by this client.
 | GossipTimeout       | integer (default: 5)                                                  | The default value (in seconds) of the `timeout` argument of gossip read methods, such as `read_gossip()`.                                                         |
 | MaxDiscoverAttempts | integer (default: 10)                                                 | The number of attempts to read gossip when connecting or reconnecting to a cluster member.                                                                        |
 | DiscoveryInterval   | integer (default: 100)                                                | How long to wait (in milliseconds) between gossip retries.                                                                                                        |
-| KeepAliveInterval   | integer (default: `None`)                                             | The value of the "grpc.keepalive_ms" gRPC channel option.                                                                                                         |
-| KeepAliveTimeout    | integer (default: `None`)                                             | The value of the "grpc.keepalive_timeout_ms" gRPC channel option.                                                                                                 |
-
-
-### Examples<a id="examples"></a>
-
-Here are some examples of EventStoreDB connection string URIs.
-
-The following URI will cause the client to connect to, and get
-cluster info, from "secure" server socket `localhost:2113`. And
-then to connect to a "leader" node. And also to use "admin" and
-"changeit" as the username and password when making calls to
-EventStoreDB API methods.
-
-    esdb://admin:changeit@localhost:2113
-
-
-The following URI will cause the client to get cluster info from
-"insecure" server socket 127.0.0.1:2113.  And then to connect to
-a "leader" node.
-
-    esdb://127.0.0.1:2113?Tls=false
-
-
-The following URI will cause the client to get cluster info from
-addresses in DNS 'A' records for cluster1.example.com. And then
-to connect to a "leader" node. And use a default deadline of 5
-seconds when making calls to EventStore API "write" methods.
-
-    esdb+discover://admin:changeit@cluster1.example.com?DefaultDeadline=5
-
-
-The following URI will cause the client to get cluster info from either
-localhost:2111, or localhost:2112, or localhost:2113. And then to connect
-to a "follower" node.
-
-    esdb://admin:changeit@localhost:2111,localhost:2112,localhost:2113?NodePreference=follower
-
-
-The following URI will cause the client to get cluster info from addresses in
-DNS 'A' records for cluster1.example.com. And to configure "keep alive" timeout
-and interval in the gRPC channel.
-
-    esdb+discover://admin:changeit@cluster1.example.com?KeepAliveInterval=10000&KeepAliveTimeout=10000
-
+| KeepAliveInterval   | integer (default: `None`)                                             | The value (in milliseconds) of the "grpc.keepalive_ms" gRPC channel option.                                                                                       |
+| KeepAliveTimeout    | integer (default: `None`)                                             | The value (in milliseconds) of the "grpc.keepalive_timeout_ms" gRPC channel option.                                                                               |
 
 Please note, the client is insensitive to the case of fields and values. If fields are
 repeated in the query string, the query string will be parsed without error. However,
@@ -563,22 +526,75 @@ the connection options used by the client will use the value of the first field.
 the other field-values in the query string with the same field name will be ignored.
 Fields without values will also be ignored.
 
-If the client's node preference is "leader" and the node becomes a
-"follower", the client will attempt to reconnect to the current leader when a method
-is called that expects to call a leader. Methods which mutate the state of the database
-expect to call a leader. For such methods, the HTTP header "requires-leader" is set to
-"true", and this header is observed by the server, and so a node which is not a leader
-that receives such a request will return an error. This error is detected by the client,
-which will then close the current gRPC connection and create a new connection to the
-leader. The request will then be retried with the leader.
-
 If the client's node preference is "follower" and there are no follower
 nodes in the cluster, then the client will raise an exception. Similarly, if the
 client's node preference is "readonlyreplica" and there are no read-only replica
 nodes in the cluster, then the client will also raise an exception.
 
 The gRPC channel option "grpc.max_receive_message_length" is automatically
-configured to the value `17 * 1024 * 1024`. This value cannot be changed.
+configured to the value `17 * 1024 * 1024`. This value cannot be configured.
+
+
+### Examples<a id="examples"></a>
+
+Here are some examples of EventStoreDB connection string URIs.
+
+The following URI will cause the client to make an "insecure" connection to
+gRPC target `'localhost:2113'`. Because the client's node preference is "follower",
+methods that can be called on a follower should complete successfully, methods that
+require a leader will raise a `NodeIsNotLeader` exception.
+
+    esdb://127.0.0.1:2113?Tls=false&NodePreference=follower
+
+The following URI will cause the client to make an "insecure" connection to
+gRPC target `'localhost:2113'`. Because the client's node preference is "leader",
+if this node is not a leader, then a `NodeIsNotLeader` exception will be raised by
+all methods.
+
+    esdb://127.0.0.1:2113?Tls=false&NodePreference=leader
+
+The following URI will cause the client to make a "secure" connection to
+gRPC target `'localhost:2113'` with username `'admin'` and password `'changeit'`
+as the default call credentials when making calls to the EventStoreDB gRPC API.
+Because the client's node preference is "leader", by default, if this node is not
+a leader, then a `NodeIsNotLeader` exception will be raised by all methods.
+
+    esdb://admin:changeit@localhost:2113
+
+The following URI will cause the client to make "secure" connections, firstly to
+get cluster info from either `'localhost:2111'`, or `'localhost:2112'`, or `'localhost:2113'`.
+Because the client's node preference is "leader", the client will select the leader
+node from the cluster info and reconnect to the leader. If the "leader" node becomes
+a "follower" and another node becomes "leader", then the client will reconnect to the
+new leader.
+
+    esdb://admin:changeit@localhost:2111,localhost:2112,localhost:2113?NodePreference=leader
+
+
+The following URI will cause the client to make "secure" connections, firstly to
+get cluster info from either `'localhost:2111'`, or `'localhost:2112'`, or `'localhost:2113'`.
+Because the client's node preference is "leader", the client will select the leader
+node from the cluster info and reconnect to the leader. Please note, if the "follower"
+node becomes the "leader", the client will not reconnect to a follower -- this behavior
+may be implemented in a future version of the client and server.
+
+    esdb://admin:changeit@localhost:2111,localhost:2112,localhost:2113?NodePreference=follower
+
+
+The following URI will cause the client to make "secure" connections, firstly to get
+cluster info from addresses in DNS 'A' records for `'cluster1.example.com'`, and then
+to connect to a "leader" node. The client will use a default timeout
+of 5 seconds when making calls to EventStore API "write" methods.
+
+    esdb+discover://admin:changeit@cluster1.example.com?DefaultDeadline=5
+
+
+The following URI will cause the client to make "secure" connections, firstly to get
+cluster info from addresses in DNS 'A' records for `'cluster1.example.com'`, and then
+to connect to a "leader" node. It will configure gRPC connections with a "keep alive
+interval" and a "keep alive timeout".
+
+    esdb+discover://admin:changeit@cluster1.example.com?KeepAliveInterval=10000&KeepAliveTimeout=10000
 
 
 ## Event objects<a id="event-objects"></a>
