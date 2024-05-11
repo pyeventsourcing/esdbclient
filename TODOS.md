@@ -2,8 +2,8 @@ Notes from implementing projections:
 
 - why all the "exception thrown by handler" errors? see tests
 - why some methods just hang? see tests
-- what if update_projection(emit_enabled=None)? leave the setting unchanged?
-- partitions, and the difference between partition 'state' and 'result'
+- partitions, and the difference between partition in 'state' and in 'result'
+- given we have get_projection_state(), is the get_projection_result() method entirely redundant? if not, when would I choose to use one and not the other?
 
 ---
 Notes from meeting with Yves 2 Nov 2023:

@@ -2856,7 +2856,7 @@ for more information on projections in EventStoreDB.
 
 ### Create projection<a id="create-projection"></a>
 
-The `create_projection()` method can be used to create a projection.
+The `create_projection()` method can be used to create a "continuous" projection.
 
 This method has two required arguments, `name` and `query`.
 
@@ -2872,8 +2872,8 @@ projection will be able to emit events. If a `True` value is specified, the proj
 will be able to emit events, otherwise the projection will not be able to emit events.
 The default value of `emit_enabled` is `False`.
 
-Please note, if your projection query includes a call to `emit()` then `emit_enabled`
-must be `True`, otherwise the projection will not run.
+Please note, `emit_enabled` must be `True` if your projection query includes a call to
+`emit()`, otherwise the projection will not run.
 
 The optional `track_emitted_streams` argument is a Python `bool` which specifies whether
 a projection will have its emitted streams tracked. If a `True` value is specified, the
@@ -2926,23 +2926,47 @@ client.create_projection(
 ```
 
 Please note, the `outputState()` call is optional, and causes the state of the
-projection to be persisted in a "result" stream. The default name of the result stream
-is `$projections-{projection_name}-result`, and this name can be used to read from and
-subscribe to the results stream with the `get_stream()`, `read_stream()`,
-`subscribe_stream()`, `create_subscription_to_stream()` and `read_subscription_to_stream()`
-methods.
+projection to be persisted in a "result" stream. If `outputState()` is called, an
+event representing the state of the projection will immediately be written to a
+"result" stream.
 
+The default name of the "result" stream for a projection with name `projection_name`
+is `$projections-{projection_name}-result`. This stream name can be used to read from
+and subscribe to the "result" stream, with the `get_stream()`, or `read_stream()`,
+or `subscribe_to_stream()`, or `create_subscription_to_stream()` and
+`read_subscription_to_stream()` methods.
+
+If your projections doesn't call `outputState()`, then you won't be able to read or
+subscribe to a "result" stream, but you will still be able to get the projection
+"result" using the `get_projection_result()` method.
+
+The "type" string of events recorded in "result" streams is `'Result'`. You may want to
+include this in a `filter_exclude` argument when filtering events by type whilst reading
+or subscribing to "all" events recorded in the database (with `read_all()`,
+`subscribe_to_all()`, etc).
+
+Additionally, and in any case, from time to time the state of the projection will be
+recorded in a "state" stream, and also the projection will write to a "checkpoint"
+stream. The "state" stream, the "checkpoint" stream, and all "emitted" streams that
+have been "tracked" (as a consequence of the `track_emitted_streams` argument having
+been `True`) can optionally be deleted when the projection is deleted. See
+`delete_projection()` for details.
+
+Unlike the "result" and "emitted" streams, the "state" and the "checkpoint" streams
+cannot be read or subscribed to by users, or viewed in the "stream browser" view of
+EventStoreDB's Web interface.
 
 ### Get projection state<a id="get-projection-state"></a>
 
-The `get_projection_state()` method can be used to get a projection's state.
+The `get_projection_state()` method can be used to get a projection's "state".
 
 This method has a required `name` argument, which is a Python `str` that
 specifies the name of a projection.
 
 This method also has three optional arguments, `partition`, `timeout`, and `credentials`.
 
-The optional `partition` argument is a Python `str` which specifies a partition...
+The optional `partition` argument is a Python `str` which specifies a "partition". The
+default value of `partition` is the empty string.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
@@ -2964,14 +2988,17 @@ assert projection_state.value == {'count': 3}
 
 ### Get projection result<a id="get-projection-result"></a>
 
-The `get_projection_result()` method can be used to get a projection's result.
+The `get_projection_result()` method can be used to get a projection's "result".
+
+A projection's "result" holds the same data as the projections "state".
 
 This method has a required `name` argument, which is a Python `str` that
 specifies the name of a projection.
 
 This method also has three optional arguments, `partition`, `timeout`, and `credentials`.
 
-The optional `partition` argument is a Python `str` which specifies a partition.
+The optional `partition` argument is a Python `str` which specifies a "partition". The
+default value of `partition` is the empty string.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
@@ -3033,8 +3060,8 @@ projection will be able to emit events. If a `True` value is specified, the proj
 will be able to emit events. If a `False` value is specified, the projection will not
 be able to emit events. The default value of `emit_enabled` is `False`.
 
-Please note, if your projection query includes a call to `emit()` then `emit_enabled`
-must be `True`, otherwise the projection will not run.
+Please note, `emit_enabled` must be `True` if your projection query includes a call
+to `emit()`, otherwise the projection will not run.
 
 Please note, it is not possible to update `track_emitted_streams` via the gRPC API.
 
@@ -3127,13 +3154,18 @@ This method also has five optional arguments, `delete_emitted_streams`,
 `delete_state_stream`, `delete_checkpoint_stream`, `timeout`, and `credentials`.
 
 The optional `delete_emitted_streams` argument is a Python `bool` which specifies
-that the emitted streams will be deleted. For emitted streams to be deleted, they
-must have been tracked (see the `track_emitted_streams` argument of the `create_projection()`
-method.)
+that all "emitted" streams that have been tracked will be deleted. For emitted streams
+to be deleted, they must have been tracked (see the `track_emitted_streams` argument of
+the `create_projection()` method.)
 
-The optional `delete_state_stream` argument is a Python `bool` which...
+The optional `delete_state_stream` argument is a Python `bool` which specifies that
+the projection's "state" stream should also be deleted. The "state" stream is like
+the "result" stream, but events are written to the "state" stream occasionally, along
+with events written to the "checkpoint" stream, rather than being written immediately
+in the way a call `outputState()` immediately writes events to the "result" stream.
 
-The optional `delete_checkpoint_stream` argument is a Python `bool` which...
+The optional `delete_checkpoint_stream` argument is a Python `bool` which specifies
+that the projection's "checkpoint" stream should also be deleted.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
@@ -3144,6 +3176,8 @@ override call credentials derived from the connection string URI.
 ```python
 client.delete_projection(name=projection_name)
 ```
+
+Please note, a projection must be disabled and reset before it can be deleted.
 
 ### Restart projections subsystem<a id="restart-projections-subsystem"></a>
 
