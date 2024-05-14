@@ -383,7 +383,7 @@ PEM encoded SSL/TLS root certificates. This value is passed directly to
 It is commonly a public certificate of the certificate authority that was responsible
 for generating the certificate used by the EventStoreDB server. Often it is unnecessary
 to provide these certificates explicitly, as they are commonly installed locally in
-a default location such a that the Python grpc library can pick them up. Alternatively,
+a default location such that the Python grpc library can pick them up. Alternatively,
 for development, you can use the server's certificate itself.
 
 In the example below, the constructor argument values are taken from the operating
