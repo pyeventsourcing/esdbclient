@@ -66,7 +66,7 @@ from esdbclient.protos.Grpc import persistent_pb2
 started = datetime.datetime.now()
 last = datetime.datetime.now()
 
-EVENTSTORE_IMAGE_TAG = os.environ.get("EVENTSTORE_IMAGE_TAG", "24.2.0")
+EVENTSTORE_IMAGE_TAG = os.environ.get("EVENTSTORE_IMAGE_TAG", "22.10")
 
 
 def get_elapsed_time() -> str:
@@ -6355,7 +6355,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         self.client.create_projection(query="", name=projection_name)
 
         # Disable projection.
-        self.client.disable_projection(name=projection_name, write_checkpoint=True)
+        self.client.disable_projection(name=projection_name)
 
     def test_enable_projection(self) -> None:
         self.construct_esdb_client()
@@ -6383,7 +6383,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         self.client.create_projection(query="", name=projection_name)
 
         # Reset projection.
-        self.client.reset_projection(name=projection_name, write_checkpoint=True)
+        self.client.reset_projection(name=projection_name)
 
     def test_get_projection_state(self) -> None:
         self.construct_esdb_client()
@@ -6474,6 +6474,36 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         """
         )
 
+        projection_name = "projection-" + str(uuid4())
+
+        self.client.create_projection(
+            query=projection_query,
+            name=projection_name,
+            emit_enabled=True,
+            track_emitted_streams=True,
+        )
+        self.client.disable_projection(name=projection_name)
+
+        # Set emit_enabled=False - still tracking emitted streams...
+        self.client.update_projection(
+            query=projection_query,
+            name=projection_name,
+            emit_enabled=False,
+        )
+
+        # Set emit_enabled=True again - still tracking emitted streams...
+        self.client.update_projection(
+            query=projection_query,
+            name=projection_name,
+            emit_enabled=True,
+        )
+
+        statistics = self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual(projection_name, statistics.name)
+
+        # Start running...
+        self.client.enable_projection(name=projection_name)
+
         application_events = [
             NewEvent(type="SomethingHappened", data=b"{}"),
             NewEvent(type="SomethingElseHappened", data=b"{}"),
@@ -6485,42 +6515,11 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
             current_version=StreamState.ANY,
         )
 
-        projection_name = "projection-" + str(uuid4())
-
-        self.client.create_projection(
-            query=projection_query,
-            name=projection_name,
-            emit_enabled=True,
-            track_emitted_streams=True,
-        )
-        self.client.disable_projection(name=projection_name)
-
-        self.client.update_projection(
-            query=projection_query,
-            name=projection_name,
-            emit_enabled=False,
-        )
-
-        self.client.update_projection(
-            query=projection_query,
-            name=projection_name,
-            emit_enabled=True,
-        )
-
-        self.client.enable_projection(name=projection_name)
-
-        projection_statistics = self.client.get_projection_statistics(
-            name=projection_name
-        )
-        self.assertEqual(projection_name, projection_statistics.name)
-
         # Wait for two events to have been processed.
         for _ in range(100):
-            if projection_statistics.events_processed_after_restart < 2:
+            if statistics.events_processed_after_restart < 2:
                 sleep(0.1)
-                projection_statistics = self.client.get_projection_statistics(
-                    name=projection_name
-                )
+                statistics = self.client.get_projection_statistics(name=projection_name)
                 continue
             break
         else:
@@ -6558,11 +6557,20 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         emitted_events = self.client.get_stream(emitted_stream_name)
         self.assertEqual(2, len(emitted_events))
 
-        projection_statistics = self.client.get_projection_statistics(
-            name=projection_name
-        )
-        assert projection_statistics.status == "Running", projection_statistics.status
+        # Check projection statistics.
+        statistics = self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual("Running", statistics.status)
 
+        # Reset whilst running is ineffective (state exists).
+        self.client.reset_projection(name=projection_name)
+        sleep(1)
+        state = self.client.get_projection_state(projection_name, partition="")
+        self.assertIn("count", state.value)
+        statistics = self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual("Running", statistics.status)
+        self.assertLess(0, statistics.events_processed_after_restart)
+
+        # Can't delete whilst running.
         with self.assertRaises(OperationFailed):
             self.client.delete_projection(
                 projection_name,
@@ -6571,26 +6579,36 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
                 delete_checkpoint_stream=True,
             )
 
+        # Disable projection (stop running).
         self.client.disable_projection(projection_name)
         sleep(1)
-        projection_statistics = self.client.get_projection_statistics(
-            name=projection_name
-        )
-        assert (
-            projection_statistics.status == "Aborted/Stopped"
-        ), projection_statistics.status
+        statistics = self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual("Stopped", statistics.status)
 
-        self.client.reset_projection(projection_name)
+        # Check projection still has state.
+        state = self.client.get_projection_state(projection_name, partition="")
+        self.assertIn("count", state.value)
+
+        # Reset whilst stopped is effective (loses state)?
+        self.client.reset_projection(name=projection_name)
         sleep(1)
-        projection_statistics = self.client.get_projection_statistics(
-            name=projection_name
-        )
-        assert projection_statistics.status == "Stopped", projection_statistics.status
-
         state = self.client.get_projection_state(projection_name, partition="")
         self.assertNotIn("count", state.value)
+        statistics = self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual("Stopped", statistics.status)
+        self.assertEqual(0, statistics.events_processed_after_restart)
 
-        # Todo: Why projection can't be deleted without both disabling and resetting?
+        # Can enable after reset.
+        self.client.enable_projection(name=projection_name)
+        sleep(1)
+        statistics = self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual("Running", statistics.status)
+        state = self.client.get_projection_state(projection_name, partition="")
+        self.assertIn("count", state.value)
+        self.assertEqual(2, state.value["count"])
+
+        # Can delete when stopped.
+        self.client.disable_projection(name=projection_name)
         self.client.delete_projection(
             projection_name,
             delete_emitted_streams=True,
@@ -6600,54 +6618,40 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
 
         # Flaky: try/except because the projection might have been deleted already...
         try:
-            projection_statistics = self.client.get_projection_statistics(
-                name=projection_name
-            )
-            assert (
-                projection_statistics.status == "Deleting/Stopped"
-            ), projection_statistics.status
+            statistics = self.client.get_projection_statistics(name=projection_name)
+            self.assertEqual("Deleting/Stopped", statistics.status)
         except NotFound:
             pass
 
         sleep(1)
 
-        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
+        # After deleting, projection methods raise NotFound.
+        with self.assertRaises(NotFound):
             self.client.get_projection_statistics(name=projection_name)
-        else:
-            with self.assertRaises(NotFound):
-                self.client.get_projection_statistics(name=projection_name)
 
-        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
+        with self.assertRaises(NotFound):
             self.client.get_projection_state(projection_name)
-        else:
-            with self.assertRaises(NotFound):
-                self.client.get_projection_state(projection_name)
 
-        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
+        with self.assertRaises(NotFound):
             self.client.get_projection_result(projection_name)
-        else:
-            with self.assertRaises(NotFound):
-                self.client.get_projection_result(projection_name)
 
+        with self.assertRaises(NotFound):
+            self.client.enable_projection(projection_name)
+
+        with self.assertRaises(NotFound):
+            self.client.disable_projection(projection_name)
+
+        # Result stream still exists.
         result_events = self.client.get_stream(result_stream_name)
         self.assertEqual(2, len(result_events))
 
+        # Emitted stream does not exist.
         with self.assertRaises(NotFound):
             self.client.get_stream(emitted_stream_name)
 
-        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
-            self.client.enable_projection(projection_name)
-        else:
-            with self.assertRaises(NotFound):
-                self.client.enable_projection(projection_name)
+        # Todo: Are "checkpoint" and "state" streams somehow hidden?
 
-        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
-            self.client.disable_projection(projection_name)
-        else:
-            with self.assertRaises(NotFound):
-                self.client.disable_projection(projection_name)
-
-        # Todo: Recreate projection...
+        # Todo: Recreate with same name (plus what happens if streams not deleted)...
         # self.client.create_projection(name=projection_name, query=projection_query)
 
 

@@ -1694,7 +1694,6 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         name: str,
         *,
-        write_checkpoint: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1705,7 +1704,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
         self._esdb.projections.disable(
             name=name,
-            write_checkpoint=write_checkpoint,
+            write_checkpoint=True,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1738,7 +1737,6 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         name: str,
         *,
-        write_checkpoint: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
@@ -1749,7 +1747,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
         self._esdb.projections.reset(
             name=name,
-            write_checkpoint=write_checkpoint,
+            write_checkpoint=True,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,

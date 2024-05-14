@@ -3077,8 +3077,8 @@ client.update_projection(name=projection_name, query=projection_query)
 
 ### Enable projection<a id="enable-projection"></a>
 
-The `enable_projection()` method can be used to enable a projection that was previously
-disabled.
+The `enable_projection()` method can be used to enable (start running) a projection
+that was previously disabled (stopped).
 
 This method has a required `name` argument, which is a Python `str` that
 specifies the name of the projection to be enabled.
@@ -3097,17 +3097,12 @@ client.enable_projection(name=projection_name)
 
 ### Disable projection<a id="disable-projection"></a>
 
-The `disable_projection()` method can be used to disable a projection.
+The `disable_projection()` method can be used to disable (stop running) a projection.
 
 This method has a required `name` argument, which is a Python `str` that
 specifies the name of the projection to be disabled.
 
-This method also has three optional arguments, `write_checkpoint`, `timeout`, and `credentials`.
-
-The optional `write_checkpoint` argument is a Python `bool` which specifies whether
-a checkpoint will be written when the projection is disabled. If `write_checkpoint`
-is `True` a checkpoint will be written, otherwise a checkpoint will not be written.
-The default value of `write_checkpoint` is `False`.
+This method also has two optional arguments, `timeout`, and `credentials`.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
@@ -3126,12 +3121,7 @@ The `reset_projection()` method can be used to reset a projection.
 This method has a required `name` argument, which is a Python `str` that
 specifies the name of the projection to be reset.
 
-This method also has three optional arguments, `write_checkpoint`, `timeout`, and `credentials`.
-
-The optional `write_checkpoint` argument is a Python `bool` which specifies whether
-a checkpoint will be written when the projection is reset. If `write_checkpoint`
-is `True` a checkpoint will be written, otherwise a checkpoint will not be written.
-The default value of `write_checkpoint` is `False`.
+This method also has two optional arguments, `timeout`, and `credentials`.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
@@ -3142,6 +3132,9 @@ override call credentials derived from the connection string URI.
 ```python
 client.reset_projection(name=projection_name)
 ```
+
+Please note, a projection must be disabled before it can be reset.
+
 
 ### Delete projection<a id="delete-projection"></a>
 
@@ -3177,7 +3170,7 @@ override call credentials derived from the connection string URI.
 client.delete_projection(name=projection_name)
 ```
 
-Please note, a projection must be disabled and reset before it can be deleted.
+Please note, a projection must be disabled before it can be deleted.
 
 ### Restart projections subsystem<a id="restart-projections-subsystem"></a>
 

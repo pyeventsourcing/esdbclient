@@ -2649,9 +2649,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         await self.client.create_projection(query="", name=projection_name)
 
         # Disable projection.
-        await self.client.disable_projection(
-            name=projection_name, write_checkpoint=True
-        )
+        await self.client.disable_projection(name=projection_name)
 
     async def test_enable_projection(self) -> None:
         projection_name = str(uuid4())
@@ -2677,7 +2675,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         await self.client.create_projection(query="", name=projection_name)
 
         # Reset projection.
-        await self.client.reset_projection(name=projection_name, write_checkpoint=True)
+        await self.client.reset_projection(name=projection_name)
 
     async def test_get_projection_state(self) -> None:
         projection_name = str(uuid4())
@@ -2767,6 +2765,36 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         """
         )
 
+        projection_name = "projection-" + str(uuid4())
+
+        await self.client.create_projection(
+            query=projection_query,
+            name=projection_name,
+            emit_enabled=True,
+            track_emitted_streams=True,
+        )
+        await self.client.disable_projection(name=projection_name)
+
+        # Set emit_enabled=False - still tracking emitted streams...
+        await self.client.update_projection(
+            query=projection_query,
+            name=projection_name,
+            emit_enabled=False,
+        )
+
+        # Set emit_enabled=True again - still tracking emitted streams...
+        await self.client.update_projection(
+            query=projection_query,
+            name=projection_name,
+            emit_enabled=True,
+        )
+
+        statistics = await self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual(projection_name, statistics.name)
+
+        # Start running...
+        await self.client.enable_projection(name=projection_name)
+
         application_events = [
             NewEvent(type="SomethingHappened", data=b"{}"),
             NewEvent(type="SomethingElseHappened", data=b"{}"),
@@ -2778,25 +2806,11 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             current_version=StreamState.ANY,
         )
 
-        projection_name = "projection-" + str(uuid4())
-
-        await self.client.create_projection(
-            query=projection_query,
-            name=projection_name,
-            emit_enabled=True,
-            track_emitted_streams=True,
-        )
-
-        projection_statistics = await self.client.get_projection_statistics(
-            name=projection_name
-        )
-        self.assertEqual(projection_name, projection_statistics.name)
-
         # Wait for two events to have been processed.
         for _ in range(100):
-            if projection_statistics.events_processed_after_restart < 2:
+            if statistics.events_processed_after_restart < 2:
                 await asyncio.sleep(0.1)
-                projection_statistics = await self.client.get_projection_statistics(
+                statistics = await self.client.get_projection_statistics(
                     name=projection_name
                 )
                 continue
@@ -2836,11 +2850,20 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         emitted_events = await self.client.get_stream(emitted_stream_name)
         self.assertEqual(2, len(emitted_events))
 
-        projection_statistics = await self.client.get_projection_statistics(
-            name=projection_name
-        )
-        assert projection_statistics.status == "Running", projection_statistics.status
+        # Check projection statistics.
+        statistics = await self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual("Running", statistics.status)
 
+        # Reset whilst running is ineffective (state exists).
+        await self.client.reset_projection(name=projection_name)
+        await asyncio.sleep(1)
+        state = await self.client.get_projection_state(projection_name, partition="")
+        self.assertIn("count", state.value)
+        statistics = await self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual("Running", statistics.status)
+        self.assertLess(0, statistics.events_processed_after_restart)
+
+        # Can't delete whilst running.
         with self.assertRaises(OperationFailed):
             await self.client.delete_projection(
                 projection_name,
@@ -2849,26 +2872,36 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 delete_checkpoint_stream=True,
             )
 
+        # Disable projection (stop running).
         await self.client.disable_projection(projection_name)
         await asyncio.sleep(1)
-        projection_statistics = await self.client.get_projection_statistics(
-            name=projection_name
-        )
-        assert (
-            projection_statistics.status == "Aborted/Stopped"
-        ), projection_statistics.status
+        statistics = await self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual("Stopped", statistics.status)
 
-        await self.client.reset_projection(projection_name)
+        # Check projection still has state.
+        state = await self.client.get_projection_state(projection_name, partition="")
+        self.assertIn("count", state.value)
+
+        # Reset whilst stopped is effective (loses state)?
+        await self.client.reset_projection(name=projection_name)
         await asyncio.sleep(1)
-        projection_statistics = await self.client.get_projection_statistics(
-            name=projection_name
-        )
-        assert projection_statistics.status == "Stopped", projection_statistics.status
-
         state = await self.client.get_projection_state(projection_name, partition="")
         self.assertNotIn("count", state.value)
+        statistics = await self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual("Stopped", statistics.status)
+        self.assertEqual(0, statistics.events_processed_after_restart)
 
-        # Todo: Why projection can't be deleted without both disabling and resetting?
+        # Can enable after reset.
+        await self.client.enable_projection(name=projection_name)
+        await asyncio.sleep(1)
+        statistics = await self.client.get_projection_statistics(name=projection_name)
+        self.assertEqual("Running", statistics.status)
+        state = await self.client.get_projection_state(projection_name, partition="")
+        self.assertIn("count", state.value)
+        self.assertEqual(2, state.value["count"])
+
+        # Can delete when stopped.
+        await self.client.disable_projection(name=projection_name)
         await self.client.delete_projection(
             projection_name,
             delete_emitted_streams=True,
@@ -2878,52 +2911,40 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         # Flaky: try/except because the projection might have been deleted already...
         try:
-            projection_statistics = await self.client.get_projection_statistics(
+            statistics = await self.client.get_projection_statistics(
                 name=projection_name
             )
-            assert (
-                projection_statistics.status == "Deleting/Stopped"
-            ), projection_statistics.status
+            self.assertEqual("Deleting/Stopped", statistics.status)
         except NotFound:
             pass
 
         await asyncio.sleep(1)
 
-        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
+        # After deleting, projection methods raise NotFound.
+        with self.assertRaises(NotFound):
             await self.client.get_projection_statistics(name=projection_name)
-        else:
-            with self.assertRaises(NotFound):
-                await self.client.get_projection_statistics(name=projection_name)
 
-        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
+        with self.assertRaises(NotFound):
             await self.client.get_projection_state(projection_name)
-        else:
-            with self.assertRaises(NotFound):
-                await self.client.get_projection_state(projection_name)
 
-        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
+        with self.assertRaises(NotFound):
             await self.client.get_projection_result(projection_name)
-        else:
-            with self.assertRaises(NotFound):
-                await self.client.get_projection_result(projection_name)
 
+        with self.assertRaises(NotFound):
+            await self.client.enable_projection(projection_name)
+
+        with self.assertRaises(NotFound):
+            await self.client.disable_projection(projection_name)
+
+        # Result stream still exists.
         result_events = await self.client.get_stream(result_stream_name)
         self.assertEqual(2, len(result_events))
 
+        # Emitted stream does not exist.
         with self.assertRaises(NotFound):
             await self.client.get_stream(emitted_stream_name)
 
-        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
-            await self.client.enable_projection(projection_name)
-        else:
-            with self.assertRaises(NotFound):
-                await self.client.enable_projection(projection_name)
+        # Todo: Are "checkpoint" and "state" streams somehow hidden?
 
-        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
-            await self.client.disable_projection(projection_name)
-        else:
-            with self.assertRaises(NotFound):
-                await self.client.disable_projection(projection_name)
-
-        # Todo: Recreate projection...
-        # await self.client.create_projection(name=projection_name, query=projection_query)
+        # Todo: Recreate with same name (plus what happens if streams not deleted)...
+        # self.client.create_projection(name=projection_name, query=projection_query)
