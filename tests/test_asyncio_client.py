@@ -20,7 +20,7 @@ from esdbclient.events import CaughtUp
 from esdbclient.persistent import AsyncioSubscriptionReadReqs
 from esdbclient.streams import AsyncioCatchupSubscription
 from tests.test_client import (
-    EVENTSTORE_IMAGE_TAG,
+    EVENTSTORE_DOCKER_IMAGE,
     PROJECTION_QUERY_TEMPLATE1,
     TimedTestCase,
     get_ca_certificate,
@@ -777,11 +777,11 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 break
 
     @skipIf(
-        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "21.10" in EVENTSTORE_DOCKER_IMAGE,
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
     @skipIf(
-        "22.10" in EVENTSTORE_IMAGE_TAG,
+        "22.10" in EVENTSTORE_DOCKER_IMAGE,
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
     async def test_subscribe_to_all_include_caught_up(self) -> None:
@@ -1422,11 +1422,11 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         self.assertEqual(info.extra_statistics, True)
 
     @skipIf(
-        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "21.10" in EVENTSTORE_DOCKER_IMAGE,
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
     @skipIf(
-        "22.10" in EVENTSTORE_IMAGE_TAG,
+        "22.10" in EVENTSTORE_DOCKER_IMAGE,
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
     async def test_subscribe_to_stream_include_caught_up(self) -> None:
@@ -2610,7 +2610,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         await asyncio.sleep(1)  # give server time to actually delete the projection....
 
-        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
+        if "21.10" in EVENTSTORE_DOCKER_IMAGE or "22.10" in EVENTSTORE_DOCKER_IMAGE:
             # Can delete a projection that has been deleted ("idempotent").
             await self.client.delete_projection(
                 name=projection_name,

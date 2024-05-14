@@ -7,10 +7,13 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11", "3.12"]
-        eventstore-image-tag: ["21.10.9-buster-slim", "22.10.3-buster-slim", "23.10.0-bookworm-slim", "24.2.0-bookworm-slim"]
-#        eventstore-image-tag: ["21.10.11-dev"]   # For Joao's dev builds (on ghcr.io).
+        eventstore-docker-image:
+          - docker.eventstore.com/eventstore-ce/eventstoredb-ce:22.10.4-jammy
+          - docker.eventstore.com/eventstore-ce/eventstoredb-ce:23.10.0-jammy
+          - docker.eventstore.com/eventstore-ce/eventstoredb-ce:24.2.0-alpha.115-jammy
+          - docker.eventstore.com/eventstore-staging-ce/eventstoredb-ce:24.6.0-nightly-x64-8.0-jammy
     env:
-      EVENTSTORE_IMAGE_TAG: ${{ matrix.eventstore-image-tag }}
+      EVENTSTORE_DOCKER_IMAGE: ${{ matrix.eventstore-docker-image }}
     runs-on: "ubuntu-22.04"
     steps:
       - uses: actions/checkout@v4

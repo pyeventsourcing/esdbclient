@@ -2,16 +2,11 @@
 
 # SHELL = bash
 
-# For testing with production EventStoreDB builds...
-EVENTSTORE_IMAGE_NAME ?= eventstore/eventstore
-# EVENTSTORE_IMAGE_TAG ?= 21.10.9-buster-slim
-# EVENTSTORE_IMAGE_TAG ?= 22.10.3-buster-slim
-# EVENTSTORE_IMAGE_TAG ?= 23.10.0-bookworm-slim
-EVENTSTORE_IMAGE_TAG ?= 24.2.0-bookworm-slim
+# EVENTSTORE_DOCKER_IMAGE ?= docker.eventstore.com/eventstore-ce/eventstoredb-ce:22.10.4-jammy
+# EVENTSTORE_DOCKER_IMAGE ?= docker.eventstore.com/eventstore-ce/eventstoredb-ce:23.10.0-jammy
+# EVENTSTORE_DOCKER_IMAGE ?= docker.eventstore.com/eventstore-ce/eventstoredb-ce:24.2.0-alpha.115-jammy
+EVENTSTORE_DOCKER_IMAGE ?= docker.eventstore.com/eventstore-staging-ce/eventstoredb-ce:24.6.0-nightly-x64-8.0-jammy
 
-# For testing with Jaao's dev builds...
-# EVENTSTORE_IMAGE_NAME ?= ghcr.io/thefringeninja/eventstore
-# EVENTSTORE_IMAGE_TAG ?= 21.10.11-dev
 
 POETRY ?= poetry
 POETRY_VERSION=1.5.1
@@ -134,7 +129,7 @@ start-eventstoredb-insecure:
     --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2113" \
     --env "EVENTSTORE_RUN_PROJECTIONS=All" \
     --name my-eventstoredb-insecure \
-    $(EVENTSTORE_IMAGE_NAME):$(EVENTSTORE_IMAGE_TAG) \
+    $(EVENTSTORE_DOCKER_IMAGE) \
     --insecure
 
 .PHONY: start-eventstoredb-secure
@@ -145,7 +140,7 @@ start-eventstoredb-secure:
     --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
     --env "EVENTSTORE_RUN_PROJECTIONS=All" \
     --name my-eventstoredb-secure \
-    $(EVENTSTORE_IMAGE_NAME):$(EVENTSTORE_IMAGE_TAG) \
+    $(EVENTSTORE_DOCKER_IMAGE) \
     --dev
 
 .PHONY: attach-eventstoredb-insecure

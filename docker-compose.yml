@@ -26,7 +26,7 @@ services:
       - volumes-provisioner
 
   esdb-node1:
-    image: ${EVENTSTORE_IMAGE_NAME}:${EVENTSTORE_IMAGE_TAG}
+    image: ${EVENTSTORE_DOCKER_IMAGE}
     env_file:
       - shared.env
     environment:
@@ -49,7 +49,7 @@ services:
       - cert-gen
 
   esdb-node2:
-    image: ${EVENTSTORE_IMAGE_NAME}:${EVENTSTORE_IMAGE_TAG}
+    image: ${EVENTSTORE_DOCKER_IMAGE}
     env_file:
       - shared.env
     environment:
@@ -72,7 +72,7 @@ services:
       - cert-gen
 
   esdb-node3:
-    image: ${EVENTSTORE_IMAGE_NAME}:${EVENTSTORE_IMAGE_TAG}
+    image: ${EVENTSTORE_DOCKER_IMAGE}
     env_file:
       - shared.env
     environment:

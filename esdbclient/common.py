@@ -166,26 +166,26 @@ def handle_rpc_error(e: grpc.RpcError) -> EventStoreDBClientException:  # noqa: 
                 "Envelope callback expected Updated, received NotFound instead"
                 in details
             ):
-                # Projections.Update and Projections.Delete does this....
-                return NotFound(e)
+                # Projections.Update and Projections.Delete does this in < v24.6
+                return NotFound(e)  # pragma: no cover
             elif (
                 "Envelope callback expected Statistics, received NotFound instead"
                 in details
             ):
-                # Projections.Statistics does this....
-                return NotFound(e)
+                # Projections.Statistics does this in < v24.6
+                return NotFound(e)  # pragma: no cover
             elif (
                 "Envelope callback expected ProjectionState, received NotFound instead"
                 in details
             ):
-                # Projections.State does this....
-                return NotFound(e)
+                # Projections.State does this in < v24.6
+                return NotFound(e)  # pragma: no cover
             elif (
                 "Envelope callback expected ProjectionResult, received NotFound instead"
                 in details
             ):
-                # Projections.Result does this....
-                return NotFound(e)
+                # Projections.Result does this in < v24.6
+                return NotFound(e)  # pragma: no cover
             elif (
                 "Envelope callback expected Updated, received OperationFailed instead"
                 in details

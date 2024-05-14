@@ -66,7 +66,7 @@ from esdbclient.protos.Grpc import persistent_pb2
 started = datetime.datetime.now()
 last = datetime.datetime.now()
 
-EVENTSTORE_IMAGE_TAG = os.environ.get("EVENTSTORE_IMAGE_TAG", "22.10")
+EVENTSTORE_DOCKER_IMAGE = os.environ.get("EVENTSTORE_DOCKER_IMAGE", "24.2")
 
 
 def get_elapsed_time() -> str:
@@ -2482,11 +2482,11 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
                 break
 
     @skipIf(
-        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "21.10" in EVENTSTORE_DOCKER_IMAGE,
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
     @skipIf(
-        "22.10" in EVENTSTORE_IMAGE_TAG,
+        "22.10" in EVENTSTORE_DOCKER_IMAGE,
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
     def test_subscribe_to_all_include_caught_up(self) -> None:
@@ -2516,8 +2516,10 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
             if isinstance(event, CaughtUp):
                 break
 
-    @skipIf("23.10" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug was fixed")
-    @skipIf("24.2" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug was fixed")
+    @skipIf("22.10" in EVENTSTORE_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
+    @skipIf("23.10" in EVENTSTORE_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
+    @skipIf("24.2" in EVENTSTORE_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
+    @skipIf("24.6" in EVENTSTORE_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
     def test_demonstrate_extra_checkpoint_bug(self) -> None:
         self.construct_esdb_client()
 
@@ -2623,8 +2625,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
             next_event_from_1.commit_position, last_checkpoint_commit_position
         )
 
-    @skipIf("21.10" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug not fixed")
-    @skipIf("22.10" in EVENTSTORE_IMAGE_TAG, "'Extra checkpoint' bug not fixed")
+    @skipIf("21.10" in EVENTSTORE_DOCKER_IMAGE, "'Extra checkpoint' bug not fixed")
     def test_extra_checkpoint_bug_is_fixed(self) -> None:
         self.construct_esdb_client()
 
@@ -3075,11 +3076,11 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         list(subscription)
 
     @skipIf(
-        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "21.10" in EVENTSTORE_DOCKER_IMAGE,
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
     @skipIf(
-        "22.10" in EVENTSTORE_IMAGE_TAG,
+        "22.10" in EVENTSTORE_DOCKER_IMAGE,
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
     def test_subscribe_to_stream_include_caught_up(self) -> None:
@@ -4818,7 +4819,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         self.assertEqual(info.extra_statistics, True)
 
     @skipIf(
-        "21.10" in EVENTSTORE_IMAGE_TAG,
+        "21.10" in EVENTSTORE_DOCKER_IMAGE,
         "v21.10 server becomes unresponsive with this test",
     )
     def test_subscription_to_all_wrong_history_buffer_size_raises_internal_error(
@@ -6314,7 +6315,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
 
         sleep(1)  # give server time to actually delete the projection....
 
-        if "21.10" in EVENTSTORE_IMAGE_TAG or "22.10" in EVENTSTORE_IMAGE_TAG:
+        if "21.10" in EVENTSTORE_DOCKER_IMAGE or "22.10" in EVENTSTORE_DOCKER_IMAGE:
             # Can delete a projection that has been deleted ("idempotent").
             self.client.delete_projection(
                 name=projection_name,
