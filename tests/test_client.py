@@ -6564,11 +6564,14 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         # Reset whilst running is ineffective (state exists).
         self.client.reset_projection(name=projection_name)
         sleep(1)
-        state = self.client.get_projection_state(projection_name, partition="")
-        self.assertIn("count", state.value)
         statistics = self.client.get_projection_statistics(name=projection_name)
         self.assertEqual("Running", statistics.status)
         self.assertLess(0, statistics.events_processed_after_restart)
+
+        state = self.client.get_projection_state(projection_name, partition="")
+        self.assertIn("count", state.value)
+        result = self.client.get_projection_result(projection_name, partition="")
+        self.assertIn("count", result.value)
 
         # Can't delete whilst running.
         with self.assertRaises(OperationFailed):
@@ -6588,15 +6591,20 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         # Check projection still has state.
         state = self.client.get_projection_state(projection_name, partition="")
         self.assertIn("count", state.value)
+        result = self.client.get_projection_result(projection_name, partition="")
+        self.assertIn("count", result.value)
 
         # Reset whilst stopped is effective (loses state)?
         self.client.reset_projection(name=projection_name)
         sleep(1)
-        state = self.client.get_projection_state(projection_name, partition="")
-        self.assertNotIn("count", state.value)
         statistics = self.client.get_projection_statistics(name=projection_name)
         self.assertEqual("Stopped", statistics.status)
         self.assertEqual(0, statistics.events_processed_after_restart)
+
+        state = self.client.get_projection_state(projection_name, partition="")
+        self.assertNotIn("count", state.value)
+        result = self.client.get_projection_result(projection_name, partition="")
+        self.assertNotIn("count", result.value)
 
         # Can enable after reset.
         self.client.enable_projection(name=projection_name)
