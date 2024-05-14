@@ -262,6 +262,7 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 * [Notes](#notes)
   * [Regular expression filters](#regular-expression-filters)
   * [Reconnect and retry method decorators](#reconnect-and-retry-method-decorators)
+* [Communities](#communities)
 * [Contributors](#contributors)
   * [Install Poetry](#install-poetry)
   * [Setup for PyCharm users](#setup-for-pycharm-users)
@@ -3440,6 +3441,13 @@ successfully returned "catch-up subscription" object, the catch-up subscription 
 need to be restarted. Similarly, when reading persistent subscriptions, if there are
 connection issues whilst iterating over a successfully received response, the consumer
 will need to be restarted.
+
+
+## Communities<a id="communities"></a>
+
+- [Issues](https://github.com/pyeventsourcing/esdbclient/issues)
+- [Discuss](https://discuss.eventstore.com/)
+- [Discord (Event Store)](https://discord.gg/Phn9pmCw3t)
 
 
 ## Contributors<a id="contributors"></a>
