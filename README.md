@@ -572,9 +572,9 @@ new leader.
 
 The following URI will cause the client to make "secure" connections, firstly to
 get cluster info from either `'localhost:2111'`, or `'localhost:2112'`, or `'localhost:2113'`.
-Because the client's node preference is "leader", the client will select the leader
-node from the cluster info and reconnect to the leader. Please note, if the "follower"
-node becomes the "leader", the client will not reconnect to a follower -- this behavior
+Because the client's node preference is "follower", the client will select a follower
+node from the cluster info and reconnect to this follower. Please note, if the "follower"
+node becomes the "leader", the client will not reconnect to a follower -- such behavior
 may be implemented in a future version of the client and server.
 
     esdb://admin:changeit@localhost:2111,localhost:2112,localhost:2113?NodePreference=follower
