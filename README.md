@@ -370,37 +370,21 @@ optional constructor argument, `root_certificates`.
 The `uri` argument is expected to be an EventStoreDB connection string URI that
 conforms with the standard EventStoreDB "esdb" or "esdb+discover" URI schemes.
 
-For example, the following connection string specifies that the client should
-attempt to create a "secure" connection to port 2113 on "localhost", and use the
-client credentials "username" and "password" when making calls to the server.
-
-    esdb://username:password@localhost:2113?Tls=true
-
 The client must be configured to create a "secure" connection to a "secure" server,
 or alternatively an "insecure" connection to an "insecure" server. By default, the
 client will attempt to create a "secure" connection. And so, when connecting to an
 "insecure" server, the connection string must specify that the client should attempt
 to make an "insecure" connection.
 
-The following connection string specifies that the client should
-attempt to create an "insecure" connection to port 2113 on "localhost".
-When connecting to an "insecure" server, the client will ignore any
-username and password information included in the connection string,
-so that usernames and passwords are not sent over an "insecure" connection.
-
-    esdb://localhost:2113?Tls=false
-
-Please note, the "insecure" connection string uses a query string with the field-value
-`Tls=false`. The value of this field is by default `true`.
-
-When connecting to a "secure" server, the `root_certificates` argument can be
-a Python `str` containing PEM encoded SSL/TLS root certificates. This value is
-passed directly to `grpc.ssl_channel_credentials()`. It is used for authenticating the
-server to the client. It is commonly the certificate of the certificate authority that
-was responsible for generating the SSL/TLS certificate used by the EventStoreDB server.
-Often it is unnecessary to provide these certificates explicitly, if they are installed
-locally in a such a way that the Python grpc library can pick them up from a default
-location. Alternatively, for development, you can use the server's certificate itself.
+When connecting to a "secure" server, it may be necessary to set the optional `root_certificates`
+argument. The optional `root_certificates` argument is a Python `str` containing
+PEM encoded SSL/TLS root certificates. This value is passed directly to
+`grpc.ssl_channel_credentials()` and is used by the client to authenticate the server.
+It is commonly a public certificate of the certificate authority that was responsible
+for generating the certificate used by the EventStoreDB server. Often it is unnecessary
+to provide these certificates explicitly, as they are commonly installed locally in
+a default location such a that the Python grpc library can pick them up. Alternatively,
+for development, you can use the server's certificate itself.
 
 In the example below, the constructor argument values are taken from the operating
 system environment.
@@ -478,9 +462,9 @@ separated with the ":" character.
 
     user-info = username , ":" , password ;
 
-The user info is sent by the client as "call credentials" in each call to a "secure"
-server, in a "basic auth" authorization header. This authorization header is used by
-the server to authenticate the client. The authorization header is not sent to
+The user info is sent by the client in a "basic auth" authorization header in each gRPC
+call to a "secure" server. This authorization header is used by the server to authenticate
+the client. The Python gRPC library does not allow call credentials to be transferred to
 "insecure" servers.
 
 ### Query string<a id="query-string"></a>
@@ -3196,6 +3180,11 @@ connection string URI.
 Many of the client methods described above have an optional `credentials` argument,
 which can be used to set call credentials for an individual method call that override
 those derived from the connection string URI.
+
+Call credentials are sent to "secure" servers in a "basic auth" authorization header.
+This authorization header is used by the server to authenticate the client. The
+authorization header is not sent to "insecure" servers.
+
 
 ### Construct call credentials<a id="construct-call-credentials"></a>
 

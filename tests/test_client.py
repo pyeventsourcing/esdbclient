@@ -6681,6 +6681,12 @@ class TestEventStoreDBClientWithInsecureConnection(TestEventStoreDBClient):
     ESDB_TLS = False
 
 
+# Todo: Test error from sending call credentials to insecure server
+#  StatusCode.UNAUTHENTICATED
+# 	details = "Established channel does not have a
+# 	sufficient security level to transfer call credential."
+
+
 class TestESDBClusterNode1(TestEventStoreDBClient):
     ESDB_TARGET = "127.0.0.1:2110,127.0.0.1:2110"  # make it do discovery
     ESDB_CLUSTER_SIZE = 3
