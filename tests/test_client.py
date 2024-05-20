@@ -6392,7 +6392,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
 
         # Raises NotFound unless projection exists.
         with self.assertRaises(NotFound):
-            self.client.get_projection_state(name=projection_name, partition="")
+            self.client.get_projection_state(name=projection_name)
 
         # Create named projection (query is an empty string).
         self.client.create_projection(query="", name=projection_name)
@@ -6400,9 +6400,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         # Try to get projection state.
         # Todo: Why does this just hang?
         with self.assertRaises(DeadlineExceeded):
-            self.client.get_projection_state(
-                name=projection_name, partition="", timeout=1
-            )
+            self.client.get_projection_state(name=projection_name, timeout=1)
 
         # Create named projection.
         projection_name = str(uuid4())
@@ -6412,7 +6410,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         )
 
         # Get projection state.
-        state = self.client.get_projection_state(name=projection_name, partition="")
+        state = self.client.get_projection_state(name=projection_name)
         self.assertEqual(state.value, {})
 
     def test_get_projection_result(self) -> None:
@@ -6421,7 +6419,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
 
         # Raises NotFound unless projection exists.
         with self.assertRaises(NotFound):
-            self.client.get_projection_result(name=projection_name, partition="")
+            self.client.get_projection_result(name=projection_name)
 
         # Create named projection.
         self.client.create_projection(query="", name=projection_name)
@@ -6429,9 +6427,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         # Try to get projection result.
         # Todo: Why does this just hang?
         with self.assertRaises(DeadlineExceeded):
-            self.client.get_projection_result(
-                name=projection_name, partition="", timeout=1
-            )
+            self.client.get_projection_result(name=projection_name, timeout=1)
 
         # Create named projection.
         projection_name = str(uuid4())
@@ -6441,7 +6437,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         )
 
         # Get projection result.
-        state = self.client.get_projection_result(name=projection_name, partition="")
+        state = self.client.get_projection_result(name=projection_name)
         self.assertEqual(state.value, {})
 
     def test_restart_projections_subsystem(self) -> None:
@@ -6527,12 +6523,12 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
             self.fail("Timed out waiting for two events to be processed by projection")
 
         # Check projection state.
-        state = self.client.get_projection_state(projection_name, partition="")
+        state = self.client.get_projection_state(projection_name)
         self.assertEqual(2, state.value["count"])
 
         # Check projection result.
         # Todo: What's the actual difference between "state" and "result"?
-        result = self.client.get_projection_result(projection_name, partition="")
+        result = self.client.get_projection_result(projection_name)
         self.assertEqual(2, result.value["count"])
 
         # Check project result stream.
@@ -6569,9 +6565,9 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         self.assertEqual("Running", statistics.status)
         self.assertLess(0, statistics.events_processed_after_restart)
 
-        state = self.client.get_projection_state(projection_name, partition="")
+        state = self.client.get_projection_state(projection_name)
         self.assertIn("count", state.value)
-        result = self.client.get_projection_result(projection_name, partition="")
+        result = self.client.get_projection_result(projection_name)
         self.assertIn("count", result.value)
 
         # Can't delete whilst running.
@@ -6590,9 +6586,9 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         self.assertEqual("Stopped", statistics.status)
 
         # Check projection still has state.
-        state = self.client.get_projection_state(projection_name, partition="")
+        state = self.client.get_projection_state(projection_name)
         self.assertIn("count", state.value)
-        result = self.client.get_projection_result(projection_name, partition="")
+        result = self.client.get_projection_result(projection_name)
         self.assertIn("count", result.value)
 
         # Reset whilst stopped is effective (loses state)?
@@ -6602,9 +6598,9 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         self.assertEqual("Stopped", statistics.status)
         self.assertEqual(0, statistics.events_processed_after_restart)
 
-        state = self.client.get_projection_state(projection_name, partition="")
+        state = self.client.get_projection_state(projection_name)
         self.assertNotIn("count", state.value)
-        result = self.client.get_projection_result(projection_name, partition="")
+        result = self.client.get_projection_result(projection_name)
         self.assertNotIn("count", result.value)
 
         # Can enable after reset.
@@ -6612,7 +6608,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         sleep(1)
         statistics = self.client.get_projection_statistics(name=projection_name)
         self.assertEqual("Running", statistics.status)
-        state = self.client.get_projection_state(projection_name, partition="")
+        state = self.client.get_projection_state(projection_name)
         self.assertIn("count", state.value)
         self.assertEqual(2, state.value["count"])
 

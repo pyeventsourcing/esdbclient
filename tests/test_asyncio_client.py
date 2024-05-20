@@ -2682,7 +2682,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         # Raises NotFound unless projection exists.
         with self.assertRaises(NotFound):
-            await self.client.get_projection_state(name=projection_name, partition="")
+            await self.client.get_projection_state(name=projection_name)
 
         # Create named projection (query is an empty string).
         await self.client.create_projection(query="", name=projection_name)
@@ -2690,9 +2690,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         # Try to get projection state.
         # Todo: Why does this just hang?
         with self.assertRaises(DeadlineExceeded):
-            await self.client.get_projection_state(
-                name=projection_name, partition="", timeout=1
-            )
+            await self.client.get_projection_state(name=projection_name, timeout=1)
 
         # Create named projection.
         projection_name = str(uuid4())
@@ -2702,9 +2700,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         )
 
         # Get projection state.
-        state = await self.client.get_projection_state(
-            name=projection_name, partition="", timeout=1
-        )
+        state = await self.client.get_projection_state(name=projection_name, timeout=1)
         self.assertEqual(state.value, {})
 
     async def test_get_projection_result(self) -> None:
@@ -2712,7 +2708,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         # Raises NotFound unless projection exists.
         with self.assertRaises(NotFound):
-            await self.client.get_projection_result(name=projection_name, partition="")
+            await self.client.get_projection_result(name=projection_name)
 
         # Create named projection.
         await self.client.create_projection(query="", name=projection_name)
@@ -2720,9 +2716,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         # Try to get projection result.
         # Todo: Why does this just hang?
         with self.assertRaises(DeadlineExceeded):
-            await self.client.get_projection_result(
-                name=projection_name, partition="", timeout=1
-            )
+            await self.client.get_projection_result(name=projection_name, timeout=1)
 
         # Create named projection.
         projection_name = str(uuid4())
@@ -2732,9 +2726,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         )
 
         # Get projection result.
-        state = await self.client.get_projection_result(
-            name=projection_name, partition=""
-        )
+        state = await self.client.get_projection_result(name=projection_name)
         self.assertEqual(state.value, {})
 
     async def test_restart_projections_subsystem(self) -> None:
@@ -2819,12 +2811,12 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             self.fail("Timed out waiting for two events to be processed by projection")
 
         # Check projection state.
-        state = await self.client.get_projection_state(projection_name, partition="")
+        state = await self.client.get_projection_state(name=projection_name)
         self.assertEqual(2, state.value["count"])
 
         # Check projection result.
         # Todo: What's the actual difference between "state" and "result"?
-        result = await self.client.get_projection_result(projection_name, partition="")
+        result = await self.client.get_projection_result(name=projection_name)
         self.assertEqual(2, result.value["count"])
 
         # Check project result stream.
@@ -2857,7 +2849,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         # Reset whilst running is ineffective (state exists).
         await self.client.reset_projection(name=projection_name)
         await asyncio.sleep(1)
-        state = await self.client.get_projection_state(projection_name, partition="")
+        state = await self.client.get_projection_state(name=projection_name)
         self.assertIn("count", state.value)
         statistics = await self.client.get_projection_statistics(name=projection_name)
         self.assertEqual("Running", statistics.status)
@@ -2879,13 +2871,13 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         self.assertEqual("Stopped", statistics.status)
 
         # Check projection still has state.
-        state = await self.client.get_projection_state(projection_name, partition="")
+        state = await self.client.get_projection_state(projection_name)
         self.assertIn("count", state.value)
 
         # Reset whilst stopped is effective (loses state)?
         await self.client.reset_projection(name=projection_name)
         await asyncio.sleep(1)
-        state = await self.client.get_projection_state(projection_name, partition="")
+        state = await self.client.get_projection_state(projection_name)
         self.assertNotIn("count", state.value)
         statistics = await self.client.get_projection_statistics(name=projection_name)
         self.assertEqual("Stopped", statistics.status)
@@ -2896,7 +2888,7 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         await asyncio.sleep(1)
         statistics = await self.client.get_projection_statistics(name=projection_name)
         self.assertEqual("Running", statistics.status)
-        state = await self.client.get_projection_state(projection_name, partition="")
+        state = await self.client.get_projection_state(projection_name)
         self.assertIn("count", state.value)
         self.assertEqual(2, state.value["count"])
 

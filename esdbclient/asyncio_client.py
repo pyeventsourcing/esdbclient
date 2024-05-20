@@ -1481,7 +1481,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        return await self._connection.projections.get_projection_statistics(
+        return await self._connection.projections.get_statistics(
             name=name,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -1559,7 +1559,6 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         self,
         name: str,
         *,
-        partition: str = "",
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> ProjectionState:
@@ -1570,7 +1569,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
 
         return await self._connection.projections.get_state(
             name=name,
-            partition=partition,
+            partition="",
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1582,7 +1581,6 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         self,
         name: str,
         *,
-        partition: str = "",
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> ProjectionResult:
@@ -1593,7 +1591,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
 
         return await self._connection.projections.get_result(
             name=name,
-            partition=partition,
+            partition="",
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,

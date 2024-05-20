@@ -1681,7 +1681,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        return self._esdb.projections.get_projection_statistics(
+        return self._esdb.projections.get_statistics(
             name=name,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -1759,7 +1759,6 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         name: str,
         *,
-        partition: str = "",
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> ProjectionState:
@@ -1770,7 +1769,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
         return self._esdb.projections.get_state(
             name=name,
-            partition=partition,
+            partition="",
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1782,7 +1781,6 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         name: str,
         *,
-        partition: str = "",
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> ProjectionResult:
@@ -1793,7 +1791,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
 
         return self._esdb.projections.get_result(
             name=name,
-            partition=partition,
+            partition="",
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,

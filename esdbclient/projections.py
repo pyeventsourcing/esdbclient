@@ -315,7 +315,7 @@ class AsyncioProjectionsService(BaseProjectionsService[AsyncGrpcStreamers]):
             raise handle_rpc_error(e) from None
         assert isinstance(delete_resp, projections_pb2.DeleteResp)
 
-    async def get_projection_statistics(
+    async def get_statistics(
         self,
         name: str,
         timeout: Optional[float] = None,
@@ -564,7 +564,7 @@ class ProjectionsService(BaseProjectionsService[SyncGrpcStreamers]):
             raise handle_rpc_error(e) from None
         assert isinstance(delete_resp, projections_pb2.DeleteResp)
 
-    def get_projection_statistics(
+    def get_statistics(
         self,
         name: str,
         timeout: Optional[float] = None,
