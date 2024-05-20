@@ -6735,7 +6735,7 @@ class TestESDBDiscoverScheme(TestCase):
         with self.assertRaises(DiscoveryFailed) as cm1:
             uri = (
                 "esdb+discover://my-unresolvable-cluster"
-                "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1"
+                "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1&GossipTimeout=30"
             )
             EventStoreDBClient(uri)
         self.assertIn(":2113", str(cm1.exception))
@@ -6746,7 +6746,7 @@ class TestESDBDiscoverScheme(TestCase):
         with self.assertRaises(DiscoveryFailed) as cm2:
             uri = (
                 "esdb+discover://my-unresolvable-cluster:9898"
-                "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1"
+                "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1&GossipTimeout=30"
             )
             EventStoreDBClient(uri)
         self.assertIn(":9898", str(cm2.exception))
@@ -6763,7 +6763,7 @@ class TestESDBDiscoverScheme(TestCase):
         with self.assertRaises(DiscoveryFailed) as cm4:
             uri = (
                 "esdb+discover://localhost:2222"
-                "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1"
+                "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1&GossipTimeout=30"
             )
             EventStoreDBClient(uri)
         self.assertIn(":2222", str(cm4.exception))
@@ -6811,7 +6811,7 @@ class TestESDBDiscoverScheme(TestCase):
         # Discover insecure single-node cluster, connect to leader.
         uri = (
             "esdb+discover://localhost:2113"
-            "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1"
+            "?Tls=false&DiscoveryInterval=0&MaxDiscoverAttempts=1&GossipTimeout=30"
         )
         client = EventStoreDBClient(uri)
         stream_name = str(uuid4())
@@ -6831,7 +6831,7 @@ class TestESDBDiscoverScheme(TestCase):
         # Discover secure single-node cluster, connect to leader.
         uri = (
             "esdb+discover://admin:changeit@localhost:2114"
-            "?DiscoveryInterval=0&MaxDiscoverAttempts=1"
+            "?DiscoveryInterval=0&MaxDiscoverAttempts=1&GossipTimeout=30"
         )
         root_certificates = get_server_certificate("localhost:2114")
         client = EventStoreDBClient(uri, root_certificates=root_certificates)

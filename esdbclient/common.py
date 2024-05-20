@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import datetime
+import os
 from abc import ABC, abstractmethod
 from base64 import b64encode
 from threading import Lock
@@ -42,6 +43,11 @@ from esdbclient.exceptions import (
     UnknownError,
 )
 from esdbclient.protos.Grpc import persistent_pb2, streams_pb2
+
+# Avoid ares resolver.
+if "GRPC_DNS_RESOLVER" not in os.environ:
+    os.environ["GRPC_DNS_RESOLVER"] = "native"
+
 
 if TYPE_CHECKING:  # pragma: no cover
     from grpc import Metadata
