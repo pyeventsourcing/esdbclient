@@ -166,7 +166,7 @@ class InvalidTransactionError(EventStoreDBClientException):
     """
 
 
-class OperationFailed(EventStoreDBClientException):
+class OperationFailed(GrpcError):
     """
     Raised when an operation fails (e.g. deleting a projection that isn't disabled).
     """
