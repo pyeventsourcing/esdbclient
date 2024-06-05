@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
-import asyncio
 import os
 import ssl
 from pathlib import Path
@@ -15,14 +14,14 @@ BASE_DIR = Path(__file__).parents[1]
 class TestDocs(TestCase):
     def setUp(self) -> None:
         self.setup_environ()
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError as e:
-            if str(e).startswith("There is no current event loop in thread"):
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-            else:
-                raise
+        # try:
+        #     loop = asyncio.get_event_loop()
+        # except RuntimeError as e:
+        #     if str(e).startswith("There is no current event loop in thread"):
+        #         loop = asyncio.new_event_loop()
+        #         asyncio.set_event_loop(loop)
+        #     else:
+        #         raise
 
     def setup_environ(self) -> None:
         os.environ["ESDB_ROOT_CERTIFICATES"] = ssl.get_server_certificate(
