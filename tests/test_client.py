@@ -5,6 +5,7 @@ import os
 import ssl
 import sys
 from collections import Counter
+from tempfile import NamedTemporaryFile
 from threading import Thread
 from time import sleep
 from typing import List, Optional, Sequence, Set, Tuple, cast
@@ -318,6 +319,28 @@ class TestConnectionSpec(TestCase):
         # Set KeepAliveTimeout.
         spec = ConnectionSpec(uri + "&KeepAliveTimeout=10")
         self.assertEqual(spec.options.KeepAliveTimeout, 10)
+
+    def test_user_cert_file(self) -> None:
+        uri = "esdb://localhost:2222?Tls=false"
+
+        # UserCertFile not mentioned.
+        spec = ConnectionSpec(uri)
+        self.assertEqual(spec.options.UserCertFile, None)
+
+        # Set UserCertFile.
+        spec = ConnectionSpec(uri + "&UserCertFile=some-path")
+        self.assertEqual(spec.options.UserCertFile, "some-path")
+
+    def test_user_key_file(self) -> None:
+        uri = "esdb://localhost:2222?Tls=false"
+
+        # UserKeyFile not mentioned.
+        spec = ConnectionSpec(uri)
+        self.assertEqual(spec.options.UserKeyFile, None)
+
+        # Set UserKeyFile.
+        spec = ConnectionSpec(uri + "&UserKeyFile=some-key")
+        self.assertEqual(spec.options.UserKeyFile, "some-key")
 
     def test_raises_when_query_string_has_unsupported_field(self) -> None:
         uri = "esdb://localhost:2222?Tls=false"
@@ -6698,7 +6721,7 @@ class TestESDBClusterNode3(TestEventStoreDBClient):
     ESDB_CLUSTER_SIZE = 3
 
 
-class TestRootCertificatesAreRequired(TimedTestCase):
+class TestRootCertificatesAreOptional(TimedTestCase):
     def test_tls_true_no_root_certificates(self) -> None:
         # NB Client can work with Tls=True without setting 'root_certificates'
         # if grpc lib can verify server cert using locally installed CA certs.
@@ -6727,6 +6750,50 @@ class TestRootCertificatesAreRequired(TimedTestCase):
 
         with self.assertRaises(DiscoveryFailed):
             EventStoreDBClient(uri, root_certificates="blah")
+
+
+class TestOptionalClientAuth(TimedTestCase):
+    def setUp(self) -> None:
+        self.user_key = b"some-key"
+        self.user_cert = b"some-cert"
+        with NamedTemporaryFile(delete=False) as f1, NamedTemporaryFile(
+            delete=False
+        ) as f2:
+            f1.write(self.user_key)
+            f2.write(self.user_cert)
+            self.user_key_file = f1.name
+            self.user_cert_file = f2.name
+
+    def tearDown(self) -> None:
+        os.remove(self.user_key_file)
+        os.remove(self.user_cert_file)
+
+    def test_tls_true_client_auth(self) -> None:
+        secure_grpc_target = "localhost:2114"
+        root_certificates = get_server_certificate(secure_grpc_target)
+        uri = f"esdb://admin:changeit@{secure_grpc_target}"
+
+        # Construct client without client auth.
+        client = EventStoreDBClient(uri, root_certificates=root_certificates)
+
+        # User cert and key should be None.
+        self.assertIsNone(client.private_key)
+        self.assertIsNone(client.certificate_chain)
+
+        # Should be able to get commit position.
+        client.get_commit_position()
+
+        # Construct client with client auth.
+        uri += f"?UserKeyFile={self.user_key_file}&UserCertFile={self.user_cert_file}"
+        client = EventStoreDBClient(uri, root_certificates=root_certificates)
+
+        # User cert and key should have expected values.
+        self.assertEqual(self.user_key, client.private_key)
+        self.assertEqual(self.user_cert, client.certificate_chain)
+
+        # Should raise SSL error.
+        with self.assertRaises(SSLError):
+            client.get_commit_position()
 
 
 class TestESDBDiscoverScheme(TestCase):

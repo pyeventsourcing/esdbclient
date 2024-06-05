@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import asyncio
 import json
+import os
 import sys
+from tempfile import NamedTemporaryFile
 from typing import Optional
 from unittest import skipIf
 
@@ -2940,3 +2942,51 @@ class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         # Todo: Recreate with same name (plus what happens if streams not deleted)...
         # self.client.create_projection(name=projection_name, query=projection_query)
+
+
+class TestOptionalClientAuth(TimedTestCase, IsolatedAsyncioTestCase):
+    def setUp(self) -> None:
+        self.user_key = b"some-key"
+        self.user_cert = b"some-cert"
+        with NamedTemporaryFile(delete=False) as f1, NamedTemporaryFile(
+            delete=False
+        ) as f2:
+            f1.write(self.user_key)
+            f2.write(self.user_cert)
+            self.user_key_file = f1.name
+            self.user_cert_file = f2.name
+
+    def tearDown(self) -> None:
+        os.remove(self.user_key_file)
+        os.remove(self.user_cert_file)
+
+    async def test_tls_true_client_auth(self) -> None:
+        secure_grpc_target = "localhost:2114"
+        root_certificates = get_server_certificate(secure_grpc_target)
+        uri = f"esdb://admin:changeit@{secure_grpc_target}"
+
+        # Construct client without client auth.
+        client = await AsyncioEventStoreDBClient(
+            uri, root_certificates=root_certificates
+        )
+
+        # User key and cert should be None.
+        self.assertIsNone(client.private_key)
+        self.assertIsNone(client.certificate_chain)
+
+        # Should be able to get commit position.
+        await client.get_commit_position()
+
+        # Construct client with client auth.
+        uri += f"?UserKeyFile={self.user_key_file}&UserCertFile={self.user_cert_file}"
+        client = await AsyncioEventStoreDBClient(
+            uri, root_certificates=root_certificates
+        )
+
+        # User cert and key should have expected values.
+        self.assertEqual(self.user_key, client.private_key)
+        self.assertEqual(self.user_cert, client.certificate_chain)
+
+        # Should raise SSL error.
+        with self.assertRaises(SSLError):
+            await client.get_commit_position()

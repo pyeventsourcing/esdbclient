@@ -487,8 +487,10 @@ appropriate value, separated with the "=" character.
                 | ( "DiscoveryInterval", "=" , integer )
                 | ( "KeepAliveInterval", "=" , integer )
                 | ( "KeepAliveTimeout", "=" , integer ) ;
+                | ( "UserCertFile", "=" , string ) ;
+                | ( "UserKeyFile", "=" , string ) ;
 
-The table below describes the query field-values supported by this client.
+The table below describes the query string field-values supported by this client.
 
 | Field               | Value                                                                 | Description                                                                                                                                                       |
 |---------------------|-----------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -502,6 +504,9 @@ The table below describes the query field-values supported by this client.
 | DiscoveryInterval   | integer (default: 100)                                                | How long to wait (in milliseconds) between gossip retries.                                                                                                        |
 | KeepAliveInterval   | integer (default: `None`)                                             | The value (in milliseconds) of the "grpc.keepalive_ms" gRPC channel option.                                                                                       |
 | KeepAliveTimeout    | integer (default: `None`)                                             | The value (in milliseconds) of the "grpc.keepalive_timeout_ms" gRPC channel option.                                                                               |
+| UserCertFile        | string (default: `None`)                                              | Absolute filesystem path to file containing the X.509 user certificate in PEM format.                                                                             |
+| UserKeyFile         | string (default: `None`)                                              | Absolute filesystem path to file containing the X.509 user certificate's private key in PEM format.                                                               |
+
 
 Please note, the client is insensitive to the case of fields and values. If fields are
 repeated in the query string, the query string will be parsed without error. However,

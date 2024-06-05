@@ -121,7 +121,7 @@ def retrygrpc(f: _TCallable) -> _TCallable:
 
 
 async def AsyncioEventStoreDBClient(
-    uri: str, root_certificates: Optional[str] = None
+    uri: str, root_certificates: Optional[Union[str, bytes]] = None
 ) -> "_AsyncioEventStoreDBClient":
     client = _AsyncioEventStoreDBClient(uri=uri, root_certificates=root_certificates)
     await client.connect()
@@ -129,8 +129,19 @@ async def AsyncioEventStoreDBClient(
 
 
 class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
-    def __init__(self, uri: str, root_certificates: Optional[str] = None):
-        super().__init__(uri=uri, root_certificates=root_certificates)
+    def __init__(
+        self,
+        uri: str,
+        root_certificates: Optional[Union[str, bytes]] = None,
+        private_key: Optional[Union[str, bytes]] = None,
+        certificate_chain: Optional[Union[str, bytes]] = None,
+    ):
+        super().__init__(
+            uri=uri,
+            root_certificates=root_certificates,
+            private_key=private_key,
+            certificate_chain=certificate_chain,
+        )
         self._is_reconnection_required = Event()
         self._reconnection_lock = Lock()
 
@@ -228,12 +239,10 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
     ) -> AsyncioESDBConnection:
         grpc_options = self.grpc_options + grpc_options
         if self.connection_spec.options.Tls is True:
-            if self.root_certificates is not None:
-                root_certificates = self.root_certificates.encode()
-            else:
-                root_certificates = None
             channel_credentials = grpc.ssl_channel_credentials(
-                root_certificates=root_certificates
+                root_certificates=self.root_certificates,
+                private_key=self.private_key,
+                certificate_chain=self.certificate_chain,
             )
             grpc_channel = grpc.aio.secure_channel(
                 target=grpc_target,

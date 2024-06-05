@@ -144,11 +144,37 @@ class BaseEventStoreDBClient:
         self,
         uri: Optional[str] = None,
         *,
-        root_certificates: Optional[str] = None,
+        root_certificates: Optional[Union[str, bytes]] = None,
+        private_key: Optional[Union[str, bytes]] = None,
+        certificate_chain: Optional[Union[str, bytes]] = None,
     ) -> None:
         self._is_closed = False
-        self.root_certificates = root_certificates
+        self.root_certificates = (
+            root_certificates.encode()
+            if isinstance(root_certificates, str)
+            else root_certificates
+        )
+        self.private_key = (
+            private_key.encode() if isinstance(private_key, str) else private_key
+        )
+        self.certificate_chain = (
+            certificate_chain.encode()
+            if isinstance(certificate_chain, str)
+            else certificate_chain
+        )
         self.connection_spec = ConnectionSpec(uri)
+
+        if self.connection_spec.options.UserKeyFile:
+            with open(self.connection_spec.options.UserKeyFile, "r+b") as f:
+                self.private_key = f.read()
+        else:
+            self.private_key = None
+
+        if self.connection_spec.options.UserCertFile:
+            with open(self.connection_spec.options.UserCertFile, "r+b") as f:
+                self.certificate_chain = f.read()
+        else:
+            self.certificate_chain = None
 
         self._default_deadline = self.connection_spec.options.DefaultDeadline
 
@@ -226,9 +252,16 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         self,
         uri: Optional[str] = None,
         *,
-        root_certificates: Optional[str] = None,
+        root_certificates: Optional[Union[str, bytes]] = None,
+        private_key: Optional[Union[str, bytes]] = None,
+        certificate_chain: Optional[Union[str, bytes]] = None,
     ) -> None:
-        super().__init__(uri, root_certificates=root_certificates)
+        super().__init__(
+            uri,
+            root_certificates=root_certificates,
+            private_key=private_key,
+            certificate_chain=certificate_chain,
+        )
         self._is_reconnection_required = Event()
         self._reconnection_lock = Lock()
         self._esdb = self._connect()
@@ -336,12 +369,10 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     ) -> grpc.Channel:
         grpc_options = self.grpc_options + grpc_options
         if self.connection_spec.options.Tls is True:
-            if self.root_certificates is not None:
-                root_certificates = self.root_certificates.encode()
-            else:
-                root_certificates = None
             channel_credentials = grpc.ssl_channel_credentials(
-                root_certificates=root_certificates
+                root_certificates=self.root_certificates,
+                private_key=self.private_key,
+                certificate_chain=self.certificate_chain,
             )
             grpc_channel = grpc.secure_channel(
                 target=grpc_target,

@@ -30,6 +30,8 @@ VALID_CONNECTION_QUERY_STRING_FIELDS = [
     "DefaultDeadline",
     "KeepAliveInterval",
     "KeepAliveTimeout",
+    "UserCertFile",
+    "UserKeyFile",
 ]
 
 
@@ -51,6 +53,8 @@ class ConnectionOptions:
         self._set_DefaultDeadline(options)
         self._set_KeepAliveInterval(options)
         self._set_KeepAliveTimeout(options)
+        self._set_UserCertFile(options)
+        self._set_UserKeyFile(options)
 
     @staticmethod
     def _validate_field_names(options: Dict[str, Any]) -> None:
@@ -156,6 +160,20 @@ class ConnectionOptions:
         else:
             self._KeepAliveTimeout = int(_KeepAliveTimeout)
 
+    def _set_UserCertFile(self, options: Dict[str, Any]) -> None:
+        _UserCertFile = options.get("UserCertFile".upper())
+        if _UserCertFile is None:
+            self._UserCertFile: Optional[str] = None
+        else:
+            self._UserCertFile = str(_UserCertFile)
+
+    def _set_UserKeyFile(self, options: Dict[str, Any]) -> None:
+        _UserKeyFile = options.get("UserKeyFile".upper())
+        if _UserKeyFile is None:
+            self._UserKeyFile: Optional[str] = None
+        else:
+            self._UserKeyFile = str(_UserKeyFile)
+
     @property
     def Tls(self) -> bool:
         """
@@ -235,6 +253,20 @@ class ConnectionOptions:
         gRPC "keep alive timeout" (in milliseconds).
         """
         return self._KeepAliveTimeout
+
+    @property
+    def UserCertFile(self) -> Optional[str]:
+        """
+        Path to file containing user X.509 certificate.
+        """
+        return self._UserCertFile
+
+    @property
+    def UserKeyFile(self) -> Optional[str]:
+        """
+        Path to file containing user X.509 key.
+        """
+        return self._UserKeyFile
 
 
 class ConnectionSpec:
