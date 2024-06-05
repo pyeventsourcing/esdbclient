@@ -141,7 +141,7 @@ class BaseReadResponse:
         return None
 
 
-class AsyncioReadResponse(
+class AsyncReadResponse(
     BaseReadResponse, AsyncGrpcStreamer, AsyncIterator[RecordedEvent]
 ):
     def __init__(
@@ -197,14 +197,14 @@ class AsyncioReadResponse(
                 pass
             self._is_stopped = True
 
-    async def __aenter__(self) -> "AsyncioReadResponse":
+    async def __aenter__(self) -> "AsyncReadResponse":
         return self
 
     async def __aexit__(self, *args: Any, **kwargs: Any) -> None:
         await self.stop()
 
 
-class AsyncioCatchupSubscription(AsyncioReadResponse):
+class AsyncCatchupSubscription(AsyncReadResponse):
     def __init__(
         self,
         aio_call: grpc.aio.UnaryStreamCall[streams_pb2.ReadReq, streams_pb2.ReadResp],
@@ -227,7 +227,7 @@ class AsyncioCatchupSubscription(AsyncioReadResponse):
                 f"Expected subscription confirmation, got: {read_resp}"
             )
 
-    async def __aenter__(self) -> "AsyncioCatchupSubscription":
+    async def __aenter__(self) -> "AsyncCatchupSubscription":
         return self
 
 
@@ -756,7 +756,7 @@ class BaseStreamsService(ESDBService[TGrpcStreamers]):
         return streams_pb2.TombstoneReq(options=options)
 
 
-class AsyncioStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
+class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
     async def batch_append(
         self,
         stream_name: str,
@@ -806,7 +806,7 @@ class AsyncioStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioReadResponse:
+    ) -> AsyncReadResponse:
         """
         Signature for reading events from a stream.
         """
@@ -824,7 +824,7 @@ class AsyncioStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioCatchupSubscription:
+    ) -> AsyncCatchupSubscription:
         """
         Signature for reading events from a stream with a catch-up subscription.
         """
@@ -843,7 +843,7 @@ class AsyncioStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioReadResponse:
+    ) -> AsyncReadResponse:
         """
         Signature for reading all events.
         """
@@ -866,7 +866,7 @@ class AsyncioStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioCatchupSubscription:
+    ) -> AsyncCatchupSubscription:
         """
         Signature for reading all events with a catch-up subscription.
         """
@@ -892,7 +892,7 @@ class AsyncioStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> Union[AsyncioReadResponse, AsyncioCatchupSubscription]:
+    ) -> Union[AsyncReadResponse, AsyncCatchupSubscription]:
         """
         Constructs and sends a gRPC 'ReadReq' to the 'Read' rpc.
 
@@ -927,13 +927,13 @@ class AsyncioStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         )
 
         if not subscribe:
-            response = AsyncioReadResponse(
+            response = AsyncReadResponse(
                 aio_call=unary_stream_call,
                 stream_name=stream_name,
                 grpc_streamers=self._grpc_streamers,
             )
         else:
-            response = AsyncioCatchupSubscription(
+            response = AsyncCatchupSubscription(
                 aio_call=unary_stream_call,
                 stream_name=stream_name,
                 include_checkpoints=include_checkpoints,

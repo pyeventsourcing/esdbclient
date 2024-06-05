@@ -4,7 +4,7 @@ This [Python package](https://pypi.org/project/esdbclient/) provides multithread
 clients for the [EventStoreDB](https://www.eventstore.com/) database.
 
 The multithreaded `EventStoreDBClient` is described in detail below. Please scroll
-down for <a href="#asyncio-client">information</a> about `AsyncioEventStoreDBClient`.
+down for <a href="#asyncio-client">information</a> about `AsyncEventStoreDBClient`.
 
 These clients have been developed and are being maintained in a collaboration
 with the EventStoreDB team, and are officially support by Event Store Ltd.
@@ -3257,8 +3257,9 @@ the `grpc.aio` package and the `asyncio` module, instead of `grpc` and `threadin
 It supports both the "esdb" and the "esdb+discover" connection string URI schemes,
 and can connect to both "secure" and "insecure" EventStoreDB servers.
 
-The async function `AsyncioEventStoreDBClient` constructs the client and connects to
-EventStoreDB. It can be imported from `esdbclient`.
+The class `AsyncEventStoreDBClient` can be used to construct an instance of the
+asynchronous I/O gRPC Python client. It can be imported from `esdbclient`. The
+async method `connect()` should be called after constructing the client.
 
 The asyncio client has exactly the same methods as the multithreaded `EventStoreDBClient`.
 These methods are defined as `async def` methods, and so calls to these methods will
@@ -3268,10 +3269,10 @@ return values. The methods are similarly decorated with reconnect and retry deco
 that selectively reconnect and retry when connection issues or server errors are
 encountered.
 
-When awaited, the methods `read_all()` and `read_stream()` return an `AsyncioReadResponse`
+When awaited, the methods `read_all()` and `read_stream()` return an `AsyncReadResponse`
 object. The methods `subscribe_to_all()` and `subscribe_to_stream()` return an
-`AsyncioCatchupSubscription` object. The methods `read_subscription_to_all()` and
-`read_subscription_to_stream()` return an `AsyncioPersistentSubscription` object.
+`AsyncCatchupSubscription` object. The methods `read_subscription_to_all()` and
+`read_subscription_to_stream()` return an `AsyncPersistentSubscription` object.
 These objects are asyncio iterables, which you can iterate over with Python's `async for`
 syntax to obtain `RecordedEvent` objects. They are also asyncio context managers,
 supporting the `async with` syntax. They also have a `stop()` method which can be
@@ -3280,14 +3281,14 @@ to the server. When used as a context manager, the `stop()` method will be calle
 the context manager exits.
 
 The methods `read_subscription_to_all()` and `read_subscription_to_stream()` return
-instances of the class `AsyncioPersistentSubscription`, which has async methods `ack()`,
+instances of the class `AsyncPersistentSubscription`, which has async methods `ack()`,
 `nack()` that work in the same way as the methods on `PersistentSubscription`,
 supporting the acknowledgement and negative acknowledgement of recorded events that
 have been received from a persistent subscription. See above for details.
 
 ### Synopsis<a id="synopsis-1"></a>
 
-The example below demonstrates the `append_to_stream()`, `get_stream()` and
+The example below demonstrates the async `append_to_stream()`, `get_stream()` and
 `subscribe_to_all()` methods. These are the most useful methods for writing
 an event-sourced application, allowing new aggregate events to be recorded, the
 recorded events of an aggregate to be obtained so aggregates can be reconstructed,
@@ -3297,16 +3298,19 @@ semantics.
 ```python
 import asyncio
 
-from esdbclient import AsyncioEventStoreDBClient
+from esdbclient import AsyncEventStoreDBClient
 
 
-async def demonstrate_asyncio_client():
+async def demonstrate_async_client():
 
     # Construct client.
-    client = await AsyncioEventStoreDBClient(
+    client = AsyncEventStoreDBClient(
         uri=os.getenv("ESDB_URI"),
         root_certificates=os.getenv("ESDB_ROOT_CERTIFICATES"),
     )
+
+    # Connect to EventStoreDB.
+    await client.connect()
 
     # Append events.
     stream_name = str(uuid.uuid4())
@@ -3346,7 +3350,7 @@ async def demonstrate_asyncio_client():
 
 # Run the demo.
 asyncio.get_event_loop().run_until_complete(
-    demonstrate_asyncio_client()
+    demonstrate_async_client()
 )
 ```
 

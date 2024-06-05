@@ -235,7 +235,7 @@ class BaseProjectionsService(ESDBService[TGrpcStreamers]):
         )
 
 
-class AsyncioProjectionsService(BaseProjectionsService[AsyncGrpcStreamers]):
+class AsyncProjectionsService(BaseProjectionsService[AsyncGrpcStreamers]):
     async def create(
         self,
         query: str,

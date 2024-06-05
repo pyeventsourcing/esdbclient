@@ -17,6 +17,7 @@ from typing import (
     cast,
     overload,
 )
+from warnings import warn
 
 import grpc.aio
 from typing_extensions import Literal
@@ -52,7 +53,7 @@ from esdbclient.exceptions import (
     ServiceUnavailable,
 )
 from esdbclient.persistent import (
-    AsyncioPersistentSubscription,
+    AsyncPersistentSubscription,
     ConsumerStrategy,
     SubscriptionInfo,
 )
@@ -61,11 +62,7 @@ from esdbclient.projections import (
     ProjectionState,
     ProjectionStatistics,
 )
-from esdbclient.streams import (
-    AsyncioCatchupSubscription,
-    AsyncioReadResponse,
-    StreamState,
-)
+from esdbclient.streams import AsyncCatchupSubscription, AsyncReadResponse, StreamState
 
 _TCallable = TypeVar("_TCallable", bound=Callable[..., Any])
 
@@ -73,7 +70,7 @@ _TCallable = TypeVar("_TCallable", bound=Callable[..., Any])
 def autoreconnect(f: _TCallable) -> _TCallable:
     @wraps(f)
     async def autoreconnect_decorator(
-        client: "_AsyncioEventStoreDBClient", *args: Any, **kwargs: Any
+        client: "AsyncEventStoreDBClient", *args: Any, **kwargs: Any
     ) -> Any:
         try:
             return await f(client, *args, **kwargs)
@@ -123,12 +120,22 @@ def retrygrpc(f: _TCallable) -> _TCallable:
 async def AsyncioEventStoreDBClient(
     uri: str, root_certificates: Optional[Union[str, bytes]] = None
 ) -> "_AsyncioEventStoreDBClient":
+    warn(
+        (
+            "async function 'AsyncioEventStoreDBClient' is deprecated. "
+            "Instead, please construct an instance of class 'AsyncEventStoreDBClient' "
+            "and await a call to async method AsyncEventStoreDBClient.connect()."
+        ),
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     client = _AsyncioEventStoreDBClient(uri=uri, root_certificates=root_certificates)
     await client.connect()
     return client
 
 
-class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
+class AsyncEventStoreDBClient(BaseEventStoreDBClient):
     def __init__(
         self,
         uri: str,
@@ -314,7 +321,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioReadResponse:
+    ) -> AsyncReadResponse:
         """
         Reads recorded events in "all streams" in the database.
         """
@@ -399,7 +406,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioReadResponse:
+    ) -> AsyncReadResponse:
         """
         Reads recorded events from the named stream.
         """
@@ -485,7 +492,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioCatchupSubscription:
+    ) -> AsyncCatchupSubscription:
         """
         Starts a catch-up subscription, from which all
         recorded events in the database can be received.
@@ -516,7 +523,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioCatchupSubscription:
+    ) -> AsyncCatchupSubscription:
         """
         Signature to start catch-up subscription from the start of the stream.
         """
@@ -531,7 +538,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioCatchupSubscription:
+    ) -> AsyncCatchupSubscription:
         """
         Signature to start catch-up subscription from a particular stream position.
         """
@@ -546,7 +553,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioCatchupSubscription:
+    ) -> AsyncCatchupSubscription:
         """
         Signature to start catch-up subscription from the end of the stream.
         """
@@ -563,7 +570,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioCatchupSubscription:
+    ) -> AsyncCatchupSubscription:
         """
         Starts a catch-up subscription from which
         recorded events in a stream can be received.
@@ -936,7 +943,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         stopping_grace: float = DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioPersistentSubscription:
+    ) -> AsyncPersistentSubscription:
         """
         Reads a persistent subscription on all streams.
         """
@@ -964,7 +971,7 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
         stopping_grace: float = DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioPersistentSubscription:
+    ) -> AsyncPersistentSubscription:
         """
         Reads a persistent subscription on one stream.
         """
@@ -1636,8 +1643,12 @@ class _AsyncioEventStoreDBClient(BaseEventStoreDBClient):
                 await esdb_connection.close()
                 self._is_closed = True
 
-    async def __aenter__(self) -> "_AsyncioEventStoreDBClient":
+    async def __aenter__(self) -> "AsyncEventStoreDBClient":
         return self
 
     async def __aexit__(self, *args: Any, **kwargs: Any) -> None:
         await self.close()
+
+
+class _AsyncioEventStoreDBClient(AsyncEventStoreDBClient):
+    pass

@@ -60,7 +60,7 @@ class BaseGossipService(ESDBService[TGrpcStreamers]):
         return tuple(members)
 
 
-class AsyncioGossipService(BaseGossipService[AsyncGrpcStreamers]):
+class AsyncGossipService(BaseGossipService[AsyncGrpcStreamers]):
     async def read(
         self,
         timeout: Optional[float] = None,

@@ -171,7 +171,7 @@ class BaseSubscriptionReadReqs:
         return self._last_ack_batch_time + self._max_ack_delay - time.monotonic()
 
 
-class AsyncioSubscriptionReadReqs(
+class AsyncSubscriptionReadReqs(
     BaseSubscriptionReadReqs, AsyncIterator[persistent_pb2.ReadReq]
 ):
     def __init__(
@@ -202,7 +202,7 @@ class AsyncioSubscriptionReadReqs(
         self.errored: Optional[BaseException] = None
         self._batch_ids: List[UUID] = []
 
-    def __aiter__(self) -> "AsyncioSubscriptionReadReqs":
+    def __aiter__(self) -> "AsyncSubscriptionReadReqs":
         return self
 
     async def __anext__(self) -> persistent_pb2.ReadReq:
@@ -470,12 +470,12 @@ class BasePersistentSubscription:
     pass
 
 
-class AsyncioPersistentSubscription(
+class AsyncPersistentSubscription(
     AsyncIterator[RecordedEvent], BasePersistentSubscription, AsyncGrpcStreamer
 ):
     def __init__(
         self,
-        read_reqs: AsyncioSubscriptionReadReqs,
+        read_reqs: AsyncSubscriptionReadReqs,
         stream_stream_call: grpc.aio.StreamStreamCall[
             persistent_pb2.ReadReq, persistent_pb2.ReadResp
         ],
@@ -562,7 +562,7 @@ class AsyncioPersistentSubscription(
 
     async def __aenter__(
         self, *args: Any, **kwargs: Any
-    ) -> "AsyncioPersistentSubscription":
+    ) -> "AsyncPersistentSubscription":
         return self
 
     async def __aexit__(self, *args: Any, **kwargs: Any) -> None:
@@ -1238,7 +1238,7 @@ class BasePersistentSubscriptionsService(ESDBService[TGrpcStreamers]):
         )
 
 
-class AsyncioPersistentSubscriptionsService(
+class AsyncPersistentSubscriptionsService(
     BasePersistentSubscriptionsService[AsyncGrpcStreamers]
 ):
     @overload
@@ -1376,8 +1376,8 @@ class AsyncioPersistentSubscriptionsService(
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncioPersistentSubscription:
-        read_reqs = AsyncioSubscriptionReadReqs(
+    ) -> AsyncPersistentSubscription:
+        read_reqs = AsyncSubscriptionReadReqs(
             group_name=group_name,
             stream_name=stream_name,
             event_buffer_size=event_buffer_size,
@@ -1393,7 +1393,7 @@ class AsyncioPersistentSubscriptionsService(
         )
         assert isinstance(stream_stream_call, StreamStreamCall)
 
-        subscription = AsyncioPersistentSubscription(
+        subscription = AsyncPersistentSubscription(
             read_reqs=read_reqs,
             stream_stream_call=stream_stream_call,
             grpc_streamers=self._grpc_streamers,

@@ -4,13 +4,13 @@ import grpc.aio
 
 from esdbclient.common import AsyncGrpcStreamers, SyncGrpcStreamers
 from esdbclient.connection_spec import ConnectionSpec
-from esdbclient.gossip import AsyncioGossipService, GossipService
+from esdbclient.gossip import AsyncGossipService, GossipService
 from esdbclient.persistent import (
-    AsyncioPersistentSubscriptionsService,
+    AsyncPersistentSubscriptionsService,
     PersistentSubscriptionsService,
 )
-from esdbclient.projections import AsyncioProjectionsService, ProjectionsService
-from esdbclient.streams import AsyncioStreamsService, StreamsService
+from esdbclient.projections import AsyncProjectionsService, ProjectionsService
+from esdbclient.streams import AsyncStreamsService, StreamsService
 
 
 class ESDBConnection:
@@ -80,22 +80,22 @@ class AsyncioESDBConnection:
         self._grpc_channel = grpc_channel
         self._grpc_target = grpc_target
         self._grpc_streamers = AsyncGrpcStreamers()
-        self.streams = AsyncioStreamsService(
+        self.streams = AsyncStreamsService(
             grpc_channel,
             connection_spec=connection_spec,
             grpc_streamers=self._grpc_streamers,
         )
-        self.persistent_subscriptions = AsyncioPersistentSubscriptionsService(
+        self.persistent_subscriptions = AsyncPersistentSubscriptionsService(
             grpc_channel,
             connection_spec=connection_spec,
             grpc_streamers=self._grpc_streamers,
         )
-        self.gossip = AsyncioGossipService(
+        self.gossip = AsyncGossipService(
             grpc_channel,
             connection_spec=connection_spec,
             grpc_streamers=self._grpc_streamers,
         )
-        self.projections = AsyncioProjectionsService(
+        self.projections = AsyncProjectionsService(
             grpc_channel,
             connection_spec=connection_spec,
             grpc_streamers=self._grpc_streamers,
