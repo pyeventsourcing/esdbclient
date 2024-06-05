@@ -3357,7 +3357,7 @@ asyncio.run(
 
 ### FastAPI example<a id="fastapi"></a>
 
-The example below shows how to use `AsyncEventStoreDBClient` with FastAPI.
+The example below shows how to use `AsyncEventStoreDBClient` with [FastAPI](https://fastapi.tiangolo.com).
 
 ```python
 from contextlib import asynccontextmanager
