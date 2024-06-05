@@ -3349,7 +3349,7 @@ async def demonstrate_async_client():
 
 
 # Run the demo.
-asyncio.get_event_loop().run_until_complete(
+asyncio.run(
     demonstrate_async_client()
 )
 ```
