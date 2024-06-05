@@ -364,8 +364,8 @@ from esdbclient import EventStoreDBClient
 
 ### Construct client<a id="construct-client"></a>
 
-The `EventStoreDBClient` class has one required constructor argument, `uri`, and one
-optional constructor argument, `root_certificates`.
+The `EventStoreDBClient` class has one required constructor argument, `uri`, and three
+optional constructor argument, `root_certificates`, `private_key`, and `certificate_chain`.
 
 The `uri` argument is expected to be an EventStoreDB connection string URI that
 conforms with the standard EventStoreDB "esdb" or "esdb+discover" URI schemes.
@@ -374,20 +374,36 @@ The client must be configured to create a "secure" connection to a "secure" serv
 or alternatively an "insecure" connection to an "insecure" server. By default, the
 client will attempt to create a "secure" connection. And so, when connecting to an
 "insecure" server, the connection string must specify that the client should attempt
-to make an "insecure" connection.
+to make an "insecure" connection by using the URI query string field-value `Tls=false`.
 
-When connecting to a "secure" server, it may be necessary to set the optional `root_certificates`
-argument. The optional `root_certificates` argument is a Python `str` containing
-PEM encoded SSL/TLS root certificates. This value is passed directly to
-`grpc.ssl_channel_credentials()` and is used by the client to authenticate the server.
-It is commonly a public certificate of the certificate authority that was responsible
-for generating the certificate used by the EventStoreDB server. Often it is unnecessary
-to provide these certificates explicitly, as they are commonly installed locally in
-a default location such that the Python grpc library can pick them up. Alternatively,
-for development, you can use the server's certificate itself.
+The optional `root_certificates` argument can be either a Python `str` or a Python `bytes`
+object containing PEM encoded SSL/TLS certificate(s), and is used by to authenticate the
+server to the client. When connecting to an "insecure" service, the value of this
+argument will be ignored. When connecting to a "secure" server, it may be necessary to
+set this argument.  Typically, the value of this argument would be the public certificate
+of the certificate authority that was responsible for generating the certificate used by
+the EventStoreDB server. It is unnecessary to set this value in this case if certificate
+authority certificates are installed locally, such that the Python grpc library can pick
+them up from a default location. Alternatively, for development, you can use the server's
+certificate itself. The value of this argument is passed directly to `grpc.ssl_channel_credentials()`.
 
-In the example below, the constructor argument values are taken from the operating
-system environment.
+The optional `private_key` and `certificate_chain` arguments are both either a Python
+`str` or a Python `bytes` object. These arguments may be used to authenticate the client
+to the server. It is necessary to provide correct values for these arguments when connecting
+to a "secure" server that is running the commercial edition of EventStoreDB with the
+User Certificates plugin enabled. The value of `private_key` should be the X.509 user
+certificate's private key in PEM format. The value of `certificate_chain` should be the
+X.509 user certificate itself in PEM format. The values of these arguments are passed
+directly to `grpc.ssl_channel_credentials()`. When connecting to an "insecure" service,
+the values of these arguments will be ignored. Please note, an alternative way of
+supplying the client with a user certificate and private key is to use the `UserCertFile`
+and `UserKeyFile` field-values of the connection string URI query string (see below).
+If the `UserCertFile` field-value is specified, the `certificate_chain` argument will be
+ignored. If the `UserKeyFile` field-value is specified, the `public_key` argument will be
+ignored.
+
+In the example below, constructor argument values for `uri` and `root_certificates` are
+taken from the operating system environment.
 
 ```python
 import os
