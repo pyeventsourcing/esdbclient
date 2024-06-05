@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import asyncio
 import json
 import sys
@@ -119,7 +121,7 @@ def retrygrpc(f: _TCallable) -> _TCallable:
 
 async def AsyncioEventStoreDBClient(
     uri: str, root_certificates: Optional[Union[str, bytes]] = None
-) -> "_AsyncioEventStoreDBClient":
+) -> _AsyncioEventStoreDBClient:
     warn(
         (
             "async function 'AsyncioEventStoreDBClient' is deprecated. "
@@ -1643,7 +1645,7 @@ class AsyncEventStoreDBClient(BaseEventStoreDBClient):
                 await esdb_connection.close()
                 self._is_closed = True
 
-    async def __aenter__(self) -> "AsyncEventStoreDBClient":
+    async def __aenter__(self) -> AsyncEventStoreDBClient:
         return self
 
     async def __aexit__(self, *args: Any, **kwargs: Any) -> None:

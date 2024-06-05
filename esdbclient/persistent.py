@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import asyncio
 import queue
 import time
@@ -202,7 +204,7 @@ class AsyncSubscriptionReadReqs(
         self.errored: Optional[BaseException] = None
         self._batch_ids: List[UUID] = []
 
-    def __aiter__(self) -> "AsyncSubscriptionReadReqs":
+    def __aiter__(self) -> AsyncSubscriptionReadReqs:
         return self
 
     async def __anext__(self) -> persistent_pb2.ReadReq:
@@ -562,7 +564,7 @@ class AsyncPersistentSubscription(
 
     async def __aenter__(
         self, *args: Any, **kwargs: Any
-    ) -> "AsyncPersistentSubscription":
+    ) -> AsyncPersistentSubscription:
         return self
 
     async def __aexit__(self, *args: Any, **kwargs: Any) -> None:
@@ -679,7 +681,7 @@ class PersistentSubscription(
             self._grpc_streamers.pop(id(self))
             self._is_stopped = True
 
-    def __enter__(self, *args: Any, **kwargs: Any) -> "PersistentSubscription":
+    def __enter__(self, *args: Any, **kwargs: Any) -> PersistentSubscription:
         return self
 
     def __exit__(self, *args: Any, **kwargs: Any) -> None:

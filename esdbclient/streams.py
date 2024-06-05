@@ -197,7 +197,7 @@ class AsyncReadResponse(
                 pass
             self._is_stopped = True
 
-    async def __aenter__(self) -> "AsyncReadResponse":
+    async def __aenter__(self) -> AsyncReadResponse:
         return self
 
     async def __aexit__(self, *args: Any, **kwargs: Any) -> None:
@@ -227,7 +227,7 @@ class AsyncCatchupSubscription(AsyncReadResponse):
                 f"Expected subscription confirmation, got: {read_resp}"
             )
 
-    async def __aenter__(self) -> "AsyncCatchupSubscription":
+    async def __aenter__(self) -> AsyncCatchupSubscription:
         return self
 
 
@@ -244,7 +244,7 @@ class ReadResponse(Iterator[RecordedEvent], BaseReadResponse, SyncGrpcStreamer):
         self._grpc_streamers = grpc_streamers
         self._grpc_streamers[id(self)] = self
 
-    def __iter__(self) -> "ReadResponse":
+    def __iter__(self) -> ReadResponse:
         return self
 
     def __next__(self) -> RecordedEvent:
@@ -282,7 +282,7 @@ class ReadResponse(Iterator[RecordedEvent], BaseReadResponse, SyncGrpcStreamer):
                 pass
             self._is_stopped = True
 
-    def __enter__(self) -> "ReadResponse":
+    def __enter__(self) -> ReadResponse:
         return self
 
     def __exit__(self, *args: Any, **kwargs: Any) -> None:
@@ -324,7 +324,7 @@ class CatchupSubscription(ReadResponse):
             self.stop()
             raise
 
-    def __enter__(self) -> "CatchupSubscription":
+    def __enter__(self) -> CatchupSubscription:
         return self
 
 

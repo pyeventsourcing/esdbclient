@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import json
 import random
 import sys
@@ -1860,7 +1862,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
                 esdb_connection.close()
                 self._is_closed = True
 
-    def __enter__(self) -> "EventStoreDBClient":
+    def __enter__(self) -> EventStoreDBClient:
         return self
 
     def __exit__(self, *args: Any, **kwargs: Any) -> None:
