@@ -16,7 +16,6 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.7",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python",
@@ -27,7 +26,7 @@ repository = "https://github.com/pyeventsourcing/esdbclient"
 include = ["esdbclient/py.typed"]
 
 [tool.poetry.dependencies]
-python = ">=3.7,<4.0"
+python = ">=3.8,<4.0"
 grpcio = ">=1.51.0,!=1.52.*"  # 1.52.0 hangs on fork
 protobuf = ">=3.11.0"
 #protobuf = "^4.21.0"
