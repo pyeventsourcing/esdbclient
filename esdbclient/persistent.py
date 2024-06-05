@@ -71,15 +71,15 @@ from esdbclient.protos.Grpc import persistent_pb2, persistent_pb2_grpc, shared_p
 @runtime_checkable
 class _ReadResps(Iterator[persistent_pb2.ReadResp], Protocol):
     @abstractmethod
-    def cancel(self) -> None:
-        ...  # pragma: no cover
+    def cancel(self) -> None:  # pragma: no cover
+        ...
 
 
 @runtime_checkable
 class _AsyncioReadResps(Iterator[persistent_pb2.ReadResp], Protocol):
     @abstractmethod
-    async def cancel(self) -> None:
-        ...  # pragma: no cover
+    async def cancel(self) -> None:  # pragma: no cover
+        ...
 
 
 ConsumerStrategy = Literal[

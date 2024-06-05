@@ -62,8 +62,8 @@ from esdbclient.protos.Grpc import shared_pb2, status_pb2, streams_pb2, streams_
 @runtime_checkable
 class _ReadResps(Iterator[streams_pb2.ReadResp], Protocol):
     @abstractmethod
-    def cancel(self) -> None:
-        ...  # pragma: no cover
+    def cancel(self) -> None:  # pragma: no cover
+        ...
 
 
 # @runtime_checkable
