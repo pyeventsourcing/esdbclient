@@ -34,7 +34,7 @@ protobuf = ">=3.11.0"
 typing_extensions = "*"
 
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 black = { version = "*", allow-prereleases = true }
 flake8 = "*"
 flake8-broken-line = "*"
@@ -52,7 +52,7 @@ types-protobuf = "*"
 mypy-protobuf = "*"
 async-case = {version = "^10.1.0", python = "<=3.8"}
 coverage = "^7.2.7"
-
+fastapi = "^0.111.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

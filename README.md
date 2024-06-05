@@ -90,6 +90,7 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
   * [Close](#close)
 * [Asyncio client](#asyncio-client)
   * [Synopsis](#synopsis-1)
+  * [FastAPI](#fastapi)
 * [Notes](#notes)
   * [Regular expression filters](#regular-expression-filters)
   * [Reconnect and retry method decorators](#reconnect-and-retry-method-decorators)
@@ -3353,6 +3354,50 @@ asyncio.run(
     demonstrate_async_client()
 )
 ```
+
+### FastAPI example<a id="fastapi"></a>
+
+The example below shows how to use `AsyncEventStoreDBClient` with FastAPI.
+
+```python
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
+from esdbclient import AsyncEventStoreDBClient
+
+
+client: AsyncEventStoreDBClient
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    # Construct the client.
+    global client
+    client = AsyncEventStoreDBClient(
+        uri="esdb+discover://localhost:2113?Tls=false",
+    )
+    await client.connect()
+
+    yield
+
+    # Close the client.
+    await client.close()
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/commit_position")
+async def commit_position():
+    commit_position = await client.get_commit_position()
+    return {"commit_position": commit_position}
+```
+
+If you put this code in a file called `fastapi_example.py` and then run command
+`uvicorn fastapi_example:app --host 0.0.0.0 --port 80`, then the FastAPI application
+will return something like `{"commit_position":628917}` when a browser is pointed
+to `http://localhost/commit_position`. Use Ctrl-c to exit the process.
 
 ## Notes<a id="notes"></a>
 
