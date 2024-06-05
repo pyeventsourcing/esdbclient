@@ -163,17 +163,17 @@ class BaseProjectionsService(ESDBService[TGrpcStreamers]):
             ),
         )
 
-    @staticmethod
-    def _construct_result_req(
-        name: str,
-        partition: str,
-    ) -> projections_pb2.ResultReq:
-        return projections_pb2.ResultReq(
-            options=projections_pb2.ResultReq.Options(
-                name=name,
-                partition=partition,
-            ),
-        )
+    # @staticmethod
+    # def _construct_result_req(
+    #     name: str,
+    #     partition: str,
+    # ) -> projections_pb2.ResultReq:
+    #     return projections_pb2.ResultReq(
+    #         options=projections_pb2.ResultReq.Options(
+    #             name=name,
+    #             partition=partition,
+    #         ),
+    #     )
 
     def _extract_value(self, value: struct_pb2.Value) -> Any:
         # message Value {
@@ -437,30 +437,30 @@ class AsyncProjectionsService(BaseProjectionsService[AsyncGrpcStreamers]):
         value = self._extract_value(state_resp.state)
         return ProjectionState(value=value)
 
-    async def get_result(
-        self,
-        name: str,
-        partition: str,
-        timeout: Optional[float] = None,
-        metadata: Optional[Metadata] = None,
-        credentials: Optional[grpc.CallCredentials] = None,
-    ) -> ProjectionResult:
-        result_req = self._construct_result_req(
-            name=name,
-            partition=partition,
-        )
-        try:
-            result_resp = await self._stub.Result(
-                result_req,
-                timeout=timeout,
-                metadata=self._metadata(metadata, requires_leader=True),
-                credentials=credentials,
-            )
-        except grpc.RpcError as e:
-            raise handle_rpc_error(e) from None
-        assert isinstance(result_resp, projections_pb2.ResultResp)
-        value = self._extract_value(result_resp.result)
-        return ProjectionResult(value=value)
+    # async def get_result(
+    #     self,
+    #     name: str,
+    #     partition: str,
+    #     timeout: Optional[float] = None,
+    #     metadata: Optional[Metadata] = None,
+    #     credentials: Optional[grpc.CallCredentials] = None,
+    # ) -> ProjectionResult:
+    #     result_req = self._construct_result_req(
+    #         name=name,
+    #         partition=partition,
+    #     )
+    #     try:
+    #         result_resp = await self._stub.Result(
+    #             result_req,
+    #             timeout=timeout,
+    #             metadata=self._metadata(metadata, requires_leader=True),
+    #             credentials=credentials,
+    #         )
+    #     except grpc.RpcError as e:
+    #         raise handle_rpc_error(e) from None
+    #     assert isinstance(result_resp, projections_pb2.ResultResp)
+    #     value = self._extract_value(result_resp.result)
+    #     return ProjectionResult(value=value)
 
     async def restart_subsystem(
         self,
@@ -686,30 +686,30 @@ class ProjectionsService(BaseProjectionsService[SyncGrpcStreamers]):
         value = self._extract_value(state_resp.state)
         return ProjectionState(value=value)
 
-    def get_result(
-        self,
-        name: str,
-        partition: str,
-        timeout: Optional[float] = None,
-        metadata: Optional[Metadata] = None,
-        credentials: Optional[grpc.CallCredentials] = None,
-    ) -> ProjectionResult:
-        result_req = self._construct_result_req(
-            name=name,
-            partition=partition,
-        )
-        try:
-            result_resp = self._stub.Result(
-                result_req,
-                timeout=timeout,
-                metadata=self._metadata(metadata, requires_leader=True),
-                credentials=credentials,
-            )
-        except grpc.RpcError as e:
-            raise handle_rpc_error(e) from None
-        assert isinstance(result_resp, projections_pb2.ResultResp)
-        value = self._extract_value(result_resp.result)
-        return ProjectionResult(value=value)
+    # def get_result(
+    #     self,
+    #     name: str,
+    #     partition: str,
+    #     timeout: Optional[float] = None,
+    #     metadata: Optional[Metadata] = None,
+    #     credentials: Optional[grpc.CallCredentials] = None,
+    # ) -> ProjectionResult:
+    #     result_req = self._construct_result_req(
+    #         name=name,
+    #         partition=partition,
+    #     )
+    #     try:
+    #         result_resp = self._stub.Result(
+    #             result_req,
+    #             timeout=timeout,
+    #             metadata=self._metadata(metadata, requires_leader=True),
+    #             credentials=credentials,
+    #         )
+    #     except grpc.RpcError as e:
+    #         raise handle_rpc_error(e) from None
+    #     assert isinstance(result_resp, projections_pb2.ResultResp)
+    #     value = self._extract_value(result_resp.result)
+    #     return ProjectionResult(value=value)
 
     def restart_subsystem(
         self,

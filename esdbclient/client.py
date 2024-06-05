@@ -74,8 +74,7 @@ from esdbclient.persistent import (
     PersistentSubscription,
     SubscriptionInfo,
 )
-from esdbclient.projections import (
-    ProjectionResult,
+from esdbclient.projections import (  # ProjectionResult,
     ProjectionState,
     ProjectionStatistics,
 )
@@ -1808,27 +1807,27 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             credentials=credentials or self._call_credentials,
         )
 
-    @retrygrpc
-    @autoreconnect
-    def get_projection_result(
-        self,
-        name: str,
-        *,
-        timeout: Optional[float] = None,
-        credentials: Optional[grpc.CallCredentials] = None,
-    ) -> ProjectionResult:
-        """
-        Gets projection result.
-        """
-        timeout = timeout if timeout is not None else self._default_deadline
-
-        return self._esdb.projections.get_result(
-            name=name,
-            partition="",
-            timeout=timeout,
-            metadata=self._call_metadata,
-            credentials=credentials or self._call_credentials,
-        )
+    # @retrygrpc
+    # @autoreconnect
+    # def get_projection_result(
+    #     self,
+    #     name: str,
+    #     *,
+    #     timeout: Optional[float] = None,
+    #     credentials: Optional[grpc.CallCredentials] = None,
+    # ) -> ProjectionResult:
+    #     """
+    #     Gets projection result.
+    #     """
+    #     timeout = timeout if timeout is not None else self._default_deadline
+    #
+    #     return self._esdb.projections.get_result(
+    #         name=name,
+    #         partition="",
+    #         timeout=timeout,
+    #         metadata=self._call_metadata,
+    #         credentials=credentials or self._call_credentials,
+    #     )
 
     @retrygrpc
     @autoreconnect

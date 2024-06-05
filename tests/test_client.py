@@ -6436,32 +6436,32 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         state = self.client.get_projection_state(name=projection_name)
         self.assertEqual(state.value, {})
 
-    def test_get_projection_result(self) -> None:
-        self.construct_esdb_client()
-        projection_name = str(uuid4())
-
-        # Raises NotFound unless projection exists.
-        with self.assertRaises(NotFound):
-            self.client.get_projection_result(name=projection_name)
-
-        # Create named projection.
-        self.client.create_projection(query="", name=projection_name)
-
-        # Try to get projection result.
-        # Todo: Why does this just hang?
-        with self.assertRaises(DeadlineExceeded):
-            self.client.get_projection_result(name=projection_name, timeout=1)
-
-        # Create named projection.
-        projection_name = str(uuid4())
-        self.client.create_projection(
-            query=PROJECTION_QUERY_TEMPLATE1 % ("app-" + projection_name),
-            name=projection_name,
-        )
-
-        # Get projection result.
-        state = self.client.get_projection_result(name=projection_name)
-        self.assertEqual(state.value, {})
+    # def test_get_projection_result(self) -> None:
+    #     self.construct_esdb_client()
+    #     projection_name = str(uuid4())
+    #
+    #     # Raises NotFound unless projection exists.
+    #     with self.assertRaises(NotFound):
+    #         self.client.get_projection_result(name=projection_name)
+    #
+    #     # Create named projection.
+    #     self.client.create_projection(query="", name=projection_name)
+    #
+    #     # Try to get projection result.
+    #     # Todo: Why does this just hang?
+    #     with self.assertRaises(DeadlineExceeded):
+    #         self.client.get_projection_result(name=projection_name, timeout=1)
+    #
+    #     # Create named projection.
+    #     projection_name = str(uuid4())
+    #     self.client.create_projection(
+    #         query=PROJECTION_QUERY_TEMPLATE1 % ("app-" + projection_name),
+    #         name=projection_name,
+    #     )
+    #
+    #     # Get projection result.
+    #     state = self.client.get_projection_result(name=projection_name)
+    #     self.assertEqual(state.value, {})
 
     def test_restart_projections_subsystem(self) -> None:
         self.construct_esdb_client()
@@ -6551,8 +6551,9 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
 
         # Check projection result.
         # Todo: What's the actual difference between "state" and "result"?
-        result = self.client.get_projection_result(projection_name)
-        self.assertEqual(2, result.value["count"])
+        #  Ans: nothing, at the moment.
+        # result = self.client.get_projection_result(projection_name)
+        # self.assertEqual(2, result.value["count"])
 
         # Check project result stream.
         result_stream_name = f"$projections-{projection_name}-result"
@@ -6590,8 +6591,8 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
 
         state = self.client.get_projection_state(projection_name)
         self.assertIn("count", state.value)
-        result = self.client.get_projection_result(projection_name)
-        self.assertIn("count", result.value)
+        # result = self.client.get_projection_result(projection_name)
+        # self.assertIn("count", result.value)
 
         # Can't delete whilst running.
         with self.assertRaises(OperationFailed):
@@ -6611,8 +6612,8 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         # Check projection still has state.
         state = self.client.get_projection_state(projection_name)
         self.assertIn("count", state.value)
-        result = self.client.get_projection_result(projection_name)
-        self.assertIn("count", result.value)
+        # result = self.client.get_projection_result(projection_name)
+        # self.assertIn("count", result.value)
 
         # Reset whilst stopped is effective (loses state)?
         self.client.reset_projection(name=projection_name)
@@ -6623,8 +6624,8 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
 
         state = self.client.get_projection_state(projection_name)
         self.assertNotIn("count", state.value)
-        result = self.client.get_projection_result(projection_name)
-        self.assertNotIn("count", result.value)
+        # result = self.client.get_projection_result(projection_name)
+        # self.assertNotIn("count", result.value)
 
         # Can enable after reset.
         self.client.enable_projection(name=projection_name)
@@ -6660,8 +6661,8 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         with self.assertRaises(NotFound):
             self.client.get_projection_state(projection_name)
 
-        with self.assertRaises(NotFound):
-            self.client.get_projection_result(projection_name)
+        # with self.assertRaises(NotFound):
+        #     self.client.get_projection_result(projection_name)
 
         with self.assertRaises(NotFound):
             self.client.enable_projection(projection_name)

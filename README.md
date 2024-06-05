@@ -75,7 +75,6 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 * [Projections](#projections)
   * [Create projection](#create-projection)
   * [Get projection state](#get-projection-state)
-  * [Get projection result](#get-projection-result)
   * [Get projection statistics](#get-projection-statistics)
   * [Update projection](#update-projection)
   * [Enable projection](#enable-projection)
@@ -2941,9 +2940,9 @@ and subscribe to the "result" stream, with the `get_stream()`, or `read_stream()
 or `subscribe_to_stream()`, or `create_subscription_to_stream()` and
 `read_subscription_to_stream()` methods.
 
-If your projections doesn't call `outputState()`, then you won't be able to read or
+If your projection does not call `outputState()`, then you won't be able to read or
 subscribe to a "result" stream, but you will still be able to get the projection
-"result" using the `get_projection_result()` method.
+"state" using the `get_projection_state()` method.
 
 The "type" string of events recorded in "result" streams is `'Result'`. You may want to
 include this in a `filter_exclude` argument when filtering events by type whilst reading
@@ -2986,32 +2985,6 @@ sleep(1)  # allow time for projection to process recorded events
 projection_state = client.get_projection_state(name=projection_name)
 
 assert projection_state.value == {'count': 3}
-```
-
-### Get projection result<a id="get-projection-result"></a>
-
-The `get_projection_result()` method can be used to get a projection's "result".
-
-A projection's "result" holds the same data as the projections "state".
-
-This method has a required `name` argument, which is a Python `str` that
-specifies the name of a projection.
-
-This method also has two optional arguments, `timeout` and `credentials`.
-
-The optional `timeout` argument is a Python `float` which sets a
-maximum duration, in seconds, for the completion of the gRPC operation.
-
-The optional `credentials` argument can be used to
-override call credentials derived from the connection string URI.
-
-In the example below, the projection "result" is obtained.
-We can see that the projection has processed three events.
-
-```python
-projection_result = client.get_projection_result(name=projection_name)
-
-assert projection_result.value == {'count': 3}
 ```
 
 ### Get projection statistics<a id="get-projection-statistics"></a>

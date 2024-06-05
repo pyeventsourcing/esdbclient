@@ -2720,31 +2720,31 @@ class TestAsyncEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         state = await self.client.get_projection_state(name=projection_name, timeout=1)
         self.assertEqual(state.value, {})
 
-    async def test_get_projection_result(self) -> None:
-        projection_name = str(uuid4())
-
-        # Raises NotFound unless projection exists.
-        with self.assertRaises(NotFound):
-            await self.client.get_projection_result(name=projection_name)
-
-        # Create named projection.
-        await self.client.create_projection(query="", name=projection_name)
-
-        # Try to get projection result.
-        # Todo: Why does this just hang?
-        with self.assertRaises(DeadlineExceeded):
-            await self.client.get_projection_result(name=projection_name, timeout=1)
-
-        # Create named projection.
-        projection_name = str(uuid4())
-        await self.client.create_projection(
-            query=PROJECTION_QUERY_TEMPLATE1 % ("app-" + projection_name),
-            name=projection_name,
-        )
-
-        # Get projection result.
-        state = await self.client.get_projection_result(name=projection_name)
-        self.assertEqual(state.value, {})
+    # async def test_get_projection_result(self) -> None:
+    #     projection_name = str(uuid4())
+    #
+    #     # Raises NotFound unless projection exists.
+    #     with self.assertRaises(NotFound):
+    #         await self.client.get_projection_result(name=projection_name)
+    #
+    #     # Create named projection.
+    #     await self.client.create_projection(query="", name=projection_name)
+    #
+    #     # Try to get projection result.
+    #     # Todo: Why does this just hang?
+    #     with self.assertRaises(DeadlineExceeded):
+    #         await self.client.get_projection_result(name=projection_name, timeout=1)
+    #
+    #     # Create named projection.
+    #     projection_name = str(uuid4())
+    #     await self.client.create_projection(
+    #         query=PROJECTION_QUERY_TEMPLATE1 % ("app-" + projection_name),
+    #         name=projection_name,
+    #     )
+    #
+    #     # Get projection result.
+    #     state = await self.client.get_projection_result(name=projection_name)
+    #     self.assertEqual(state.value, {})
 
     async def test_restart_projections_subsystem(self) -> None:
         await self.client.restart_projections_subsystem()
@@ -2833,8 +2833,9 @@ class TestAsyncEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         # Check projection result.
         # Todo: What's the actual difference between "state" and "result"?
-        result = await self.client.get_projection_result(name=projection_name)
-        self.assertEqual(2, result.value["count"])
+        #  Ans: nothing, at the moment.
+        # result = await self.client.get_projection_result(name=projection_name)
+        # self.assertEqual(2, result.value["count"])
 
         # Check project result stream.
         result_stream_name = f"$projections-{projection_name}-result"
@@ -2936,8 +2937,8 @@ class TestAsyncEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         with self.assertRaises(NotFound):
             await self.client.get_projection_state(projection_name)
 
-        with self.assertRaises(NotFound):
-            await self.client.get_projection_result(projection_name)
+        # with self.assertRaises(NotFound):
+        #     await self.client.get_projection_result(projection_name)
 
         with self.assertRaises(NotFound):
             await self.client.enable_projection(projection_name)
