@@ -6480,7 +6480,8 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         .when({
           $init: function(){
             return {
-              count: 0
+              count: 0,
+              list: [null, "2.10", true]
             };
           },
           SomethingHappened: function(s,e){
@@ -6548,6 +6549,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         # Check projection state.
         state = self.client.get_projection_state(projection_name)
         self.assertEqual(2, state.value["count"])
+        self.assertEqual([None, "2.10", True], state.value["list"])
 
         # Check projection result.
         # Todo: What's the actual difference between "state" and "result"?
@@ -6562,8 +6564,14 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         self.assertEqual("Result", result_events[0].type)
         self.assertEqual("Result", result_events[1].type)
 
-        self.assertEqual({"count": 1}, json.loads(result_events[0].data))
-        self.assertEqual({"count": 2}, json.loads(result_events[1].data))
+        self.assertEqual(
+            {"count": 1, "list": [None, "2.10", True]},
+            json.loads(result_events[0].data),
+        )
+        self.assertEqual(
+            {"count": 2, "list": [None, "2.10", True]},
+            json.loads(result_events[1].data),
+        )
 
         self.assertEqual(
             str(application_events[0].id),

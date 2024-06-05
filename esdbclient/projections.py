@@ -195,18 +195,20 @@ class BaseProjectionsService(ESDBService[TGrpcStreamers]):
         # }
         kind_oneof = value.WhichOneof("kind")
         if kind_oneof == "null_value":
-            return None  # pragma: no cover
+            return None
         elif kind_oneof == "number_value":
             return value.number_value
         elif kind_oneof == "string_value":
-            return value.string_value  # pragma: no cover
+            return value.string_value
         elif kind_oneof == "bool_value":
-            return value.bool_value  # pragma: no cover
+            return value.bool_value
         elif kind_oneof == "struct_value":
             fields = value.struct_value.fields
             return {f: self._extract_value(fields[f]) for f in fields}
-        elif kind_oneof == "list_value":  # pragma: no cover
+        elif kind_oneof == "list_value":
             return [self._extract_value(v) for v in value.list_value.values]
+        else:  # pragma: no cover
+            raise ValueError(f"Unsupported kind of value '{kind_oneof}': {value}")
 
     @staticmethod
     def _construct_projection_statistics(
