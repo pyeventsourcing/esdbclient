@@ -69,6 +69,9 @@ last = datetime.datetime.now()
 
 EVENTSTORE_DOCKER_IMAGE = os.environ.get("EVENTSTORE_DOCKER_IMAGE", "24.2")
 
+# os.environ["GRPC_VERBOSITY"] = "debug"
+# os.environ["GRPC_TRACE"] = "all"
+
 
 def get_elapsed_time() -> str:
     global last

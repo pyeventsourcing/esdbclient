@@ -31,9 +31,9 @@ from esdbclient.common import (
     AsyncGrpcStreamer,
     AsyncGrpcStreamers,
     ESDBService,
+    GrpcStreamer,
+    GrpcStreamers,
     Metadata,
-    SyncGrpcStreamer,
-    SyncGrpcStreamers,
     TGrpcStreamers,
     construct_filter_exclude_regex,
     construct_filter_include_regex,
@@ -150,12 +150,12 @@ class AsyncReadResponse(
         stream_name: Optional[str],
         grpc_streamers: AsyncGrpcStreamers,
     ):
-        super().__init__(stream_name=stream_name)
-        self._is_stopped = False
+        BaseReadResponse.__init__(self, stream_name=stream_name)
+        AsyncGrpcStreamer.__init__(self)
         self.aio_call = aio_call
         self.read_resp_iter = aio_call.__aiter__()
         self._grpc_streamers = grpc_streamers
-        self._grpc_streamers[id(self)] = self
+        self._grpc_streamers.add(self)
 
     def __aiter__(self) -> AsyncIterator[RecordedEvent]:
         return self
@@ -189,13 +189,9 @@ class AsyncReadResponse(
             return read_resp
 
     async def stop(self) -> None:
-        if not self._is_stopped:
+        if not await self._set_is_stopped():
             self.aio_call.cancel()
-            try:
-                self._grpc_streamers.pop(id(self))
-            except KeyError:  # pragma: no cover
-                pass
-            self._is_stopped = True
+            self._grpc_streamers.remove(self)
 
     async def __aenter__(self) -> AsyncReadResponse:
         return self
@@ -231,18 +227,18 @@ class AsyncCatchupSubscription(AsyncReadResponse):
         return self
 
 
-class ReadResponse(Iterator[RecordedEvent], BaseReadResponse, SyncGrpcStreamer):
+class ReadResponse(Iterator[RecordedEvent], BaseReadResponse, GrpcStreamer):
     def __init__(
         self,
         read_resps: _ReadResps,
         stream_name: Optional[str],
-        grpc_streamers: SyncGrpcStreamers,
+        grpc_streamers: GrpcStreamers,
     ):
-        super().__init__(stream_name=stream_name)
-        self._is_stopped = False
+        BaseReadResponse.__init__(self, stream_name=stream_name)
+        GrpcStreamer.__init__(self)
         self._read_resps = read_resps
         self._grpc_streamers = grpc_streamers
-        self._grpc_streamers[id(self)] = self
+        self._grpc_streamers.add(self)
 
     def __iter__(self) -> ReadResponse:
         return self
@@ -274,13 +270,9 @@ class ReadResponse(Iterator[RecordedEvent], BaseReadResponse, SyncGrpcStreamer):
             return read_resp
 
     def stop(self) -> None:
-        if not self._is_stopped:
+        if not self._set_is_stopped():
             self._read_resps.cancel()
-            try:
-                self._grpc_streamers.pop(id(self))
-            except KeyError:  # pragma: no cover
-                pass
-            self._is_stopped = True
+            self._grpc_streamers.remove(self)
 
     def __enter__(self) -> ReadResponse:
         return self
@@ -298,7 +290,7 @@ class CatchupSubscription(ReadResponse):
         self,
         read_resps: _ReadResps,
         stream_name: Optional[str],
-        grpc_streamers: SyncGrpcStreamers,
+        grpc_streamers: GrpcStreamers,
         include_checkpoints: bool = False,
         include_caught_up: bool = False,
     ):
@@ -1012,7 +1004,7 @@ class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
             assert isinstance(tombstone_resp, streams_pb2.TombstoneResp)
 
 
-class StreamsService(BaseStreamsService[SyncGrpcStreamers]):
+class StreamsService(BaseStreamsService[GrpcStreamers]):
     """
     Encapsulates the 'streams.Streams' gRPC service.
     """

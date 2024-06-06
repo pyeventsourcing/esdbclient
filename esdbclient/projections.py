@@ -9,8 +9,8 @@ from google.protobuf import struct_pb2
 from esdbclient.common import (
     AsyncGrpcStreamers,
     ESDBService,
+    GrpcStreamers,
     Metadata,
-    SyncGrpcStreamers,
     TGrpcStreamers,
     handle_rpc_error,
 )
@@ -482,7 +482,7 @@ class AsyncProjectionsService(BaseProjectionsService[AsyncGrpcStreamers]):
         assert isinstance(empty_resp, shared_pb2.Empty)
 
 
-class ProjectionsService(BaseProjectionsService[SyncGrpcStreamers]):
+class ProjectionsService(BaseProjectionsService[GrpcStreamers]):
     """
     Encapsulates the 'gossip.Projections' gRPC service.
     """

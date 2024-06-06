@@ -2,7 +2,7 @@
 
 import grpc.aio
 
-from esdbclient.common import AsyncGrpcStreamers, SyncGrpcStreamers
+from esdbclient.common import AsyncGrpcStreamers, GrpcStreamers
 from esdbclient.connection_spec import ConnectionSpec
 from esdbclient.gossip import AsyncGossipService, GossipService
 from esdbclient.persistent import (
@@ -22,7 +22,7 @@ class ESDBConnection:
     ) -> None:
         self._grpc_channel = grpc_channel
         self._grpc_target = grpc_target
-        self._grpc_streamers = SyncGrpcStreamers()
+        self._grpc_streamers = GrpcStreamers()
         self.streams = StreamsService(
             grpc_channel=grpc_channel,
             connection_spec=connection_spec,

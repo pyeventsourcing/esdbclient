@@ -8,8 +8,8 @@ import grpc.aio
 from esdbclient.common import (
     AsyncGrpcStreamers,
     ESDBService,
+    GrpcStreamers,
     Metadata,
-    SyncGrpcStreamers,
     TGrpcStreamers,
     handle_rpc_error,
 )
@@ -80,7 +80,7 @@ class AsyncGossipService(BaseGossipService[AsyncGrpcStreamers]):
         return self._construct_cluster_members(read_resp)
 
 
-class GossipService(BaseGossipService[SyncGrpcStreamers]):
+class GossipService(BaseGossipService[GrpcStreamers]):
     """
     Encapsulates the 'gossip.Gossip' gRPC service.
     """

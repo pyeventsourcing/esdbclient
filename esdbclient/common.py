@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import datetime
 import os
+import threading
 from abc import ABC, abstractmethod
 from base64 import b64encode
-from threading import Lock
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -80,48 +81,81 @@ GrpcOption = Tuple[str, Union[str, int]]
 GrpcOptions = Tuple[GrpcOption, ...]
 
 
-class GrpcStreamer(ABC):
+class BaseGrpcStreamer(ABC):
     pass
 
 
-class SyncGrpcStreamer(GrpcStreamer):
+class GrpcStreamer(BaseGrpcStreamer):
+    def __init__(self) -> None:
+        self._is_stopped = False
+        self._is_stopped_lock = threading.Lock()
+
     @abstractmethod
     def stop(self) -> None:
         """
         Stops the iterator(s) of streaming call.
         """
 
+    def _set_is_stopped(self) -> bool:
+        is_stopped = True
+        if self._is_stopped is False:
+            with self._is_stopped_lock:
+                if self._is_stopped is False:
+                    is_stopped = False
+                    self._is_stopped = True
+                else:  # pragma: no cover
+                    pass
+        return is_stopped
 
-class AsyncGrpcStreamer(GrpcStreamer):
+
+class AsyncGrpcStreamer(BaseGrpcStreamer):
+    def __init__(self) -> None:
+        self._is_stopped = False
+        self._is_stopped_lock = asyncio.Lock()
+
     @abstractmethod
     async def stop(self) -> None:
         """
         Stops the iterator(s) of streaming call.
         """
 
+    async def _set_is_stopped(self) -> bool:
+        is_stopped = True
+        if self._is_stopped is False:
+            async with self._is_stopped_lock:
+                if self._is_stopped is False:
+                    is_stopped = False
+                    self._is_stopped = True
+                else:  # pragma: no cover
+                    pass
+        return is_stopped
 
-TGrpcStreamer = TypeVar("TGrpcStreamer", bound=GrpcStreamer)
+
+TGrpcStreamer = TypeVar("TGrpcStreamer", bound=BaseGrpcStreamer)
 
 
-class GrpcStreamers(Generic[TGrpcStreamer]):
+class BaseGrpcStreamers(Generic[TGrpcStreamer]):
     def __init__(self) -> None:
         self.map: WeakValueDictionary[int, TGrpcStreamer] = WeakValueDictionary()
-        self.lock = Lock()
+        self.lock = threading.Lock()
 
-    def __setitem__(self, key: int, value: TGrpcStreamer) -> None:
+    def add(self, streamer: TGrpcStreamer) -> None:
         with self.lock:
-            self.map[key] = value
+            self.map[id(streamer)] = streamer
 
     def __iter__(self) -> Iterator[TGrpcStreamer]:
         with self.lock:
             return iter(tuple(self.map.values()))
 
-    def pop(self, key: int) -> TGrpcStreamer:
+    def remove(self, streamer: TGrpcStreamer) -> None:
         with self.lock:
-            return self.map.pop(key)
+            try:
+                self.map.pop(id(streamer))
+            except KeyError:  # pragma: no cover
+                pass
 
 
-class SyncGrpcStreamers(GrpcStreamers[SyncGrpcStreamer]):
+class GrpcStreamers(BaseGrpcStreamers[GrpcStreamer]):
     def close(self) -> None:
         for grpc_streamer in self:
             # print("closing streamer")
@@ -129,7 +163,7 @@ class SyncGrpcStreamers(GrpcStreamers[SyncGrpcStreamer]):
             # print("closed streamer")
 
 
-class AsyncGrpcStreamers(GrpcStreamers[AsyncGrpcStreamer]):
+class AsyncGrpcStreamers(BaseGrpcStreamers[AsyncGrpcStreamer]):
     async def close(self) -> None:
         for async_grpc_streamer in self:
             # print("closing streamer")
@@ -137,7 +171,7 @@ class AsyncGrpcStreamers(GrpcStreamers[AsyncGrpcStreamer]):
             # print("closed streamer")
 
 
-TGrpcStreamers = TypeVar("TGrpcStreamers", bound=GrpcStreamers[Any])
+TGrpcStreamers = TypeVar("TGrpcStreamers", bound=BaseGrpcStreamers[Any])
 
 
 class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):

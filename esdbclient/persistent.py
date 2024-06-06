@@ -46,9 +46,9 @@ from esdbclient.common import (
     AsyncGrpcStreamer,
     AsyncGrpcStreamers,
     ESDBService,
+    GrpcStreamer,
+    GrpcStreamers,
     Metadata,
-    SyncGrpcStreamer,
-    SyncGrpcStreamers,
     TGrpcStreamers,
     construct_filter_exclude_regex,
     construct_filter_include_regex,
@@ -485,14 +485,14 @@ class AsyncPersistentSubscription(
         stream_name: Optional[str],
         grpc_streamers: AsyncGrpcStreamers,
     ) -> None:
+        super().__init__()
         self._read_reqs = read_reqs
         self._stream_stream_call = stream_stream_call
         self._stream_stream_call_iter = stream_stream_call.__aiter__()
         self._expected_group_name = expected_group_name
         self._stream_name = stream_name
         self._grpc_streamers = grpc_streamers
-        self._grpc_streamers[id(self)] = self
-        self._is_stopped = False
+        self._grpc_streamers.add(self)
 
     async def init(self) -> None:
         try:
@@ -555,12 +555,11 @@ class AsyncPersistentSubscription(
             raise handle_rpc_error(e) from None
 
     async def stop(self) -> None:
-        if not self._is_stopped:
-            self._is_stopped = True
+        if not await self._set_is_stopped():
             await self._read_reqs.stop()
             self._stream_stream_call.cancel()
             await asyncio.sleep(0.05)
-            self._grpc_streamers.pop(id(self))
+            self._grpc_streamers.remove(self)
 
     async def __aenter__(
         self, *args: Any, **kwargs: Any
@@ -589,7 +588,7 @@ class AsyncPersistentSubscription(
 
 
 class PersistentSubscription(
-    Iterator[RecordedEvent], BasePersistentSubscription, SyncGrpcStreamer
+    Iterator[RecordedEvent], BasePersistentSubscription, GrpcStreamer
 ):
     def __init__(
         self,
@@ -597,13 +596,13 @@ class PersistentSubscription(
         read_resps: _ReadResps,
         expected_group_name: str,
         stream_name: Optional[str],
-        grpc_streamers: SyncGrpcStreamers,
+        grpc_streamers: GrpcStreamers,
     ):
+        super().__init__()
         self._read_reqs = read_reqs
         self._read_resps = read_resps
         self._grpc_streamers = grpc_streamers
-        self._grpc_streamers[id(self)] = self
-        self._is_stopped = False
+        self._grpc_streamers.add(self)
 
         try:
             first_read_resp = self._get_next_read_resp()
@@ -671,15 +670,14 @@ class PersistentSubscription(
     def _abort(self) -> None:
         self._read_reqs.abort()
         self._read_resps.cancel()
-        self._grpc_streamers.pop(id(self))
+        self._grpc_streamers.remove(self)
         self._is_stopped = True
 
     def stop(self) -> None:
-        if not self._is_stopped:
+        if not self._set_is_stopped():
             self._read_reqs.stop()
             self._read_resps.cancel()
-            self._grpc_streamers.pop(id(self))
-            self._is_stopped = True
+            self._grpc_streamers.remove(self)
 
     def __enter__(self, *args: Any, **kwargs: Any) -> PersistentSubscription:
         return self
@@ -1612,9 +1610,7 @@ class AsyncPersistentSubscriptionsService(
         assert isinstance(resp, persistent_pb2.ReplayParkedResp)
 
 
-class PersistentSubscriptionsService(
-    BasePersistentSubscriptionsService[SyncGrpcStreamers]
-):
+class PersistentSubscriptionsService(BasePersistentSubscriptionsService[GrpcStreamers]):
     """
     Encapsulates the 'persistent.PersistentSubscriptions' gRPC service.
     """
