@@ -127,8 +127,11 @@ class SubscriptionConfirmationError(EventStoreDBClientException):
 class WrongCurrentVersion(EventStoreDBClientException):
     """
     Raised when expected position does not match the
-    actual position of the last event in a stream.
+    stream position of the last event in a stream.
     """
+
+
+WrongExpectedVersion = WrongCurrentVersion
 
 
 class AccessDeniedError(EventStoreDBClientException):

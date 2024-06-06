@@ -13,16 +13,30 @@ from esdbclient.projections import AsyncProjectionsService, ProjectionsService
 from esdbclient.streams import AsyncStreamsService, StreamsService
 
 
-class ESDBConnection:
+class BaseESDBConnection:
+    def __init__(self, grpc_target: str):
+        self._grpc_target = grpc_target
+
+    @property
+    def grpc_target(self) -> str:
+        return self._grpc_target
+
+
+class ESDBConnection(BaseESDBConnection):
     def __init__(
         self,
         grpc_channel: grpc.Channel,
         grpc_target: str,
         connection_spec: ConnectionSpec,
     ) -> None:
+        super().__init__(grpc_target)
         self._grpc_channel = grpc_channel
-        self._grpc_target = grpc_target
         self._grpc_streamers = GrpcStreamers()
+        self.gossip = GossipService(
+            channel=grpc_channel,
+            connection_spec=connection_spec,
+            grpc_streamers=self._grpc_streamers,
+        )
         self.streams = StreamsService(
             grpc_channel=grpc_channel,
             connection_spec=connection_spec,
@@ -33,27 +47,13 @@ class ESDBConnection:
             connection_spec=connection_spec,
             grpc_streamers=self._grpc_streamers,
         )
-        self.gossip = GossipService(
-            channel=grpc_channel,
-            connection_spec=connection_spec,
-            grpc_streamers=self._grpc_streamers,
-        )
-        # self.cluster_gossip = ClusterGossipService(
-        #     channel=grpc_channel,
-        #     connection_spec=connection_spec,
-        #     grpc_streamers=self._grpc_streamers,
-        # )
-        # self._channel_connectivity_state: Optional[ChannelConnectivity] = None
-        # self.grpc_channel.subscribe(self._receive_channel_connectivity_state)
         self.projections = ProjectionsService(
             channel=grpc_channel,
             connection_spec=connection_spec,
             grpc_streamers=self._grpc_streamers,
         )
-
-    @property
-    def grpc_target(self) -> str:
-        return self._grpc_target
+        # self._channel_connectivity_state: Optional[ChannelConnectivity] = None
+        # self.grpc_channel.subscribe(self._receive_channel_connectivity_state)
 
     # def _receive_channel_connectivity_state(
     #     self, connectivity: ChannelConnectivity
@@ -70,16 +70,22 @@ class ESDBConnection:
         # print("closed channel")
 
 
-class AsyncioESDBConnection:
+class AsyncESDBConnection(BaseESDBConnection):
     def __init__(
         self,
         grpc_channel: grpc.aio.Channel,
         grpc_target: str,
         connection_spec: ConnectionSpec,
     ) -> None:
+        super().__init__(grpc_target)
         self._grpc_channel = grpc_channel
         self._grpc_target = grpc_target
         self._grpc_streamers = AsyncGrpcStreamers()
+        self.gossip = AsyncGossipService(
+            grpc_channel,
+            connection_spec=connection_spec,
+            grpc_streamers=self._grpc_streamers,
+        )
         self.streams = AsyncStreamsService(
             grpc_channel,
             connection_spec=connection_spec,
@@ -90,20 +96,11 @@ class AsyncioESDBConnection:
             connection_spec=connection_spec,
             grpc_streamers=self._grpc_streamers,
         )
-        self.gossip = AsyncGossipService(
-            grpc_channel,
-            connection_spec=connection_spec,
-            grpc_streamers=self._grpc_streamers,
-        )
         self.projections = AsyncProjectionsService(
             grpc_channel,
             connection_spec=connection_spec,
             grpc_streamers=self._grpc_streamers,
         )
-
-    @property
-    def grpc_target(self) -> str:
-        return self._grpc_target
 
     async def close(self) -> None:
         await self._grpc_streamers.close()

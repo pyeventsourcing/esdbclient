@@ -43,7 +43,7 @@ from esdbclient.common import (
     DEFAULT_WINDOW_SIZE,
     GrpcOptions,
 )
-from esdbclient.connection import AsyncioESDBConnection
+from esdbclient.connection import AsyncESDBConnection
 from esdbclient.connection_spec import NODE_PREFERENCE_LEADER, URI_SCHEME_ESDB
 from esdbclient.events import NewEvent, RecordedEvent
 from esdbclient.exceptions import (
@@ -153,6 +153,10 @@ class AsyncEventStoreDBClient(BaseEventStoreDBClient):
         self._is_reconnection_required = Event()
         self._reconnection_lock = Lock()
 
+    @property
+    def connection_target(self) -> str:
+        return self._connection.grpc_target
+
     async def connect(self) -> None:
         self._connection = await self._connect()
 
@@ -168,9 +172,7 @@ class AsyncEventStoreDBClient(BaseEventStoreDBClient):
                 # Todo: Test with concurrent writes to wrong node state.
                 pass
 
-    async def _connect(
-        self, grpc_target: Optional[str] = None
-    ) -> AsyncioESDBConnection:
+    async def _connect(self, grpc_target: Optional[str] = None) -> AsyncESDBConnection:
         if grpc_target:
             # Just connect to the given target.
             return self._construct_esdb_connection(grpc_target)
@@ -185,7 +187,7 @@ class AsyncEventStoreDBClient(BaseEventStoreDBClient):
         # Discover preferred node in cluster.
         return await self._discover_preferred_node()
 
-    async def _discover_preferred_node(self) -> AsyncioESDBConnection:
+    async def _discover_preferred_node(self) -> AsyncESDBConnection:
         attempts = self.connection_spec.options.MaxDiscoverAttempts
         assert attempts > 0
         if self.connection_spec.scheme == URI_SCHEME_ESDB:
@@ -244,7 +246,7 @@ class AsyncEventStoreDBClient(BaseEventStoreDBClient):
 
     def _construct_esdb_connection(
         self, grpc_target: str, grpc_options: GrpcOptions = ()
-    ) -> AsyncioESDBConnection:
+    ) -> AsyncESDBConnection:
         grpc_options = self.grpc_options + grpc_options
         if self.connection_spec.options.Tls is True:
             channel_credentials = grpc.ssl_channel_credentials(
@@ -262,14 +264,12 @@ class AsyncEventStoreDBClient(BaseEventStoreDBClient):
                 target=grpc_target, options=grpc_options
             )
 
-        return AsyncioESDBConnection(
+        return AsyncESDBConnection(
             grpc_channel=grpc_channel,
             grpc_target=grpc_target,
             connection_spec=self.connection_spec,
         )
 
-    @retrygrpc
-    @autoreconnect
     async def append_events(
         self,
         stream_name: str,
@@ -279,32 +279,36 @@ class AsyncEventStoreDBClient(BaseEventStoreDBClient):
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> int:
+        return await self.append_to_stream(
+            stream_name=stream_name,
+            current_version=current_version,
+            events=events,
+            timeout=timeout,
+            credentials=credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    async def append_to_stream(
+        self,
+        stream_name: str,
+        *,
+        current_version: Union[int, StreamState],
+        events: Union[NewEvent, Iterable[NewEvent]],
+        timeout: Optional[float] = None,
+        credentials: Optional[grpc.CallCredentials] = None,
+    ) -> int:
         timeout = timeout if timeout is not None else self._default_deadline
+
+        if isinstance(events, NewEvent):
+            events = [events]
+
         return await self._connection.streams.batch_append(
             stream_name=stream_name,
             current_version=current_version,
             events=events,
             timeout=timeout,
             metadata=self._call_metadata,
-            credentials=credentials or self._call_credentials,
-        )
-
-    async def append_to_stream(
-        self,
-        stream_name: str,
-        *,
-        current_version: Union[int, StreamState],
-        events: Union[NewEvent, Sequence[NewEvent]],
-        timeout: Optional[float] = None,
-        credentials: Optional[grpc.CallCredentials] = None,
-    ) -> int:
-        if isinstance(events, NewEvent):
-            events = [events]
-        return await self.append_events(
-            stream_name=stream_name,
-            current_version=current_version,
-            events=events,
-            timeout=timeout,
             credentials=credentials or self._call_credentials,
         )
 
@@ -397,6 +401,8 @@ class AsyncEventStoreDBClient(BaseEventStoreDBClient):
         ) as events:
             return tuple([e async for e in events])
 
+    @retrygrpc
+    @autoreconnect
     async def read_stream(
         self,
         stream_name: str,

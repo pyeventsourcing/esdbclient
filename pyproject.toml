@@ -50,9 +50,12 @@ grpcio-tools = "*"
 grpc-stubs = "*"
 types-protobuf = "*"
 mypy-protobuf = "*"
-async-case = {version = "^10.1.0", python = "<=3.8"}
 coverage = "^7.2.7"
 fastapi = "^0.111.0"
+opentelemetry-sdk = "^1.25.0"
+opentelemetry-exporter-otlp-proto-http = "^1.25.0"
+opentelemetry-exporter-otlp-proto-grpc = "^1.25.0"
+opentelemetry-instrumentation-grpc = "^0.46b0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

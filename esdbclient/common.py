@@ -8,6 +8,7 @@ from base64 import b64encode
 from typing import (
     TYPE_CHECKING,
     Any,
+    AsyncIterator,
     Generic,
     Iterator,
     Optional,
@@ -21,6 +22,7 @@ from weakref import WeakValueDictionary
 
 import grpc
 import grpc.aio
+from typing_extensions import Self
 
 from esdbclient.connection_spec import ConnectionSpec
 from esdbclient.events import RecordedEvent
@@ -402,3 +404,61 @@ def construct_recorded_event(
         recorded_at=recorded_at,
     )
     return recorded_event
+
+
+class RecordedEventIterator(Iterator[RecordedEvent]):
+    @abstractmethod
+    def stop(self) -> None:
+        pass  # pragma: no cover
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *args: Any, **kwargs: Any) -> None:
+        self.stop()
+
+    def __del__(self) -> None:
+        self.stop()
+
+
+class RecordedEventSubscription(RecordedEventIterator):
+    @property
+    @abstractmethod
+    def subscription_id(self) -> str:
+        pass  # pragma: no cover
+
+
+class AsyncRecordedEventIterator(AsyncIterator[RecordedEvent]):
+    @abstractmethod
+    async def stop(self) -> None:
+        pass  # pragma: no cover
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *args: Any, **kwargs: Any) -> None:
+        await self.stop()
+
+    def _set_iter_error_for_testing(self) -> None:
+        # This, because I can't find a good way to inspire an error during iterating
+        # with catchup and persistent subscriptions after successfully
+        # receiving confirmation response, tried closing the channel
+        # but the async streaming response continues (unlike with sync call). Needed
+        # to inspire this error to test instrumentation span error during iteration.
+        self._iter_error_for_testing = True
+
+    def _has_iter_error_for_testing(self) -> bool:
+        return getattr(self, "_iter_error_for_testing", False)
+
+
+class AsyncRecordedEventSubscription(AsyncRecordedEventIterator):
+    @property
+    @abstractmethod
+    def subscription_id(self) -> str:
+        pass  # pragma: no cover

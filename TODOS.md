@@ -1,3 +1,12 @@
+Notes from meeting with William (18 June 2024):
+
+- need samples for the projections API
+- need to push the samples to the new docs repo
+- review the new Python docs
+-
+
+----
+
 Notes from implementing projections:
 
 - why all the "exception thrown by handler" errors? see tests

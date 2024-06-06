@@ -2,11 +2,16 @@
 import asyncio
 import json
 import os
-import sys
 from tempfile import NamedTemporaryFile
 from typing import Optional
-from unittest import skipIf
+from unittest import IsolatedAsyncioTestCase, skipIf
+from uuid import uuid4
 
+from esdbclient import AsyncioEventStoreDBClient, Checkpoint, NewEvent, StreamState
+from esdbclient.asyncio_client import (
+    AsyncEventStoreDBClient,
+    _AsyncioEventStoreDBClient,
+)
 from esdbclient.common import (
     DEFAULT_PERSISTENT_SUBSCRIPTION_CHECKPOINT_AFTER,
     DEFAULT_PERSISTENT_SUBSCRIPTION_HISTORY_BUFFER_SIZE,
@@ -19,29 +24,6 @@ from esdbclient.common import (
     DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
 )
 from esdbclient.events import CaughtUp
-from esdbclient.persistent import AsyncSubscriptionReadReqs
-from esdbclient.streams import AsyncCatchupSubscription
-from tests.test_client import (
-    EVENTSTORE_DOCKER_IMAGE,
-    PROJECTION_QUERY_TEMPLATE1,
-    TimedTestCase,
-    get_ca_certificate,
-    get_server_certificate,
-    random_data,
-)
-
-if sys.version_info[0:2] > (3, 7):
-    from unittest import IsolatedAsyncioTestCase
-else:
-    from async_case import IsolatedAsyncioTestCase
-
-from uuid import uuid4
-
-from esdbclient import AsyncioEventStoreDBClient, Checkpoint, NewEvent, StreamState
-from esdbclient.asyncio_client import (
-    AsyncEventStoreDBClient,
-    _AsyncioEventStoreDBClient,
-)
 from esdbclient.exceptions import (
     AlreadyExists,
     DeadlineExceeded,
@@ -59,6 +41,16 @@ from esdbclient.exceptions import (
     SSLError,
     StreamIsDeleted,
     WrongCurrentVersion,
+)
+from esdbclient.persistent import AsyncSubscriptionReadReqs
+from esdbclient.streams import AsyncCatchupSubscription
+from tests.test_client import (
+    EVENTSTORE_DOCKER_IMAGE,
+    PROJECTION_QUERY_TEMPLATE1,
+    TimedTestCase,
+    get_ca_certificate,
+    get_server_certificate,
+    random_data,
 )
 
 
@@ -138,6 +130,7 @@ class TestAsyncEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             "&GossipTimeout=1&MaxDiscoverAttempts=1&DiscoveryInterval=0"
         )
         await client.connect()
+        self.assertEqual("localhost:2113", client.connection_target)
 
     async def test_esdb_discover_scheme_raises_discovery_failed(self) -> None:
         client = AsyncEventStoreDBClient(
@@ -415,17 +408,14 @@ class TestAsyncEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         with self.assertRaises(StreamIsDeleted):
             await self.client.get_stream_metadata(stream_name)
 
-    async def test_append_events_raises_not_found(self) -> None:
+    async def test_append_events_raises_wrong_current_version(self) -> None:
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
-        with self.assertRaises(NotFound):
+        with self.assertRaises(WrongCurrentVersion):
             await self.client.append_events(
                 stream_name=stream_name1, events=[event1], current_version=10
             )
 
-    async def test_append_events_raises_wrong_current_version(self) -> None:
-        stream_name1 = str(uuid4())
-        event1 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
             stream_name=stream_name1,
             events=[event1],
@@ -2506,7 +2496,7 @@ class TestAsyncEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         with self.assertRaises(ProgrammingError):
             await s.nack(uuid4(), "retry")
 
-    async def test_persistent_subscription_sends_acks(self) -> None:
+    async def test_persistent_subscription_read_reqs(self) -> None:
         reqs = AsyncSubscriptionReadReqs("group1", max_ack_batch_size=3)
         await reqs.__anext__()  # options req
         await reqs.ack(uuid4())
@@ -2529,6 +2519,43 @@ class TestAsyncEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         await reqs.stop()
         req5 = await reqs.__anext__()
         self.assertEqual(len(req5.ack.ids), 2)
+
+        # Cover the case of stopping without waiting (wait_until_stopped=False).
+        reqs = AsyncSubscriptionReadReqs("group1", max_ack_batch_size=3)
+        await reqs.stop(wait_until_stopped=False)
+
+        # Cover the case of calling this method twice.
+        await reqs.stop(wait_until_stopped=False)
+
+        # Iterate until stopped.
+        async for _ in reqs:
+            pass
+
+        # Iterate and stop whilst waiting for queue item.
+        reqs = AsyncSubscriptionReadReqs("group1", max_ack_batch_size=3)
+
+        async def iterate_until_stopped() -> None:
+            async for _ in reqs:
+                pass
+
+        async def sleep_then_stop() -> None:
+            await asyncio.sleep(1)
+            await reqs.stop(wait_until_stopped=False)
+
+        await asyncio.gather(iterate_until_stopped(), sleep_then_stop())
+
+        # Can't call ack() after stopped.
+        with self.assertRaises(ProgrammingError):
+            await reqs.ack(uuid4())
+        with self.assertRaises(ProgrammingError):
+            await reqs.nack(uuid4(), "park")
+
+        # Raises exception whilst preparing batch.
+        reqs = AsyncSubscriptionReadReqs("group1", max_ack_batch_size=1)
+        await reqs.ack(333)  # type: ignore
+        await reqs.__anext__()  # options req
+        with self.assertRaises(ValueError):
+            await reqs.__anext__()
 
     async def test_persistent_subscription_context_manager(self) -> None:
         group_name = str(uuid4())

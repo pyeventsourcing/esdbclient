@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from threading import Event
 from time import sleep
 from typing import (
-    Any,
     AsyncIterator,
     Dict,
     Iterator,
@@ -24,7 +23,7 @@ from typing import (
 from uuid import UUID
 
 import grpc
-from grpc.aio import StreamStreamCall
+from grpc.aio import AioRpcError, StreamStreamCall
 from typing_extensions import Literal, Protocol, TypedDict, runtime_checkable
 
 from esdbclient.common import (
@@ -45,10 +44,12 @@ from esdbclient.common import (
     DEFAULT_WINDOW_SIZE,
     AsyncGrpcStreamer,
     AsyncGrpcStreamers,
+    AsyncRecordedEventSubscription,
     ESDBService,
     GrpcStreamer,
     GrpcStreamers,
     Metadata,
+    RecordedEventSubscription,
     TGrpcStreamers,
     construct_filter_exclude_regex,
     construct_filter_include_regex,
@@ -258,7 +259,9 @@ class AsyncSubscriptionReadReqs(
                                     action=batch_action,
                                 )
                         else:
-                            assert isinstance(event_id, UUID)
+                            if not isinstance(event_id, UUID):
+                                msg = f"event_id {repr(event_id)} is not a UUID"
+                                raise ValueError(msg)
                             if batch_action is None:
                                 # Set the "current action" if there isn't one already.
                                 batch_action = action
@@ -293,7 +296,7 @@ class AsyncSubscriptionReadReqs(
                                 event_ids=self._batch_ids,
                                 action=batch_action,
                             )
-                        else:  # pragma: no cover
+                        else:
                             pass
         except BaseException as e:
             self._is_stopped.set()
@@ -316,13 +319,12 @@ class AsyncSubscriptionReadReqs(
         assert action in ["unknown", "park", "retry", "skip", "stop"]
         await self._ack_queue.put((event_id, action))
 
-    async def stop(self) -> None:
+    async def stop(self, wait_until_stopped: bool = True) -> None:
         if not self._is_poisoned:
             self._is_poisoned = True
             await self._ack_queue.put((None, "poison"))
-            await self._is_stopped.wait()
-        else:  # pragma: no cover
-            pass
+            if wait_until_stopped:
+                await self._is_stopped.wait()
 
 
 class SubscriptionReadReqs(BaseSubscriptionReadReqs):
@@ -402,7 +404,9 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                                     action=batch_action,
                                 )
                         else:
-                            assert isinstance(event_id, UUID)
+                            if not isinstance(event_id, UUID):
+                                msg = f"event_id {repr(event_id)} is not a UUID"
+                                raise ValueError(msg)
                             if batch_action is None:
                                 # Set the "current action" if there isn't one already.
                                 batch_action = action
@@ -473,7 +477,7 @@ class BasePersistentSubscription:
 
 
 class AsyncPersistentSubscription(
-    AsyncIterator[RecordedEvent], BasePersistentSubscription, AsyncGrpcStreamer
+    AsyncRecordedEventSubscription, BasePersistentSubscription, AsyncGrpcStreamer
 ):
     def __init__(
         self,
@@ -512,17 +516,18 @@ class AsyncPersistentSubscription(
                     or confirmed_stream_name != expected_stream_name
                 ):  # pragma: no cover
                     raise SubscriptionConfirmationError()
-                self._subscription_id = subscription_id.encode()
+                self._subscription_id = subscription_id
             else:  # pragma: no cover
                 raise EventStoreDBClientException(
                     f"Expected subscription confirmation, got: {first_read_resp}"
                 )
         except BaseException:
-            await self.stop()
+            await self.stop(wait_until_stopped=False)
             raise
 
-    def __aiter__(self) -> AsyncIterator[RecordedEvent]:
-        return self
+    @property
+    def subscription_id(self) -> str:
+        return self._subscription_id
 
     async def __anext__(self) -> RecordedEvent:
         try:
@@ -540,34 +545,39 @@ class AsyncPersistentSubscription(
                 else:  # pragma: no cover
                     pass
         except BaseException:
-            await self.stop()
+            await self.stop(wait_until_stopped=False)
             raise
 
     async def _get_next_read_resp(self) -> persistent_pb2.ReadResp:
         try:
-            return await self._stream_stream_call_iter.__anext__()
+            response = await self._stream_stream_call_iter.__anext__()
+            if self._has_iter_error_for_testing():
+                raise AioRpcError(
+                    grpc.StatusCode.INTERNAL,
+                    grpc.aio.Metadata(),
+                    grpc.aio.Metadata(),
+                    "",
+                    "",
+                )
+
         except asyncio.CancelledError as e:
+            await self.stop(wait_until_stopped=False)
             if self._read_reqs.errored:
                 raise ExceptionIteratingRequests() from self._read_reqs.errored
             else:
                 raise StopAsyncIteration() from e
         except grpc.aio.AioRpcError as e:
+            await self.stop(wait_until_stopped=False)
             raise handle_rpc_error(e) from None
+        else:
+            return response
 
-    async def stop(self) -> None:
+    async def stop(self, wait_until_stopped: bool = True) -> None:
         if not await self._set_is_stopped():
-            await self._read_reqs.stop()
+            await self._read_reqs.stop(wait_until_stopped=wait_until_stopped)
             self._stream_stream_call.cancel()
             await asyncio.sleep(0.05)
             self._grpc_streamers.remove(self)
-
-    async def __aenter__(
-        self, *args: Any, **kwargs: Any
-    ) -> AsyncPersistentSubscription:
-        return self
-
-    async def __aexit__(self, *args: Any, **kwargs: Any) -> None:
-        await self.stop()
 
     async def ack(self, item: Union[UUID, RecordedEvent]) -> None:
         await self._read_reqs.ack(event_id=self._get_event_id(item))
@@ -588,7 +598,7 @@ class AsyncPersistentSubscription(
 
 
 class PersistentSubscription(
-    Iterator[RecordedEvent], BasePersistentSubscription, GrpcStreamer
+    RecordedEventSubscription, BasePersistentSubscription, GrpcStreamer
 ):
     def __init__(
         self,
@@ -622,6 +632,7 @@ class PersistentSubscription(
                     or confirmed_stream_name != expected_stream_name
                 ):  # pragma: no cover
                     raise SubscriptionConfirmationError()
+                self._subscription_id = subscription_id
                 self._read_reqs.subscription_id = subscription_id.encode()
             else:  # pragma: no cover
                 raise EventStoreDBClientException(
@@ -631,8 +642,9 @@ class PersistentSubscription(
             self._abort()
             raise
 
-    def __iter__(self) -> Iterator[RecordedEvent]:
-        return self
+    @property
+    def subscription_id(self) -> str:
+        return self._subscription_id
 
     def __next__(self) -> RecordedEvent:
         while True:
@@ -679,12 +691,6 @@ class PersistentSubscription(
             self._read_resps.cancel()
             self._grpc_streamers.remove(self)
 
-    def __enter__(self, *args: Any, **kwargs: Any) -> PersistentSubscription:
-        return self
-
-    def __exit__(self, *args: Any, **kwargs: Any) -> None:
-        self.stop()
-
     def ack(self, item: Union[UUID, RecordedEvent]) -> None:
         self._read_reqs.ack(event_id=self._get_event_id(item))
 
@@ -701,9 +707,6 @@ class PersistentSubscription(
             return item.ack_id
         else:
             return item
-
-    def __del__(self) -> None:
-        self.stop()
 
 
 class SubscriptionUpdateKwargs(TypedDict):
@@ -1765,7 +1768,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService[GrpcStre
             metadata=self._metadata(metadata, requires_leader=True),
             credentials=credentials,
         )
-        assert isinstance(read_resps, _ReadResps)
+        # assert isinstance(read_resps, _ReadResps), type(_ReadResps)
 
         subscription = PersistentSubscription(
             grpc_streamers=self._grpc_streamers,

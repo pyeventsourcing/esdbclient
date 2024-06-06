@@ -197,3 +197,22 @@ docker-down:
 docker-logs:
 	docker compose logs --follow --tail=1000
 
+
+# Jaeger natively supports OTLP to receive trace data. You can run Jaeger in a docker container
+# with the UI accessible on port 16686 and OTLP enabled on ports 4317 and 4318.
+# https://opentelemetry.io/docs/languages/python/exporters/#jaeger
+.PHONY: start-jaeger
+start-jaeger:
+	docker run -d \
+    -e COLLECTOR_ZIPKIN_HOST_PORT=:9411 \
+    -p 16686:16686 \
+    -p 4317:4317 \
+    -p 4318:4318 \
+    -p 9411:9411 \
+    --name jaeger \
+    jaegertracing/all-in-one:latest
+
+.PHONY: stop-jaeger
+stop-jaeger:
+	docker stop jaeger
+	docker rm jaeger

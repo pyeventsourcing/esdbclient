@@ -7,21 +7,13 @@ from abc import abstractmethod
 from asyncio import CancelledError
 from dataclasses import dataclass
 from enum import Enum
-from typing import (
-    Any,
-    AsyncIterator,
-    Iterable,
-    Iterator,
-    Optional,
-    Sequence,
-    Union,
-    overload,
-)
+from typing import Any, Iterable, Iterator, Optional, Sequence, Union, overload
 from uuid import UUID, uuid4
 
 import grpc
 import grpc.aio
 from google.protobuf import duration_pb2, empty_pb2
+from grpc.aio import AioRpcError, UsageError
 from typing_extensions import Literal, Protocol, runtime_checkable
 
 from esdbclient.common import (
@@ -30,10 +22,14 @@ from esdbclient.common import (
     PROTOBUF_MAX_DEADLINE_SECONDS,
     AsyncGrpcStreamer,
     AsyncGrpcStreamers,
+    AsyncRecordedEventIterator,
+    AsyncRecordedEventSubscription,
     ESDBService,
     GrpcStreamer,
     GrpcStreamers,
     Metadata,
+    RecordedEventIterator,
+    RecordedEventSubscription,
     TGrpcStreamers,
     construct_filter_exclude_regex,
     construct_filter_include_regex,
@@ -105,7 +101,8 @@ class BaseReadResponse:
     ) -> Optional[RecordedEvent]:
         content_oneof = read_resp.WhichOneof("content")
         if content_oneof == "stream_not_found":
-            raise NotFound(f"Stream {self._stream_name!r} not found")
+            msg = f"Stream {self._stream_name!r} not found"
+            raise NotFound(msg)
         elif content_oneof == "event":
             return construct_recorded_event(read_resp.event)
         elif content_oneof == "checkpoint":
@@ -142,7 +139,7 @@ class BaseReadResponse:
 
 
 class AsyncReadResponse(
-    BaseReadResponse, AsyncGrpcStreamer, AsyncIterator[RecordedEvent]
+    BaseReadResponse, AsyncGrpcStreamer, AsyncRecordedEventIterator
 ):
     def __init__(
         self,
@@ -156,9 +153,6 @@ class AsyncReadResponse(
         self.read_resp_iter = aio_call.__aiter__()
         self._grpc_streamers = grpc_streamers
         self._grpc_streamers.add(self)
-
-    def __aiter__(self) -> AsyncIterator[RecordedEvent]:
-        return self
 
     async def __anext__(self) -> RecordedEvent:
         while True:
@@ -180,6 +174,14 @@ class AsyncReadResponse(
     async def _get_next_read_resp(self) -> streams_pb2.ReadResp:
         try:
             read_resp = await self.read_resp_iter.__anext__()
+            if self._has_iter_error_for_testing():
+                raise AioRpcError(
+                    grpc.StatusCode.INTERNAL,
+                    grpc.aio.Metadata(),
+                    grpc.aio.Metadata(),
+                    "",
+                    "",
+                )
         except grpc.RpcError as e:
             raise self._handle_stream_read_rpc_error(e) from None
         except CancelledError:
@@ -190,17 +192,19 @@ class AsyncReadResponse(
 
     async def stop(self) -> None:
         if not await self._set_is_stopped():
-            self.aio_call.cancel()
+            try:
+                self.aio_call.cancel()
+            except UsageError:  # pragma: no cover
+                # Get here (when testing) by closing
+                # channel and then canceling a call.
+                pass
             self._grpc_streamers.remove(self)
-
-    async def __aenter__(self) -> AsyncReadResponse:
-        return self
 
     async def __aexit__(self, *args: Any, **kwargs: Any) -> None:
         await self.stop()
 
 
-class AsyncCatchupSubscription(AsyncReadResponse):
+class AsyncCatchupSubscription(AsyncReadResponse, AsyncRecordedEventSubscription):
     def __init__(
         self,
         aio_call: grpc.aio.UnaryStreamCall[streams_pb2.ReadReq, streams_pb2.ReadResp],
@@ -219,15 +223,17 @@ class AsyncCatchupSubscription(AsyncReadResponse):
         read_resp = await self._get_next_read_resp()
         content_oneof = read_resp.WhichOneof("content")
         if content_oneof != "confirmation":  # pragma: no cover
-            raise SubscriptionConfirmationError(
-                f"Expected subscription confirmation, got: {read_resp}"
-            )
+            msg = f"Expected subscription confirmation, got: {read_resp}"
+            raise SubscriptionConfirmationError(msg)
+        else:
+            self._subscription_id = read_resp.confirmation.subscription_id
 
-    async def __aenter__(self) -> AsyncCatchupSubscription:
-        return self
+    @property
+    def subscription_id(self) -> str:
+        return self._subscription_id
 
 
-class ReadResponse(Iterator[RecordedEvent], BaseReadResponse, GrpcStreamer):
+class ReadResponse(RecordedEventIterator, BaseReadResponse, GrpcStreamer):
     def __init__(
         self,
         read_resps: _ReadResps,
@@ -239,9 +245,6 @@ class ReadResponse(Iterator[RecordedEvent], BaseReadResponse, GrpcStreamer):
         self._read_resps = read_resps
         self._grpc_streamers = grpc_streamers
         self._grpc_streamers.add(self)
-
-    def __iter__(self) -> ReadResponse:
-        return self
 
     def __next__(self) -> RecordedEvent:
         while True:
@@ -274,18 +277,8 @@ class ReadResponse(Iterator[RecordedEvent], BaseReadResponse, GrpcStreamer):
             self._read_resps.cancel()
             self._grpc_streamers.remove(self)
 
-    def __enter__(self) -> ReadResponse:
-        return self
 
-    def __exit__(self, *args: Any, **kwargs: Any) -> None:
-        self.stop()
-
-    def __del__(self) -> None:
-        self.stop()
-        del self
-
-
-class CatchupSubscription(ReadResponse):
+class CatchupSubscription(ReadResponse, RecordedEventSubscription):
     def __init__(
         self,
         read_resps: _ReadResps,
@@ -299,25 +292,23 @@ class CatchupSubscription(ReadResponse):
             stream_name=stream_name,
             grpc_streamers=grpc_streamers,
         )
-        self._subscription_id: Optional[UUID] = None
         self._include_checkpoints = include_checkpoints
         self._include_caught_up = include_caught_up
         try:
             first_read_resp = self._get_next_read_resp()
             content_oneof = first_read_resp.WhichOneof("content")
             if content_oneof == "confirmation":
-                pass
-                # Todo: What is '.confirmation.subscription_id' for?
+                self._subscription_id = first_read_resp.confirmation.subscription_id
             else:  # pragma: no cover
-                raise SubscriptionConfirmationError(
-                    f"Expected subscription confirmation, got: {first_read_resp}"
-                )
+                msg = f"Expected subscription confirmation, got: {first_read_resp}"
+                raise SubscriptionConfirmationError(msg)
         except Exception:
             self.stop()
             raise
 
-    def __enter__(self) -> CatchupSubscription:
-        return self
+    @property
+    def subscription_id(self) -> str:
+        return self._subscription_id
 
 
 @dataclass
@@ -521,19 +512,18 @@ class BaseStreamsService(ESDBService[TGrpcStreamers]):
 
     @staticmethod
     def _convert_batch_append_resp(
-        response: streams_pb2.BatchAppendResp, stream_name: str
-    ) -> Union[BatchAppendResponse, EventStoreDBClientException]:
-        result: Union[BatchAppendResponse, EventStoreDBClientException]
+        response: streams_pb2.BatchAppendResp,
+        stream_name: str,
+        current_version: Union[int, StreamState],
+    ) -> int:
         # Response 'result' is either 'success' or 'error'.
         result_oneof = response.WhichOneof("result")
         if result_oneof == "success":
-            # Construct response object.
-            result = BatchAppendResponse(
-                commit_position=response.success.position.commit_position,
-            )
+            # Return commit position.
+            return response.success.position.commit_position
         else:
             # Construct exception object.
-            assert result_oneof == "error"
+            assert result_oneof == "error", result_oneof
             assert isinstance(response.error, status_pb2.Status)
 
             error_details = response.error.details
@@ -543,46 +533,53 @@ class BaseStreamsService(ESDBService[TGrpcStreamers]):
 
                 csro_oneof = wrong_version.WhichOneof("current_stream_revision_option")
                 if csro_oneof == "current_no_stream":
-                    result = NotFound(f"Stream {stream_name !r} not found")
+                    msg = f"Stream {stream_name!r} does not exist"
+                    raise WrongCurrentVersion(msg)
                 else:
                     assert csro_oneof == "current_stream_revision"
-                    psn = wrong_version.current_stream_revision
-                    result = WrongCurrentVersion(f"Current position is {psn}")
+                    msg = (
+                        f"Stream position of last event is"
+                        f" {wrong_version.current_stream_revision}"
+                        f" not {current_version}"
+                    )
+                    raise WrongCurrentVersion(msg)
 
             # Todo: Write tests to cover all of this:
             elif error_details.Is(
                 shared_pb2.AccessDenied.DESCRIPTOR
             ):  # pragma: no cover
-                result = AccessDeniedError()
+                raise AccessDeniedError()
             elif error_details.Is(shared_pb2.StreamDeleted.DESCRIPTOR):
                 stream_deleted = shared_pb2.StreamDeleted()
                 error_details.Unpack(stream_deleted)
                 # Todo: Ask ESDB team if this is ever different from request value.
                 # stream_name = stream_deleted.stream_identifier.stream_name
-                result = StreamIsDeleted(f"Stream {stream_name !r} is deleted")
+                msg = f"Stream {stream_name !r} is deleted"
+                raise StreamIsDeleted(msg)
             elif error_details.Is(shared_pb2.Timeout.DESCRIPTOR):  # pragma: no cover
-                result = AppendDeadlineExceeded()
+                raise AppendDeadlineExceeded()
             elif error_details.Is(shared_pb2.Unknown.DESCRIPTOR):  # pragma: no cover
-                result = UnknownError()
+                raise UnknownError()
             elif error_details.Is(
                 shared_pb2.InvalidTransaction.DESCRIPTOR
             ):  # pragma: no cover
-                result = InvalidTransactionError()
+                raise InvalidTransactionError()
             elif error_details.Is(
                 shared_pb2.MaximumAppendSizeExceeded.DESCRIPTOR
             ):  # pragma: no cover
                 size_exceeded = shared_pb2.MaximumAppendSizeExceeded()
                 error_details.Unpack(size_exceeded)
                 size = size_exceeded.maxAppendSize
-                result = MaximumAppendSizeExceededError(f"Max size is {size}")
+                msg = f"Max size is {size}"
+                raise MaximumAppendSizeExceededError(msg)
             elif error_details.Is(shared_pb2.BadRequest.DESCRIPTOR):  # pragma: no cover
                 bad_request = shared_pb2.BadRequest()
                 error_details.Unpack(bad_request)
-                result = BadRequestError(f"Bad request: {bad_request.message}")
+                msg = f"Bad request: {bad_request.message}"
+                raise BadRequestError(msg)
             else:
                 # Unexpected error details type.
-                result = EventStoreDBClientException(error_details)  # pragma: no cover
-        return result
+                raise EventStoreDBClientException(error_details)  # pragma: no cover
 
     @staticmethod
     def _construct_read_request(
@@ -767,21 +764,24 @@ class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
                 timeout=timeout,
                 correlation_id=uuid4(),
             )
-            async for response in self._stub.BatchAppend(
+            batch_append_call = self._stub.BatchAppend(
                 iter([req]),
                 timeout=timeout,
                 metadata=self._metadata(metadata, requires_leader=True),
                 credentials=credentials,
-            ):
+            )
+
+            async for response in batch_append_call:
                 assert isinstance(response, streams_pb2.BatchAppendResp)
-                result = self._convert_batch_append_resp(response, stream_name)
-                if isinstance(result, BatchAppendResponse):
-                    return result.commit_position
-                else:
-                    assert isinstance(result, EventStoreDBClientException)
-                    raise result
+                batch_append_response = self._convert_batch_append_resp(
+                    response, stream_name, current_version
+                )
+                batch_append_call.cancel()
+                return batch_append_response
+
             else:  # pragma: no cover
-                raise EventStoreDBClientException("Batch append response not received")
+                msg = "Batch append response not received"
+                raise EventStoreDBClientException(msg)
 
         except grpc.RpcError as e:
             raise handle_rpc_error(e) from None
@@ -1138,7 +1138,7 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
             metadata=self._metadata(metadata),
             credentials=credentials,
         )
-        assert isinstance(read_resps, _ReadResps)  # a _MultiThreadedRendezvous
+        # assert isinstance(read_resps, _ReadResps)  # a _MultiThreadedRendezvous
 
         if subscribe is False:
             return ReadResponse(
@@ -1190,18 +1190,30 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
             # Response 'result' is either 'success' or 'wrong_expected_version'.
             result_oneof = append_resp.WhichOneof("result")
             if result_oneof == "success":
+                # Return commit position.
                 return append_resp.success.position.commit_position
             else:
                 assert result_oneof == "wrong_expected_version", result_oneof
                 wev = append_resp.wrong_expected_version
                 cro_oneof = wev.WhichOneof("current_revision_option")
-                if cro_oneof == "current_revision":
-                    raise WrongCurrentVersion(
-                        f"Current version is {wev.current_revision}"
-                    )
+                if cro_oneof == "current_no_stream":
+                    msg = f"Stream {stream_name!r} does not exist"
+                    raise WrongCurrentVersion(msg)
                 else:
-                    assert cro_oneof == "current_no_stream", cro_oneof
-                    raise WrongCurrentVersion(f"Stream {stream_name!r} does not exist")
+                    assert cro_oneof == "current_revision", cro_oneof
+                    msg = (
+                        f"Stream position of last event is"
+                        f" {wev.current_revision}"
+                        f" not {current_version}"
+                    )
+                    raise WrongCurrentVersion(msg)
+                # if cro_oneof == "current_revision":
+                #     msg = f"Current version is {wev.current_revision}"
+                #     raise WrongCurrentVersion(msg)
+                # else:
+                #     assert cro_oneof == "current_no_stream", cro_oneof
+                #     msg = f"Stream {stream_name!r} does not exist"
+                #     raise WrongCurrentVersion(msg)
 
     # def batch_append_multiplexed(
     #     self,
@@ -1301,12 +1313,9 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
                 credentials=credentials,
             ):
                 assert isinstance(response, streams_pb2.BatchAppendResp)
-                result = self._convert_batch_append_resp(response, stream_name)
-                if isinstance(result, BatchAppendResponse):
-                    return result.commit_position
-                else:
-                    assert isinstance(result, EventStoreDBClientException)
-                    raise result
+                return self._convert_batch_append_resp(
+                    response, stream_name, current_version
+                )
             else:  # pragma: no cover
                 raise EventStoreDBClientException("Batch append response not received")
 

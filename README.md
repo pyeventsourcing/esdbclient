@@ -938,7 +938,7 @@ an application command which generated the new events may need to be executed ag
 the user of the application may need to be given an opportunity to decide if they still wish to
 proceed with their original intention, by displaying a suitable error with an up-to-date view of
 the recorded state. In the case where concurrency controls have been disabled, by using `StreamState.ANY` or
-`StreamState.EXISTS` as the value of `current_position`, retrying a method call that failed to
+`StreamState.EXISTS` as the value of `current_version`, retrying a method call that failed to
 return successfully will, more simply, just attempt to ensure the new events are recorded, regardless
 of their resulting stream positions. In either case, when the method call does return successfully, we
 can be sure the events have been recorded.

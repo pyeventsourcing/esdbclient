@@ -8,8 +8,9 @@ from collections import Counter
 from tempfile import NamedTemporaryFile
 from threading import Thread
 from time import sleep
-from typing import List, Optional, Sequence, Set, Tuple, cast
+from typing import Any, List, Optional, Sequence, Set, Tuple, cast
 from unittest import TestCase, skipIf
+from unittest.case import _AssertRaisesContext
 from uuid import UUID, uuid4
 
 from grpc import RpcError, StatusCode
@@ -506,35 +507,6 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         self.assertEqual(events[0].commit_position, commit_position1)
         self.assertEqual(events[2].commit_position, commit_position2)
 
-    def test_stream_append_to_stream_takes_one_or_many_events(self) -> None:
-        # This method exists to match other language clients.
-        self.construct_esdb_client()
-        stream_name = str(uuid4())
-
-        event1 = NewEvent(type="OrderCreated", data=random_data())
-        event2 = NewEvent(type="OrderUpdated", data=random_data())
-        event3 = NewEvent(type="OrderDeleted", data=random_data())
-
-        # Append single event.
-        commit_position1 = self.client.append_to_stream(
-            stream_name=stream_name,
-            current_version=StreamState.NO_STREAM,
-            events=event1,
-        )
-
-        # Append sequence of events.
-        commit_position2 = self.client.append_to_stream(
-            stream_name=stream_name,
-            current_version=0,
-            events=[event2, event3],
-        )
-
-        # Check commit positions are returned.
-        events = list(self.client.read_all(commit_position=commit_position1))
-        self.assertEqual(len(events), 3)
-        self.assertEqual(events[0].commit_position, commit_position1)
-        self.assertEqual(events[2].commit_position, commit_position2)
-
     # def test_stream_append_to_stream_is_atomic(self) -> None:
     #     # This method exists to match other language clients.
     #     self.construct_esdb_client()
@@ -578,6 +550,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
     #     self.assertFalse(count_events(stream_name2))  # should be atomic
 
     def test_stream_append_event_with_current_version(self) -> None:
+        cm: _AssertRaisesContext[Any]
         self.construct_esdb_client()
         stream_name = str(uuid4())
 
@@ -661,7 +634,10 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
             self.client.append_event(
                 stream_name, current_version=StreamState.NO_STREAM, event=event2
             )
-        self.assertEqual(cm.exception.args[0], "Current version is 0")
+        self.assertEqual(
+            "Stream position of last event is 0 not StreamState.NO_STREAM",
+            cm.exception.args[0],
+        )
 
         # Append another event.
         commit_position2 = self.client.append_event(
@@ -709,7 +685,9 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         # Check we can't append another new event at second position.
         with self.assertRaises(WrongCurrentVersion) as cm:
             self.client.append_event(stream_name, current_version=0, event=event3)
-        self.assertEqual(cm.exception.args[0], "Current version is 1")
+        self.assertEqual(
+            "Stream position of last event is 1 not 0", cm.exception.args[0]
+        )
 
         # Append another new event.
         commit_position3 = self.client.append_event(
@@ -1034,7 +1012,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         event2 = NewEvent(type="OrderUpdated", data=random_data())
 
         # Fail to append (stream does not exist).
-        with self.assertRaises(NotFound):
+        with self.assertRaises(WrongCurrentVersion):
             self.client.append_events(
                 stream_name, current_version=1, events=[event1, event2]
             )
@@ -1142,7 +1120,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         event2 = NewEvent(type="OrderUpdated", data=random_data())
 
         # Append batch of new events.
-        with self.assertRaises(NotFound):
+        with self.assertRaises(WrongCurrentVersion):
             self.client.append_events(
                 stream_name, current_version=StreamState.EXISTS, events=[event1, event2]
             )
@@ -3348,7 +3326,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
         with self.assertRaises(ExceptionIteratingRequests) as cm:
             for _ in subscription:
                 subscription.ack(NotUUID())  # type: ignore
-        self.assertIsInstance(cm.exception.__cause__, AssertionError)
+        self.assertIsInstance(cm.exception.__cause__, ValueError)
 
     def test_subscription_to_stream_replay_parked(self) -> None:
         self.construct_esdb_client()
@@ -4290,7 +4268,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
             self.client.update_subscription_to_all(group_name=group_name)
         with self.assertRaises(NotFound):
             # raises in update()
-            self.client._esdb.persistent_subscriptions.update(
+            self.client._connection.persistent_subscriptions.update(
                 group_name=group_name,
                 metadata=self.client._call_metadata,
                 credentials=self.client._call_credentials,
@@ -7068,7 +7046,7 @@ class TestRequiresLeaderHeader(TimedTestCase):
 
     def _set_reader_connection_on_writer(self) -> None:
         # Give the writer a connection to a follower.
-        old, self.writer._esdb = self.writer._esdb, self.reader._esdb
+        old, self.writer._connection = self.writer._connection, self.reader._connection
         # - this is hopeful mitigation for the "Exception was thrown by handler"
         #   which is occasionally a cause of failure of test_append_events()
         #   with both EventStoreDB 21.10.9 and 22.10.0.
@@ -7333,12 +7311,14 @@ class TestRequiresLeaderHeader(TimedTestCase):
 
         # Check reader reconnects to leader.
         self.assertNotEqual(
-            self.reader._esdb._grpc_target, self.writer._esdb._grpc_target
+            self.reader._connection._grpc_target, self.writer._connection._grpc_target
         )
-        connection_id = id(self.reader._esdb)
+        connection_id = id(self.reader._connection)
         self.reader.get_stream(stream_name)
-        self.assertNotEqual(connection_id, id(self.reader._esdb))
-        self.assertEqual(self.reader._esdb._grpc_target, self.writer._esdb._grpc_target)
+        self.assertNotEqual(connection_id, id(self.reader._connection))
+        self.assertEqual(
+            self.reader._connection._grpc_target, self.writer._connection._grpc_target
+        )
 
 
 class TestAutoReconnectClosedConnection(TimedTestCase):
@@ -7382,8 +7362,10 @@ class TestAutoReconnectAfterServiceUnavailable(TimedTestCase):
         self.client = EventStoreDBClient(uri=uri, root_certificates=server_certificate)
 
         # Reconstruct connection with wrong port (to inspire ServiceUnavailable).
-        self.client._esdb.close()
-        self.client._esdb = self.client._construct_esdb_connection("localhost:2222")
+        self.client._connection.close()
+        self.client._connection = self.client._construct_esdb_connection(
+            "localhost:2222"
+        )
 
     def tearDown(self) -> None:
         try:
@@ -7515,6 +7497,7 @@ class TestConnectsDespiteBadTarget(EventStoreDBClientTestCase):
     def test(self) -> None:
         self.construct_esdb_client()
         self.client.get_commit_position()
+        self.assertEqual("localhost:2113", self.client.connection_target)
 
 
 class TestConnectToPreferredNode(EventStoreDBClientTestCase):

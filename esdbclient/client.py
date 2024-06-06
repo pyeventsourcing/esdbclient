@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import random
 import sys
+from abc import ABC, abstractmethod
 from functools import wraps
 from threading import Event, Lock
 from time import sleep
@@ -68,17 +69,25 @@ from esdbclient.gossip import (
     NODE_STATE_LEADER,
     NODE_STATE_REPLICA,
     ClusterMember,
+    GossipService,
 )
 from esdbclient.persistent import (
     ConsumerStrategy,
     PersistentSubscription,
+    PersistentSubscriptionsService,
     SubscriptionInfo,
 )
 from esdbclient.projections import (  # ProjectionResult,
+    ProjectionsService,
     ProjectionState,
     ProjectionStatistics,
 )
-from esdbclient.streams import CatchupSubscription, ReadResponse, StreamState
+from esdbclient.streams import (
+    CatchupSubscription,
+    ReadResponse,
+    StreamsService,
+    StreamState,
+)
 
 # Matches the 'type' of "system" events.
 ESDB_SYSTEM_EVENTS_REGEX = r"\$.+"
@@ -92,11 +101,11 @@ _TCallable = TypeVar("_TCallable", bound=Callable[..., Any])
 
 def autoreconnect(f: _TCallable) -> _TCallable:
     @wraps(f)
-    def autoreconnect_decorator(
-        client: "EventStoreDBClient", *args: Any, **kwargs: Any
-    ) -> Any:
+    def autoreconnect_decorator(*args: Any, **kwargs: Any) -> Any:
+        client = args[0]
+        assert isinstance(client, EventStoreDBClient)
         try:
-            return f(client, *args, **kwargs)
+            return f(*args, **kwargs)
 
         except NodeIsNotLeader as e:
             if (
@@ -108,22 +117,23 @@ def autoreconnect(f: _TCallable) -> _TCallable:
             ):
                 client.reconnect(e.leader_grpc_target)
                 sleep(0.1)
-                return f(client, *args, **kwargs)
+                return f(*args, **kwargs)
             else:
                 raise
 
         except ValueError as e:
-            if "Channel closed!" in str(e):
+            s = str(e)
+            if "Channel closed!" in s or "Cannot invoke RPC on closed channel!" in s:
                 client.reconnect()
                 sleep(0.1)
-                return f(client, *args, **kwargs)
+                return f(*args, **kwargs)
             else:  # pragma: no cover
                 raise
 
         except ServiceUnavailable:
             client.reconnect()
             sleep(0.1)
-            return f(client, *args, **kwargs)
+            return f(*args, **kwargs)
 
     return cast(_TCallable, autoreconnect_decorator)
 
@@ -140,7 +150,7 @@ def retrygrpc(f: _TCallable) -> _TCallable:
     return cast(_TCallable, retrygrpc_decorator)
 
 
-class BaseEventStoreDBClient:
+class BaseEventStoreDBClient(ABC):
     def __init__(
         self,
         uri: Optional[str] = None,
@@ -203,13 +213,18 @@ class BaseEventStoreDBClient:
         )
 
     @property
+    @abstractmethod
+    def connection_target(self) -> str:
+        pass  # pragma: no cover
+
+    @property
     def is_closed(self) -> bool:
         return self._is_closed
 
     def construct_call_credentials(
         self, username: Optional[str], password: Optional[str]
     ) -> Optional[grpc.CallCredentials]:
-        if username and password:
+        if username and password and self.connection_spec.options.Tls is True:
             return grpc.metadata_call_credentials(
                 BasicAuthCallCredentials(username, password)
             )
@@ -265,7 +280,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         )
         self._is_reconnection_required = Event()
         self._reconnection_lock = Lock()
-        self._esdb = self._connect()
+        self._connection = self._connect()
 
         # self._batch_append_futures_lock = Lock()
         # self._batch_append_futures_queue = BatchAppendFutureQueue()
@@ -273,6 +288,26 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         #     target=self._batch_append_future_result_loop, daemon=True
         # )
         # self._batch_append_thread.start()
+
+    @property
+    def connection_target(self) -> str:
+        return self._connection.grpc_target
+
+    @property
+    def streams(self) -> StreamsService:
+        return self._connection.streams
+
+    @property
+    def persistent_subscriptions(self) -> PersistentSubscriptionsService:
+        return self._connection.persistent_subscriptions
+
+    @property
+    def gossip(self) -> GossipService:
+        return self._connection.gossip
+
+    @property
+    def projections(self) -> ProjectionsService:
+        return self._connection.projections
 
     def _connect(self, grpc_target: Optional[str] = None) -> ESDBConnection:
         if grpc_target:
@@ -349,7 +384,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         with self._reconnection_lock:
             if self._is_reconnection_required.is_set():
                 new_conn = self._connect(grpc_target)
-                old_conn, self._esdb = self._esdb, new_conn
+                old_conn, self._connection = self._connection, new_conn
                 old_conn.close()
                 self._is_reconnection_required.clear()
             else:  # pragma: no cover
@@ -390,7 +425,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     #     # while self._channel_connectivity_state is not ChannelConnectivity.SHUTDOWN:
     #     credentials = None
     #     try:
-    #         self._esdb.streams.batch_append_multiplexed(
+    #         self.streams.batch_append_multiplexed(
     #             futures_queue=self._batch_append_futures_queue,
     #             timeout=None,
     #             metadata=self._call_metadata,
@@ -444,18 +479,14 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> int:
-        timeout = timeout if timeout is not None else self._default_deadline
-        return self._esdb.streams.batch_append(
+        return self.append_to_stream(
             stream_name=stream_name,
             current_version=current_version,
             events=events,
             timeout=timeout,
-            metadata=self._call_metadata,
-            credentials=credentials or self._call_credentials,
+            credentials=credentials,
         )
 
-    @retrygrpc
-    @autoreconnect
     def append_event(
         self,
         stream_name: str,
@@ -468,43 +499,46 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Appends a new event to the named stream.
         """
-        timeout = timeout if timeout is not None else self._default_deadline
-        return self._esdb.streams.append(
+        return self.append_to_stream(
             stream_name=stream_name,
             current_version=current_version,
-            events=[event],
+            events=event,
             timeout=timeout,
-            metadata=self._call_metadata,
-            credentials=credentials or self._call_credentials,
+            credentials=credentials,
         )
 
+    @retrygrpc
+    @autoreconnect
     def append_to_stream(
         self,
         stream_name: str,
         *,
         current_version: Union[int, StreamState],
-        events: Union[NewEvent, Sequence[NewEvent]],
+        events: Union[NewEvent, Iterable[NewEvent]],
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> int:
         """
         Appends a new event or a sequence of new events to the named stream.
         """
+        timeout = timeout if timeout is not None else self._default_deadline
         if isinstance(events, NewEvent):
-            return self.append_event(
+            return self.streams.append(
                 stream_name=stream_name,
                 current_version=current_version,
-                event=events,
+                events=[events],
                 timeout=timeout,
-                credentials=credentials,
+                metadata=self._call_metadata,
+                credentials=credentials or self._call_credentials,
             )
         else:
-            return self.append_events(
+            return self.streams.batch_append(
                 stream_name=stream_name,
                 current_version=current_version,
                 events=events,
                 timeout=timeout,
-                credentials=credentials,
+                metadata=self._call_metadata,
+                credentials=credentials or self._call_credentials,
             )
 
     @retrygrpc
@@ -519,7 +553,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     ) -> None:
         # Todo: Reconsider using current_version=None to indicate "stream exists"?
         timeout = timeout if timeout is not None else self._default_deadline
-        self._esdb.streams.delete(
+        self.streams.delete(
             stream_name=stream_name,
             current_version=current_version,
             timeout=timeout,
@@ -538,7 +572,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         credentials: Optional[grpc.CallCredentials] = None,
     ) -> None:
         timeout = timeout if timeout is not None else self._default_deadline
-        self._esdb.streams.tombstone(
+        self.streams.tombstone(
             stream_name=stream_name,
             current_version=current_version,
             timeout=timeout,
@@ -587,7 +621,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Reads recorded events from the named stream.
         """
-        return self._esdb.streams.read(
+        return self.streams.read(
             stream_name=stream_name,
             stream_position=stream_position,
             backwards=backwards,
@@ -614,7 +648,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Reads recorded events in "all streams" in the database.
         """
-        return self._esdb.streams.read(
+        return self.streams.read(
             commit_position=commit_position,
             backwards=backwards,
             resolve_links=resolve_links,
@@ -641,7 +675,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         try:
             last_event = list(
-                self._esdb.streams.read(
+                self.streams.read(
                     stream_name=stream_name,
                     backwards=True,
                     limit=1,
@@ -673,14 +707,15 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Returns the current commit position of the database.
         """
-        recorded_events = self.read_all(
+        recorded_events = self.streams.read(
             backwards=True,
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
             limit=1,
             timeout=timeout,
-            credentials=credentials,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
         )
         for ev in recorded_events:
             assert ev.commit_position is not None
@@ -766,7 +801,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         Starts a catch-up subscription, from which all
         recorded events in the database can be received.
         """
-        return self._esdb.streams.read(
+        return self.streams.read(
             commit_position=commit_position,
             from_end=from_end,
             resolve_links=resolve_links,
@@ -844,7 +879,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         Starts a catch-up subscription from which
         recorded events in a stream can be received.
         """
-        return self._esdb.streams.read(
+        return self.streams.read(
             stream_name=stream_name,
             stream_position=stream_position,
             from_end=from_end,
@@ -974,7 +1009,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._esdb.persistent_subscriptions.create(
+        self.persistent_subscriptions.create(
             group_name=group_name,
             from_end=from_end,
             commit_position=commit_position,
@@ -1106,7 +1141,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._esdb.persistent_subscriptions.create(
+        self.persistent_subscriptions.create(
             group_name=group_name,
             stream_name=stream_name,
             from_end=from_end,
@@ -1144,7 +1179,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Reads a persistent subscription on all streams.
         """
-        return self._esdb.persistent_subscriptions.read(
+        return self.persistent_subscriptions.read(
             group_name=group_name,
             event_buffer_size=event_buffer_size,
             max_ack_batch_size=max_ack_batch_size,
@@ -1172,7 +1207,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Reads a persistent subscription on one stream.
         """
-        return self._esdb.persistent_subscriptions.read(
+        return self.persistent_subscriptions.read(
             group_name=group_name,
             stream_name=stream_name,
             event_buffer_size=event_buffer_size,
@@ -1197,7 +1232,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Gets info for a persistent subscription.
         """
-        return self._esdb.persistent_subscriptions.get_info(
+        return self.persistent_subscriptions.get_info(
             group_name=group_name,
             stream_name=stream_name,
             timeout=timeout,
@@ -1216,7 +1251,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Lists all persistent subscriptions.
         """
-        return self._esdb.persistent_subscriptions.list(
+        return self.persistent_subscriptions.list(
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1234,7 +1269,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         Lists persistent stream subscriptions.
         """
-        return self._esdb.persistent_subscriptions.list(
+        return self.persistent_subscriptions.list(
             stream_name=stream_name,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -1387,7 +1422,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             extra_statistics=extra_statistics,
         )
 
-        self._esdb.persistent_subscriptions.update(
+        self.persistent_subscriptions.update(
             group_name=group_name,
             **kwargs,
             timeout=timeout if timeout is not None else self._default_deadline,
@@ -1549,7 +1584,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             extra_statistics=extra_statistics,
         )
 
-        self._esdb.persistent_subscriptions.update(
+        self.persistent_subscriptions.update(
             group_name=group_name,
             stream_name=stream_name,
             **kwargs,
@@ -1570,7 +1605,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     ) -> None:
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._esdb.persistent_subscriptions.replay_parked(
+        self.persistent_subscriptions.replay_parked(
             group_name=group_name,
             stream_name=stream_name,
             timeout=timeout,
@@ -1593,7 +1628,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._esdb.persistent_subscriptions.delete(
+        self.persistent_subscriptions.delete(
             group_name=group_name,
             stream_name=stream_name,
             timeout=timeout,
@@ -1614,7 +1649,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             if timeout is not None
             else self.connection_spec.options.GossipTimeout
         )
-        return self._esdb.gossip.read(
+        return self.gossip.read(
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1637,7 +1672,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._esdb.projections.create(
+        self.projections.create(
             query=query,
             name=name,
             emit_enabled=emit_enabled,
@@ -1663,7 +1698,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._esdb.projections.update(
+        self.projections.update(
             name=name,
             query=query,
             emit_enabled=emit_enabled,
@@ -1689,7 +1724,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._esdb.projections.delete(
+        self.projections.delete(
             name=name,
             delete_emitted_streams=delete_emitted_streams,
             delete_state_stream=delete_state_stream,
@@ -1713,7 +1748,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        return self._esdb.projections.get_statistics(
+        return self.projections.get_statistics(
             name=name,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -1734,7 +1769,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._esdb.projections.disable(
+        self.projections.disable(
             name=name,
             write_checkpoint=True,
             timeout=timeout,
@@ -1756,7 +1791,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._esdb.projections.enable(
+        self.projections.enable(
             name=name,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -1777,7 +1812,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        self._esdb.projections.reset(
+        self.projections.reset(
             name=name,
             write_checkpoint=True,
             timeout=timeout,
@@ -1799,7 +1834,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        return self._esdb.projections.get_state(
+        return self.projections.get_state(
             name=name,
             partition="",
             timeout=timeout,
@@ -1821,7 +1856,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     #     """
     #     timeout = timeout if timeout is not None else self._default_deadline
     #
-    #     return self._esdb.projections.get_result(
+    #     return self.projections.get_result(
     #         name=name,
     #         partition="",
     #         timeout=timeout,
@@ -1842,7 +1877,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        return self._esdb.projections.restart_subsystem(
+        return self.projections.restart_subsystem(
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1854,7 +1889,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         """
         if not self._is_closed:
             try:
-                esdb_connection = self._esdb
+                esdb_connection = self._connection
             except AttributeError:
                 pass
             else:
