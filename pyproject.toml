@@ -33,6 +33,12 @@ protobuf = ">=3.11.0"
 #protobuf = ">=3.11.0,<3.21.0"
 typing_extensions = "*"
 
+opentelemetry-api = { version = "^1.25.0", optional = true }
+opentelemetry-instrumentation = { version = "^0.46b0", optional = true }
+opentelemetry-semantic-conventions = { version = "^0.46b0", optional = true }
+
+[tool.poetry.extras]
+opentelemetry = ["opentelemetry-api", "opentelemetry-instrumentation", "opentelemetry-semantic-conventions"]
 
 [tool.poetry.group.dev.dependencies]
 black = { version = "*", allow-prereleases = true }
@@ -52,7 +58,6 @@ types-protobuf = "*"
 mypy-protobuf = "*"
 coverage = "^7.2.7"
 fastapi = "^0.111.0"
-opentelemetry-sdk = "^1.25.0"
 opentelemetry-exporter-otlp-proto-http = "^1.25.0"
 opentelemetry-exporter-otlp-proto-grpc = "^1.25.0"
 opentelemetry-instrumentation-grpc = "^0.46b0"

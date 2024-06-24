@@ -10,7 +10,6 @@ from typing import Any, Callable, Mapping, Sequence, Tuple
 import grpc
 import opentelemetry.trace as trace_api
 from grpc._channel import _Rendezvous
-from opentelemetry.instrumentation.grpc.grpcext._interceptor import _StreamClientInfo
 from opentelemetry.instrumentation.utils import unwrap
 from opentelemetry.propagate import inject
 from opentelemetry.semconv.trace import SpanAttributes
@@ -22,6 +21,9 @@ try:
         _carrier_setter,
     )
     from opentelemetry.instrumentation.grpc._utilities import RpcInfo
+    from opentelemetry.instrumentation.grpc.grpcext._interceptor import (
+        _StreamClientInfo,
+    )
 
 except ImportError:  # pragma: no cover
     OpenTelemetryClientInterceptor = None  # type: ignore

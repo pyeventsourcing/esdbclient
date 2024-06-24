@@ -93,6 +93,8 @@ https://github.com/pyeventsourcing/eventsourcing-eventstoredb) package.
 * [Notes](#notes)
   * [Regular expression filters](#regular-expression-filters)
   * [Reconnect and retry method decorators](#reconnect-and-retry-method-decorators)
+* [Instrumentation](#instrumentation)
+  * [OpenTelemetry](#open-telemetry)
 * [Communities](#communities)
 * [Contributors](#contributors)
   * [Install Poetry](#install-poetry)
@@ -3464,6 +3466,124 @@ need to be restarted. Similarly, when reading persistent subscriptions, if there
 connection issues whilst iterating over a successfully received response, the consumer
 will need to be restarted.
 
+## Instrumentation<a id="instrumentation"></a>
+
+Instrumentation is the act of modifying software so that analysis can be performed on it.
+Instrumentation helps enterprises reveal areas or features where users frequently
+encounter errors or slowdowns in their software or platform.
+
+Instrumentation helps you understand the inner state of your software systems.
+Instrumented applications measure what code is doing when it responds to active
+requests by collecting data such as metrics, events, logs, and traces.
+
+Instrumentation provides immediate visibility into your application, often using
+charts and graphs to illustrate what is going on “under the hood.”
+
+This package supports instrumenting the EventStoreDB clients with OpenTelemetry.
+
+### OpenTelemetry<a id="open-telemetry"></a>
+
+The [OpenTelemetry](https://opentelemetry.io) project provides a collection of APIs,
+SDKs, and tools for instrumenting, generating, collecting, and exporting telemetry data,
+that can help you analyze your software’s performance and behavior. It is vendor-neutral,
+100% Free and Open Source, and adopted and supported by industry leaders in the
+observability space.
+
+This package provides OpenTelemetry instrumentors for both the `EventStoreDBClient`
+and the `AsyncEventStoreDBClient` clients. These instrumentors depend on the Python
+OpenTelemetry SDK, which you will need to install separately, preferably with this
+project's "opentelemetry" package extra to ensure verified version compatibility.
+
+You can install the "opentelemetry" package extra with pip.
+
+    $ pip install esdbclient[opentelemetry]
+
+Or you can use Poetry to add it to your pyproject.toml and install it.
+
+    $ poetry add esdbclient[opentelemetry]
+
+
+You can use the OpenTelemetry instrumentor `EventStoreDBClientInstrumentor` to
+instrument the `EventStoreDBClient`.
+
+```python
+from esdbclient.instrumentation.opentelemetry import EventStoreDBClientInstrumentor
+
+# Activate instrumentation.
+EventStoreDBClientInstrumentor().instrument()
+
+# Deactivate instrumentation.
+EventStoreDBClientInstrumentor().uninstrument()
+```
+
+You can use the OpenTelemetry instrumentor `AsyncEventStoreDBClientInstrumentor`
+to instrument the `AsyncEventStoreDBClient`.
+
+```python
+from esdbclient.instrumentation.opentelemetry import AsyncEventStoreDBClientInstrumentor
+
+# Activate instrumentation.
+AsyncEventStoreDBClientInstrumentor().instrument()
+
+# Deactivate instrumentation.
+AsyncEventStoreDBClientInstrumentor().uninstrument()
+```
+
+The instrumentors use a global OpenTelemetry tracer provider, which you will need to
+initialise in order to export telemetry data.
+
+For example, to export data to the console you will need to install the Python
+package `opentelemetry-sdk`, and use the class `TracerProvider`, `BatchSpanProcessor`,
+and `ConsoleSpanExporter` in the following way.
+
+```python
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+from opentelemetry.trace import set_tracer_provider
+
+resource = Resource.create(
+    attributes={
+        SERVICE_NAME: "eventstoredb",
+    }
+)
+provider = TracerProvider(resource=resource)
+provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
+set_tracer_provider(provider)
+```
+
+To export to an OpenTelemetry compatible data collector, such as
+[Jaeger](https://www.jaegertracing.io), you will need to install the Python package
+`opentelemetry-exporter-otlp-proto-http`, and then use the class `OTLPSpanExporter`
+from the `opentelemetry.exporter.otlp.proto.http.trace_exporter` module, with an
+appropriate `endpoint` argument for your collector.
+
+```python
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.trace import set_tracer_provider
+
+resource = Resource.create(
+    attributes={
+        SERVICE_NAME: "eventstoredb",
+    }
+)
+provider = TracerProvider(resource=resource)
+provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint="http://localhost:4318/v1/traces")))
+set_tracer_provider(provider)
+```
+
+You can start Jaeger locally by running the following command.
+
+    $ docker run -d -p 4318:4318 -p 16686:16686 --name jaeger jaegertracing/all-in-one:latest
+
+You can then navigate to `http://localhost:16686` to access the Jaeger UI. Telemetry
+data can be sent by your tracer provider to `http://localhost:4318/v1/traces`.
+
+At this time, the instrumented methods are `append_to_stream()`, `subscribe_to_stream()`
+`subscribe_to_all()`, `read_subscription_to_stream()`, `read_subscription_to_all()`.
 
 ## Communities<a id="communities"></a>
 
