@@ -89,6 +89,9 @@ SPAN_KINDS_BY_CLIENT_METHOD = {
     AsyncEventStoreDBClient.read_subscription_to_stream.__qualname__: SpanKind.CONSUMER,
 }
 
+METADATA_TRACE_ID = "$traceId"
+METADATA_SPAN_ID = "$spanId"
+
 
 def _get_span_kind(func: Callable[..., Any]) -> SpanKind:
     return SPAN_KINDS_BY_CLIENT_METHOD.get(func.__qualname__, SpanKind.CLIENT)
@@ -230,6 +233,79 @@ def _stack_include(line: str) -> bool:
     return _stack_exclude_regex.match(line) is None
 
 
+def _propagate_context_via_events(
+    context: SpanContext, kwargs: MutableMapping[str, Any]
+) -> None:
+    if "events" in kwargs:
+        events = cast(Union[NewEvent, Sequence[NewEvent]], kwargs["events"])
+        reconstructed_events = []
+        if isinstance(events, NewEvent):
+            events = [events]
+        for event in events:
+            event = _inject_context_in_event(event, context)
+            reconstructed_events.append(event)
+        kwargs["events"] = reconstructed_events
+
+
+def _inject_context_in_event(event: NewEvent, context: SpanContext) -> NewEvent:
+    try:
+        metadata = _inject_span_and_trace_ids(
+            event.metadata,
+            context.span_id,
+            context.trace_id,
+        )
+    except Exception:
+        return event
+    else:
+        return NewEvent(
+            id=event.id,
+            type=event.type,
+            data=event.data,
+            content_type=event.content_type,
+            metadata=metadata,
+        )
+
+
+def _inject_span_and_trace_ids(metadata: bytes, span_id: int, trace_id: int) -> bytes:
+    d = json.loads((metadata or b"{}").decode("utf8"))
+    d[METADATA_SPAN_ID] = _int_to_hex(span_id)
+    d[METADATA_TRACE_ID] = _int_to_hex(trace_id)
+    return json.dumps(d).encode("utf8")
+
+
+def _int_to_hex(i: int) -> str:
+    return f"{i:#x}"
+
+
+def _extract_context_from_event(recorded_event: RecordedEvent) -> Optional[Context]:
+    try:
+        parent_span_id, trace_id = _extract_span_and_trace_ids(recorded_event.metadata)
+    except Exception:
+        context: Optional[Context] = None
+    else:
+        trace_flags = TraceFlags(TraceFlags.SAMPLED)
+        span_context = SpanContext(
+            trace_id=trace_id,
+            span_id=parent_span_id,
+            is_remote=True,
+            trace_flags=trace_flags,
+        )
+        context = set_span_in_context(
+            NonRecordingSpan(span_context),
+            Context(),
+        )
+    return context
+
+
+def _extract_span_and_trace_ids(metadata: bytes) -> Tuple[int, int]:
+    m = json.loads(metadata.decode("utf8"))
+    return _hex_to_int(m[METADATA_SPAN_ID]), _hex_to_int(m[METADATA_TRACE_ID])
+
+
+def _hex_to_int(hex_string: str) -> int:
+    return int(hex_string, 16)
+
+
 T = TypeVar("T")
 
 SpannerType = Callable[
@@ -364,43 +440,13 @@ def span_append_to_stream(
                 db_operation_name=span_name,
                 stream_name=stream_name,
             )
-            _add_trace_metadata_to_events(span, kwargs)
+            _propagate_context_via_events(span.get_span_context(), kwargs)
             yield original(*args, **kwargs)
         except Exception as e:
             _set_span_error(span, e)
             raise
         else:
             _set_span_ok(span)
-
-
-def _add_trace_metadata_to_events(span: Span, kwargs: MutableMapping[str, Any]) -> None:
-    events = cast(Union[NewEvent, Sequence[NewEvent]], kwargs["events"])
-    reconstructed_events = []
-    if isinstance(events, NewEvent):
-        events = [events]
-    for event in events:
-        metadata_bytes = event.metadata
-        if metadata_bytes == b"":
-            metadata_bytes = b"{}"
-        try:
-            metadata_dict = json.loads(metadata_bytes.decode("utf8"))
-            span_context = span.get_span_context()
-            metadata_dict["$traceId"] = f"{span_context.trace_id:#x}"
-            metadata_dict["$spanId"] = f"{span_context.span_id:#x}"
-            metadata_bytes = json.dumps(metadata_dict).encode("utf8")
-        except Exception:
-            reconstructed_event = event
-        else:
-            reconstructed_event = NewEvent(
-                id=event.id,
-                type=event.type,
-                data=event.data,
-                content_type=event.content_type,
-                metadata=metadata_bytes,
-            )
-
-        reconstructed_events.append(reconstructed_event)
-    kwargs["events"] = reconstructed_events
 
 
 @contextmanager
@@ -578,23 +624,6 @@ class TracedRecordedEventIterator(
                 span.end()
                 self._current_span = None
 
-    # def _enrich_span(
-    #     self,
-    #     *,
-    #     span: Span,
-    #     stream_name: Optional[str] = None,
-    #     event_id: Optional[str] = None,
-    #     event_type: Optional[str] = None,
-    # ) -> None:
-    #     _enrich_span(
-    #         span=span,
-    #         client=self.client,
-    #         db_operation_name=self.span_name,
-    #         stream_name=stream_name,
-    #         event_id=event_id,
-    #         event_type=event_type,
-    #     )
-
     def stop(self) -> None:
         self.response.stop()
 
@@ -636,26 +665,7 @@ class TracedRecordedEventSubscription(
                 _set_span_error(span, e)
                 raise
         else:
-            # Set the span's parentId as the $spanId from recorded event metadata,
-            # and the span's traceId as the $traceId from recorded event metadata.
-            try:
-                metadata_dict = json.loads(recorded_event.metadata.decode("utf8"))
-                trace_id = metadata_dict["$traceId"]
-                parent_span_id = metadata_dict["$spanId"]
-            except Exception:
-                context: Optional[Context] = None
-            else:
-                trace_flags = TraceFlags(TraceFlags.SAMPLED)
-                span_context = SpanContext(
-                    trace_id=int(trace_id, 16),
-                    span_id=int(parent_span_id, 16),
-                    is_remote=True,
-                    trace_flags=trace_flags,
-                )
-                context = set_span_in_context(
-                    NonRecordingSpan(span_context),
-                    Context(),
-                )
+            context = _extract_context_from_event(recorded_event)
 
             with _start_span(
                 self.tracer, self.span_name, self.span_kind, context=context
@@ -824,27 +834,7 @@ class TracedAsyncRecordedEventSubscription(
                 _set_span_error(span, e)
                 raise
         else:
-            # Set the span's parentId as the $spanId from recorded event metadata,
-            # and the span's traceId as the $traceId from recorded event metadata.
-            try:
-                metadata_dict = json.loads(recorded_event.metadata.decode("utf8"))
-                trace_id = metadata_dict["$traceId"]
-                parent_span_id = metadata_dict["$spanId"]
-            except Exception:
-                context: Optional[Context] = None
-            else:
-                trace_flags = TraceFlags(TraceFlags.SAMPLED)
-                span_context = SpanContext(
-                    trace_id=int(trace_id, 16),
-                    span_id=int(parent_span_id, 16),
-                    is_remote=True,
-                    trace_flags=trace_flags,
-                )
-                context = set_span_in_context(
-                    NonRecordingSpan(span_context),
-                    Context(),
-                )
-
+            context = _extract_context_from_event(recorded_event)
             with _start_span(
                 self.tracer, self.span_name, self.span_kind, context=context
             ) as span:

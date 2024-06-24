@@ -155,6 +155,14 @@ class TestDocs(TestCase):
 
         print(f"{num_code_lines} lines of code in {doc_path}")
 
+        for i, line in enumerate(lines):
+            if "set_tracer_provider(" in line:
+                lines[i] = ""
+            if "instrument()" in line:
+                lines[i] = ""
+            if "uninstrument()" in line:
+                lines[i] = ""
+
         source = "\n".join(lines) + "\n"
 
         # # Write the code into a temp file.

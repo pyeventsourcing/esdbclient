@@ -43,7 +43,13 @@ from opentelemetry.sdk.trace.export import (
 
 # from opentelemetry.sdk.trace.export import ConsoleSpanExporter, SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from opentelemetry.trace import SpanKind, Tracer, get_tracer, set_tracer_provider
+from opentelemetry.trace import (
+    INVALID_SPAN_CONTEXT,
+    SpanKind,
+    Tracer,
+    get_tracer,
+    set_tracer_provider,
+)
 from opentelemetry.util.types import AttributeValue
 
 from esdbclient import (
@@ -61,6 +67,7 @@ from esdbclient.instrumentation.opentelemetry import (
 )
 from esdbclient.instrumentation.opentelemetry.utils import (
     _enrich_span,
+    _propagate_context_via_events,
     _set_span_error,
     _set_span_ok,
     _start_span,
@@ -419,28 +426,6 @@ class BaseEventStoreDBClientTestCase(TestCase, ABC, Generic[TEventStoreDBClient]
         }
         self.assertEqual(resource_attributes, span.resource.attributes)
 
-        # Check span parent.
-        if parent_span_index is not None:
-            self.assertIsNotNone(span.parent)
-            assert span.parent is not None  # for mypy
-            parent_span = spans[parent_span_index]
-            self.assertIsNotNone(parent_span.context)
-            assert parent_span.context is not None  # for mypy
-            # Check "streams.subscribe" parent span ID is the "streams.append" span ID.
-            self.assertEqual(parent_span.context.span_id, span.parent.span_id)
-            # Check "streams.subscribe" parent trace ID is the "streams.append" trace ID.
-            self.assertEqual(parent_span.context.trace_id, span.parent.trace_id)
-        else:
-            self.assertIsNone(span.parent)
-            # if span.parent is not None:
-            #     current_span = cast(trace_sdk.Span, trace_api.get_current_span())
-            #     self.assertTrue(
-            #         current_span.name.startswith("test_"), current_span.name
-            #     )
-            #     self.assertEqual(
-            #         current_span.get_span_context().span_id, span.parent.span_id
-            #     )
-
         # Check the span attributes.
         if span_attributes is None:
             span_attributes = {}
@@ -506,6 +491,28 @@ class BaseEventStoreDBClientTestCase(TestCase, ABC, Generic[TEventStoreDBClient]
             self.assertEqual(str(error), event_attributes["exception.message"])
             self.assertEqual(str(True), event_attributes["exception.escaped"])
             self.assertIn("Traceback", str(event_attributes["exception.stacktrace"]))
+
+        # Check span parent.
+        if parent_span_index is not None:
+            self.assertIsNotNone(span.parent)
+            assert span.parent is not None  # for mypy
+            parent_span = spans[parent_span_index]
+            self.assertIsNotNone(parent_span.context)
+            assert parent_span.context is not None  # for mypy
+            # Check "streams.subscribe" parent span ID is the "streams.append" span ID.
+            self.assertEqual(parent_span.context.span_id, span.parent.span_id)
+            # Check "streams.subscribe" parent trace ID is the "streams.append" trace ID.
+            self.assertEqual(parent_span.context.trace_id, span.parent.trace_id)
+        else:
+            self.assertIsNone(span.parent)
+            # if span.parent is not None:
+            #     current_span = cast(trace_sdk.Span, trace_api.get_current_span())
+            #     self.assertTrue(
+            #         current_span.name.startswith("test_"), current_span.name
+            #     )
+            #     self.assertEqual(
+            #         current_span.get_span_context().span_id, span.parent.span_id
+            #     )
 
 
 class EventStoreDBClientInstrumentorTestCase(
@@ -683,7 +690,7 @@ class AsyncEventStoreDBClientInstrumentorTestCase(
 
 
 class BaseUtilsTestCase(BaseEventStoreDBClientTestCase[TEventStoreDBClient]):
-    def test(self) -> None:
+    def test_span_helpers(self) -> None:
         tracer = get_tracer("esdbclient.instrumentation.opentelemetry", "1.1")
         client = self.construct_client()
         self.check_spans(num_spans=0)
@@ -884,7 +891,99 @@ class BaseUtilsTestCase(BaseEventStoreDBClientTestCase[TEventStoreDBClient]):
 class TestUtils(
     EventStoreDBClientInstrumentorTestCase, BaseUtilsTestCase[EventStoreDBClient]
 ):
-    pass
+    def test_propagate_context_via_events(self) -> None:
+        # Missing "events".
+        kwargs: Dict[str, Any] = {}
+        context = INVALID_SPAN_CONTEXT
+        _propagate_context_via_events(context, kwargs)
+        self.assertEqual({}, kwargs)
+
+        # Single event, empty metadata.
+        event1 = NewEvent("SomethingHappened", b"{}", b"")
+        kwargs = {"events": event1}
+        _propagate_context_via_events(context, kwargs)
+        expected_kwargs = {
+            "events": [
+                NewEvent(
+                    type="SomethingHappened",
+                    data=b"{}",
+                    metadata=b'{"$spanId": "0x0", "$traceId": "0x0"}',
+                    id=event1.id,
+                )
+            ]
+        }
+        self.assertEqual(repr(expected_kwargs), repr(kwargs))
+
+        # Single event, json metadata.
+        event1 = NewEvent("SomethingHappened", b"{}", b"{}")
+        kwargs = {"events": event1}
+        _propagate_context_via_events(context, kwargs)
+        expected_kwargs = {
+            "events": [
+                NewEvent(
+                    type="SomethingHappened",
+                    data=b"{}",
+                    metadata=b'{"$spanId": "0x0", "$traceId": "0x0"}',
+                    id=event1.id,
+                )
+            ]
+        }
+        self.assertEqual(repr(expected_kwargs), repr(kwargs))
+
+        # Single event, json metadata.
+        event1 = NewEvent("SomethingHappened", b"{}", b'{"my-key": "my-value"}')
+        kwargs = {"events": event1}
+        _propagate_context_via_events(context, kwargs)
+        expected_kwargs = {
+            "events": [
+                NewEvent(
+                    type="SomethingHappened",
+                    data=b"{}",
+                    metadata=b'{"my-key": "my-value", "$spanId": "0x0", "$traceId": "0x0"}',
+                    id=event1.id,
+                )
+            ]
+        }
+        self.assertEqual(repr(expected_kwargs), repr(kwargs))
+
+        # Single event, non-json metadata.
+        event1 = NewEvent("SomethingHappened", b"{}", b"12345")
+        kwargs = {"events": event1}
+        _propagate_context_via_events(context, kwargs)
+        expected_kwargs = {
+            "events": [
+                NewEvent(
+                    type="SomethingHappened",
+                    data=b"{}",
+                    metadata=b"12345",
+                    id=event1.id,
+                )
+            ]
+        }
+        self.assertEqual(repr(expected_kwargs), repr(kwargs))
+
+        # Multiple events.
+        event1 = NewEvent("SomethingHappened", b"{}", b"")
+        event2 = NewEvent("SomethingHappened", b"{}", b"12345")
+        kwargs = {"events": [event1, event2]}
+        _propagate_context_via_events(context, kwargs)
+        expected_kwargs = {
+            "events": [
+                NewEvent(
+                    type="SomethingHappened",
+                    data=b"{}",
+                    metadata=b'{"$spanId": "0x0", "$traceId": "0x0"}',
+                    id=event1.id,
+                ),
+                NewEvent(
+                    type="SomethingHappened",
+                    data=b"{}",
+                    metadata=b"12345",
+                    id=event2.id,
+                ),
+            ]
+        }
+        self.assertEqual(repr(expected_kwargs), repr(kwargs))
 
 
 class AsyncTestUtils(
