@@ -3490,8 +3490,8 @@ that can help you analyze your software’s performance and behavior. It is vend
 observability space.
 
 This package provides OpenTelemetry instrumentors for both the `EventStoreDBClient`
-and the `AsyncEventStoreDBClient` clients. These instrumentors depend on the Python
-OpenTelemetry SDK, which you will need to install separately, preferably with this
+and the `AsyncEventStoreDBClient` clients. These instrumentors depend on various Python
+OpenTelemetry packages, which you will need to install, preferably with this
 project's "opentelemetry" package extra to ensure verified version compatibility.
 
 You can install the "opentelemetry" package extra with pip.
@@ -3584,6 +3584,17 @@ data can be sent by your tracer provider to `http://localhost:4318/v1/traces`.
 
 At this time, the instrumented methods are `append_to_stream()`, `subscribe_to_stream()`
 `subscribe_to_all()`, `read_subscription_to_stream()`, `read_subscription_to_all()`.
+
+The `append_to_stream()` method is instrumented by spanning the method call with a
+"producer" span kind. It also adds span context information to the new event metadata
+so that consumers can associate "consumer" spans with the "producer" span.
+
+The subscription methods are instrumented by instrumenting the response iterators,
+creating a "consumer" span for each recorded event received. It extracts span
+context information from the recorded event metadata and associates the "consumer"
+spans with a "producer" span, by making the "consumer" span a child of the "producer"
+span.
+
 
 ## Communities<a id="communities"></a>
 
