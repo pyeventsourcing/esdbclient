@@ -3490,20 +3490,20 @@ that can help you analyze your software’s performance and behavior. It is vend
 observability space.
 
 This package provides OpenTelemetry instrumentors for both the `EventStoreDBClient`
-and the `AsyncEventStoreDBClient` clients. These instrumentors depend on various Python
-OpenTelemetry packages, which you will need to install, preferably with this
+and the `AsyncEventStoreDBClient` clients. These instrumentors depend on various
+OpenTelemetry Python packages, which you will need to install, preferably with this
 project's "opentelemetry" package extra to ensure verified version compatibility.
 
-You can install the "opentelemetry" package extra with pip.
+For example, you can install the "opentelemetry" package extra with pip.
 
     $ pip install esdbclient[opentelemetry]
 
-Or you can use Poetry to add it to your pyproject.toml and install it.
+Or you can use Poetry to add it to your pyproject.toml file and install it.
 
     $ poetry add esdbclient[opentelemetry]
 
 
-You can use the OpenTelemetry instrumentor `EventStoreDBClientInstrumentor` to
+You can then use the OpenTelemetry instrumentor `EventStoreDBClientInstrumentor` to
 instrument the `EventStoreDBClient`.
 
 ```python
@@ -3516,7 +3516,7 @@ EventStoreDBClientInstrumentor().instrument()
 EventStoreDBClientInstrumentor().uninstrument()
 ```
 
-You can use the OpenTelemetry instrumentor `AsyncEventStoreDBClientInstrumentor`
+You can also use the OpenTelemetry instrumentor `AsyncEventStoreDBClientInstrumentor`
 to instrument the `AsyncEventStoreDBClient`.
 
 ```python
@@ -3529,7 +3529,7 @@ AsyncEventStoreDBClientInstrumentor().instrument()
 AsyncEventStoreDBClientInstrumentor().uninstrument()
 ```
 
-The instrumentors use a global OpenTelemetry tracer provider, which you will need to
+The instrumentors use a global OpenTelemetry "tracer provider", which you will need to
 initialise in order to export telemetry data.
 
 For example, to export data to the console you will need to install the Python
@@ -3552,7 +3552,7 @@ provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
 set_tracer_provider(provider)
 ```
 
-To export to an OpenTelemetry compatible data collector, such as
+Or to export to an OpenTelemetry compatible data collector, such as
 [Jaeger](https://www.jaegertracing.io), you will need to install the Python package
 `opentelemetry-exporter-otlp-proto-http`, and then use the class `OTLPSpanExporter`
 from the `opentelemetry.exporter.otlp.proto.http.trace_exporter` module, with an
@@ -3579,8 +3579,8 @@ You can start Jaeger locally by running the following command.
 
     $ docker run -d -p 4318:4318 -p 16686:16686 --name jaeger jaegertracing/all-in-one:latest
 
-You can then navigate to `http://localhost:16686` to access the Jaeger UI. Telemetry
-data can be sent by your tracer provider to `http://localhost:4318/v1/traces`.
+You can then navigate to `http://localhost:16686` to access the Jaeger UI. And telemetry
+data can be sent by an OpenTelemetry tracer provider to `http://localhost:4318/v1/traces`.
 
 At this time, the instrumented methods are `append_to_stream()`, `subscribe_to_stream()`
 `subscribe_to_all()`, `read_subscription_to_stream()`, `read_subscription_to_all()`.
