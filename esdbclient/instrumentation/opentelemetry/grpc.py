@@ -72,7 +72,7 @@ def _replacement_intercept_server_stream(
     else:
         mutable_metadata = OrderedDict(metadata)
 
-    with self._start_span(
+    with self._start_span(  # type: ignore[no-untyped-call]
         client_info.full_method,
         end_on_exit=False,
         record_exception=False,
@@ -80,7 +80,7 @@ def _replacement_intercept_server_stream(
     ) as span:
         inject(mutable_metadata, setter=_carrier_setter)
         metadata = tuple(mutable_metadata.items())
-        rpc_info = RpcInfo(
+        rpc_info = RpcInfo(  # type: ignore[no-untyped-call]
             full_method=client_info.full_method,
             metadata=metadata,
             timeout=client_info.timeout,

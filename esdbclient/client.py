@@ -511,6 +511,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
     @autoreconnect
     def append_to_stream(
         self,
+        /,
         stream_name: str,
         *,
         current_version: Union[int, StreamState],
@@ -818,49 +819,49 @@ class EventStoreDBClient(BaseEventStoreDBClient):
             credentials=credentials or self._call_credentials,
         )
 
-    @overload
-    def subscribe_to_stream(
-        self,
-        stream_name: str,
-        *,
-        resolve_links: bool = False,
-        include_caught_up: bool = False,
-        timeout: Optional[float] = None,
-        credentials: Optional[grpc.CallCredentials] = None,
-    ) -> CatchupSubscription:
-        """
-        Signature to start catch-up subscription from the start of the stream.
-        """
-
-    @overload
-    def subscribe_to_stream(
-        self,
-        stream_name: str,
-        *,
-        stream_position: int,
-        resolve_links: bool = False,
-        include_caught_up: bool = False,
-        timeout: Optional[float] = None,
-        credentials: Optional[grpc.CallCredentials] = None,
-    ) -> CatchupSubscription:
-        """
-        Signature to start catch-up subscription from a particular stream position.
-        """
-
-    @overload
-    def subscribe_to_stream(
-        self,
-        stream_name: str,
-        *,
-        from_end: Literal[True] = True,
-        resolve_links: bool = False,
-        include_caught_up: bool = False,
-        timeout: Optional[float] = None,
-        credentials: Optional[grpc.CallCredentials] = None,
-    ) -> CatchupSubscription:
-        """
-        Signature to start catch-up subscription from the end of the stream.
-        """
+    # @overload
+    # def subscribe_to_stream(
+    #     self,
+    #     stream_name: str,
+    #     *,
+    #     resolve_links: bool = False,
+    #     include_caught_up: bool = False,
+    #     timeout: Optional[float] = None,
+    #     credentials: Optional[grpc.CallCredentials] = None,
+    # ) -> CatchupSubscription:
+    #     """
+    #     Signature to start catch-up subscription from the start of the stream.
+    #     """
+    #
+    # @overload
+    # def subscribe_to_stream(
+    #     self,
+    #     stream_name: str,
+    #     *,
+    #     stream_position: int,
+    #     resolve_links: bool = False,
+    #     include_caught_up: bool = False,
+    #     timeout: Optional[float] = None,
+    #     credentials: Optional[grpc.CallCredentials] = None,
+    # ) -> CatchupSubscription:
+    #     """
+    #     Signature to start catch-up subscription from a particular stream position.
+    #     """
+    #
+    # @overload
+    # def subscribe_to_stream(
+    #     self,
+    #     stream_name: str,
+    #     *,
+    #     from_end: Literal[True] = True,
+    #     resolve_links: bool = False,
+    #     include_caught_up: bool = False,
+    #     timeout: Optional[float] = None,
+    #     credentials: Optional[grpc.CallCredentials] = None,
+    # ) -> CatchupSubscription:
+    #     """
+    #     Signature to start catch-up subscription from the end of the stream.
+    #     """
 
     @retrygrpc
     @autoreconnect

@@ -43,7 +43,7 @@ class BaseGossipService(ESDBService[TGrpcStreamers]):
         grpc_streamers: TGrpcStreamers,
     ):
         super().__init__(connection_spec=connection_spec, grpc_streamers=grpc_streamers)
-        self._stub = gossip_pb2_grpc.GossipStub(channel)
+        self._stub = gossip_pb2_grpc.GossipStub(channel)  # type: ignore[no-untyped-call]
 
     @staticmethod
     def _construct_cluster_members(

@@ -937,7 +937,7 @@ class BasePersistentSubscriptionsService(ESDBService[TGrpcStreamers]):
         grpc_streamers: TGrpcStreamers,
     ):
         super().__init__(connection_spec=connection_spec, grpc_streamers=grpc_streamers)
-        self._stub = persistent_pb2_grpc.PersistentSubscriptionsStub(channel)
+        self._stub = persistent_pb2_grpc.PersistentSubscriptionsStub(channel)  # type: ignore[no-untyped-call]
 
     def _construct_create_req(
         self,

@@ -60,7 +60,7 @@ class BaseProjectionsService(ESDBService[TGrpcStreamers]):
         grpc_streamers: TGrpcStreamers,
     ):
         super().__init__(connection_spec=connection_spec, grpc_streamers=grpc_streamers)
-        self._stub = projections_pb2_grpc.ProjectionsStub(channel)
+        self._stub = projections_pb2_grpc.ProjectionsStub(channel)  # type: ignore[no-untyped-call]
 
     @staticmethod
     def _construct_create_req(

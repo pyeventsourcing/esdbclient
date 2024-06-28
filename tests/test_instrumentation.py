@@ -4,22 +4,20 @@ from __future__ import annotations
 import asyncio
 import json
 from abc import ABC, abstractmethod
-from contextlib import contextmanager
 from copy import deepcopy
 from typing import (
     Any,
-    Callable,
     Dict,
     Generic,
-    Iterator,
-    Mapping,
     Optional,
+    Protocol,
     Sequence,
     Tuple,
     Type,
     TypeVar,
     Union,
     cast,
+    overload,
 )
 from unittest import IsolatedAsyncioTestCase, TestCase
 from unittest.case import _AssertRaisesContext
@@ -45,6 +43,7 @@ from opentelemetry.sdk.trace.export import (
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import (
     INVALID_SPAN_CONTEXT,
+    SpanContext,
     SpanKind,
     Tracer,
     get_tracer,
@@ -66,8 +65,11 @@ from esdbclient.instrumentation.opentelemetry import (
     EventStoreDBClientInstrumentor,
 )
 from esdbclient.instrumentation.opentelemetry.utils import (
+    AsyncSpannerResponse,
+    SpannerResponse,
+    UnionSpannerResponse,
     _enrich_span,
-    _propagate_context_via_events,
+    _set_context_in_kwargs_events,
     _set_span_error,
     _set_span_ok,
     _start_span,
@@ -121,6 +123,7 @@ def _force_flush_spans() -> None:
     tracer_provider.force_flush()
 
 
+S = TypeVar("S")
 T = TypeVar("T")
 
 
@@ -130,21 +133,26 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
         self.tracer = get_tracer(__name__)
 
     async def test(self) -> None:
-        class Example:
-            def double(self, x: int, name: str = "") -> int:
+
+        class Example(BaseEventStoreDBClient):
+            def double(self, /, x: int, name: str = "") -> int:
                 if x < 0:
                     raise ValueError(f"Negative value {name}")
                 return 2 * x
 
-            async def adouble(self, x: int, name: str = "") -> int:
+            async def adouble(self, /, x: int, name: str = "") -> int:
                 if x < 0:
                     raise ValueError(f"Negative value {name}")
                 return 2 * x
+
+            @property
+            def connection_target(self) -> str:
+                return ""
 
         self.check_spans(num_spans=0)
 
         # Check example class.
-        example = Example()
+        example = Example("esdb://blah?Tls=False")
         self.assertEqual(6, example.double(3, name="test1"))
         self.assertEqual(6, await example.adouble(3, name="test2"))
         with self.assertRaises(ValueError):
@@ -154,24 +162,50 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
 
         self.check_spans(num_spans=0)
 
+        class DoubleMethod(Protocol):
+            def __call__(self, /, x: int, name: str = "") -> int: ...
+
+        class AsyncDoubleMethod(Protocol):
+            async def __call__(self, /, x: int, name: str = "") -> int: ...
+
         # Define example spanner.
-        @contextmanager
+        @overload
         def example_spanner(
             tracer: Tracer,
-            original: Callable[..., T],
-            instance: Any,
-            args: Sequence[Any],
-            kwargs: Mapping[str, Any],
-        ) -> Iterator[T]:
+            instance: Example,
+            spanned_func: DoubleMethod,
+            /,
+            x: int,
+            name: str = "",
+        ) -> SpannerResponse[int]: ...
+
+        @overload
+        def example_spanner(
+            tracer: Tracer,
+            instance: Example,
+            spanned_func: AsyncDoubleMethod,
+            /,
+            x: int,
+            name: str = "",
+        ) -> AsyncSpannerResponse[int]: ...
+
+        def example_spanner(
+            tracer: Tracer,
+            instance: Example,
+            spanned_func: Union[DoubleMethod, AsyncDoubleMethod],
+            /,
+            x: int,
+            name: str = "",
+        ) -> UnionSpannerResponse[int, int]:
             with _start_span(
                 tracer=tracer,
-                span_name=kwargs["name"],
+                span_name=name,
                 span_kind=SpanKind.CLIENT,
                 end_on_exit=False,
             ) as span:
                 try:
-                    assert isinstance(instance, Example)
-                    yield original(*args, **kwargs)
+                    assert isinstance(instance, Example), instance
+                    yield spanned_func(x, name)
                 except Exception as e:
                     _set_span_error(span, e)
                     raise
@@ -181,16 +215,29 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
                     span.end()
 
         # Apply instrumenting wrapper to sync and async methods.
-        apply_spanner(Example, "double", example_spanner, self.tracer)
-        apply_spanner(Example, "adouble", example_spanner, self.tracer)
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.double,
+            spanner_func=example_spanner,
+            tracer=self.tracer,
+        )
+
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.adouble,
+            spanner_func=example_spanner,
+            tracer=self.tracer,
+        )
 
         self.check_spans(num_spans=0)
 
-        self.assertEqual(6, example.double(3, name="test5"))
+        x = example.double(3, name="test5")
+        self.assertEqual(6, x)
 
         self.check_spans(num_spans=1, span_index=0, span_name="test5")
 
-        self.assertEqual(6, await example.adouble(3, name="test6"))
+        x = await example.adouble(3, name="test6")
+        self.assertEqual(6, x)
 
         self.check_spans(num_spans=2, span_index=1, span_name="test6")
 
@@ -212,6 +259,606 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
             span_index=3,
             span_name="test8",
             error=cm.exception,
+        )
+
+        #
+        ## Check mypy raises errors from broken static typing.
+        #
+
+        # Mismatched receiver of the spanned func. The spanned_func
+        # is defined on Example2, but the patched_class is Example.
+
+        class Example2(BaseEventStoreDBClient):
+            def double(self, /, x: int, name: str = "") -> int:
+                if x < 0:
+                    raise ValueError(f"Negative value {name}")
+                return 2 * x
+
+            async def adouble(self, /, x: int, name: str = "") -> int:
+                if x < 0:
+                    raise ValueError(f"Negative value {name}")
+                return 2 * x
+
+            @property
+            def connection_target(self) -> str:
+                return ""
+
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example2.double,  # type: ignore
+            spanner_func=example_spanner,
+            tracer=self.tracer,
+        )
+
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example2.adouble,  # type: ignore
+            spanner_func=example_spanner,
+            tracer=self.tracer,
+        )
+
+        # Mismatched spanned function arg type. It has "y: int"
+        # which doesn't match the type of its spanned_func arg.
+
+        def example2_spanner(
+            tracer: Tracer,
+            instance: Example2,
+            spanned_func: DoubleMethod,
+            /,
+            x: int,
+            y: int,
+            name: str = "",
+        ) -> SpannerResponse[int]:
+
+            with _start_span(
+                tracer=tracer,
+                span_name=name,
+                span_kind=SpanKind.CLIENT,
+                end_on_exit=False,
+            ) as span:
+                try:
+                    assert isinstance(instance, Example), instance
+                    yield spanned_func(x, y, name)  # type: ignore
+                except Exception as e:
+                    _set_span_error(span, e)
+                    raise
+                else:
+                    _set_span_ok(span)
+                finally:
+                    span.end()
+
+        # Mismatched spanner_func arg value. The spanner function
+        # "example3_spanner()" supports the type of its spanned_func
+        # arg with its args, and its instance type is Example, but
+        # the method signature of DoubleMethod3 doesn't match the signature
+        # of Example.double or Example.adouble.
+
+        class DoubleMethod3(Protocol):
+            def __call__(self, /, x: int, y: int, name: str = "") -> int: ...
+
+        class AsyncDoubleMethod3(Protocol):
+            async def __call__(self, /, x: int, y: int, name: str = "") -> int: ...
+
+        @overload
+        def example3_spanner(
+            tracer: Tracer,
+            instance: Example,
+            spanned_func: DoubleMethod3,
+            /,
+            x: int,
+            y: int,
+            name: str = "",
+        ) -> SpannerResponse[int]: ...
+
+        @overload
+        def example3_spanner(
+            tracer: Tracer,
+            instance: Example,
+            spanned_func: AsyncDoubleMethod3,
+            /,
+            x: int,
+            y: int,
+            name: str = "",
+        ) -> AsyncSpannerResponse[int]: ...
+
+        def example3_spanner(
+            tracer: Tracer,
+            instance: Example,
+            spanned_func: Union[DoubleMethod3, AsyncDoubleMethod3],
+            /,
+            x: int,
+            y: int,
+            name: str = "",
+        ) -> UnionSpannerResponse[int, int]:
+
+            with _start_span(
+                tracer=tracer,
+                span_name=name,
+                span_kind=SpanKind.CLIENT,
+                end_on_exit=False,
+            ) as span:
+                try:
+                    assert isinstance(instance, Example), instance
+                    yield spanned_func(x, y, name)
+                except Exception as e:
+                    _set_span_error(span, e)
+                    raise
+                else:
+                    _set_span_ok(span)
+                finally:
+                    span.end()
+
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.double,  # type: ignore
+            spanner_func=example3_spanner,  # type: ignore
+            tracer=self.tracer,
+        )
+
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.adouble,
+            spanner_func=example3_spanner,  # type: ignore
+            tracer=self.tracer,
+        )
+
+        # Invalid spanner func signature. The function "example4_spanner()"
+        # isn't a SpannerFunc, because its tracer arg type is not Tracer.
+
+        @overload
+        def example4_spanner(
+            tracer: int,
+            instance: Example,
+            spanned_func: DoubleMethod,
+            /,
+            x: int,
+            name: str = "",
+        ) -> SpannerResponse[int]: ...
+
+        @overload
+        def example4_spanner(
+            tracer: int,
+            instance: Example,
+            spanned_func: AsyncDoubleMethod,
+            /,
+            x: int,
+            name: str = "",
+        ) -> AsyncSpannerResponse[int]: ...
+
+        def example4_spanner(
+            tracer: int,
+            instance: Example,
+            spanned_func: Union[DoubleMethod, AsyncDoubleMethod],
+            /,
+            x: int,
+            name: str = "",
+        ) -> UnionSpannerResponse[int, int]:
+            with _start_span(
+                tracer=cast(Tracer, tracer),
+                span_name=name,
+                span_kind=SpanKind.CLIENT,
+                end_on_exit=False,
+            ) as span:
+                try:
+                    assert isinstance(instance, Example), instance
+                    yield spanned_func(x, name)
+                except Exception as e:
+                    _set_span_error(span, e)
+                    raise
+                else:
+                    _set_span_ok(span)
+                finally:
+                    span.end()
+
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.double,  # type: ignore
+            spanner_func=example4_spanner,  # type: ignore
+            tracer=self.tracer,
+        )
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.adouble,
+            spanner_func=example4_spanner,  # type: ignore
+            tracer=self.tracer,
+        )
+
+        # Invalid spanner func signature. The function "example5_spanner()"
+        # isn't a SpannerFunc, because its instance arg is not a superclass
+        # of the receiver type of the spanned_func arg value (it's "int").
+
+        @overload
+        def example5_spanner(
+            tracer: Tracer,
+            instance: int,
+            spanned_func: DoubleMethod,
+            /,
+            x: int,
+            name: str = "",
+        ) -> SpannerResponse[int]: ...
+
+        @overload
+        def example5_spanner(
+            tracer: Tracer,
+            instance: int,
+            spanned_func: AsyncDoubleMethod,
+            /,
+            x: int,
+            name: str = "",
+        ) -> AsyncSpannerResponse[int]: ...
+
+        def example5_spanner(
+            tracer: Tracer,
+            instance: int,
+            spanned_func: Union[DoubleMethod, AsyncDoubleMethod],
+            /,
+            x: int,
+            name: str = "",
+        ) -> UnionSpannerResponse[int, int]:
+            with _start_span(
+                tracer=tracer,
+                span_name=name,
+                span_kind=SpanKind.CLIENT,
+                end_on_exit=False,
+            ) as span:
+                try:
+                    assert isinstance(instance, Example), instance
+                    yield spanned_func(x, name)
+                except Exception as e:
+                    _set_span_error(span, e)
+                    raise
+                else:
+                    _set_span_ok(span)
+                finally:
+                    span.end()
+
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.double,  # type: ignore
+            spanner_func=example5_spanner,  # type: ignore
+            tracer=self.tracer,
+        )
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.adouble,
+            spanner_func=example5_spanner,  # type: ignore
+            tracer=self.tracer,
+        )
+
+        # This is okay because instance is "object".
+        @overload
+        def example6_spanner(
+            tracer: Tracer,
+            instance: object,
+            spanned_func: DoubleMethod,
+            /,
+            x: int,
+            name: str = "",
+        ) -> SpannerResponse[int]: ...
+
+        @overload
+        def example6_spanner(
+            tracer: Tracer,
+            instance: object,
+            spanned_func: AsyncDoubleMethod,
+            /,
+            x: int,
+            name: str = "",
+        ) -> AsyncSpannerResponse[int]: ...
+
+        def example6_spanner(
+            tracer: Tracer,
+            instance: object,
+            spanned_func: Union[DoubleMethod, AsyncDoubleMethod],
+            /,
+            x: int,
+            name: str = "",
+        ) -> UnionSpannerResponse[int, int]:
+            with _start_span(
+                tracer=tracer,
+                span_name=name,
+                span_kind=SpanKind.CLIENT,
+                end_on_exit=False,
+            ) as span:
+                try:
+                    assert isinstance(instance, Example), instance
+                    yield spanned_func(x, name)
+                except Exception as e:
+                    _set_span_error(span, e)
+                    raise
+                else:
+                    _set_span_ok(span)
+                finally:
+                    span.end()
+
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.double,
+            spanner_func=example6_spanner,
+            tracer=self.tracer,
+        )
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.adouble,
+            spanner_func=example6_spanner,
+            tracer=self.tracer,
+        )
+
+        # This is okay because instance is "BaseEventStoreDBClient".
+        @overload
+        def example7_spanner(
+            tracer: Tracer,
+            instance: BaseEventStoreDBClient,
+            spanned_func: AsyncDoubleMethod,
+            /,
+            x: int,
+            name: str = "",
+        ) -> AsyncSpannerResponse[int]: ...
+
+        @overload
+        def example7_spanner(
+            tracer: Tracer,
+            instance: BaseEventStoreDBClient,
+            spanned_func: DoubleMethod,
+            /,
+            x: int,
+            name: str = "",
+        ) -> SpannerResponse[int]: ...
+
+        def example7_spanner(
+            tracer: Tracer,
+            instance: BaseEventStoreDBClient,
+            spanned_func: Union[DoubleMethod, AsyncDoubleMethod],
+            /,
+            x: int,
+            name: str = "",
+        ) -> UnionSpannerResponse[int, int]:
+            with _start_span(
+                tracer=tracer,
+                span_name=name,
+                span_kind=SpanKind.CLIENT,
+                end_on_exit=False,
+            ) as span:
+                try:
+                    assert isinstance(instance, Example), instance
+                    yield spanned_func(x, name)
+                except Exception as e:
+                    _set_span_error(span, e)
+                    raise
+                else:
+                    _set_span_ok(span)
+                finally:
+                    span.end()
+
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.double,
+            spanner_func=example7_spanner,
+            tracer=self.tracer,
+        )
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.adouble,
+            spanner_func=example7_spanner,
+            tracer=self.tracer,
+        )
+
+        # This is not okay because instance is "SubExample" - a subclass.
+        class SubExample(Example):
+            pass
+
+        @overload
+        def example8_spanner(
+            tracer: Tracer,
+            instance: SubExample,
+            spanned_func: AsyncDoubleMethod,
+            /,
+            x: int,
+            name: str = "",
+        ) -> AsyncSpannerResponse[int]: ...
+
+        @overload
+        def example8_spanner(
+            tracer: Tracer,
+            instance: SubExample,
+            spanned_func: DoubleMethod,
+            /,
+            x: int,
+            name: str = "",
+        ) -> SpannerResponse[int]: ...
+
+        def example8_spanner(
+            tracer: Tracer,
+            instance: SubExample,
+            spanned_func: Union[DoubleMethod, AsyncDoubleMethod],
+            /,
+            x: int,
+            name: str = "",
+        ) -> UnionSpannerResponse[int, int]:
+            with _start_span(
+                tracer=tracer,
+                span_name=name,
+                span_kind=SpanKind.CLIENT,
+                end_on_exit=False,
+            ) as span:
+                try:
+                    assert isinstance(instance, Example), instance
+                    yield spanned_func(x, name)
+                except Exception as e:
+                    _set_span_error(span, e)
+                    raise
+                else:
+                    _set_span_ok(span)
+                finally:
+                    span.end()
+
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.double,  # type: ignore
+            spanner_func=example8_spanner,  # type: ignore
+            tracer=self.tracer,
+        )
+        apply_spanner(
+            patched_class=Example,
+            spanned_func=Example.adouble,
+            spanner_func=example8_spanner,  # type: ignore
+            tracer=self.tracer,
+        )
+
+        # Here we have different return values from the sync and async methods.
+        #  - this should all work
+
+        class SyncInt(int):
+            pass
+
+        class AsyncInt(int):
+            pass
+
+        class DoubleMethod9(Protocol):
+            def __call__(self, /, x: int, name: str = "") -> SyncInt: ...
+
+        class AsyncDoubleMethod9(Protocol):
+            async def __call__(self, /, x: int, name: str = "") -> AsyncInt: ...
+
+        class Example9:
+            def double(self, /, x: int, name: str = "") -> SyncInt:
+                return SyncInt(x * 2)
+
+            async def adouble(self, /, x: int, name: str = "") -> AsyncInt:
+                return AsyncInt(x * 2)
+
+        @overload
+        def example9_spanner(
+            tracer: Tracer,
+            instance: Example9,
+            spanned_func: AsyncDoubleMethod9,
+            /,
+            x: int,
+            name: str = "",
+        ) -> AsyncSpannerResponse[AsyncInt]: ...
+
+        @overload
+        def example9_spanner(
+            tracer: Tracer,
+            instance: Example9,
+            spanned_func: DoubleMethod9,
+            /,
+            x: int,
+            name: str = "",
+        ) -> SpannerResponse[SyncInt]: ...
+
+        def example9_spanner(
+            tracer: Tracer,
+            instance: Example9,
+            spanned_func: Union[DoubleMethod9, AsyncDoubleMethod9],
+            /,
+            x: int,
+            name: str = "",
+        ) -> UnionSpannerResponse[SyncInt, AsyncInt]:
+            with _start_span(
+                tracer=tracer,
+                span_name=name,
+                span_kind=SpanKind.CLIENT,
+                end_on_exit=False,
+            ) as span:
+                try:
+                    assert isinstance(instance, Example), instance
+                    yield spanned_func(x, name)
+                except Exception as e:
+                    _set_span_error(span, e)
+                    raise
+                else:
+                    _set_span_ok(span)
+                finally:
+                    span.end()
+
+        apply_spanner(
+            patched_class=Example9,
+            spanned_func=Example9.double,
+            spanner_func=example9_spanner,
+            tracer=self.tracer,
+        )
+
+        apply_spanner(
+            patched_class=Example9,
+            spanned_func=Example9.adouble,
+            spanner_func=example9_spanner,
+            tracer=self.tracer,
+        )
+
+        # The same again, but with the spanner's instance arg type as a subclass.
+        #  - this should all work
+
+        class DoubleMethod10(Protocol):
+            def __call__(self, /, x: int, name: str = "") -> SyncInt: ...
+
+        class AsyncDoubleMethod10(Protocol):
+            async def __call__(self, /, x: int, name: str = "") -> AsyncInt: ...
+
+        class Example10(EventStoreDBClient):
+            def double(self, /, x: int, name: str = "") -> SyncInt:
+                return SyncInt(x * 2)
+
+            async def adouble(self, /, x: int, name: str = "") -> AsyncInt:
+                return AsyncInt(x * 2)
+
+        @overload
+        def example10_spanner(
+            tracer: Tracer,
+            instance: EventStoreDBClient,
+            spanned_func: AsyncDoubleMethod10,
+            /,
+            x: int,
+            name: str = "",
+        ) -> AsyncSpannerResponse[AsyncInt]: ...
+
+        @overload
+        def example10_spanner(
+            tracer: Tracer,
+            instance: EventStoreDBClient,
+            spanned_func: DoubleMethod10,
+            /,
+            x: int,
+            name: str = "",
+        ) -> SpannerResponse[SyncInt]: ...
+
+        def example10_spanner(
+            tracer: Tracer,
+            instance: EventStoreDBClient,
+            spanned_func: Union[DoubleMethod10, AsyncDoubleMethod10],
+            /,
+            x: int,
+            name: str = "",
+        ) -> UnionSpannerResponse[SyncInt, AsyncInt]:
+            with _start_span(
+                tracer=tracer,
+                span_name=name,
+                span_kind=SpanKind.CLIENT,
+                end_on_exit=False,
+            ) as span:
+                try:
+                    assert isinstance(instance, Example), instance
+                    yield spanned_func(x, name)
+                except Exception as e:
+                    _set_span_error(span, e)
+                    raise
+                else:
+                    _set_span_ok(span)
+                finally:
+                    span.end()
+
+        apply_spanner(
+            patched_class=Example10,
+            spanned_func=Example10.double,
+            spanner_func=example10_spanner,
+            tracer=self.tracer,
+        )
+
+        apply_spanner(
+            patched_class=Example10,
+            spanned_func=Example10.adouble,
+            spanner_func=example10_spanner,
+            tracer=self.tracer,
         )
 
     def check_spans(
@@ -273,9 +920,10 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
                 self.assertTrue(
                     current_span.name.startswith("test_"), current_span.name
                 )
-                self.assertEqual(
-                    current_span.get_span_context().span_id, span.parent.span_id
-                )
+                context: Optional[SpanContext] = current_span.get_span_context()  # type: ignore[no-untyped-call]
+                self.assertIsNotNone(context)
+                assert context is not None  # for mypy
+                self.assertEqual(context.span_id, span.parent.span_id)
 
         # Check the span attributes.
         span_attributes: Dict[str, AttributeValue] = {}
@@ -527,7 +1175,8 @@ class EventStoreDBClientInstrumentorTestCase(
             instrument_get_and_read_stream=cls.instrument_get_and_read_stream
         )
         if cls.instrument_grpc:
-            GrpcInstrumentorClient().instrument()
+            instrumentor = GrpcInstrumentorClient()  # type: ignore[no-untyped-call]
+            instrumentor.instrument()
 
         # tracer = trace_api.get_tracer(__name__)
         # for name, func in cls.__dict__.items():
@@ -539,7 +1188,8 @@ class EventStoreDBClientInstrumentorTestCase(
     def tearDownClass(cls) -> None:
         EventStoreDBClientInstrumentor().uninstrument()
         if cls.instrument_grpc:
-            GrpcInstrumentorClient().uninstrument()
+            instrumentor = GrpcInstrumentorClient()  # type: ignore[no-untyped-call]
+            instrumentor.uninstrument()
 
     def construct_client(
         self,
@@ -599,7 +1249,8 @@ class AsyncEventStoreDBClientInstrumentorTestCase(
             instrument_get_and_read_stream=cls.instrument_get_and_read_stream
         )
         if cls.instrument_grpc:
-            GrpcAioInstrumentorClient().instrument()
+            instrumentor = GrpcAioInstrumentorClient()  # type: ignore[no-untyped-call]
+            instrumentor.instrument()
 
         # tracer = trace_api.get_tracer(__name__)
         # for name, func in cls.__dict__.items():
@@ -611,7 +1262,8 @@ class AsyncEventStoreDBClientInstrumentorTestCase(
     def tearDownClass(cls) -> None:
         AsyncEventStoreDBClientInstrumentor().uninstrument()
         if cls.instrument_grpc:
-            GrpcAioInstrumentorClient().uninstrument()
+            instrumentor = GrpcAioInstrumentorClient()  # type: ignore[no-untyped-call]
+            instrumentor.uninstrument()
 
     def construct_client(
         self,
@@ -895,13 +1547,13 @@ class TestUtils(
         # Missing "events".
         kwargs: Dict[str, Any] = {}
         context = INVALID_SPAN_CONTEXT
-        _propagate_context_via_events(context, kwargs)
+        _set_context_in_kwargs_events(context, kwargs)
         self.assertEqual({}, kwargs)
 
         # Single event, empty metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b"")
         kwargs = {"events": event1}
-        _propagate_context_via_events(context, kwargs)
+        _set_context_in_kwargs_events(context, kwargs)
         expected_kwargs = {
             "events": [
                 NewEvent(
@@ -917,7 +1569,7 @@ class TestUtils(
         # Single event, json metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b"{}")
         kwargs = {"events": event1}
-        _propagate_context_via_events(context, kwargs)
+        _set_context_in_kwargs_events(context, kwargs)
         expected_kwargs = {
             "events": [
                 NewEvent(
@@ -933,7 +1585,7 @@ class TestUtils(
         # Single event, json metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b'{"my-key": "my-value"}')
         kwargs = {"events": event1}
-        _propagate_context_via_events(context, kwargs)
+        _set_context_in_kwargs_events(context, kwargs)
         expected_kwargs = {
             "events": [
                 NewEvent(
@@ -949,7 +1601,7 @@ class TestUtils(
         # Single event, non-json metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b"12345")
         kwargs = {"events": event1}
-        _propagate_context_via_events(context, kwargs)
+        _set_context_in_kwargs_events(context, kwargs)
         expected_kwargs = {
             "events": [
                 NewEvent(
@@ -966,7 +1618,7 @@ class TestUtils(
         event1 = NewEvent("SomethingHappened", b"{}", b"")
         event2 = NewEvent("SomethingHappened", b"{}", b"12345")
         kwargs = {"events": [event1, event2]}
-        _propagate_context_via_events(context, kwargs)
+        _set_context_in_kwargs_events(context, kwargs)
         expected_kwargs = {
             "events": [
                 NewEvent(
@@ -2305,6 +2957,7 @@ class TestReadAndGetStream(EventStoreDBClientInstrumentorTestCase):
             span_kind=trace_api.SpanKind.CLIENT,
             span_attributes={
                 "db.operation": "EventStoreDBClient.get_stream",
+                "db.eventstoredb.stream": stream_name,
             },
         )
 
@@ -2557,6 +3210,7 @@ class AsyncTestReadAndGetStream(AsyncEventStoreDBClientInstrumentorTestCase):
             span_kind=trace_api.SpanKind.CLIENT,
             span_attributes={
                 "db.operation": "AsyncEventStoreDBClient.get_stream",
+                "db.eventstoredb.stream": stream_name,
             },
         )
 
@@ -2820,6 +3474,7 @@ class TestReadAndGetStreamWithGrpcInstrumentor(EventStoreDBClientInstrumentorTes
             span_kind=trace_api.SpanKind.CLIENT,
             span_attributes={
                 "db.operation": "EventStoreDBClient.get_stream",
+                "db.eventstoredb.stream": stream_name,
             },
         )
 

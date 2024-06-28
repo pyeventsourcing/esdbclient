@@ -411,7 +411,7 @@ class BaseStreamsService(ESDBService[TGrpcStreamers]):
         grpc_streamers: TGrpcStreamers,
     ):
         super().__init__(connection_spec=connection_spec, grpc_streamers=grpc_streamers)
-        self._stub = streams_pb2_grpc.StreamsStub(grpc_channel)
+        self._stub = streams_pb2_grpc.StreamsStub(grpc_channel)  # type: ignore[no-untyped-call]
 
     @staticmethod
     def _generate_append_reqs(

@@ -65,7 +65,7 @@ lint-isort:
 
 .PHONY: lint-mypy
 lint-mypy:
-	$(POETRY) run mypy
+	$(POETRY) run mypy --strict
 
 .PHONY: lint-python
 lint-python: lint-black lint-flake8 lint-isort lint-mypy
