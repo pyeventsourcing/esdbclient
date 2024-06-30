@@ -17,22 +17,22 @@ from esdbclient.instrumentation.opentelemetry.grpc import (
     try_wrap_opentelemetry_intercept_grpc_server_stream,
 )
 from esdbclient.instrumentation.opentelemetry.package import _instruments
-from esdbclient.instrumentation.opentelemetry.utils import (
-    apply_spanner,
+from esdbclient.instrumentation.opentelemetry.spanners import (
     span_append_to_stream,
     span_catchup_subscription,
     span_get_stream,
     span_persistent_subscription,
     span_read_stream,
 )
+from esdbclient.instrumentation.opentelemetry.utils import apply_spanner
 from esdbclient.instrumentation.opentelemetry.version import __version__
 
 
-class RedefinedBaseInstrumentor(BaseInstrumentor):  # type: ignore[misc]
+class _RedefinedBaseInstrumentor(BaseInstrumentor):  # type: ignore[misc]
     pass
 
 
-class _BaseInstrumentor(RedefinedBaseInstrumentor):
+class _BaseInstrumentor(_RedefinedBaseInstrumentor):
     instrument_get_and_read_stream = False
 
     def instrumentation_dependencies(self) -> Collection[str]:
@@ -62,47 +62,47 @@ class EventStoreDBClientInstrumentor(_BaseInstrumentor):
         tracer = self._get_tracer(**kwargs)
 
         apply_spanner(
-            EventStoreDBClient,
-            EventStoreDBClient.append_to_stream,
-            span_append_to_stream,
-            tracer,
+            patched_class=EventStoreDBClient,
+            spanned_func=EventStoreDBClient.append_to_stream,
+            spanner_func=span_append_to_stream,
+            tracer=tracer,
         )
         apply_spanner(
-            EventStoreDBClient,
-            EventStoreDBClient.subscribe_to_stream,
-            span_catchup_subscription,
-            tracer,
+            patched_class=EventStoreDBClient,
+            spanned_func=EventStoreDBClient.subscribe_to_stream,
+            spanner_func=span_catchup_subscription,
+            tracer=tracer,
         )
         apply_spanner(
-            EventStoreDBClient,
-            EventStoreDBClient.subscribe_to_all,
-            span_catchup_subscription,
-            tracer,
+            patched_class=EventStoreDBClient,
+            spanned_func=EventStoreDBClient.subscribe_to_all,
+            spanner_func=span_catchup_subscription,
+            tracer=tracer,
         )
         apply_spanner(
-            EventStoreDBClient,
-            EventStoreDBClient.read_subscription_to_stream,
-            span_persistent_subscription,
-            tracer,
+            patched_class=EventStoreDBClient,
+            spanned_func=EventStoreDBClient.read_subscription_to_stream,
+            spanner_func=span_persistent_subscription,
+            tracer=tracer,
         )
         apply_spanner(
-            EventStoreDBClient,
-            EventStoreDBClient.read_subscription_to_all,
-            span_persistent_subscription,
-            tracer,
+            patched_class=EventStoreDBClient,
+            spanned_func=EventStoreDBClient.read_subscription_to_all,
+            spanner_func=span_persistent_subscription,
+            tracer=tracer,
         )
         if self.instrument_get_and_read_stream:
             apply_spanner(
-                EventStoreDBClient,
-                EventStoreDBClient.read_stream,
-                span_read_stream,
-                tracer,
+                patched_class=EventStoreDBClient,
+                spanned_func=EventStoreDBClient.read_stream,
+                spanner_func=span_read_stream,
+                tracer=tracer,
             )
             apply_spanner(
-                EventStoreDBClient,
-                EventStoreDBClient.get_stream,
-                span_get_stream,
-                tracer,
+                patched_class=EventStoreDBClient,
+                spanned_func=EventStoreDBClient.get_stream,
+                spanner_func=span_get_stream,
+                tracer=tracer,
             )
 
         # Because its server streaming wrapper doesn't return an
@@ -130,47 +130,47 @@ class AsyncEventStoreDBClientInstrumentor(_BaseInstrumentor):
         tracer = self._get_tracer(**kwargs)
 
         apply_spanner(
-            AsyncEventStoreDBClient,
-            AsyncEventStoreDBClient.append_to_stream,
-            span_append_to_stream,
-            tracer,
+            patched_class=AsyncEventStoreDBClient,
+            spanned_func=AsyncEventStoreDBClient.append_to_stream,
+            spanner_func=span_append_to_stream,
+            tracer=tracer,
         )
         apply_spanner(
-            AsyncEventStoreDBClient,
-            AsyncEventStoreDBClient.subscribe_to_stream,
-            span_catchup_subscription,
-            tracer,
+            patched_class=AsyncEventStoreDBClient,
+            spanned_func=AsyncEventStoreDBClient.subscribe_to_stream,
+            spanner_func=span_catchup_subscription,
+            tracer=tracer,
         )
         apply_spanner(
-            AsyncEventStoreDBClient,
-            AsyncEventStoreDBClient.subscribe_to_all,
-            span_catchup_subscription,
-            tracer,
+            patched_class=AsyncEventStoreDBClient,
+            spanned_func=AsyncEventStoreDBClient.subscribe_to_all,
+            spanner_func=span_catchup_subscription,
+            tracer=tracer,
         )
         apply_spanner(
-            AsyncEventStoreDBClient,
-            AsyncEventStoreDBClient.read_subscription_to_stream,
-            span_persistent_subscription,
-            tracer,
+            patched_class=AsyncEventStoreDBClient,
+            spanned_func=AsyncEventStoreDBClient.read_subscription_to_stream,
+            spanner_func=span_persistent_subscription,
+            tracer=tracer,
         )
         apply_spanner(
-            AsyncEventStoreDBClient,
-            AsyncEventStoreDBClient.read_subscription_to_all,
-            span_persistent_subscription,
-            tracer,
+            patched_class=AsyncEventStoreDBClient,
+            spanned_func=AsyncEventStoreDBClient.read_subscription_to_all,
+            spanner_func=span_persistent_subscription,
+            tracer=tracer,
         )
         if self.instrument_get_and_read_stream:
             apply_spanner(
-                AsyncEventStoreDBClient,
-                AsyncEventStoreDBClient.read_stream,
-                span_read_stream,
-                tracer,
+                patched_class=AsyncEventStoreDBClient,
+                spanned_func=AsyncEventStoreDBClient.read_stream,
+                spanner_func=span_read_stream,
+                tracer=tracer,
             )
             apply_spanner(
-                AsyncEventStoreDBClient,
-                AsyncEventStoreDBClient.get_stream,
-                span_get_stream,
-                tracer,
+                patched_class=AsyncEventStoreDBClient,
+                spanned_func=AsyncEventStoreDBClient.get_stream,
+                spanner_func=span_get_stream,
+                tracer=tracer,
             )
 
     def _uninstrument(self, **kwargs: Any) -> None:

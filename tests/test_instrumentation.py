@@ -64,12 +64,14 @@ from esdbclient.instrumentation.opentelemetry import (
     AsyncEventStoreDBClientInstrumentor,
     EventStoreDBClientInstrumentor,
 )
+from esdbclient.instrumentation.opentelemetry.spanners import (
+    _enrich_span,
+    _set_context_in_events,
+)
 from esdbclient.instrumentation.opentelemetry.utils import (
     AsyncSpannerResponse,
+    OverloadedSpannerResponse,
     SpannerResponse,
-    UnionSpannerResponse,
-    _enrich_span,
-    _set_context_in_kwargs_events,
     _set_span_error,
     _set_span_ok,
     _start_span,
@@ -196,7 +198,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
             /,
             x: int,
             name: str = "",
-        ) -> UnionSpannerResponse[int, int]:
+        ) -> OverloadedSpannerResponse[int, int]:
             with _start_span(
                 tracer=tracer,
                 span_name=name,
@@ -328,10 +330,11 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
                     span.end()
 
         # Mismatched spanner_func arg value. The spanner function
-        # "example3_spanner()" supports the type of its spanned_func
-        # arg with its args, and its instance type is Example, but
-        # the method signature of DoubleMethod3 doesn't match the signature
-        # of Example.double or Example.adouble.
+        # "example3_spanner()" supports DoubleMethod3 with its args,
+        # and its instance type is Example, but its args and the method
+        # signatures of DoubleMethod3 and AsyncDoubleMethod3 don't match
+        # the signature of the spanned functions Example.double and
+        # Example.adouble.
 
         class DoubleMethod3(Protocol):
             def __call__(self, /, x: int, y: int, name: str = "") -> int: ...
@@ -369,7 +372,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
             x: int,
             y: int,
             name: str = "",
-        ) -> UnionSpannerResponse[int, int]:
+        ) -> OverloadedSpannerResponse[int, int]:
 
             with _start_span(
                 tracer=tracer,
@@ -390,7 +393,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
 
         apply_spanner(
             patched_class=Example,
-            spanned_func=Example.double,  # type: ignore
+            spanned_func=Example.double,
             spanner_func=example3_spanner,  # type: ignore
             tracer=self.tracer,
         )
@@ -432,7 +435,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
             /,
             x: int,
             name: str = "",
-        ) -> UnionSpannerResponse[int, int]:
+        ) -> OverloadedSpannerResponse[int, int]:
             with _start_span(
                 tracer=cast(Tracer, tracer),
                 span_name=name,
@@ -452,7 +455,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
 
         apply_spanner(
             patched_class=Example,
-            spanned_func=Example.double,  # type: ignore
+            spanned_func=Example.double,
             spanner_func=example4_spanner,  # type: ignore
             tracer=self.tracer,
         )
@@ -494,7 +497,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
             /,
             x: int,
             name: str = "",
-        ) -> UnionSpannerResponse[int, int]:
+        ) -> OverloadedSpannerResponse[int, int]:
             with _start_span(
                 tracer=tracer,
                 span_name=name,
@@ -514,7 +517,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
 
         apply_spanner(
             patched_class=Example,
-            spanned_func=Example.double,  # type: ignore
+            spanned_func=Example.double,
             spanner_func=example5_spanner,  # type: ignore
             tracer=self.tracer,
         )
@@ -553,7 +556,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
             /,
             x: int,
             name: str = "",
-        ) -> UnionSpannerResponse[int, int]:
+        ) -> OverloadedSpannerResponse[int, int]:
             with _start_span(
                 tracer=tracer,
                 span_name=name,
@@ -612,7 +615,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
             /,
             x: int,
             name: str = "",
-        ) -> UnionSpannerResponse[int, int]:
+        ) -> OverloadedSpannerResponse[int, int]:
             with _start_span(
                 tracer=tracer,
                 span_name=name,
@@ -643,7 +646,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
             tracer=self.tracer,
         )
 
-        # This is not okay because instance is "SubExample" - a subclass.
+        # This is not okay because spanner func instance arg is type "SubExample" - a subclass.
         class SubExample(Example):
             pass
 
@@ -674,7 +677,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
             /,
             x: int,
             name: str = "",
-        ) -> UnionSpannerResponse[int, int]:
+        ) -> OverloadedSpannerResponse[int, int]:
             with _start_span(
                 tracer=tracer,
                 span_name=name,
@@ -694,7 +697,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
 
         apply_spanner(
             patched_class=Example,
-            spanned_func=Example.double,  # type: ignore
+            spanned_func=Example.double,
             spanner_func=example8_spanner,  # type: ignore
             tracer=self.tracer,
         )
@@ -754,7 +757,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
             /,
             x: int,
             name: str = "",
-        ) -> UnionSpannerResponse[SyncInt, AsyncInt]:
+        ) -> OverloadedSpannerResponse[SyncInt, AsyncInt]:
             with _start_span(
                 tracer=tracer,
                 span_name=name,
@@ -829,7 +832,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
             /,
             x: int,
             name: str = "",
-        ) -> UnionSpannerResponse[SyncInt, AsyncInt]:
+        ) -> OverloadedSpannerResponse[SyncInt, AsyncInt]:
             with _start_span(
                 tracer=tracer,
                 span_name=name,
@@ -1544,98 +1547,79 @@ class TestUtils(
     EventStoreDBClientInstrumentorTestCase, BaseUtilsTestCase[EventStoreDBClient]
 ):
     def test_propagate_context_via_events(self) -> None:
-        # Missing "events".
-        kwargs: Dict[str, Any] = {}
         context = INVALID_SPAN_CONTEXT
-        _set_context_in_kwargs_events(context, kwargs)
-        self.assertEqual({}, kwargs)
 
         # Single event, empty metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b"")
-        kwargs = {"events": event1}
-        _set_context_in_kwargs_events(context, kwargs)
-        expected_kwargs = {
-            "events": [
-                NewEvent(
-                    type="SomethingHappened",
-                    data=b"{}",
-                    metadata=b'{"$spanId": "0x0", "$traceId": "0x0"}',
-                    id=event1.id,
-                )
-            ]
-        }
-        self.assertEqual(repr(expected_kwargs), repr(kwargs))
+        events = _set_context_in_events(context, event1)
+        expected_events = [
+            NewEvent(
+                type="SomethingHappened",
+                data=b"{}",
+                metadata=b'{"$spanId": "0x0", "$traceId": "0x0"}',
+                id=event1.id,
+            )
+        ]
+        self.assertEqual(repr(expected_events), repr(events))
 
         # Single event, json metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b"{}")
-        kwargs = {"events": event1}
-        _set_context_in_kwargs_events(context, kwargs)
-        expected_kwargs = {
-            "events": [
-                NewEvent(
-                    type="SomethingHappened",
-                    data=b"{}",
-                    metadata=b'{"$spanId": "0x0", "$traceId": "0x0"}',
-                    id=event1.id,
-                )
-            ]
-        }
-        self.assertEqual(repr(expected_kwargs), repr(kwargs))
+        events = _set_context_in_events(context, event1)
+        expected_events = [
+            NewEvent(
+                type="SomethingHappened",
+                data=b"{}",
+                metadata=b'{"$spanId": "0x0", "$traceId": "0x0"}',
+                id=event1.id,
+            )
+        ]
+        self.assertEqual(repr(expected_events), repr(events))
 
         # Single event, json metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b'{"my-key": "my-value"}')
-        kwargs = {"events": event1}
-        _set_context_in_kwargs_events(context, kwargs)
-        expected_kwargs = {
-            "events": [
-                NewEvent(
-                    type="SomethingHappened",
-                    data=b"{}",
-                    metadata=b'{"my-key": "my-value", "$spanId": "0x0", "$traceId": "0x0"}',
-                    id=event1.id,
-                )
-            ]
-        }
-        self.assertEqual(repr(expected_kwargs), repr(kwargs))
+        events = _set_context_in_events(context, event1)
+        expected_events = [
+            NewEvent(
+                type="SomethingHappened",
+                data=b"{}",
+                metadata=b'{"my-key": "my-value", "$spanId": "0x0", "$traceId": "0x0"}',
+                id=event1.id,
+            )
+        ]
+        self.assertEqual(repr(expected_events), repr(events))
 
         # Single event, non-json metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b"12345")
-        kwargs = {"events": event1}
-        _set_context_in_kwargs_events(context, kwargs)
-        expected_kwargs = {
-            "events": [
-                NewEvent(
-                    type="SomethingHappened",
-                    data=b"{}",
-                    metadata=b"12345",
-                    id=event1.id,
-                )
-            ]
-        }
-        self.assertEqual(repr(expected_kwargs), repr(kwargs))
+        events = _set_context_in_events(context, event1)
+        expected_events = [
+            NewEvent(
+                type="SomethingHappened",
+                data=b"{}",
+                metadata=b"12345",
+                id=event1.id,
+            )
+        ]
+        self.assertEqual(repr(expected_events), repr(events))
 
         # Multiple events.
         event1 = NewEvent("SomethingHappened", b"{}", b"")
         event2 = NewEvent("SomethingHappened", b"{}", b"12345")
-        kwargs = {"events": [event1, event2]}
-        _set_context_in_kwargs_events(context, kwargs)
-        expected_kwargs = {
-            "events": [
-                NewEvent(
-                    type="SomethingHappened",
-                    data=b"{}",
-                    metadata=b'{"$spanId": "0x0", "$traceId": "0x0"}',
-                    id=event1.id,
-                ),
-                NewEvent(
-                    type="SomethingHappened",
-                    data=b"{}",
-                    metadata=b"12345",
-                    id=event2.id,
-                ),
-            ]
-        }
-        self.assertEqual(repr(expected_kwargs), repr(kwargs))
+        events = _set_context_in_events(context, [event1, event2])
+        expected_events = [
+            NewEvent(
+                type="SomethingHappened",
+                data=b"{}",
+                metadata=b'{"$spanId": "0x0", "$traceId": "0x0"}',
+                id=event1.id,
+            ),
+            NewEvent(
+                type="SomethingHappened",
+                data=b"{}",
+                metadata=b"12345",
+                id=event2.id,
+            ),
+        ]
+        self.assertEqual(repr(expected_events), repr(events))
 
 
 class AsyncTestUtils(
