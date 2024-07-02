@@ -2524,6 +2524,7 @@ class TestEventStoreDBClient(EventStoreDBClientTestCase):
     @skipIf("23.10" in EVENTSTORE_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
     @skipIf("24.2" in EVENTSTORE_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
     @skipIf("24.6" in EVENTSTORE_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
+    @skipIf("24.10" in EVENTSTORE_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
     def test_demonstrate_extra_checkpoint_bug(self) -> None:
         self.construct_esdb_client()
 
