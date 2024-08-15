@@ -2862,6 +2862,8 @@ for more information on projections in EventStoreDB.
 
 ### Create projection<a id="create-projection"></a>
 
+*requires leader*
+
 The `create_projection()` method can be used to create a "continuous" projection.
 
 This method has two required arguments, `name` and `query`.
@@ -2964,6 +2966,8 @@ EventStoreDB's Web interface.
 
 ### Get projection state<a id="get-projection-state"></a>
 
+*requires leader*
+
 The `get_projection_state()` method can be used to get a projection's "state".
 
 This method has a required `name` argument, which is a Python `str` that
@@ -2991,6 +2995,8 @@ assert projection_state.value == {'count': 3}
 
 ### Get projection statistics<a id="get-projection-statistics"></a>
 
+*requires leader*
+
 The `get_projection_statistics()` method can be used to get projection statistics.
 
 This method has a required `name` argument, which is a Python `str` that specifies the
@@ -3015,6 +3021,8 @@ A `ProjectionStatistics` object is returned. The attributes of this object
 have values that represent the progress of the projection.
 
 ### Update projection<a id="update-projection"></a>
+
+*requires leader*
 
 The `update_projection()` method can be used to update a projection.
 
@@ -3049,6 +3057,8 @@ client.update_projection(name=projection_name, query=projection_query)
 
 ### Enable projection<a id="enable-projection"></a>
 
+*requires leader*
+
 The `enable_projection()` method can be used to enable (start running) a projection
 that was previously disabled (stopped).
 
@@ -3069,6 +3079,8 @@ client.enable_projection(name=projection_name)
 
 ### Disable projection<a id="disable-projection"></a>
 
+*requires leader*
+
 The `disable_projection()` method can be used to disable (stop running) a projection.
 
 This method has a required `name` argument, which is a Python `str` that
@@ -3087,6 +3099,8 @@ client.disable_projection(name=projection_name)
 ```
 
 ### Reset projection<a id="reset-projection"></a>
+
+*requires leader*
 
 The `reset_projection()` method can be used to reset a projection.
 
@@ -3109,6 +3123,8 @@ Please note, a projection must be disabled before it can be reset.
 
 
 ### Delete projection<a id="delete-projection"></a>
+
+*requires leader*
 
 The `delete_projection()` method can be used to delete a projection.
 
@@ -3145,6 +3161,8 @@ client.delete_projection(name=projection_name)
 Please note, a projection must be disabled before it can be deleted.
 
 ### Restart projections subsystem<a id="restart-projections-subsystem"></a>
+
+*requires leader*
 
 The `restart_projections_subsystem()` method can be used to restart the projections subsystem.
 
