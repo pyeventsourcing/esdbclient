@@ -38,14 +38,10 @@ from opentelemetry.util.types import AttributeValue
 from typing_extensions import Self
 
 from esdbclient import (
-    AsyncCatchupSubscription,
     AsyncEventStoreDBClient,
-    AsyncPersistentSubscription,
     AsyncReadResponse,
-    CatchupSubscription,
     EventStoreDBClient,
     NewEvent,
-    PersistentSubscription,
     ReadResponse,
     RecordedEvent,
     StreamState,
@@ -492,7 +488,7 @@ def span_catchup_subscription(
             yield wrap_response()
         else:
             # Because TypeGuard doesn't do type narrowing in negative case.
-            assert isinstance(response, CatchupSubscription)
+            assert isinstance(response, AbstractCatchupSubscription)
 
             yield TracedCatchupSubscription(
                 client=instance,
@@ -586,7 +582,7 @@ def span_persistent_subscription(
 
         else:
             # Because TypeGuard doesn't do type narrowing in negative case.
-            assert isinstance(response, PersistentSubscription)
+            assert isinstance(response, AbstractPersistentSubscription)
 
             yield TracedPersistentSubscription(
                 client=instance,
@@ -777,13 +773,14 @@ class TracedRecordedEventSubscription(
 
 
 class TracedCatchupSubscription(
-    TracedRecordedEventSubscription[CatchupSubscription], AbstractCatchupSubscription
+    TracedRecordedEventSubscription[AbstractCatchupSubscription],
+    AbstractCatchupSubscription,
 ):
     pass
 
 
 class TracedPersistentSubscription(
-    TracedRecordedEventSubscription[PersistentSubscription],
+    TracedRecordedEventSubscription[AbstractPersistentSubscription],
     AbstractPersistentSubscription,
 ):
     def ack(self, item: Union[UUID, RecordedEvent]) -> None:
@@ -953,14 +950,14 @@ class TracedAsyncRecordedEventSubscription(
 
 
 class TracedAsyncCatchupSubscription(
-    TracedAsyncRecordedEventSubscription[AsyncCatchupSubscription],
+    TracedAsyncRecordedEventSubscription[AbstractAsyncCatchupSubscription],
     AbstractAsyncCatchupSubscription,
 ):
     pass
 
 
 class TracedAsyncPersistentSubscription(
-    TracedAsyncRecordedEventSubscription[AsyncPersistentSubscription],
+    TracedAsyncRecordedEventSubscription[AbstractAsyncPersistentSubscription],
     AbstractAsyncPersistentSubscription,
 ):
     async def ack(self, item: Union[UUID, RecordedEvent]) -> None:
