@@ -16,7 +16,7 @@ SAMPLES_LINE_LENGTH=70
 
 .PHONY: install-poetry
 install-poetry:
-	curl -sSL $(POETRY_INSTALLER_URL) | python3
+	@curl -sSL $(POETRY_INSTALLER_URL) | python3
 	$(POETRY) --version
 
 .PHONY: install-packages
@@ -88,7 +88,7 @@ fmt: fmt-isort fmt-black
 
 .PHONY: test
 test:
-	timeout --preserve-status --kill-after=10s 10m $(POETRY) run coverage run -m unittest discover ./tests -v
+	@timeout --preserve-status --kill-after=10s 10m $(POETRY) run coverage run -m unittest discover ./tests -v
 	$(POETRY) run coverage report --fail-under=100 --show-missing
 
 # 	$(POETRY) run python -m pytest -v $(opts) $(call tests,.) & read -t 1 ||
@@ -124,7 +124,7 @@ grpc-stubs:
 
 .PHONY: start-eventstoredb-insecure
 start-eventstoredb-insecure:
-	docker run -d -i -t -p 2113:2113 \
+	@docker run -d -i -t -p 2113:2113 \
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
     --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2113" \
     --env "EVENTSTORE_RUN_PROJECTIONS=All" \
@@ -134,7 +134,7 @@ start-eventstoredb-insecure:
 
 .PHONY: start-eventstoredb-secure
 start-eventstoredb-secure:
-	docker run -d -i -t -p 2114:2113 \
+	@docker run -d -i -t -p 2114:2113 \
     --env "HOME=/tmp" \
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
     --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
@@ -145,21 +145,21 @@ start-eventstoredb-secure:
 
 .PHONY: attach-eventstoredb-insecure
 attach-eventstoredb-insecure:
-	docker exec -it my-eventstoredb-insecure /bin/bash
+	@docker exec -it my-eventstoredb-insecure /bin/bash
 
 .PHONY: attach-eventstoredb-secure
 attach-eventstoredb-secure:
-	docker exec -it my-eventstoredb-secure /bin/bash
+	@docker exec -it my-eventstoredb-secure /bin/bash
 
 .PHONY: stop-eventstoredb-insecure
 stop-eventstoredb-insecure:
-	docker stop my-eventstoredb-insecure
-	docker rm my-eventstoredb-insecure
+	@docker stop my-eventstoredb-insecure
+	@docker rm my-eventstoredb-insecure
 
 .PHONY: stop-eventstoredb-secure
 stop-eventstoredb-secure:
-	docker stop my-eventstoredb-secure
-	docker rm my-eventstoredb-secure
+	@docker stop my-eventstoredb-secure
+	@docker rm my-eventstoredb-secure
 
 .PHONY: start-eventstoredb
 start-eventstoredb: start-eventstoredb-insecure start-eventstoredb-secure docker-up
@@ -169,16 +169,16 @@ stop-eventstoredb: stop-eventstoredb-insecure stop-eventstoredb-secure docker-do
 
 .PHONY: docker-pull
 docker-pull:
-	docker compose pull
+	@docker compose pull
 
 .PHONY: docker-build
 docker-build:
-	docker compose build
+	@docker compose build
 
 .PHONY: docker-up
 docker-up:
 	@docker --version
-	docker compose up -d
+	@docker compose up -d
 	@echo "Waiting for containers to be healthy"
 	@until docker compose ps | grep -in "healthy" | wc -l | grep -in 3 > /dev/null; do printf "." && sleep 1; done; echo ""
 	@docker compose ps
@@ -186,16 +186,16 @@ docker-up:
 
 .PHONY: docker-stop
 docker-stop:
-	docker compose stop
+	@docker compose stop
 
 .PHONY: docker-down
 docker-down:
-	docker compose down -v --remove-orphans
+	@docker compose down -v --remove-orphans
 
 
 .PHONY: docker-logs
 docker-logs:
-	docker compose logs --follow --tail=1000
+	@docker compose logs --follow --tail=1000
 
 
 # Jaeger natively supports OTLP to receive trace data. You can run Jaeger in a docker container
@@ -203,7 +203,7 @@ docker-logs:
 # https://opentelemetry.io/docs/languages/python/exporters/#jaeger
 .PHONY: start-jaeger
 start-jaeger:
-	docker run -d \
+	@docker run -d \
     -e COLLECTOR_ZIPKIN_HOST_PORT=:9411 \
     -p 16686:16686 \
     -p 4317:4317 \
@@ -214,5 +214,5 @@ start-jaeger:
 
 .PHONY: stop-jaeger
 stop-jaeger:
-	docker stop jaeger
-	docker rm jaeger
+	@docker stop jaeger
+	@docker rm jaeger
