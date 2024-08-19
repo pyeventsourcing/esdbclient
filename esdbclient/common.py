@@ -414,9 +414,14 @@ def construct_recorded_event(
     return recorded_event
 
 
-class RecordedEventIterator(
-    Iterator[RecordedEvent], AbstractContextManager[Iterator[RecordedEvent]]
-):
+try:  # pragma: no cover
+    _ContextManager = AbstractContextManager[Iterator[RecordedEvent]]
+except TypeError:  # pragma: no cover
+    # For Python <= v3.9.
+    _ContextManager = AbstractContextManager  # type: ignore
+
+
+class RecordedEventIterator(Iterator[RecordedEvent], _ContextManager):
     def __iter__(self) -> Self:
         return self
 
@@ -463,10 +468,14 @@ class AbstractPersistentSubscription(RecordedEventSubscription):
         pass  # pragma: no cover
 
 
-class AsyncRecordedEventIterator(
-    AsyncIterator[RecordedEvent],
-    AbstractAsyncContextManager[AsyncIterator[RecordedEvent]],
-):
+try:  # pragma: no cover
+    _AsyncContextManager = AbstractAsyncContextManager[AsyncIterator[RecordedEvent]]
+except TypeError:  # pragma: no cover
+    # For Python <= v3.9.
+    _AsyncContextManager = AbstractAsyncContextManager  # type: ignore
+
+
+class AsyncRecordedEventIterator(AsyncIterator[RecordedEvent], _AsyncContextManager):
     @abstractmethod
     async def stop(self) -> None:
         pass  # pragma: no cover

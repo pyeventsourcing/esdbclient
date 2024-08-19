@@ -57,10 +57,7 @@ from esdbclient.exceptions import (
     ServiceUnavailable,
 )
 from esdbclient.persistent import ConsumerStrategy, SubscriptionInfo
-from esdbclient.projections import (
-    ProjectionState,
-    ProjectionStatistics,
-)
+from esdbclient.projections import ProjectionState, ProjectionStatistics
 from esdbclient.streams import AsyncReadResponse, StreamState
 
 _TCallable = TypeVar("_TCallable", bound=Callable[..., Any])

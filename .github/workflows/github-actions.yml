@@ -11,9 +11,8 @@ jobs:
         # https://cloudsmith.io/~eventstore/repos/eventstore-staging-ce/packages/
         eventstore-docker-image:
           - docker.eventstore.com/eventstore-ce/eventstoredb-ce:22.10.4-jammy
-          - docker.eventstore.com/eventstore-ce/eventstoredb-ce:23.10.0-jammy
-          - docker.eventstore.com/eventstore-ce/eventstoredb-ce:24.2.0-alpha.115-jammy
-          - docker.eventstore.com/eventstore-staging-ce/eventstoredb-oss:24.6.0-jammy
+          - docker.eventstore.com/eventstore-ce/eventstoredb-oss:23.10.2-jammy
+          - docker.eventstore.com/eventstore-ce/eventstoredb-oss:24.6.0-jammy
           - docker.eventstore.com/eventstore-staging-ce/eventstoredb-ce:24.10.0-nightly-x64-8.0-jammy
     env:
       EVENTSTORE_DOCKER_IMAGE: ${{ matrix.eventstore-docker-image }}

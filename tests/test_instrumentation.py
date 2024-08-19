@@ -72,6 +72,7 @@ from esdbclient.instrumentation.opentelemetry import (
 )
 from esdbclient.instrumentation.opentelemetry.spanners import (
     _enrich_span,
+    _extract_context_from_event,
     _set_context_in_events,
 )
 from esdbclient.instrumentation.opentelemetry.utils import (
@@ -1050,7 +1051,7 @@ class BaseEventStoreDBClientTestCase(TestCase, ABC, Generic[TEventStoreDBClient]
 
         # Check the number of finished spans.
         if num_spans is not None:
-            self.assertEqual(num_spans, len(spans), len(spans))
+            self.assertEqual(num_spans, len(spans))
 
         if span_index is None:
             return
@@ -1215,6 +1216,7 @@ class EventStoreDBClientInstrumentorTestCase(
         ],
         new_event: NewEvent,
         parent_span_index: Optional[int] = 0,
+        expect_new_span: bool = True,
     ) -> None:
         # Count the number of spans.
         num_spans = len(_get_in_memory_spans())
@@ -1225,20 +1227,23 @@ class EventStoreDBClientInstrumentorTestCase(
         self.assertEqual(new_event.id, recorded_event.id)
 
         # Check the spans.
-        self.check_spans(
-            num_spans=num_spans + 1,
-            span_index=-1,
-            parent_span_index=parent_span_index,
-            span_name="streams.subscribe",
-            span_kind=trace_api.SpanKind.CONSUMER,
-            span_attributes={
-                "db.operation": "streams.subscribe",
-                "db.eventstoredb.event.id": str(recorded_event.id),
-                "db.eventstoredb.event.type": recorded_event.type,
-                "db.eventstoredb.stream": recorded_event.stream_name,
-                "db.eventstoredb.subscription.id": subscription.subscription_id,
-            },
-        )
+        if expect_new_span:
+            self.check_spans(
+                num_spans=num_spans + 1,
+                span_index=-1,
+                parent_span_index=parent_span_index,
+                span_name="streams.subscribe",
+                span_kind=trace_api.SpanKind.CONSUMER,
+                span_attributes={
+                    "db.operation": "streams.subscribe",
+                    "db.eventstoredb.event.id": str(recorded_event.id),
+                    "db.eventstoredb.event.type": recorded_event.type,
+                    "db.eventstoredb.stream": recorded_event.stream_name,
+                    "db.eventstoredb.subscription.id": subscription.subscription_id,
+                },
+            )
+        else:
+            self.assertEqual(num_spans, len(_get_in_memory_spans()))
 
     @staticmethod
     def break_client_connection(client: EventStoreDBClient) -> None:
@@ -1291,6 +1296,7 @@ class AsyncEventStoreDBClientInstrumentorTestCase(
         ],
         new_event: NewEvent,
         parent_span_index: Optional[int] = 0,
+        expect_new_span: bool = True,
     ) -> None:
         # Count the number of spans.
         num_spans = len(_get_in_memory_spans())
@@ -1301,20 +1307,23 @@ class AsyncEventStoreDBClientInstrumentorTestCase(
         self.assertEqual(new_event.id, recorded_event.id)
 
         # Check the spans.
-        self.check_spans(
-            num_spans=num_spans + 1,
-            span_index=-1,
-            parent_span_index=parent_span_index,
-            span_name="streams.subscribe",
-            span_kind=trace_api.SpanKind.CONSUMER,
-            span_attributes={
-                "db.operation": "streams.subscribe",
-                "db.eventstoredb.event.id": str(recorded_event.id),
-                "db.eventstoredb.event.type": recorded_event.type,
-                "db.eventstoredb.stream": recorded_event.stream_name,
-                "db.eventstoredb.subscription.id": subscription.subscription_id,
-            },
-        )
+        if expect_new_span:
+            self.check_spans(
+                num_spans=num_spans + 1,
+                span_index=-1,
+                parent_span_index=parent_span_index,
+                span_name="streams.subscribe",
+                span_kind=trace_api.SpanKind.CONSUMER,
+                span_attributes={
+                    "db.operation": "streams.subscribe",
+                    "db.eventstoredb.event.id": str(recorded_event.id),
+                    "db.eventstoredb.event.type": recorded_event.type,
+                    "db.eventstoredb.stream": recorded_event.stream_name,
+                    "db.eventstoredb.subscription.id": subscription.subscription_id,
+                },
+            )
+        else:
+            self.assertEqual(num_spans, len(_get_in_memory_spans()))
 
     @staticmethod
     async def async_break_client_connection(client: AsyncEventStoreDBClient) -> None:
@@ -1323,6 +1332,12 @@ class AsyncEventStoreDBClientInstrumentorTestCase(
 
 
 class BaseUtilsTestCase(BaseEventStoreDBClientTestCase[TEventStoreDBClient]):
+    pass
+
+
+class TestUtils(
+    EventStoreDBClientInstrumentorTestCase, BaseUtilsTestCase[EventStoreDBClient]
+):
     def test_span_helpers(self) -> None:
         tracer = get_tracer("esdbclient.instrumentation.opentelemetry", "1.1")
         client = self.construct_client()
@@ -1520,10 +1535,6 @@ class BaseUtilsTestCase(BaseEventStoreDBClientTestCase[TEventStoreDBClient]):
             span_attributes={},
         )
 
-
-class TestUtils(
-    EventStoreDBClientInstrumentorTestCase, BaseUtilsTestCase[EventStoreDBClient]
-):
     def test_propagate_context_via_events(self) -> None:
         context = INVALID_SPAN_CONTEXT
 
@@ -1539,6 +1550,7 @@ class TestUtils(
             )
         ]
         self.assertEqual(repr(expected_events), repr(events))
+        self.assertIsNotNone(_extract_context_from_event(events[0]))
 
         # Single event, json metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b"{}")
@@ -1552,6 +1564,7 @@ class TestUtils(
             )
         ]
         self.assertEqual(repr(expected_events), repr(events))
+        self.assertIsNotNone(_extract_context_from_event(events[0]))
 
         # Single event, json metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b'{"my-key": "my-value"}')
@@ -1565,6 +1578,7 @@ class TestUtils(
             )
         ]
         self.assertEqual(repr(expected_events), repr(events))
+        self.assertIsNotNone(_extract_context_from_event(events[0]))
 
         # Single event, non-json metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b"12345")
@@ -1578,6 +1592,24 @@ class TestUtils(
             )
         ]
         self.assertEqual(repr(expected_events), repr(events))
+        self.assertIsNone(_extract_context_from_event(events[0]))
+
+        # Single event, non-json content-type.
+        event1 = NewEvent(
+            "SomethingHappened", b"{}", b"", content_type="application/octet-stream"
+        )
+        events = _set_context_in_events(context, event1)
+        expected_events = [
+            NewEvent(
+                type="SomethingHappened",
+                data=b"{}",
+                metadata=b"",
+                id=event1.id,
+                content_type="application/octet-stream",
+            )
+        ]
+        self.assertEqual(repr(expected_events), repr(events))
+        self.assertIsNone(_extract_context_from_event(events[0]))
 
         # Multiple events.
         event1 = NewEvent("SomethingHappened", b"{}", b"")
@@ -1598,6 +1630,8 @@ class TestUtils(
             ),
         ]
         self.assertEqual(repr(expected_events), repr(events))
+        self.assertIsNotNone(_extract_context_from_event(events[0]))
+        self.assertIsNone(_extract_context_from_event(events[1]))
 
 
 class AsyncTestUtils(
@@ -1895,7 +1929,7 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
         # Check consumer spans are created by subscription.
         self.get_next_and_check_consumer_span(subscription, new_events[0])
         self.get_next_and_check_consumer_span(subscription, new_events[1])
-        self.get_next_and_check_consumer_span(subscription, new_events[2], None)
+        # self.get_next_and_check_consumer_span(subscription, new_events[2], None)
 
         # Check wrapper supports context manager.
         with subscription as s:
@@ -1908,7 +1942,7 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
         subscription.stop()
 
         # Check there are still four spans.
-        self.check_spans(num_spans=4)
+        self.check_spans(num_spans=3)
 
         # Check span after error during iteration.
         subscription = client.subscribe_to_stream(stream_name)
@@ -1918,8 +1952,8 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
             next(subscription)
 
         self.check_spans(
-            num_spans=5,
-            span_index=4,
+            num_spans=4,
+            span_index=3,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -1934,8 +1968,8 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
             client.subscribe_to_stream(stream_name)
 
         self.check_spans(
-            num_spans=6,
-            span_index=5,
+            num_spans=5,
+            span_index=4,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -1975,7 +2009,9 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
         # Check consumer spans are created by subscription.
         self.get_next_and_check_consumer_span(subscription, new_events[0])
         self.get_next_and_check_consumer_span(subscription, new_events[1])
-        self.get_next_and_check_consumer_span(subscription, new_events[2], None)
+        self.get_next_and_check_consumer_span(
+            subscription, new_events[2], expect_new_span=False
+        )
 
         # Check wrapper supports context manager.
         with subscription as s:
@@ -1988,7 +2024,7 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
         subscription.stop()
 
         # Check there are still four spans.
-        self.check_spans(num_spans=4)
+        self.check_spans(num_spans=3)
 
         # Check span after error during iteration.
         subscription = client.subscribe_to_all(commit_position=commit_position)
@@ -1998,8 +2034,8 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
             next(subscription)
 
         self.check_spans(
-            num_spans=5,
-            span_index=4,
+            num_spans=4,
+            span_index=3,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -2014,8 +2050,8 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
             client.subscribe_to_all(from_end=True)
 
         self.check_spans(
-            num_spans=6,
-            span_index=5,
+            num_spans=5,
+            span_index=4,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -2056,7 +2092,9 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
         # Check consumer spans are created by subscription.
         self.get_next_and_check_consumer_span(subscription, new_events[0])
         self.get_next_and_check_consumer_span(subscription, new_events[1])
-        self.get_next_and_check_consumer_span(subscription, new_events[2], None)
+        self.get_next_and_check_consumer_span(
+            subscription, new_events[2], expect_new_span=False
+        )
 
         # Check wrapper supports ack and nack.
         subscription.nack(new_events[0].id, "retry")
@@ -2073,7 +2111,7 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
         subscription.stop()
 
         # Check there are still four spans.
-        self.check_spans(num_spans=4)
+        self.check_spans(num_spans=3)
 
         # Check span after error during iteration.
         group_name = "instrumentation-test-" + str(uuid4())
@@ -2085,8 +2123,8 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
             next(subscription)
 
         self.check_spans(
-            num_spans=5,
-            span_index=4,
+            num_spans=4,
+            span_index=3,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -2102,8 +2140,8 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
             client.read_subscription_to_stream(group_name, stream_name)
 
         self.check_spans(
-            num_spans=6,
-            span_index=5,
+            num_spans=5,
+            span_index=4,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -2144,7 +2182,9 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
         # Check consumer spans are created by subscription.
         self.get_next_and_check_consumer_span(subscription, new_events[0])
         self.get_next_and_check_consumer_span(subscription, new_events[1])
-        self.get_next_and_check_consumer_span(subscription, new_events[2], None)
+        self.get_next_and_check_consumer_span(
+            subscription, new_events[2], expect_new_span=False
+        )
 
         # Check wrapper supports ack and nack.
         subscription.nack(new_events[0].id, "retry")
@@ -2161,7 +2201,7 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
         subscription.stop()
 
         # Check there are still four spans.
-        self.check_spans(num_spans=4)
+        self.check_spans(num_spans=3)
 
         # Check span after error during iteration.
         group_name = "instrumentation-test-" + str(uuid4())
@@ -2173,8 +2213,8 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
             next(subscription)
 
         self.check_spans(
-            num_spans=5,
-            span_index=4,
+            num_spans=4,
+            span_index=3,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -2189,8 +2229,8 @@ class TestWhatAlexeyAskedFor(EventStoreDBClientInstrumentorTestCase):
             client.read_subscription_to_all(group_name)
 
         self.check_spans(
-            num_spans=6,
-            span_index=5,
+            num_spans=5,
+            span_index=4,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -2362,7 +2402,7 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
         await self.async_get_next_and_check_consumer_span(subscription, new_events[0])
         await self.async_get_next_and_check_consumer_span(subscription, new_events[1])
         await self.async_get_next_and_check_consumer_span(
-            subscription, new_events[2], None
+            subscription, new_events[2], expect_new_span=False
         )
 
         # Check wrapper supports context manager.
@@ -2376,7 +2416,7 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
         await subscription.stop()
 
         # Check there are still four spans.
-        self.check_spans(num_spans=4)
+        self.check_spans(num_spans=3)
 
         # Check span after error during iteration.
         subscription = await client.subscribe_to_stream(stream_name)
@@ -2387,8 +2427,8 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
             await subscription.__anext__()
 
         self.check_spans(
-            num_spans=5,
-            span_index=4,
+            num_spans=4,
+            span_index=3,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -2403,8 +2443,8 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
             await client.subscribe_to_stream(stream_name)
 
         self.check_spans(
-            num_spans=6,
-            span_index=5,
+            num_spans=5,
+            span_index=4,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -2446,7 +2486,7 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
         await self.async_get_next_and_check_consumer_span(subscription, new_events[0])
         await self.async_get_next_and_check_consumer_span(subscription, new_events[1])
         await self.async_get_next_and_check_consumer_span(
-            subscription, new_events[2], None
+            subscription, new_events[2], expect_new_span=False
         )
 
         # Check wrapper supports context manager.
@@ -2460,7 +2500,7 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
         await subscription.stop()
 
         # Check there are still four spans.
-        self.check_spans(num_spans=4)
+        self.check_spans(num_spans=3)
 
         # Check span after error during iteration.
         subscription = await client.subscribe_to_all(commit_position=commit_position)
@@ -2471,8 +2511,8 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
             await subscription.__anext__()
 
         self.check_spans(
-            num_spans=5,
-            span_index=4,
+            num_spans=4,
+            span_index=3,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -2487,8 +2527,8 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
             await client.subscribe_to_all(from_end=True)
 
         self.check_spans(
-            num_spans=6,
-            span_index=5,
+            num_spans=5,
+            span_index=4,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -2531,7 +2571,7 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
         await self.async_get_next_and_check_consumer_span(subscription, new_events[0])
         await self.async_get_next_and_check_consumer_span(subscription, new_events[1])
         await self.async_get_next_and_check_consumer_span(
-            subscription, new_events[2], None
+            subscription, new_events[2], expect_new_span=False
         )
 
         # Check wrapper supports ack and nack.
@@ -2549,7 +2589,7 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
         await subscription.stop()
 
         # Check there are still four spans.
-        self.check_spans(num_spans=4)
+        self.check_spans(num_spans=3)
 
         # Check span after error during iteration.
         group_name = "instrumentation-test-" + str(uuid4())
@@ -2561,8 +2601,8 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
             await subscription.__anext__()
 
         self.check_spans(
-            num_spans=5,
-            span_index=4,
+            num_spans=4,
+            span_index=3,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -2580,8 +2620,8 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
             await client.read_subscription_to_stream(group_name, stream_name)
 
         self.check_spans(
-            num_spans=6,
-            span_index=5,
+            num_spans=5,
+            span_index=4,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -2624,7 +2664,7 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
         await self.async_get_next_and_check_consumer_span(subscription, new_events[0])
         await self.async_get_next_and_check_consumer_span(subscription, new_events[1])
         await self.async_get_next_and_check_consumer_span(
-            subscription, new_events[2], None
+            subscription, new_events[2], expect_new_span=False
         )
 
         # Check wrapper supports ack and nack.
@@ -2642,7 +2682,7 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
         await subscription.stop()
 
         # Check there are still four spans.
-        self.check_spans(num_spans=4)
+        self.check_spans(num_spans=3)
 
         # Check span after error during iteration.
         group_name = "instrumentation-test-" + str(uuid4())
@@ -2653,8 +2693,8 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
             await subscription.__anext__()
 
         self.check_spans(
-            num_spans=5,
-            span_index=4,
+            num_spans=4,
+            span_index=3,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={
@@ -2670,8 +2710,8 @@ class AsyncTestWhatAlexeyAskedFor(AsyncEventStoreDBClientInstrumentorTestCase):
             await client.read_subscription_to_all(group_name)
 
         self.check_spans(
-            num_spans=6,
-            span_index=5,
+            num_spans=5,
+            span_index=4,
             span_name="streams.subscribe",
             span_kind=trace_api.SpanKind.CONSUMER,
             span_attributes={

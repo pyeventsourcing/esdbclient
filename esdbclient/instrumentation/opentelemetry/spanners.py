@@ -736,18 +736,21 @@ class TracedRecordedEventSubscription(
         else:
             context = _extract_context_from_event(recorded_event)
 
-            with _start_span(
-                self.tracer, self.span_name, self.span_kind, context=context
-            ) as span:
-                self._enrich_span(
-                    span=span,
-                    stream_name=recorded_event.stream_name,
-                    event_id=str(recorded_event.id),
-                    event_type=recorded_event.type,
-                )
+            if context is not None:
+                with _start_span(
+                    self.tracer, self.span_name, self.span_kind, context=context
+                ) as span:
+                    self._enrich_span(
+                        span=span,
+                        stream_name=recorded_event.stream_name,
+                        event_id=str(recorded_event.id),
+                        event_type=recorded_event.type,
+                    )
 
-                span.set_status(StatusCode.OK)
+                    span.set_status(StatusCode.OK)
 
+                    return recorded_event
+            else:
                 return recorded_event
 
     def _enrich_span(
@@ -910,16 +913,20 @@ class TracedAsyncRecordedEventSubscription(
                 raise
         else:
             context = _extract_context_from_event(recorded_event)
-            with _start_span(
-                self.tracer, self.span_name, self.span_kind, context=context
-            ) as span:
-                self._enrich_span(
-                    span=span,
-                    stream_name=recorded_event.stream_name,
-                    event_id=str(recorded_event.id),
-                    event_type=recorded_event.type,
-                )
-                _set_span_ok(span)
+
+            if context is not None:
+                with _start_span(
+                    self.tracer, self.span_name, self.span_kind, context=context
+                ) as span:
+                    self._enrich_span(
+                        span=span,
+                        stream_name=recorded_event.stream_name,
+                        event_id=str(recorded_event.id),
+                        event_type=recorded_event.type,
+                    )
+                    _set_span_ok(span)
+                    return recorded_event
+            else:
                 return recorded_event
 
     def _enrich_span(
@@ -1034,32 +1041,35 @@ METADATA_SPAN_ID = "$spanId"
 
 def _set_context_in_events(
     context: SpanContext, events: Union[NewEvent, Iterable[NewEvent]]
-) -> Iterable[NewEvent]:
+) -> Sequence[NewEvent]:
     # Kind of propagate OpenTelemetry context in "standard EventStoreDB" style.
     reconstructed_events = []
     if isinstance(events, NewEvent):
         events = [events]
     for event in events:
-        try:
-            d = json.loads((event.metadata or b"{}").decode("utf8"))
-            d[METADATA_SPAN_ID] = _int_to_hex(context.span_id)
-            d[METADATA_TRACE_ID] = _int_to_hex(context.trace_id)
-            metadata = json.dumps(d).encode("utf8")
-        except Exception:
-            pass
-        else:
-            event = NewEvent(
-                id=event.id,
-                type=event.type,
-                data=event.data,
-                content_type=event.content_type,
-                metadata=metadata,
-            )
+        if event.content_type == "application/json":
+            try:
+                d = json.loads((event.metadata or b"{}").decode("utf8"))
+                d[METADATA_SPAN_ID] = _int_to_hex(context.span_id)
+                d[METADATA_TRACE_ID] = _int_to_hex(context.trace_id)
+                metadata = json.dumps(d).encode("utf8")
+            except Exception:
+                pass
+            else:
+                event = NewEvent(
+                    id=event.id,
+                    type=event.type,
+                    data=event.data,
+                    content_type=event.content_type,
+                    metadata=metadata,
+                )
         reconstructed_events.append(event)
     return reconstructed_events
 
 
-def _extract_context_from_event(recorded_event: RecordedEvent) -> Optional[Context]:
+def _extract_context_from_event(
+    recorded_event: Union[NewEvent, RecordedEvent],
+) -> Optional[Context]:
     # Extract propagated OpenTelemetry context using "standard EventStoreDB" style.
     try:
         m = json.loads(recorded_event.metadata.decode("utf8"))
