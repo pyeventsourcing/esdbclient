@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+
 import asyncio
 import datetime
 import os
 import threading
 from abc import ABC, abstractmethod
 from base64 import b64encode
+from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from typing import (
     TYPE_CHECKING,
     Any,
     AsyncIterator,
     Generic,
     Iterator,
+    Literal,
     Optional,
     Sequence,
     Tuple,
@@ -88,7 +92,9 @@ class BaseGrpcStreamer(ABC):
 
 
 class GrpcStreamer(BaseGrpcStreamer):
-    def __init__(self) -> None:
+    def __init__(self, grpc_streamers: GrpcStreamers) -> None:
+        self._grpc_streamers = grpc_streamers
+        self._grpc_streamers.add(self)
         self._is_stopped = False
         self._is_stopped_lock = threading.Lock()
 
@@ -111,7 +117,9 @@ class GrpcStreamer(BaseGrpcStreamer):
 
 
 class AsyncGrpcStreamer(BaseGrpcStreamer):
-    def __init__(self) -> None:
+    def __init__(self, grpc_streamers: AsyncGrpcStreamers) -> None:
+        self._grpc_streamers = grpc_streamers
+        self._grpc_streamers.add(self)
         self._is_stopped = False
         self._is_stopped_lock = asyncio.Lock()
 
@@ -406,11 +414,9 @@ def construct_recorded_event(
     return recorded_event
 
 
-class RecordedEventIterator(Iterator[RecordedEvent]):
-    @abstractmethod
-    def stop(self) -> None:
-        pass  # pragma: no cover
-
+class RecordedEventIterator(
+    Iterator[RecordedEvent], AbstractContextManager[Iterator[RecordedEvent]]
+):
     def __iter__(self) -> Self:
         return self
 
@@ -423,6 +429,14 @@ class RecordedEventIterator(Iterator[RecordedEvent]):
     def __del__(self) -> None:
         self.stop()
 
+    @abstractmethod
+    def stop(self) -> None:
+        pass  # pragma: no cover
+
+
+class AbstractReadResponse(RecordedEventIterator):
+    pass
+
 
 class RecordedEventSubscription(RecordedEventIterator):
     @property
@@ -431,7 +445,28 @@ class RecordedEventSubscription(RecordedEventIterator):
         pass  # pragma: no cover
 
 
-class AsyncRecordedEventIterator(AsyncIterator[RecordedEvent]):
+class AbstractCatchupSubscription(RecordedEventSubscription):
+    pass
+
+
+class AbstractPersistentSubscription(RecordedEventSubscription):
+    @abstractmethod
+    def ack(self, item: Union[UUID, RecordedEvent]) -> None:
+        pass  # pragma: no cover
+
+    @abstractmethod
+    def nack(
+        self,
+        item: Union[UUID, RecordedEvent],
+        action: Literal["unknown", "park", "retry", "skip", "stop"],
+    ) -> None:
+        pass  # pragma: no cover
+
+
+class AsyncRecordedEventIterator(
+    AsyncIterator[RecordedEvent],
+    AbstractAsyncContextManager[AsyncIterator[RecordedEvent]],
+):
     @abstractmethod
     async def stop(self) -> None:
         pass  # pragma: no cover
@@ -457,8 +492,30 @@ class AsyncRecordedEventIterator(AsyncIterator[RecordedEvent]):
         return getattr(self, "_iter_error_for_testing", False)
 
 
+class AbstractAsyncReadResponse(AsyncRecordedEventIterator):
+    pass
+
+
 class AsyncRecordedEventSubscription(AsyncRecordedEventIterator):
     @property
     @abstractmethod
     def subscription_id(self) -> str:
+        pass  # pragma: no cover
+
+
+class AbstractAsyncCatchupSubscription(AsyncRecordedEventSubscription):
+    pass
+
+
+class AbstractAsyncPersistentSubscription(AsyncRecordedEventSubscription):
+    @abstractmethod
+    async def ack(self, item: Union[UUID, RecordedEvent]) -> None:
+        pass  # pragma: no cover
+
+    @abstractmethod
+    async def nack(
+        self,
+        item: Union[UUID, RecordedEvent],
+        action: Literal["unknown", "park", "retry", "skip", "stop"],
+    ) -> None:
         pass  # pragma: no cover

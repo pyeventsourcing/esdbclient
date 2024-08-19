@@ -41,6 +41,9 @@ from esdbclient.common import (
     DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
     DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
     DEFAULT_WINDOW_SIZE,
+    AbstractCatchupSubscription,
+    AbstractPersistentSubscription,
+    AbstractReadResponse,
     BasicAuthCallCredentials,
     GrpcOptions,
 )
@@ -73,21 +76,15 @@ from esdbclient.gossip import (
 )
 from esdbclient.persistent import (
     ConsumerStrategy,
-    PersistentSubscription,
     PersistentSubscriptionsService,
     SubscriptionInfo,
 )
-from esdbclient.projections import (  # ProjectionResult,
+from esdbclient.projections import (
     ProjectionsService,
     ProjectionState,
     ProjectionStatistics,
 )
-from esdbclient.streams import (
-    CatchupSubscription,
-    ReadResponse,
-    StreamsService,
-    StreamState,
-)
+from esdbclient.streams import StreamsService, StreamState
 
 # Matches the 'type' of "system" events.
 ESDB_SYSTEM_EVENTS_REGEX = r"\$.+"
@@ -618,7 +615,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> ReadResponse:
+    ) -> AbstractReadResponse:
         """
         Reads recorded events from the named stream.
         """
@@ -645,7 +642,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         limit: int = sys.maxsize,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> ReadResponse:
+    ) -> AbstractReadResponse:
         """
         Reads recorded events in "all streams" in the database.
         """
@@ -797,7 +794,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> CatchupSubscription:
+    ) -> AbstractCatchupSubscription:
         """
         Starts a catch-up subscription, from which all
         recorded events in the database can be received.
@@ -875,7 +872,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> CatchupSubscription:
+    ) -> AbstractCatchupSubscription:
         """
         Starts a catch-up subscription from which
         recorded events in a stream can be received.
@@ -1176,7 +1173,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         stopping_grace: float = DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> PersistentSubscription:
+    ) -> AbstractPersistentSubscription:
         """
         Reads a persistent subscription on all streams.
         """
@@ -1204,7 +1201,7 @@ class EventStoreDBClient(BaseEventStoreDBClient):
         stopping_grace: float = DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> PersistentSubscription:
+    ) -> AbstractPersistentSubscription:
         """
         Reads a persistent subscription on one stream.
         """

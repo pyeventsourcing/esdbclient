@@ -41,6 +41,8 @@ from esdbclient.common import (
     DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
     DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
     DEFAULT_WINDOW_SIZE,
+    AbstractAsyncCatchupSubscription,
+    AbstractAsyncPersistentSubscription,
     GrpcOptions,
 )
 from esdbclient.connection import AsyncESDBConnection
@@ -54,16 +56,12 @@ from esdbclient.exceptions import (
     NotFound,
     ServiceUnavailable,
 )
-from esdbclient.persistent import (
-    AsyncPersistentSubscription,
-    ConsumerStrategy,
-    SubscriptionInfo,
-)
-from esdbclient.projections import (  # ProjectionResult,
+from esdbclient.persistent import ConsumerStrategy, SubscriptionInfo
+from esdbclient.projections import (
     ProjectionState,
     ProjectionStatistics,
 )
-from esdbclient.streams import AsyncCatchupSubscription, AsyncReadResponse, StreamState
+from esdbclient.streams import AsyncReadResponse, StreamState
 
 _TCallable = TypeVar("_TCallable", bound=Callable[..., Any])
 
@@ -499,7 +497,7 @@ class AsyncEventStoreDBClient(BaseEventStoreDBClient):
         include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncCatchupSubscription:
+    ) -> AbstractAsyncCatchupSubscription:
         """
         Starts a catch-up subscription, from which all
         recorded events in the database can be received.
@@ -578,7 +576,7 @@ class AsyncEventStoreDBClient(BaseEventStoreDBClient):
         include_caught_up: bool = False,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncCatchupSubscription:
+    ) -> AbstractAsyncCatchupSubscription:
         """
         Starts a catch-up subscription from which
         recorded events in a stream can be received.
@@ -951,7 +949,7 @@ class AsyncEventStoreDBClient(BaseEventStoreDBClient):
         stopping_grace: float = DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncPersistentSubscription:
+    ) -> AbstractAsyncPersistentSubscription:
         """
         Reads a persistent subscription on all streams.
         """
@@ -979,7 +977,7 @@ class AsyncEventStoreDBClient(BaseEventStoreDBClient):
         stopping_grace: float = DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
         timeout: Optional[float] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> AsyncPersistentSubscription:
+    ) -> AbstractAsyncPersistentSubscription:
         """
         Reads a persistent subscription on one stream.
         """

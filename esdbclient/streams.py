@@ -20,16 +20,16 @@ from esdbclient.common import (
     DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
     DEFAULT_WINDOW_SIZE,
     PROTOBUF_MAX_DEADLINE_SECONDS,
+    AbstractAsyncCatchupSubscription,
+    AbstractAsyncReadResponse,
+    AbstractCatchupSubscription,
+    AbstractReadResponse,
     AsyncGrpcStreamer,
     AsyncGrpcStreamers,
-    AsyncRecordedEventIterator,
-    AsyncRecordedEventSubscription,
     ESDBService,
     GrpcStreamer,
     GrpcStreamers,
     Metadata,
-    RecordedEventIterator,
-    RecordedEventSubscription,
     TGrpcStreamers,
     construct_filter_exclude_regex,
     construct_filter_include_regex,
@@ -138,9 +138,7 @@ class BaseReadResponse:
         return None
 
 
-class AsyncReadResponse(
-    BaseReadResponse, AsyncGrpcStreamer, AsyncRecordedEventIterator
-):
+class AsyncReadResponse(BaseReadResponse, AsyncGrpcStreamer, AbstractAsyncReadResponse):
     def __init__(
         self,
         aio_call: grpc.aio.UnaryStreamCall[streams_pb2.ReadReq, streams_pb2.ReadResp],
@@ -148,11 +146,9 @@ class AsyncReadResponse(
         grpc_streamers: AsyncGrpcStreamers,
     ):
         BaseReadResponse.__init__(self, stream_name=stream_name)
-        AsyncGrpcStreamer.__init__(self)
+        AsyncGrpcStreamer.__init__(self, grpc_streamers=grpc_streamers)
         self.aio_call = aio_call
         self.read_resp_iter = aio_call.__aiter__()
-        self._grpc_streamers = grpc_streamers
-        self._grpc_streamers.add(self)
 
     async def __anext__(self) -> RecordedEvent:
         while True:
@@ -204,7 +200,7 @@ class AsyncReadResponse(
         await self.stop()
 
 
-class AsyncCatchupSubscription(AsyncReadResponse, AsyncRecordedEventSubscription):
+class AsyncCatchupSubscription(AsyncReadResponse, AbstractAsyncCatchupSubscription):
     def __init__(
         self,
         aio_call: grpc.aio.UnaryStreamCall[streams_pb2.ReadReq, streams_pb2.ReadResp],
@@ -233,18 +229,16 @@ class AsyncCatchupSubscription(AsyncReadResponse, AsyncRecordedEventSubscription
         return self._subscription_id
 
 
-class ReadResponse(RecordedEventIterator, BaseReadResponse, GrpcStreamer):
+class ReadResponse(GrpcStreamer, BaseReadResponse, AbstractReadResponse):
     def __init__(
         self,
         read_resps: _ReadResps,
         stream_name: Optional[str],
         grpc_streamers: GrpcStreamers,
     ):
+        GrpcStreamer.__init__(self, grpc_streamers=grpc_streamers)
         BaseReadResponse.__init__(self, stream_name=stream_name)
-        GrpcStreamer.__init__(self)
         self._read_resps = read_resps
-        self._grpc_streamers = grpc_streamers
-        self._grpc_streamers.add(self)
 
     def __next__(self) -> RecordedEvent:
         while True:
@@ -278,7 +272,7 @@ class ReadResponse(RecordedEventIterator, BaseReadResponse, GrpcStreamer):
             self._grpc_streamers.remove(self)
 
 
-class CatchupSubscription(ReadResponse, RecordedEventSubscription):
+class CatchupSubscription(ReadResponse, AbstractCatchupSubscription):
     def __init__(
         self,
         read_resps: _ReadResps,

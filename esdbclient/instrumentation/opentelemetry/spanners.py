@@ -52,6 +52,12 @@ from esdbclient import (
 )
 from esdbclient.client import BaseEventStoreDBClient
 from esdbclient.common import (
+    AbstractAsyncCatchupSubscription,
+    AbstractAsyncPersistentSubscription,
+    AbstractAsyncReadResponse,
+    AbstractCatchupSubscription,
+    AbstractPersistentSubscription,
+    AbstractReadResponse,
     AsyncRecordedEventIterator,
     AsyncRecordedEventSubscription,
     RecordedEventIterator,
@@ -223,7 +229,7 @@ class ReadStreamMethod(Protocol):
         stream_name: str,
         *args: Any,
         **kwargs: Any,
-    ) -> ReadResponse:
+    ) -> AbstractReadResponse:
         pass  # pragma: no cover
 
 
@@ -260,7 +266,7 @@ def span_read_stream(
     stream_name: str,
     *args: Any,
     **kwargs: Any,
-) -> SpannerResponse[ReadResponse]:
+) -> SpannerResponse[AbstractReadResponse]:
     pass  # pragma: no cover
 
 
@@ -272,7 +278,7 @@ def span_read_stream(
     stream_name: str,
     *args: Any,
     **kwargs: Any,
-) -> OverloadedSpannerResponse[ReadResponse, AsyncReadResponse]:
+) -> OverloadedSpannerResponse[AbstractReadResponse, AsyncReadResponse]:
     span_name, span_kind = _get_span_name_and_kind(spanned_func)
     with _start_span(tracer, span_name, span_kind) as span:
 
@@ -303,15 +309,12 @@ def span_read_stream(
                 # Because TypeGuard doesn't do type narrowing in negative case.
                 assert isinstance(response, ReadResponse)
 
-                yield cast(
-                    ReadResponse,
-                    TracedReadResponse(
-                        client=instance,
-                        response=response,
-                        tracer=tracer,
-                        span_name=span_name,
-                        span_kind=span_kind,
-                    ),
+                yield TracedReadResponse(
+                    client=instance,
+                    response=response,
+                    tracer=tracer,
+                    span_name=span_name,
+                    span_kind=span_kind,
                 )
         except Exception as e:
             _set_span_error(span, e)
@@ -424,7 +427,7 @@ class CatchupSubscriptionMethod(Protocol):
         /,
         *args: Any,
         **kwargs: Any,
-    ) -> CatchupSubscription:
+    ) -> AbstractCatchupSubscription:
         pass  # pragma: no cover
 
 
@@ -434,7 +437,7 @@ class AsyncCatchupSubscriptionMethod(Protocol):
         /,
         *args: Any,
         **kwargs: Any,
-    ) -> AsyncCatchupSubscription:
+    ) -> AbstractAsyncCatchupSubscription:
         pass  # pragma: no cover
 
 
@@ -446,7 +449,7 @@ def span_catchup_subscription(
     /,
     *args: Any,
     **kwargs: Any,
-) -> AsyncSpannerResponse[AsyncCatchupSubscription]:
+) -> AsyncSpannerResponse[AbstractAsyncCatchupSubscription]:
     pass  # pragma: no cover
 
 
@@ -458,7 +461,7 @@ def span_catchup_subscription(
     /,
     *args: Any,
     **kwargs: Any,
-) -> SpannerResponse[CatchupSubscription]:
+) -> SpannerResponse[AbstractCatchupSubscription]:
     pass  # pragma: no cover
 
 
@@ -469,22 +472,21 @@ def span_catchup_subscription(
     /,
     *args: Any,
     **kwargs: Any,
-) -> OverloadedSpannerResponse[CatchupSubscription, AsyncCatchupSubscription]:
+) -> OverloadedSpannerResponse[
+    AbstractCatchupSubscription, AbstractAsyncCatchupSubscription
+]:
     span_name, span_kind = _get_span_name_and_kind(spanned_func)
     try:
         response = spanned_func(*args, **kwargs)
         if inspect.isawaitable(response):
 
-            async def wrap_response() -> AsyncCatchupSubscription:
-                return cast(
-                    AsyncCatchupSubscription,
-                    TracedAsyncCatchupSubscription(
-                        client=instance,
-                        response=await response,
-                        tracer=tracer,
-                        span_name=span_name,
-                        span_kind=span_kind,
-                    ),
+            async def wrap_response() -> AbstractAsyncCatchupSubscription:
+                return TracedAsyncCatchupSubscription(
+                    client=instance,
+                    response=await response,
+                    tracer=tracer,
+                    span_name=span_name,
+                    span_kind=span_kind,
                 )
 
             yield wrap_response()
@@ -492,15 +494,12 @@ def span_catchup_subscription(
             # Because TypeGuard doesn't do type narrowing in negative case.
             assert isinstance(response, CatchupSubscription)
 
-            yield cast(
-                CatchupSubscription,
-                TracedCatchupSubscription(
-                    client=instance,
-                    response=response,
-                    tracer=tracer,
-                    span_name=span_name,
-                    span_kind=span_kind,
-                ),
+            yield TracedCatchupSubscription(
+                client=instance,
+                response=response,
+                tracer=tracer,
+                span_name=span_name,
+                span_kind=span_kind,
             )
     except Exception as e:
         with _start_span(tracer, span_name, span_kind) as span:
@@ -519,7 +518,7 @@ class ReadPersistentSubscriptionMethod(Protocol):
         /,
         *args: Any,
         **kwargs: Any,
-    ) -> PersistentSubscription:
+    ) -> AbstractPersistentSubscription:
         pass  # pragma: no cover
 
 
@@ -529,7 +528,7 @@ class AsyncReadPersistentSubscriptionMethod(Protocol):
         /,
         *args: Any,
         **kwargs: Any,
-    ) -> AsyncPersistentSubscription:
+    ) -> AbstractAsyncPersistentSubscription:
         pass  # pragma: no cover
 
 
@@ -541,7 +540,7 @@ def span_persistent_subscription(
     /,
     *args: Any,
     **kwargs: Any,
-) -> AsyncSpannerResponse[AsyncPersistentSubscription]:
+) -> AsyncSpannerResponse[AbstractAsyncPersistentSubscription]:
     pass  # pragma: no cover
 
 
@@ -553,7 +552,7 @@ def span_persistent_subscription(
     /,
     *args: Any,
     **kwargs: Any,
-) -> SpannerResponse[PersistentSubscription]:
+) -> SpannerResponse[AbstractPersistentSubscription]:
     pass  # pragma: no cover
 
 
@@ -566,22 +565,21 @@ def span_persistent_subscription(
     /,
     *args: Any,
     **kwargs: Any,
-) -> OverloadedSpannerResponse[PersistentSubscription, AsyncPersistentSubscription]:
+) -> OverloadedSpannerResponse[
+    AbstractPersistentSubscription, AbstractAsyncPersistentSubscription
+]:
     span_name, span_kind = _get_span_name_and_kind(spanned_func)
     try:
         response = spanned_func(*args, **kwargs)
         if inspect.isawaitable(response):
 
-            async def wrap_response() -> AsyncPersistentSubscription:
-                return cast(
-                    AsyncPersistentSubscription,
-                    TracedAsyncPersistentSubscription(
-                        client=instance,
-                        response=await response,
-                        tracer=tracer,
-                        span_name=span_name,
-                        span_kind=span_kind,
-                    ),
+            async def wrap_response() -> AbstractAsyncPersistentSubscription:
+                return TracedAsyncPersistentSubscription(
+                    client=instance,
+                    response=await response,
+                    tracer=tracer,
+                    span_name=span_name,
+                    span_kind=span_kind,
                 )
 
             yield wrap_response()
@@ -590,15 +588,12 @@ def span_persistent_subscription(
             # Because TypeGuard doesn't do type narrowing in negative case.
             assert isinstance(response, PersistentSubscription)
 
-            yield cast(
-                PersistentSubscription,
-                TracedPersistentSubscription(
-                    client=instance,
-                    response=response,
-                    tracer=tracer,
-                    span_name=span_name,
-                    span_kind=span_kind,
-                ),
+            yield TracedPersistentSubscription(
+                client=instance,
+                response=response,
+                tracer=tracer,
+                span_name=span_name,
+                span_kind=span_kind,
             )
 
     except Exception as e:
@@ -648,9 +643,6 @@ class TracedRecordedEventIterator(
         #         client=self.client,
         #     )
         # self.iterator_context = set_span_in_context(self.iterator_span, Context())
-
-    def __iter__(self) -> Self:
-        return self
 
     def __next__(self) -> RecordedEvent:
         span_name, span_kind = _get_span_name_and_kind(self.response.__next__)
@@ -720,7 +712,9 @@ class TracedRecordedEventIterator(
         #     iterator_span.end()
 
 
-class TracedReadResponse(TracedRecordedEventIterator[ReadResponse]):
+class TracedReadResponse(
+    TracedRecordedEventIterator[AbstractReadResponse], AbstractReadResponse
+):
     pass
 
 
@@ -779,12 +773,15 @@ class TracedRecordedEventSubscription(
         return self.response.subscription_id
 
 
-class TracedCatchupSubscription(TracedRecordedEventSubscription[CatchupSubscription]):
+class TracedCatchupSubscription(
+    TracedRecordedEventSubscription[CatchupSubscription], AbstractCatchupSubscription
+):
     pass
 
 
 class TracedPersistentSubscription(
-    TracedRecordedEventSubscription[PersistentSubscription]
+    TracedRecordedEventSubscription[PersistentSubscription],
+    AbstractPersistentSubscription,
 ):
     def ack(self, item: Union[UUID, RecordedEvent]) -> None:
         self.response.ack(item)
@@ -889,7 +886,10 @@ class TracedAsyncRecordedEventIterator(
             current_span.end()
 
 
-class TracedAsyncReadResponse(TracedAsyncRecordedEventIterator[AsyncReadResponse]):
+class TracedAsyncReadResponse(
+    TracedAsyncRecordedEventIterator[AsyncReadResponse],
+    AbstractAsyncReadResponse,
+):
     pass
 
 
@@ -946,13 +946,15 @@ class TracedAsyncRecordedEventSubscription(
 
 
 class TracedAsyncCatchupSubscription(
-    TracedAsyncRecordedEventSubscription[AsyncCatchupSubscription]
+    TracedAsyncRecordedEventSubscription[AsyncCatchupSubscription],
+    AbstractAsyncCatchupSubscription,
 ):
     pass
 
 
 class TracedAsyncPersistentSubscription(
-    TracedAsyncRecordedEventSubscription[AsyncPersistentSubscription]
+    TracedAsyncRecordedEventSubscription[AsyncPersistentSubscription],
+    AbstractAsyncPersistentSubscription,
 ):
     async def ack(self, item: Union[UUID, RecordedEvent]) -> None:
         await self.response.ack(item)

@@ -3,11 +3,17 @@ import asyncio
 import json
 import os
 from tempfile import NamedTemporaryFile
-from typing import Optional
+from typing import Optional, cast
 from unittest import IsolatedAsyncioTestCase, skipIf
 from uuid import uuid4
 
-from esdbclient import AsyncioEventStoreDBClient, Checkpoint, NewEvent, StreamState
+from esdbclient import (
+    AsyncioEventStoreDBClient,
+    AsyncPersistentSubscription,
+    Checkpoint,
+    NewEvent,
+    StreamState,
+)
 from esdbclient.asyncio_client import (
     AsyncEventStoreDBClient,
     _AsyncioEventStoreDBClient,
@@ -2481,9 +2487,9 @@ class TestAsyncEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         await self.client.create_subscription_to_all(group_name)
         s = await self.client.read_subscription_to_all(group_name)
         await s.stop()
-        self.assertTrue(s._is_stopped)
+        self.assertTrue(cast(AsyncPersistentSubscription, s)._is_stopped)
         await s.stop()
-        self.assertTrue(s._is_stopped)
+        self.assertTrue(cast(AsyncPersistentSubscription, s)._is_stopped)
 
     async def test_persistent_subscription_raises_programming_error(self) -> None:
         group_name = str(uuid4())
@@ -2564,7 +2570,7 @@ class TestAsyncEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         s = await self.client.read_subscription_to_all(group_name)
         async with s as s:
             pass
-        self.assertTrue(s._is_stopped)
+        self.assertTrue(cast(AsyncPersistentSubscription, s)._is_stopped)
 
     # async def test_subscribe_to_all_raises_discovery_failed(self) -> None:
     #     await self.client._connection.close()

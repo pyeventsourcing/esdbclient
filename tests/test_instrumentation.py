@@ -59,6 +59,12 @@ from esdbclient import (
     StreamState,
 )
 from esdbclient.client import BaseEventStoreDBClient
+from esdbclient.common import (
+    AbstractAsyncCatchupSubscription,
+    AbstractAsyncPersistentSubscription,
+    AbstractCatchupSubscription,
+    AbstractPersistentSubscription,
+)
 from esdbclient.exceptions import DiscoveryFailed, GrpcError, ServiceUnavailable
 from esdbclient.instrumentation.opentelemetry import (
     AsyncEventStoreDBClientInstrumentor,
@@ -77,8 +83,6 @@ from esdbclient.instrumentation.opentelemetry.utils import (
     _start_span,
     apply_spanner,
 )
-from esdbclient.persistent import AsyncPersistentSubscription, PersistentSubscription
-from esdbclient.streams import AsyncCatchupSubscription, CatchupSubscription
 
 _in_memory_span_exporter = InMemorySpanExporter()
 
@@ -1206,7 +1210,9 @@ class EventStoreDBClientInstrumentorTestCase(
 
     def get_next_and_check_consumer_span(
         self,
-        subscription: Union[CatchupSubscription, PersistentSubscription],
+        subscription: Union[
+            AbstractCatchupSubscription, AbstractPersistentSubscription
+        ],
         new_event: NewEvent,
         parent_span_index: Optional[int] = 0,
     ) -> None:
@@ -1278,39 +1284,11 @@ class AsyncEventStoreDBClientInstrumentorTestCase(
         uri = self.construct_uri(uri_schema, user_info, grpc_target, qs)
         return AsyncEventStoreDBClient(uri)
 
-    def get_next_and_check_consumer_span(
-        self,
-        subscription: Union[CatchupSubscription, PersistentSubscription],
-        new_event: NewEvent,
-        parent_span_index: Optional[int] = 0,
-    ) -> None:
-        # Count the number of spans.
-        num_spans = len(_get_in_memory_spans())
-
-        # Receive a recorded event from the subscription.
-        recorded_event = next(subscription)
-
-        self.assertEqual(new_event.id, recorded_event.id)
-
-        # Check the spans.
-        self.check_spans(
-            num_spans=num_spans + 1,
-            span_index=-1,
-            parent_span_index=parent_span_index,
-            span_name="streams.subscribe",
-            span_kind=trace_api.SpanKind.CONSUMER,
-            span_attributes={
-                "db.operation": "streams.subscribe",
-                "db.eventstoredb.event.id": str(recorded_event.id),
-                "db.eventstoredb.event.type": recorded_event.type,
-                "db.eventstoredb.stream": recorded_event.stream_name,
-                "db.eventstoredb.subscription.id": subscription.subscription_id,
-            },
-        )
-
     async def async_get_next_and_check_consumer_span(
         self,
-        subscription: Union[AsyncCatchupSubscription, AsyncPersistentSubscription],
+        subscription: Union[
+            AbstractAsyncCatchupSubscription, AbstractAsyncPersistentSubscription
+        ],
         new_event: NewEvent,
         parent_span_index: Optional[int] = 0,
     ) -> None:
@@ -1634,7 +1612,7 @@ class AsyncTestUtils(
         qs: str = "",
     ) -> AsyncEventStoreDBClient:
         client = super().construct_client(uri_schema, user_info, grpc_target, qs)
-        asyncio.get_event_loop().run_until_complete(client.connect())
+        asyncio.run(client.connect())
         return client
 
 

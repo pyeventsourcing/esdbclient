@@ -42,14 +42,14 @@ from esdbclient.common import (
     DEFAULT_PERSISTENT_SUBSCRIPTION_READ_BATCH_SIZE,
     DEFAULT_PERSISTENT_SUBSCRIPTION_STOPPING_GRACE,
     DEFAULT_WINDOW_SIZE,
+    AbstractAsyncPersistentSubscription,
+    AbstractPersistentSubscription,
     AsyncGrpcStreamer,
     AsyncGrpcStreamers,
-    AsyncRecordedEventSubscription,
     ESDBService,
     GrpcStreamer,
     GrpcStreamers,
     Metadata,
-    RecordedEventSubscription,
     TGrpcStreamers,
     construct_filter_exclude_regex,
     construct_filter_include_regex,
@@ -477,7 +477,7 @@ class BasePersistentSubscription:
 
 
 class AsyncPersistentSubscription(
-    AsyncRecordedEventSubscription, BasePersistentSubscription, AsyncGrpcStreamer
+    BasePersistentSubscription, AsyncGrpcStreamer, AbstractAsyncPersistentSubscription
 ):
     def __init__(
         self,
@@ -489,14 +489,12 @@ class AsyncPersistentSubscription(
         stream_name: Optional[str],
         grpc_streamers: AsyncGrpcStreamers,
     ) -> None:
-        super().__init__()
+        super().__init__(grpc_streamers=grpc_streamers)
         self._read_reqs = read_reqs
         self._stream_stream_call = stream_stream_call
         self._stream_stream_call_iter = stream_stream_call.__aiter__()
         self._expected_group_name = expected_group_name
         self._stream_name = stream_name
-        self._grpc_streamers = grpc_streamers
-        self._grpc_streamers.add(self)
 
     async def init(self) -> None:
         try:
@@ -598,7 +596,7 @@ class AsyncPersistentSubscription(
 
 
 class PersistentSubscription(
-    RecordedEventSubscription, BasePersistentSubscription, GrpcStreamer
+    GrpcStreamer, AbstractPersistentSubscription, BasePersistentSubscription
 ):
     def __init__(
         self,
@@ -608,11 +606,9 @@ class PersistentSubscription(
         stream_name: Optional[str],
         grpc_streamers: GrpcStreamers,
     ):
-        super().__init__()
+        super().__init__(grpc_streamers=grpc_streamers)
         self._read_reqs = read_reqs
         self._read_resps = read_resps
-        self._grpc_streamers = grpc_streamers
-        self._grpc_streamers.add(self)
 
         try:
             first_read_resp = self._get_next_read_resp()
@@ -1753,7 +1749,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService[GrpcStre
         timeout: Optional[float] = None,
         metadata: Optional[Metadata] = None,
         credentials: Optional[grpc.CallCredentials] = None,
-    ) -> PersistentSubscription:
+    ) -> AbstractPersistentSubscription:
         read_reqs = SubscriptionReadReqs(
             group_name=group_name,
             stream_name=stream_name,
