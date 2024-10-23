@@ -172,17 +172,24 @@ class BaseEventStoreDBClient(ABC):
         )
         self.connection_spec = ConnectionSpec(uri)
 
+        # Load private_key from UserKeyFile if specified
         if self.connection_spec.options.UserKeyFile:
             with open(self.connection_spec.options.UserKeyFile, "r+b") as f:
                 self.private_key = f.read()
         else:
             self.private_key = None
 
+        # Load certificate_chain from UserCertFile if specified
         if self.connection_spec.options.UserCertFile:
             with open(self.connection_spec.options.UserCertFile, "r+b") as f:
                 self.certificate_chain = f.read()
         else:
             self.certificate_chain = None
+
+        # Load root_certificates from TlsCaFile if specified
+        if self.connection_spec.options.TlsCaFile:
+            with open(self.connection_spec.options.TlsCaFile, "r+b") as f:
+                self.root_certificates = f.read()
 
         self._default_deadline = self.connection_spec.options.DefaultDeadline
 
