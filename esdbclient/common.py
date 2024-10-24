@@ -450,7 +450,7 @@ class RecordedEventSubscription(RecordedEventIterator):
         pass  # pragma: no cover
 
 
-class AbstractCatchupSubscription(RecordedEventSubscription):
+class AbstractCatchupSubscription(RecordedEventSubscription, AbstractReadResponse):
     pass
 
 
