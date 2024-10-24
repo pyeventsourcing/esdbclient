@@ -30,6 +30,7 @@ VALID_CONNECTION_QUERY_STRING_FIELDS = [
     "DefaultDeadline",
     "KeepAliveInterval",
     "KeepAliveTimeout",
+    "TlsCaFile",
     "UserCertFile",
     "UserKeyFile",
 ]
@@ -53,6 +54,7 @@ class ConnectionOptions:
         self._set_DefaultDeadline(options)
         self._set_KeepAliveInterval(options)
         self._set_KeepAliveTimeout(options)
+        self._set_TlsCaFile(options)
         self._set_UserCertFile(options)
         self._set_UserKeyFile(options)
 
@@ -160,6 +162,13 @@ class ConnectionOptions:
         else:
             self._KeepAliveTimeout = int(_KeepAliveTimeout)
 
+    def _set_TlsCaFile(self, options: Dict[str, Any]) -> None:
+        _TlsCaFile = options.get("TlsCaFile".upper())
+        if _TlsCaFile is None:
+            self._TlsCaFile: Optional[str] = None
+        else:
+            self._TlsCaFile = str(_TlsCaFile)
+
     def _set_UserCertFile(self, options: Dict[str, Any]) -> None:
         _UserCertFile = options.get("UserCertFile".upper())
         if _UserCertFile is None:
@@ -253,6 +262,13 @@ class ConnectionOptions:
         gRPC "keep alive timeout" (in milliseconds).
         """
         return self._KeepAliveTimeout
+
+    @property
+    def TlsCaFile(self) -> Optional[str]:
+        """
+        Path to file containing root CA certificate(s) to verify server.
+        """
+        return self._TlsCaFile
 
     @property
     def UserCertFile(self) -> Optional[str]:

@@ -2997,17 +2997,21 @@ class TestOptionalClientAuth(TimedTestCase, IsolatedAsyncioTestCase):
     def setUp(self) -> None:
         self.user_key = b"some-key"
         self.user_cert = b"some-cert"
+        self.tls_ca = b"some-cert"
         with NamedTemporaryFile(delete=False) as f1, NamedTemporaryFile(
             delete=False
-        ) as f2:
+        ) as f2, NamedTemporaryFile(delete=False) as f3:
             f1.write(self.user_key)
             f2.write(self.user_cert)
+            f3.write(self.tls_ca)
             self.user_key_file = f1.name
             self.user_cert_file = f2.name
+            self.tls_ca_file = f3.name
 
     def tearDown(self) -> None:
         os.remove(self.user_key_file)
         os.remove(self.user_cert_file)
+        os.remove(self.tls_ca_file)
 
     async def test_tls_true_client_auth(self) -> None:
         secure_grpc_target = "localhost:2114"
@@ -3039,6 +3043,18 @@ class TestOptionalClientAuth(TimedTestCase, IsolatedAsyncioTestCase):
         # Should raise SSL error.
         with self.assertRaises(SSLError):
             await client.get_commit_position()
+
+        # Construct client with TlsCaFile (instead of passing root_certificates directly).
+        uri += f"&TlsCaFile={self.tls_ca_file}"
+        client_with_tls_ca = await AsyncioEventStoreDBClient(uri)
+
+        # Read the contents of TlsCaFile as bytes, since root_certificates are compared as bytes
+        with open(self.tls_ca_file, "rb") as f:
+            tls_ca_file_contents = f.read()
+
+        # TlsCaFile should override the root_certificates passed directly.
+        self.assertNotEqual(root_certificates, client_with_tls_ca.root_certificates)
+        self.assertEqual(tls_ca_file_contents, client_with_tls_ca.root_certificates)
 
 
 class TestAsyncioEventStoreDBClient(TimedTestCase, IsolatedAsyncioTestCase):

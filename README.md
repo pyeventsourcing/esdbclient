@@ -379,15 +379,17 @@ client will attempt to create a "secure" connection. And so, when connecting to 
 to make an "insecure" connection by using the URI query string field-value `Tls=false`.
 
 The optional `root_certificates` argument can be either a Python `str` or a Python `bytes`
-object containing PEM encoded SSL/TLS certificate(s), and is used by to authenticate the
+object containing PEM encoded SSL/TLS certificate(s), and is used to authenticate the
 server to the client. When connecting to an "insecure" service, the value of this
 argument will be ignored. When connecting to a "secure" server, it may be necessary to
-set this argument.  Typically, the value of this argument would be the public certificate
+set this argument. Typically, the value of this argument would be the public certificate
 of the certificate authority that was responsible for generating the certificate used by
 the EventStoreDB server. It is unnecessary to set this value in this case if certificate
 authority certificates are installed locally, such that the Python grpc library can pick
 them up from a default location. Alternatively, for development, you can use the server's
 certificate itself. The value of this argument is passed directly to `grpc.ssl_channel_credentials()`.
+
+An alternative way to supply the `root_certificates` argument is through the `tlsCaFile` field-value of the connection string URI query string (see below). If the `tlsCaFile` field-value is specified, the `root_certificates` argument will be ignored.
 
 The optional `private_key` and `certificate_chain` arguments are both either a Python
 `str` or a Python `bytes` object. These arguments may be used to authenticate the client
@@ -505,6 +507,7 @@ appropriate value, separated with the "=" character.
                 | ( "DiscoveryInterval", "=" , integer )
                 | ( "KeepAliveInterval", "=" , integer )
                 | ( "KeepAliveTimeout", "=" , integer ) ;
+                | ( "TlsCaFile", "=" , string ) ;
                 | ( "UserCertFile", "=" , string ) ;
                 | ( "UserKeyFile", "=" , string ) ;
 
@@ -522,6 +525,7 @@ The table below describes the query string field-values supported by this client
 | DiscoveryInterval   | integer (default: 100)                                                | How long to wait (in milliseconds) between gossip retries.                                                                                                        |
 | KeepAliveInterval   | integer (default: `None`)                                             | The value (in milliseconds) of the "grpc.keepalive_ms" gRPC channel option.                                                                                       |
 | KeepAliveTimeout    | integer (default: `None`)                                             | The value (in milliseconds) of the "grpc.keepalive_timeout_ms" gRPC channel option.                                                                               |
+| TlsCaFile           | string (default: `None`)                                              | Absolute filesystem path to file containing the CA certicate in PEM format. This will be used to verify the server's certificate.                                 |
 | UserCertFile        | string (default: `None`)                                              | Absolute filesystem path to file containing the X.509 user certificate in PEM format.                                                                             |
 | UserKeyFile         | string (default: `None`)                                              | Absolute filesystem path to file containing the X.509 user certificate's private key in PEM format.                                                               |
 
