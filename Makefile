@@ -129,6 +129,8 @@ start-eventstoredb-insecure:
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
     --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2113" \
     --env "EVENTSTORE_RUN_PROJECTIONS=All" \
+    --env "EVENTSTORE_START_STANDARD_PROJECTIONS=true" \
+    --env "EVENTSTORE_ENABLE_ATOM_PUB_OVER_HTTP=true" \
     --name my-eventstoredb-insecure \
     $(EVENTSTORE_DOCKER_IMAGE) \
     --insecure
@@ -140,6 +142,7 @@ start-eventstoredb-secure:
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
     --env "EVENTSTORE_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
     --env "EVENTSTORE_RUN_PROJECTIONS=All" \
+    --env "EVENTSTORE_START_STANDARD_PROJECTIONS=true" \
     --name my-eventstoredb-secure \
     $(EVENTSTORE_DOCKER_IMAGE) \
     --dev
