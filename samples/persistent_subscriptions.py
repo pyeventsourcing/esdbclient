@@ -21,7 +21,7 @@ KDB_TARGET = "localhost:2114"
 qs = "MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1"
 
 client = KurrentDBClient(
-    uri=f"kdb://admin:changeit@{KDB_TARGET}?{qs}",
+    uri=f"kurrentdb://admin:changeit@{KDB_TARGET}?{qs}",
     root_certificates=get_server_certificate(KDB_TARGET),
 )
 
