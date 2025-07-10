@@ -26,7 +26,7 @@ from opentelemetry.instrumentation.grpc import (
     GrpcAioInstrumentorClient,
     GrpcInstrumentorClient,
 )
-from opentelemetry.sdk.resources import Resource  # type: ignore[attr-defined]
+from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import (
     BatchSpanProcessor,
