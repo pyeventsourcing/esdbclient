@@ -149,7 +149,7 @@ from kurrentdbclient import KurrentDBClient, NewEvent, StreamState
 # connect to an "insecure" server running on port 2113.
 
 client = KurrentDBClient(
-    uri="kdb://localhost:2113?Tls=false"
+    uri="kurrentdb://localhost:2113?Tls=false"
 )
 
 # Generate new events. Typically, domain events of different
@@ -307,7 +307,7 @@ As we will see, your client will need a KurrentDB connection string URI as the v
 of its `uri` constructor argument. The connection string for this "secure" KurrentDB
 server would be:
 
-    kdb://admin:changeit@localhost:2113
+    kurrentdb://admin:changeit@localhost:2113
 
 To connect to a "secure" server, you will usually need to include a "username"
 and a "password" in the connection string, so that the server can authenticate the
@@ -335,7 +335,7 @@ Alternatively, you can start an "insecure" server using the following command.
 
 The connection string URI for this "insecure" server would be:
 
-    kdb://localhost:2113?Tls=false
+    kurrentdb://localhost:2113?Tls=false
 
 As we will see, when connecting to an "insecure" server, there is no need to include
 a "username" and a "password" in the connection string. If you do, these values will
@@ -376,7 +376,7 @@ The `KurrentDBClient` class has one required constructor argument, `uri`, and th
 optional constructor argument, `root_certificates`, `private_key`, and `certificate_chain`.
 
 The `uri` argument is expected to be a KurrentDB connection string URI that
-conforms with the standard KurrentDB "kdb" or "kdb+discover" URI schemes.
+conforms with the standard KurrentDB "kurrentdb" or "kurrentdb+discover" URI schemes.
 
 The client must be configured to create a "secure" connection to a "secure" server,
 or alternatively an "insecure" connection to an "insecure" server. By default, the
@@ -427,22 +427,22 @@ client = KurrentDBClient(
 ## Connection strings<a id="connection-strings"></a>
 
 A KurrentDB connection string is a URI that conforms with one of two possible
-schemes: either the "kdb" scheme, or the "kdb+discover" scheme.
+schemes: either the "kurrentdb" scheme, or the "kurrentdb+discover" scheme.
 
 The syntax and semantics of the KurrentDB URI schemes are described below. The
 syntax is defined using [EBNF](https://en.wikipedia.org/wiki/Extended_Backus–Naur_form).
 
-Please note, also supported are "kurrentdb" and "esdb" which are synonyms for the "kdb"
-scheme, and "kurrentdb+discover" and "esdb+disover" which are synonyms for the "kdb+discover"
+Please note, also supported are "kdb" and "esdb" which are synonyms for the "kurrentdb"
+scheme, and "kdb+discover" and "esdb+disover" which are synonyms for the "kdb+discover"
 scheme.
 
 ### Two schemes<a id="two-schemes"></a>
 
-The "kdb" URI scheme can be defined in the following way.
+The "kurrentdb" URI scheme can be defined in the following way.
 
-    kdb-uri = "kdb://" , [ user-info , "@" ] , grpc-target, { "," , grpc-target } , [ "?" , query-string ] ;
+    kurrentdb-uri = "kurrentdb://" , [ user-info , "@" ] , grpc-target, { "," , grpc-target } , [ "?" , query-string ] ;
 
-In the "kdb" URI scheme, after the optional user info string, there must be at least
+In the "kurrentdb" URI scheme, after the optional user info string, there must be at least
 one gRPC target. If there are several gRPC targets, they must be separated from each
 other with the "," character.
 
@@ -466,11 +466,11 @@ and after connecting to a leader, if the leader becomes a follower, the client w
 reconnect to the new leader.
 
 
-The "kdb+discover" URI scheme can be defined in the following way.
+The "kurrentdb+discover" URI scheme can be defined in the following way.
 
-    kdb-discover-uri = "kdb+discover://" , [ user-info, "@" ] , cluster-domainname, [ ":" , port-number ] , [ "?" , query-string ] ;
+    kurrentdb-discover-uri = "kurrentdb+discover://" , [ user-info, "@" ] , cluster-domainname, [ ":" , port-number ] , [ "?" , query-string ] ;
 
-In the "kdb+discover" URI scheme, after the optional user info string, there should be
+In the "kurrentdb+discover" URI scheme, after the optional user info string, there should be
 a domain name which identifies a cluster of KurrentDB servers. Individual nodes in
 the cluster should be declared with DNS 'A' records.
 
@@ -485,7 +485,7 @@ reconnect to the new leader.
 
 ### User info string<a id="user-info-string"></a>
 
-In both the "kdb" and "kdb+discover" schemes, the URI may include a user info string.
+In both the "kurrentdb" and "kurrentdb+discover" schemes, the URI may include a user info string.
 If it exists in the URI, the user info string must be separated from the rest of the URI
 with the "@" character. The user info string must include a username and a password,
 separated with the ":" character.
@@ -499,7 +499,7 @@ the client. The Python gRPC library does not allow call credentials to be transf
 
 ### Query string<a id="query-string"></a>
 
-In both the "kdb" and "kdb+discover" schemes, the optional query string must be one
+In both the "kurrentdb" and "kurrentdb+discover" schemes, the optional query string must be one
 or many field-value arguments, separated from each other with the "&" character.
 
     query-string = field-value, { "&", field-value } ;
@@ -564,14 +564,14 @@ gRPC target `'localhost:2113'`. Because the client's node preference is "followe
 methods that can be called on a follower should complete successfully, methods that
 require a leader will raise a `NodeIsNotLeaderError` exception.
 
-    kdb://127.0.0.1:2113?Tls=false&NodePreference=follower
+    kurrentdb://127.0.0.1:2113?Tls=false&NodePreference=follower
 
 The following URI will cause the client to make an "insecure" connection to
 gRPC target `'localhost:2113'`. Because the client's node preference is "leader",
 if this node is not a leader, then a `NodeIsNotLeaderError` exception will be raised by
 all methods.
 
-    kdb://127.0.0.1:2113?Tls=false&NodePreference=leader
+    kurrentdb://127.0.0.1:2113?Tls=false&NodePreference=leader
 
 The following URI will cause the client to make a "secure" connection to
 gRPC target `'localhost:2113'` with username `'admin'` and password `'changeit'`
@@ -579,7 +579,7 @@ as the default call credentials when making calls to the KurrentDB gRPC API.
 Because the client's node preference is "leader", by default, if this node is not
 a leader, then a `NodeIsNotLeaderError` exception will be raised by all methods.
 
-    kdb://admin:changeit@localhost:2113
+    kurrentdb://admin:changeit@localhost:2113
 
 The following URI will cause the client to make "secure" connections, firstly to
 get cluster info from either `'localhost:2111'`, or `'localhost:2112'`, or `'localhost:2113'`.
@@ -588,7 +588,7 @@ node from the cluster info and reconnect to the leader. If the "leader" node bec
 a "follower" and another node becomes "leader", then the client will reconnect to the
 new leader.
 
-    kdb://admin:changeit@localhost:2111,localhost:2112,localhost:2113?NodePreference=leader
+    kurrentdb://admin:changeit@localhost:2111,localhost:2112,localhost:2113?NodePreference=leader
 
 
 The following URI will cause the client to make "secure" connections, firstly to
@@ -598,7 +598,7 @@ node from the cluster info and reconnect to this follower. Please note, if the "
 node becomes the "leader", the client will not reconnect to a follower -- such behavior
 may be implemented in a future version of the client and server.
 
-    kdb://admin:changeit@localhost:2111,localhost:2112,localhost:2113?NodePreference=follower
+    kurrentdb://admin:changeit@localhost:2111,localhost:2112,localhost:2113?NodePreference=follower
 
 
 The following URI will cause the client to make "secure" connections, firstly to get
@@ -606,7 +606,7 @@ cluster info from addresses in DNS 'A' records for `'cluster1.example.com'`, and
 to connect to a "leader" node. The client will use a default timeout
 of 5 seconds when making calls to KurrentDB API "write" methods.
 
-    kdb+discover://admin:changeit@cluster1.example.com?DefaultDeadline=5
+    kurrentdb+discover://admin:changeit@cluster1.example.com?DefaultDeadline=5
 
 
 The following URI will cause the client to make "secure" connections, firstly to get
@@ -614,7 +614,7 @@ cluster info from addresses in DNS 'A' records for `'cluster1.example.com'`, and
 to connect to a "leader" node. It will configure gRPC connections with a "keep alive
 interval" and a "keep alive timeout".
 
-    kdb+discover://admin:changeit@cluster1.example.com?KeepAliveInterval=10000&KeepAliveTimeout=10000
+    kurrentdb+discover://admin:changeit@cluster1.example.com?KeepAliveInterval=10000&KeepAliveTimeout=10000
 
 
 ## Event objects<a id="event-objects"></a>
@@ -3325,7 +3325,7 @@ The `kurrentdbclient` package also provides an asynchronous I/O gRPC Python clie
 KurrentDB. It is functionally equivalent to the multithreaded client. It uses
 the `grpc.aio` package and the `asyncio` module, instead of `grpc` and `threading`.
 
-It supports both the "kdb" and the "kdb+discover" connection string URI schemes,
+It supports both the "kurrentdb" and the "kurrentdb+discover" connection string URI schemes,
 and can connect to both "secure" and "insecure" KurrentDB servers.
 
 The class `AsyncKurrentDBClient` can be used to construct an instance of the
@@ -3441,7 +3441,7 @@ async def lifespan(_: FastAPI):
     # Construct the client.
     global client
     client = AsyncKurrentDBClient(
-        uri="kdb+discover://localhost:2113?Tls=false",
+        uri="kurrentdb+discover://localhost:2113?Tls=false",
     )
     await client.connect()
 
