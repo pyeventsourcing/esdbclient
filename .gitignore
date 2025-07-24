@@ -136,3 +136,8 @@ dmypy.json
 
 # KurrentDB es-gencert-cli Docker container output
 certs/
+
+# docs
+.temp
+.cache
+node_modules
