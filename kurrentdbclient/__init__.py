@@ -9,6 +9,7 @@ from kurrentdbclient.events import (
     CaughtUp,
     Checkpoint,
     ContentType,
+    FellBehind,
     NewEvent,
     RecordedEvent,
 )
@@ -38,6 +39,7 @@ __all__ = [
     "Checkpoint",
     "CaughtUp",
     "ContentType",
+    "FellBehind",
     "KurrentDBClient",
     "NewEvent",
     "RecordedEvent",

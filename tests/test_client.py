@@ -2539,6 +2539,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         commit_position = self.client.get_commit_position()
 
         # Append new events.
+        before_recording = datetime.datetime.now(tz=datetime.timezone.utc)
         event1 = NewEvent(type="OrderCreated", data=random_data())
         stream_name1 = str(uuid4())
         self.client.append_events(
@@ -2558,6 +2559,16 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         # Expect to get caught up message.
         for event in subscription:
             if isinstance(event, CaughtUp):
+                if "23.10" in KURRENTDB_DOCKER_IMAGE:
+                    pass
+                else:
+                    self.assertEqual(0, event.stream_position)
+                    self.assertEqual(commit_position, event.commit_position)
+                    self.assertEqual(commit_position, event.prepare_position)
+                    assert event.recorded_at is not None
+                    self.assertGreaterEqual(event.recorded_at, before_recording)
+                    after_subscribing = datetime.datetime.now(tz=datetime.timezone.utc)
+                    self.assertLessEqual(event.recorded_at, after_subscribing)
                 break
 
     @skipIf("22.10" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
@@ -3180,13 +3191,15 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.construct_esdb_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
 
         # Append new events.
+        before_recording = datetime.datetime.now(tz=datetime.timezone.utc)
         stream_name1 = str(uuid4())
-        self.client.append_events(
+        commit_position = self.client.append_events(
             stream_name1,
             current_version=StreamState.NO_STREAM,
-            events=[event1],
+            events=[event1, event2],
         )
 
         # Subscribe to stream events, from the start.
@@ -3197,6 +3210,18 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         )
         for event in subscription:
             if isinstance(event, CaughtUp):
+                if "23.10" in KURRENTDB_DOCKER_IMAGE:
+                    pass
+                else:
+                    self.assertEqual(1, event.stream_position)
+                    self.assertNotEqual(commit_position, event.commit_position)
+                    self.assertNotEqual(commit_position, event.prepare_position)
+                    self.assertEqual(0, event.prepare_position)
+                    self.assertEqual(1, event.stream_position)
+                    assert event.recorded_at is not None
+                    self.assertGreaterEqual(event.recorded_at, before_recording)
+                    after_subscribing = datetime.datetime.now(tz=datetime.timezone.utc)
+                    self.assertLessEqual(event.recorded_at, after_subscribing)
                 break
 
     def test_subscription_to_all_read_with_ack_event_id(self) -> None:

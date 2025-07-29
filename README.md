@@ -791,6 +791,14 @@ class RecordedEvent:
     @property
     def is_checkpoint(self) -> bool:
         return False
+
+    @property
+    def is_caught_up(self) -> bool:
+        return False
+
+    @property
+    def is_fell_behind(self) -> bool:
+        return False
 ```
 
 The property `ack_id` can be used to obtain the correct event ID to `ack()` or `nack()`
@@ -808,8 +816,13 @@ The property `is_resolve_event` indicates whether the event has been resolved fr
 "link event". The returned value is `True` if `link` is not `None`.
 
 The property `is_checkpoint` is `False`. This can be used to identify `Checkpoint`
-instances returned when receiving events from `include_checkpoints=True`.
+instances returned when subscribing to events with `include_checkpoints=True`.
 
+The property `is_caught_up` is `False`. This can be used to identify `CaughtUp`
+instances returned when subscribing to events with `include_caught_up=True`.
+
+The property `is_fell_behind` is `False`. This can be used to identify `FellBehind`
+instances returned when subscribing to events with `include_fell_behind=True`.
 
 
 ## Streams<a id="streams"></a>
@@ -1877,9 +1890,9 @@ The`subscribe_to_all()` method can be used to start a catch-up subscription
 from which all events recorded in the database can be obtained in the order
 they were recorded. This method returns a "catch-up subscription" iterator.
 
-This method also has ten optional arguments, `commit_position`, `from_end`, `resolve_links`,
+This method also has eleven optional arguments, `commit_position`, `from_end`, `resolve_links`,
 `filter_exclude`, `filter_include`, `filter_by_stream_name`, `include_checkpoints`,
-`include_caught_up`, `timeout` and `credentials`.
+`include_caught_up`, `include_fell_behind`, `timeout` and `credentials`.
 
 The optional `commit_position` argument specifies a commit position. The default
 value of `commit_position` is `None`, which means the catch-up subscription will
@@ -1925,6 +1938,10 @@ the event processing component is restarted.
 The optional `include_caught_up` argument is a Python `bool` which indicates
 whether "caught up" messages should be included when recorded events are
 received. The default value of `include_caught_up` is `False`.
+
+The optional `include_fell_behind` argument is a Python `bool` which indicates
+whether "fell behind" messages should be included when recorded events are
+received. The default value of `include_fell_behind` is `False`.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.
@@ -2066,8 +2083,8 @@ returns a "catch-up subscription" iterator.
 This method has a required `stream_name` argument, which specifies the name of the
 stream from which recorded events will be received.
 
-This method also has six optional arguments, `stream_position`, `from_end`,
-`resolve_links`, `include_caught_up`, `timeout` and `credentials`.
+This method also has seven optional arguments, `stream_position`, `from_end`,
+`resolve_links`, `include_caught_up`, `include_fell_behind`, `timeout` and `credentials`.
 
 The optional `stream_position` argument specifies a position in the stream from
 which to start subscribing. The default value of `stream_position` is `None`,
@@ -2088,6 +2105,10 @@ be resolved, so that the linked events will be returned instead of the event lin
 The optional `include_caught_up` argument is a Python `bool` which indicates
 whether "caught up" messages should be included when recorded events are
 received. The default value of `include_caught_up` is `False`.
+
+The optional `include_fell_behind` argument is a Python `bool` which indicates
+whether "fell behind" messages should be included when recorded events are
+received. The default value of `include_fell_behind` is `False`.
 
 The optional `timeout` argument is a Python `float` which sets a
 maximum duration, in seconds, for the completion of the gRPC operation.

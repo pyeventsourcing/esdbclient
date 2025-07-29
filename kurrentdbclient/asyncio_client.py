@@ -470,6 +470,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         include_caught_up: bool = False,
+        include_fell_behind: bool = False,
         timeout: float | None = None,
         credentials: grpc.CallCredentials | None = None,
     ) -> AbstractAsyncCatchupSubscription:
@@ -489,6 +490,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
             window_size=window_size,
             checkpoint_interval_multiplier=checkpoint_interval_multiplier,
             include_caught_up=include_caught_up,
+            include_fell_behind=include_fell_behind,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -502,6 +504,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
     #     *,
     #     resolve_links: bool = False,
     #     include_caught_up: bool = False,
+    #     include_fell_behind: bool = False,
     #     timeout: Optional[float] = None,
     #     credentials: Optional[grpc.CallCredentials] = None,
     # ) -> AsyncCatchupSubscription:
@@ -517,6 +520,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
     #     stream_position: int,
     #     resolve_links: bool = False,
     #     include_caught_up: bool = False,
+    #     include_fell_behind: bool = False,
     #     timeout: Optional[float] = None,
     #     credentials: Optional[grpc.CallCredentials] = None,
     # ) -> AsyncCatchupSubscription:
@@ -532,6 +536,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
     #     from_end: Literal[True] = True,
     #     resolve_links: bool = False,
     #     include_caught_up: bool = False,
+    #     include_fell_behind: bool = False,
     #     timeout: Optional[float] = None,
     #     credentials: Optional[grpc.CallCredentials] = None,
     # ) -> AsyncCatchupSubscription:
@@ -549,6 +554,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         from_end: bool = False,
         resolve_links: bool = False,
         include_caught_up: bool = False,
+        include_fell_behind: bool = False,
         timeout: float | None = None,
         credentials: grpc.CallCredentials | None = None,
     ) -> AbstractAsyncCatchupSubscription:
@@ -563,6 +569,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
             resolve_links=resolve_links,
             subscribe=True,
             include_caught_up=include_caught_up,
+            include_fell_behind=include_fell_behind,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,

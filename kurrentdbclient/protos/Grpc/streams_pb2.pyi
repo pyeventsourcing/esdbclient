@@ -370,6 +370,107 @@ class ReadResp(google.protobuf.message.Message):
 
         COMMIT_POSITION_FIELD_NUMBER: builtins.int
         PREPARE_POSITION_FIELD_NUMBER: builtins.int
+        TIMESTAMP_FIELD_NUMBER: builtins.int
+        commit_position: builtins.int
+        prepare_position: builtins.int
+        @property
+        def timestamp(self) -> google.protobuf.timestamp_pb2.Timestamp:
+            """Current time in the server when the checkpoint was reached"""
+
+        def __init__(
+            self,
+            *,
+            commit_position: builtins.int = ...,
+            prepare_position: builtins.int = ...,
+            timestamp: google.protobuf.timestamp_pb2.Timestamp | None = ...,
+        ) -> None: ...
+        def HasField(self, field_name: typing.Literal["timestamp", b"timestamp"]) -> builtins.bool: ...
+        def ClearField(self, field_name: typing.Literal["commit_position", b"commit_position", "prepare_position", b"prepare_position", "timestamp", b"timestamp"]) -> None: ...
+
+    @typing.final
+    class CaughtUp(google.protobuf.message.Message):
+        """The $all or stream subscription has caught up and become live."""
+
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        TIMESTAMP_FIELD_NUMBER: builtins.int
+        STREAM_REVISION_FIELD_NUMBER: builtins.int
+        POSITION_FIELD_NUMBER: builtins.int
+        stream_revision: builtins.int
+        """Checkpoint for resuming a stream subscription.
+        For stream subscriptions it is populated unless the stream is empty.
+        For $all subscriptions it is not populated.
+        """
+        @property
+        def timestamp(self) -> google.protobuf.timestamp_pb2.Timestamp:
+            """Current time in the server when the subscription caught up"""
+
+        @property
+        def position(self) -> global___ReadResp.Position:
+            """Checkpoint for resuming a $all subscription.
+            For stream subscriptions it is not populated.
+            For $all subscriptions it is populated unless the database is empty.
+            """
+
+        def __init__(
+            self,
+            *,
+            timestamp: google.protobuf.timestamp_pb2.Timestamp | None = ...,
+            stream_revision: builtins.int | None = ...,
+            position: global___ReadResp.Position | None = ...,
+        ) -> None: ...
+        def HasField(self, field_name: typing.Literal["_position", b"_position", "_stream_revision", b"_stream_revision", "position", b"position", "stream_revision", b"stream_revision", "timestamp", b"timestamp"]) -> builtins.bool: ...
+        def ClearField(self, field_name: typing.Literal["_position", b"_position", "_stream_revision", b"_stream_revision", "position", b"position", "stream_revision", b"stream_revision", "timestamp", b"timestamp"]) -> None: ...
+        @typing.overload
+        def WhichOneof(self, oneof_group: typing.Literal["_position", b"_position"]) -> typing.Literal["position"] | None: ...
+        @typing.overload
+        def WhichOneof(self, oneof_group: typing.Literal["_stream_revision", b"_stream_revision"]) -> typing.Literal["stream_revision"] | None: ...
+
+    @typing.final
+    class FellBehind(google.protobuf.message.Message):
+        """The $all or stream subscription has fallen back into catchup mode and is no longer live."""
+
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        TIMESTAMP_FIELD_NUMBER: builtins.int
+        STREAM_REVISION_FIELD_NUMBER: builtins.int
+        POSITION_FIELD_NUMBER: builtins.int
+        stream_revision: builtins.int
+        """Checkpoint for resuming a stream subscription.
+        For stream subscriptions it is populated unless the stream is empty.
+        For $all subscriptions it is not populated.
+        """
+        @property
+        def timestamp(self) -> google.protobuf.timestamp_pb2.Timestamp:
+            """Current time in the server when the subscription fell behind"""
+
+        @property
+        def position(self) -> global___ReadResp.Position:
+            """Checkpoint for resuming a $all subscription.
+            For stream subscriptions it is not populated.
+            For $all subscriptions it is populated unless the database is empty.
+            """
+
+        def __init__(
+            self,
+            *,
+            timestamp: google.protobuf.timestamp_pb2.Timestamp | None = ...,
+            stream_revision: builtins.int | None = ...,
+            position: global___ReadResp.Position | None = ...,
+        ) -> None: ...
+        def HasField(self, field_name: typing.Literal["_position", b"_position", "_stream_revision", b"_stream_revision", "position", b"position", "stream_revision", b"stream_revision", "timestamp", b"timestamp"]) -> builtins.bool: ...
+        def ClearField(self, field_name: typing.Literal["_position", b"_position", "_stream_revision", b"_stream_revision", "position", b"position", "stream_revision", b"stream_revision", "timestamp", b"timestamp"]) -> None: ...
+        @typing.overload
+        def WhichOneof(self, oneof_group: typing.Literal["_position", b"_position"]) -> typing.Literal["position"] | None: ...
+        @typing.overload
+        def WhichOneof(self, oneof_group: typing.Literal["_stream_revision", b"_stream_revision"]) -> typing.Literal["stream_revision"] | None: ...
+
+    @typing.final
+    class Position(google.protobuf.message.Message):
+        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+
+        COMMIT_POSITION_FIELD_NUMBER: builtins.int
+        PREPARE_POSITION_FIELD_NUMBER: builtins.int
         commit_position: builtins.int
         prepare_position: builtins.int
         def __init__(
@@ -379,22 +480,6 @@ class ReadResp(google.protobuf.message.Message):
             prepare_position: builtins.int = ...,
         ) -> None: ...
         def ClearField(self, field_name: typing.Literal["commit_position", b"commit_position", "prepare_position", b"prepare_position"]) -> None: ...
-
-    @typing.final
-    class CaughtUp(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-        def __init__(
-            self,
-        ) -> None: ...
-
-    @typing.final
-    class FellBehind(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-        def __init__(
-            self,
-        ) -> None: ...
 
     @typing.final
     class StreamNotFound(google.protobuf.message.Message):

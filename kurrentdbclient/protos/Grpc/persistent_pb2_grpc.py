@@ -6,7 +6,7 @@ import warnings
 from kurrentdbclient.protos.Grpc import persistent_pb2 as kurrentdbclient_dot_protos_dot_Grpc_dot_persistent__pb2
 from kurrentdbclient.protos.Grpc import shared_pb2 as kurrentdbclient_dot_protos_dot_Grpc_dot_shared__pb2
 
-GRPC_GENERATED_VERSION = '1.71.0'
+GRPC_GENERATED_VERSION = '1.71.2'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 

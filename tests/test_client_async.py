@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import datetime
 import json
 import os
 from tempfile import NamedTemporaryFile
@@ -800,6 +801,7 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         commit_position = await self.client.get_commit_position()
 
         # Append new events.
+        before_recording = datetime.datetime.now(tz=datetime.timezone.utc)
         event1 = NewEvent(type="OrderCreated", data=random_data())
         stream_name1 = str(uuid4())
         await self.client.append_events(
@@ -819,6 +821,16 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         # Expect to get caught up message.
         async for event in subscription:
             if isinstance(event, CaughtUp):
+                if "23.10" in KURRENTDB_DOCKER_IMAGE:
+                    pass
+                else:
+                    self.assertEqual(0, event.stream_position)
+                    self.assertEqual(commit_position, event.commit_position)
+                    self.assertEqual(commit_position, event.prepare_position)
+                    assert event.recorded_at is not None
+                    self.assertGreaterEqual(event.recorded_at, before_recording)
+                    after_subscribing = datetime.datetime.now(tz=datetime.timezone.utc)
+                    self.assertLessEqual(event.recorded_at, after_subscribing)
                 break
 
     async def test_subscribe_to_stream(self) -> None:
@@ -1377,13 +1389,15 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
     )
     async def test_subscribe_to_stream_include_caught_up(self) -> None:
         event1 = NewEvent(type="OrderCreated", data=random_data())
+        event2 = NewEvent(type="OrderUpdated", data=random_data())
 
         # Append new events.
+        before_recording = datetime.datetime.now(tz=datetime.timezone.utc)
         stream_name1 = str(uuid4())
-        await self.client.append_events(
+        commit_position = await self.client.append_events(
             stream_name1,
             current_version=StreamState.NO_STREAM,
-            events=[event1],
+            events=[event1, event2],
         )
 
         # Subscribe to stream events, from the start.
@@ -1394,6 +1408,18 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         )
         async for event in subscription:
             if isinstance(event, CaughtUp):
+                if "23.10" in KURRENTDB_DOCKER_IMAGE:
+                    pass
+                else:
+                    self.assertEqual(1, event.stream_position)
+                    self.assertNotEqual(commit_position, event.commit_position)
+                    self.assertNotEqual(commit_position, event.prepare_position)
+                    self.assertEqual(0, event.prepare_position)
+                    self.assertEqual(1, event.stream_position)
+                    assert event.recorded_at is not None
+                    self.assertGreaterEqual(event.recorded_at, before_recording)
+                    after_subscribing = datetime.datetime.now(tz=datetime.timezone.utc)
+                    self.assertLessEqual(event.recorded_at, after_subscribing)
                 break
 
     async def test_persistent_subscription_to_all(self) -> None:

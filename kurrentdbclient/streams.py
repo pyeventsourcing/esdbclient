@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import datetime
 import math
 import sys
 from abc import abstractmethod
@@ -37,7 +38,13 @@ from kurrentdbclient.common import (
     construct_recorded_event,
     handle_rpc_error,
 )
-from kurrentdbclient.events import CaughtUp, Checkpoint, NewEvent, RecordedEvent
+from kurrentdbclient.events import (
+    CaughtUp,
+    Checkpoint,
+    FellBehind,
+    NewEvent,
+    RecordedEvent,
+)
 from kurrentdbclient.exceptions import (
     AccessDeniedError,
     AppendDeadlineExceededError,
@@ -60,6 +67,8 @@ from kurrentdbclient.protos.Grpc import (
 )
 
 if TYPE_CHECKING:
+    from google.protobuf.timestamp_pb2 import Timestamp
+
     from kurrentdbclient.connection_spec import ConnectionSpec
 
 
@@ -91,6 +100,7 @@ class BaseReadResponse:
         self._stream_name = stream_name
         self._include_checkpoints = False
         self._include_caught_up = False
+        self._include_fell_behind = False
 
     def _convert_read_resp(
         self, read_resp: streams_pb2.ReadResp
@@ -106,12 +116,25 @@ class BaseReadResponse:
             return Checkpoint(
                 commit_position=checkpoint.commit_position,
                 prepare_position=checkpoint.prepare_position,
+                recorded_at=self._convert_timestamp(checkpoint.timestamp),
             )
-        if content_oneof == "caught_up":  # pragma: no cover
-            return CaughtUp()
-        # if content_oneof == "fell_behind":  # pragma: no cover
-        #     return FellBehind()
-        return None  # pragma: no cover
+        if content_oneof == "caught_up":
+            caught_up = read_resp.caught_up
+            return CaughtUp(
+                stream_position=caught_up.stream_revision,
+                commit_position=caught_up.position.commit_position,
+                prepare_position=caught_up.position.prepare_position,
+                recorded_at=self._convert_timestamp(caught_up.timestamp),
+            )
+        if content_oneof == "fell_behind":
+            fell_behind = read_resp.fell_behind
+            return FellBehind(
+                stream_position=fell_behind.stream_revision,
+                commit_position=fell_behind.position.commit_position,
+                prepare_position=fell_behind.position.prepare_position,
+                recorded_at=self._convert_timestamp(fell_behind.timestamp),
+            )
+        return None
         # Todo: Maybe support other content_oneof values:
         # 		uint64 first_stream_position = 5;
         # 		uint64 last_stream_position = 6;
@@ -119,6 +142,11 @@ class BaseReadResponse:
         #
         # Todo: Not sure how to request to get first_stream_position,
         #   last_stream_position, first_all_stream_position.
+
+    def _convert_timestamp(self, timestamp: Timestamp) -> datetime.datetime | None:
+        if timestamp.seconds == 0 and timestamp.nanos == 0:
+            return None
+        return timestamp.ToDatetime(datetime.timezone.utc)
 
     def _filter_recorded_event(
         self, recorded_event: RecordedEvent | None
@@ -128,6 +156,7 @@ class BaseReadResponse:
             (recorded_event_type is RecordedEvent)
             or (self._include_checkpoints and recorded_event_type is Checkpoint)
             or (self._include_caught_up and (recorded_event_type is CaughtUp))
+            or (self._include_fell_behind and (recorded_event_type is FellBehind))
         ):
             return recorded_event
         return None
@@ -199,12 +228,14 @@ class AsyncCatchupSubscription(AsyncReadResponse, AbstractAsyncCatchupSubscripti
         grpc_streamers: AsyncGrpcStreamers,
         include_checkpoints: bool = False,
         include_caught_up: bool = False,
+        include_fell_behind: bool = False,
     ):
         super().__init__(
             aio_call=aio_call, stream_name=stream_name, grpc_streamers=grpc_streamers
         )
         self._include_checkpoints = include_checkpoints
         self._include_caught_up = include_caught_up
+        self._include_fell_behind = include_fell_behind
 
     async def check_confirmation(self) -> None:
         read_resp = await self._get_next_read_resp()
@@ -271,6 +302,7 @@ class CatchupSubscription(ReadResponse, AbstractCatchupSubscription):
         grpc_streamers: GrpcStreamers,
         include_checkpoints: bool = False,
         include_caught_up: bool = False,
+        include_fell_behind: bool = False,
     ):
         super().__init__(
             read_resps=read_resps,
@@ -279,6 +311,7 @@ class CatchupSubscription(ReadResponse, AbstractCatchupSubscription):
         )
         self._include_checkpoints = include_checkpoints
         self._include_caught_up = include_caught_up
+        self._include_fell_behind = include_fell_behind
         try:
             first_read_resp = self._get_next_read_resp()
             content_oneof = first_read_resp.WhichOneof("content")
@@ -798,6 +831,7 @@ class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         resolve_links: bool = False,
         subscribe: Literal[True],
         include_caught_up: bool = False,
+        include_fell_behind: bool = False,
         timeout: float | None = None,
         metadata: Metadata | None = None,
         credentials: grpc.CallCredentials | None = None,
@@ -840,6 +874,7 @@ class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         include_caught_up: bool = False,
+        include_fell_behind: bool = False,
         timeout: float | None = None,
         metadata: Metadata | None = None,
         credentials: grpc.CallCredentials | None = None,
@@ -866,6 +901,7 @@ class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         include_caught_up: bool = False,
+        include_fell_behind: bool = False,
         timeout: float | None = None,
         metadata: Metadata | None = None,
         credentials: grpc.CallCredentials | None = None,
@@ -915,6 +951,7 @@ class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
                 stream_name=stream_name,
                 include_checkpoints=include_checkpoints,
                 include_caught_up=include_caught_up,
+                include_fell_behind=include_fell_behind,
                 grpc_streamers=self._grpc_streamers,
             )
             await response.check_confirmation()
@@ -997,6 +1034,7 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
         resolve_links: bool = False,
         subscribe: Literal[True],
         include_caught_up: bool = False,
+        include_fell_behind: bool = False,
         timeout: float | None = None,
         metadata: Metadata | None = None,
         credentials: grpc.CallCredentials | None = None,
@@ -1039,6 +1077,7 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         include_caught_up: bool = False,
+        include_fell_behind: bool = False,
         timeout: float | None = None,
         metadata: Metadata | None = None,
         credentials: grpc.CallCredentials | None = None,
@@ -1065,6 +1104,7 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         include_caught_up: bool = False,
+        include_fell_behind: bool = False,
         timeout: float | None = None,
         metadata: Metadata | None = None,
         credentials: grpc.CallCredentials | None = None,
@@ -1112,6 +1152,7 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
             stream_name=stream_name,
             include_checkpoints=include_checkpoints,
             include_caught_up=include_caught_up,
+            include_fell_behind=include_fell_behind,
             grpc_streamers=self._grpc_streamers,
         )
 
