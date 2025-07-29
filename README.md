@@ -22,9 +22,9 @@ with the KurrentDB team, and are officially supported by Kurrent Inc.
 Although not all aspects of the KurrentDB gRPC API are implemented, most
 features are presented in an easy-to-use interface.
 
-These clients have been tested to work with KurrentDB 25.0.0, without and without
-SSL/TLS, with both single-server and cluster modes, and with Python versions
-3.9, 3.10, 3.11, 3.12, and 3.13.
+These clients have been tested to work with KurrentDB 25.0.1, EventStoreDB 24.10.6,
+and EventStoreDB 23.10.7, both with and without SSL/TLS, in both single-server and
+cluster modes, across Python versions 3.9, 3.10, 3.11, 3.12, and 3.13.
 
 The test suite has 100% line and branch coverage. The code has typing annotations
 checked strictly with mypy. The code is formatted with black and isort, and checked

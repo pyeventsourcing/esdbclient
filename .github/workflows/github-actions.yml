@@ -10,13 +10,12 @@ jobs:
         # https://cloudsmith.io/~eventstore/repos/eventstore-ce/packages/
         # https://cloudsmith.io/~eventstore/repos/eventstore-staging-ce/packages/
         kurrentdb-docker-image:
-#          - docker.eventstore.com/eventstore-ce/eventstoredb-ce:22.10.4-jammy
-#          - docker.eventstore.com/eventstore-ce/eventstoredb-oss:23.10.2-jammy
-#          - docker.eventstore.com/eventstore/eventstoredb-ee:24.10.0-x64-8.0-bookworm-slim
-          - docker.eventstore.com/kurrent-latest/kurrentdb:25.0.0-x64-8.0-bookworm-slim
+          - docker.cloudsmith.io/eventstore/eventstore-ce/eventstoredb-oss:23.10.7-bookworm-slim
+          - docker.cloudsmith.io/eventstore/eventstore/eventstoredb-ee:24.10.6-x64-8.0-bookworm-slim
+          - docker.eventstore.com/kurrent-latest/kurrentdb:25.0.1-x64-8.0-bookworm-slim
     env:
       KURRENTDB_DOCKER_IMAGE: ${{ matrix.kurrentdb-docker-image }}
-    runs-on: "ubuntu-22.04"
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
