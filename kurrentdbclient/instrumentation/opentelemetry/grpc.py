@@ -97,7 +97,7 @@ def _replacement_intercept_server_stream(
                     description=f"{type(err).__name__}: {err}",
                 )
             )
-            err_code_value_int = err.code().value[0]  # type: ignore[index]
+            err_code_value_int = err.code().value[0]
             span.set_attribute(SpanAttributes.RPC_GRPC_STATUS_CODE, err_code_value_int)
             span.record_exception(err)
             span.end()
@@ -131,7 +131,7 @@ class InterceptServerStream:
             self._span.end()
             raise
         except grpc.RpcError as err:
-            err_code_value_int = err.code().value[0]  # type: ignore[index]
+            err_code_value_int = err.code().value[0]
             self._span.set_attribute(
                 SpanAttributes.RPC_GRPC_STATUS_CODE, err_code_value_int
             )

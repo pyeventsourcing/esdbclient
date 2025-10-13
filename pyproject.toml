@@ -22,6 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python",
 ]
@@ -54,7 +55,7 @@ grpc-stubs = "*"
 types-protobuf = "*"
 mypy-protobuf = "*"
 coverage = "^7.8.0"
-fastapi = "^0.115.12"
+fastapi = "*"
 opentelemetry-exporter-otlp-proto-http = "*"
 opentelemetry-exporter-otlp-proto-grpc = "*"
 opentelemetry-instrumentation-grpc = "*"
