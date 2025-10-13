@@ -766,6 +766,7 @@ class SubscriptionInfo:
     consumer_strategy: ConsumerStrategy
     max_subscriber_count: int
     parked_message_count: int
+    connections: list[ConnectionInfo]
 
     def update_all_kwargs(
         self,
@@ -929,6 +930,25 @@ class SubscriptionInfo:
             ),
         }
         return kwargs
+
+
+@dataclass
+class ConnectionInfo:
+    from_: str
+    username: str
+    average_items_per_second: int
+    total_items: int
+    count_since_last_measurement: int
+    observed_measurements: list[Measurement]
+    available_slots: int
+    in_flight_messages: int
+    connection_name: str
+
+
+@dataclass
+class Measurement:
+    key: str
+    value: int
 
 
 class BasePersistentSubscriptionsService(KurrentDBService[TGrpcStreamers]):
@@ -1210,8 +1230,8 @@ class BasePersistentSubscriptionsService(KurrentDBService[TGrpcStreamers]):
     ) -> list[SubscriptionInfo]:
         return [self._construct_subscription_info(s) for s in resp.subscriptions]
 
-    @staticmethod
     def _construct_subscription_info(
+        self,
         s: persistent_pb2.SubscriptionInfo,
     ) -> SubscriptionInfo:
         return SubscriptionInfo(
@@ -1242,6 +1262,25 @@ class BasePersistentSubscriptionsService(KurrentDBService[TGrpcStreamers]):
             consumer_strategy=cast(ConsumerStrategy, s.named_consumer_strategy),
             max_subscriber_count=s.max_subscriber_count,
             parked_message_count=s.parked_message_count,
+            connections=[self._construct_connection_info(c) for c in s.connections],
+        )
+
+    @staticmethod
+    def _construct_connection_info(
+        c: persistent_pb2.SubscriptionInfo.ConnectionInfo,
+    ) -> ConnectionInfo:
+        return ConnectionInfo(
+            from_=getattr(c, "from"),
+            username=c.username,
+            average_items_per_second=c.average_items_per_second,
+            total_items=c.total_items,
+            count_since_last_measurement=c.count_since_last_measurement,
+            observed_measurements=[
+                Measurement(key=m.key, value=m.value) for m in c.observed_measurements
+            ],
+            available_slots=c.available_slots,
+            in_flight_messages=c.in_flight_messages,
+            connection_name=c.connection_name,
         )
 
 

@@ -69,7 +69,7 @@ from kurrentdbclient.exceptions import (
     WrongCurrentVersionError,
 )
 from kurrentdbclient.gossip import NODE_STATE_FOLLOWER, NODE_STATE_LEADER
-from kurrentdbclient.persistent import SubscriptionReadReqs
+from kurrentdbclient.persistent import ConnectionInfo, SubscriptionReadReqs
 from kurrentdbclient.projections import ProjectionStatistics
 from kurrentdbclient.protos.Grpc import persistent_pb2
 from kurrentdbclient.streams import handle_streams_rpc_error
@@ -4350,6 +4350,15 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         info = self.client.get_subscription_info(group_name)
         self.assertEqual(info.group_name, group_name)
         self.assertEqual(info.event_source, "$all")
+        self.assertEqual(len(info.connections), 0)
+
+        read_response = self.client.read_subscription_to_all(group_name=group_name)
+        next(read_response)
+        info = self.client.get_subscription_info(group_name)
+        self.assertEqual(len(info.connections), 1)
+        connection_info = info.connections[0]
+        self.assertIsInstance(connection_info, ConnectionInfo)
+        self.assertEqual(connection_info.from_, "")
 
     def test_subscriptions_list(self) -> None:
         self.construct_esdb_client()
