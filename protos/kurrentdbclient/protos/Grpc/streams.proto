@@ -129,7 +129,7 @@ message ReadResp {
 		uint64 commit_position = 1;
 		uint64 prepare_position = 2;
 
-        // Current time in the server when the checkpoint was reached
+    // Current time in the server when the checkpoint was reached
 		google.protobuf.Timestamp timestamp = 3;
 	}
 	// The $all or stream subscription has caught up and become live.
@@ -164,12 +164,12 @@ message ReadResp {
 		optional Position position = 3;
 	}
 
-    message Position {
+  message Position {
 		uint64 commit_position = 1;
 		uint64 prepare_position = 2;
 	}
 
-    message StreamNotFound {
+  message StreamNotFound {
 		event_store.client.StreamIdentifier stream_identifier = 1;
 	}
 }
@@ -350,4 +350,3 @@ message TombstoneResp {
 		uint64 prepare_position = 2;
 	}
 }
-

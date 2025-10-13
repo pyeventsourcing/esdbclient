@@ -16,7 +16,8 @@
 # list tags for 24.10: https://docker.kurrent.io/v2/eventstore/eventstoredb-ee/tags/list
 # KURRENTDB_DOCKER_IMAGE ?= docker.cloudsmith.io/eventstore/eventstore/eventstoredb-ee:24.10.6-x64-8.0-bookworm-slim
 
-KURRENTDB_DOCKER_IMAGE ?= docker.eventstore.com/kurrent-latest/kurrentdb:25.0.1-x64-8.0-bookworm-slim
+#KURRENTDB_DOCKER_IMAGE ?= docker.eventstore.com/kurrent-latest/kurrentdb:25.0.1-x64-8.0-bookworm-slim
+KURRENTDB_DOCKER_IMAGE ?= docker.cloudsmith.io/eventstore/kurrent-preview/kurrentdb:25.1.0-rc.1-x64-8.0-bookworm-slim
 
 
 
