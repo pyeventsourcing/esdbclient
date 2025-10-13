@@ -2681,7 +2681,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         )
 
     @skipIf("21.10" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug not fixed")
-    def _test_extra_checkpoint_bug_is_fixed(self) -> None:
+    def test_extra_checkpoint_bug_is_fixed(self) -> None:
         self.construct_esdb_client()
 
         # Append new events.
