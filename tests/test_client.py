@@ -81,7 +81,7 @@ if TYPE_CHECKING:
 started = datetime.datetime.now()
 last = datetime.datetime.now()
 
-KURRENTDB_DOCKER_IMAGE = os.environ.get("KURRENTDB_DOCKER_IMAGE", "25.0.0")
+KURRENTDB_DOCKER_IMAGE = os.environ.get("KURRENTDB_DOCKER_IMAGE", "25.1.0")
 
 # os.environ["GRPC_VERBOSITY"] = "debug"
 # os.environ["GRPC_TRACE"] = "all"
@@ -2577,6 +2577,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     @skipIf("24.6" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
     @skipIf("24.10" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
     @skipIf("25.0" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
+    @skipIf("25.1" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
     def test_demonstrate_extra_checkpoint_bug(self) -> None:
         self.construct_esdb_client()
 
@@ -4352,8 +4353,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(info.event_source, "$all")
         self.assertEqual(len(info.connections), 0)
 
-        read_response = self.client.read_subscription_to_all(group_name=group_name)
-        next(read_response)
+        _read_response = self.client.read_subscription_to_all(group_name=group_name)
         info = self.client.get_subscription_info(group_name)
         self.assertEqual(len(info.connections), 1)
         connection_info = info.connections[0]
