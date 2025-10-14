@@ -37,13 +37,14 @@ from kurrentdbclient.common import (
     AbstractAsyncCatchupSubscription,
     AbstractAsyncPersistentSubscription,
     GrpcOptions,
+    grpc_target,
 )
 from kurrentdbclient.connection import AsyncKurrentDBConnection
 from kurrentdbclient.connection_spec import (
     NODE_PREFERENCE_LEADER,
     URI_SCHEMES_NON_DISCOVER,
 )
-from kurrentdbclient.events import NewEvent, RecordedEvent
+from kurrentdbclient.events import NewEvent, NewEvents, RecordedEvent, StreamState
 from kurrentdbclient.exceptions import (
     DeadlineExceededError,
     DiscoveryFailedError,
@@ -52,13 +53,13 @@ from kurrentdbclient.exceptions import (
     NotFoundError,
     ServiceUnavailableError,
 )
-from kurrentdbclient.streams import AsyncReadResponse, StreamState
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
     from kurrentdbclient.persistent import ConsumerStrategy, SubscriptionInfo
     from kurrentdbclient.projections import ProjectionState, ProjectionStatistics
+    from kurrentdbclient.streams import AsyncReadResponse
 
 _TCallable = TypeVar("_TCallable", bound=Callable[..., Any])
 
@@ -79,7 +80,9 @@ def autoreconnect(f: _TCallable) -> _TCallable:
                     and len(client.connection_spec.targets) == 1
                 )
             ):
-                await client.reconnect(e.leader_grpc_target)
+                await client.reconnect(
+                    grpc_target(e.host, e.port) if e.host and e.port else None
+                )
                 await asyncio.sleep(0.1)
                 return await f(client, *args, **kwargs)
             raise
@@ -282,6 +285,29 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         return await self._connection.streams.batch_append(
             stream_name=stream_name,
             current_version=current_version,
+            events=events,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    async def multi_append_to_stream(
+        self,
+        /,
+        events: NewEvents | Iterable[NewEvents],
+        *,
+        timeout: float | None = None,
+        credentials: grpc.CallCredentials | None = None,
+    ) -> int:  # pragma: no v2cover
+        """
+        Appends new events to one or many streams.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+        if isinstance(events, NewEvents):
+            events = [events]
+        return await self._connection.v2streams.multi_append(
             events=events,
             timeout=timeout,
             metadata=self._call_metadata,

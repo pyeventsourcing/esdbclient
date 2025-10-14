@@ -27,7 +27,7 @@ from kurrentdbclient.common import (
     DEFAULT_PERSISTENT_SUB_MIN_CHECKPOINT_COUNT,
     DEFAULT_PERSISTENT_SUB_READ_BATCH_SIZE,
 )
-from kurrentdbclient.events import CaughtUp
+from kurrentdbclient.events import CaughtUp, NewEvents
 from kurrentdbclient.exceptions import (
     AlreadyExistsError,
     DeadlineExceededError,
@@ -36,6 +36,7 @@ from kurrentdbclient.exceptions import (
     ExceptionThrownByHandlerError,
     FollowerNotFoundError,
     GrpcDeadlineExceededError,
+    MultiAppendToSameStreamError,
     NodeIsNotLeaderError,
     NotFoundError,
     OperationFailedError,
@@ -44,6 +45,8 @@ from kurrentdbclient.exceptions import (
     ServiceUnavailableError,
     SSLError,
     StreamIsDeletedError,
+    StreamTombstonedError,
+    UnauthenticatedError,
     WrongCurrentVersionError,
 )
 from kurrentdbclient.persistent import AsyncSubscriptionReadReqs
@@ -52,6 +55,7 @@ from kurrentdbclient.streams import AsyncCatchupSubscription
 from tests.test_client import (
     KURRENTDB_DOCKER_IMAGE,
     PROJECTION_QUERY_TEMPLATE1,
+    SERVER_VERSION,
     TimedTestCase,
     get_ca_certificate,
     get_server_certificate,
@@ -3004,6 +3008,636 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         # Todo: Recreate with same name (plus what happens if streams not deleted)...
         # self.client.create_projection(name=projection_name, query=projection_query)
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    async def test_stream_multi_append_one_stream(self) -> None:
+        stream_name = str(uuid4())
+
+        # Check stream not found.
+        with self.assertRaises(NotFoundError):
+            await self.client.get_stream(stream_name)
+
+        # Check stream position is None.
+        self.assertEqual(
+            await self.client.get_current_version(stream_name), StreamState.NO_STREAM
+        )
+
+        # Construct four new events.
+        event1 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        event2 = NewEvent(
+            type="OrderUpdated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        event3 = NewEvent(
+            type="OrderDeleted",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        event4 = NewEvent(
+            type="OrderCorrected",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+
+        # Check get error when attempting to append new event to position 1.
+        with self.assertRaises(WrongCurrentVersionError) as cm:
+            await self.client.multi_append_to_stream(
+                NewEvents(stream_name, current_version=1, events=[event1])
+            )
+        self.assertEqual(
+            f"Append failed due to a version conflict on stream {stream_name!r}. "
+            f"Expected version: 1. Actual version: -1.",
+            cm.exception.args[0],
+        )
+
+        # Check get error when attempting to append new event expecting stream exists.
+        with self.assertRaises(WrongCurrentVersionError) as cm:
+            await self.client.multi_append_to_stream(
+                NewEvents(
+                    stream_name, current_version=StreamState.EXISTS, events=[event1]
+                )
+            )
+        self.assertEqual(
+            f"Append failed due to a version conflict on stream {stream_name!r}. "
+            f"Expected version: -4. Actual version: -1.",
+            cm.exception.args[0],
+        )
+
+        # Check the current_version value is validated.
+        with self.assertRaises(ProgrammingError) as cm_prog_err:
+            await self.client.multi_append_to_stream(
+                NewEvents(stream_name, current_version=-1, events=[event1])
+            )
+        self.assertEqual(
+            "Unsupported current_version value: -1", cm_prog_err.exception.args[0]
+        )
+
+        # Append new event with correct expected position of StreamState.NO_STREAM.
+        commit_position0 = await self.client.get_commit_position()
+        commit_position1 = await self.client.multi_append_to_stream(
+            NewEvents(
+                stream_name, current_version=StreamState.NO_STREAM, events=[event1]
+            )
+        )
+
+        # Check commit position is greater.
+        self.assertGreater(commit_position1, commit_position0)
+
+        # Check stream position is 0.
+        self.assertEqual(await self.client.get_current_version(stream_name), 0)
+
+        # Read the stream forwards from the start (expect one event).
+        events = await self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 1)
+
+        # Check the attributes of the recorded event.
+        self.assertEqual(events[0].type, event1.type)
+        self.assertEqual(events[0].data, event1.data)
+        self.assertEqual(events[0].content_type, event1.content_type)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[0].stream_name, stream_name)
+        self.assertEqual(events[0].stream_position, 0)
+        self.assertEqual(events[0].commit_position, commit_position1)
+
+        # Check we can't append another new event at initial position.
+        with self.assertRaises(WrongCurrentVersionError) as cm:
+            await self.client.multi_append_to_stream(
+                NewEvents(
+                    stream_name, current_version=StreamState.NO_STREAM, events=[event2]
+                )
+            )
+        self.assertEqual(
+            f"Append failed due to a version conflict on stream '{stream_name}'. "
+            f"Expected version: -1. Actual version: 0.",
+            cm.exception.args[0],
+        )
+
+        # Append another event.
+        commit_position2 = await self.client.multi_append_to_stream(
+            NewEvents(stream_name, current_version=0, events=[event2])
+        )
+
+        # Check stream position is 1.
+        self.assertEqual(await self.client.get_current_version(stream_name), 1)
+
+        # Check stream position.
+        self.assertGreater(commit_position2, commit_position1)
+
+        # Read the stream (expect two events in 'forwards' order).
+        events = await self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+
+        # Read the stream backwards from the end.
+        events = await self.client.get_stream(stream_name, backwards=True)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event2.id)
+        self.assertEqual(events[1].id, event1.id)
+
+        # Read the stream forwards from position 1.
+        events = await self.client.get_stream(stream_name, stream_position=1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Read the stream backwards from position 0.
+        events = await self.client.get_stream(
+            stream_name, stream_position=0, backwards=True
+        )
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event1.id)
+
+        # Read the stream forwards from start with limit.
+        events = await self.client.get_stream(stream_name, limit=1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event1.id)
+
+        # Read the stream backwards from end with limit.
+        events = await self.client.get_stream(stream_name, backwards=True, limit=1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Check we can't append another new event at second position.
+        with self.assertRaises(WrongCurrentVersionError) as cm:
+            await self.client.multi_append_to_stream(
+                NewEvents(stream_name, current_version=0, events=[event3])
+            )
+        self.assertEqual(
+            f"Append failed due to a version conflict on stream '{stream_name}'. "
+            f"Expected version: 0. Actual version: 1.",
+            cm.exception.args[0],
+        )
+
+        # Append another new event.
+        commit_position3 = await self.client.multi_append_to_stream(
+            NewEvents(stream_name, current_version=1, events=[event3])
+        )
+
+        # Check stream position is 2.
+        self.assertEqual(await self.client.get_current_version(stream_name), 2)
+
+        # Check the commit position.
+        self.assertGreater(commit_position3, commit_position2)
+
+        # Read the stream forwards from start (expect three events).
+        events = await self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Read the stream backwards from end (expect three events).
+        events = await self.client.get_stream(stream_name, backwards=True)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event3.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event1.id)
+
+        # Read the stream forwards from position 1 with limit 1.
+        events = await self.client.get_stream(stream_name, stream_position=1, limit=1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Read the stream backwards from position 1 with limit 1.
+        events = await self.client.get_stream(
+            stream_name, stream_position=1, backwards=True, limit=1
+        )
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Idempotent write of event1.
+        commit_position1_1 = await self.client.multi_append_to_stream(
+            NewEvents(
+                stream_name, current_version=StreamState.NO_STREAM, events=[event1]
+            )
+        )
+        self.assertEqual(commit_position1, commit_position1_1)
+
+        events = await self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Idempotent write of event2.
+        commit_position2_1 = await self.client.multi_append_to_stream(
+            NewEvents(stream_name, current_version=0, events=[event2])
+        )
+        self.assertEqual(commit_position2_1, commit_position2)
+
+        events = await self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Idempotent write of event3.
+        commit_position3_1 = await self.client.multi_append_to_stream(
+            NewEvents(stream_name, current_version=1, events=[event3])
+        )
+        self.assertEqual(commit_position3, commit_position3_1)
+
+        events = await self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Idempotent write of event1, event2.
+        commit_position2_1 = await self.client.multi_append_to_stream(
+            NewEvents(
+                stream_name,
+                current_version=StreamState.NO_STREAM,
+                events=[event1, event2],
+            )
+        )
+        self.assertEqual(commit_position2, commit_position2_1)
+
+        events = await self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Idempotent write of event2, event3.
+        commit_position3_1 = await self.client.multi_append_to_stream(
+            NewEvents(
+                stream_name,
+                current_version=0,
+                events=[event2, event3],
+            )
+        )
+        self.assertEqual(commit_position3, commit_position3_1)
+
+        # Stream should still have 3 events.
+        events = await self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Mixture of "idempotent" write of event2, event3, with new event4.
+        with self.assertRaises(WrongCurrentVersionError):
+            await self.client.multi_append_to_stream(
+                NewEvents(
+                    stream_name,
+                    current_version=0,
+                    events=[event2, event3, event4],
+                )
+            )
+
+        # Stream should still have 3 events.
+        events = await self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Append events with same ID at end of stream (specify current version).
+        await self.client.multi_append_to_stream(
+            NewEvents(stream_name, [event2, event3, event4], 2)
+        )
+
+        # Stream now has 6 events....
+        events = await self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 6)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+        self.assertEqual(events[3].id, event2.id)
+        self.assertEqual(events[4].id, event3.id)
+        self.assertEqual(events[5].id, event4.id)
+
+        # Append events with same ID at end of stream (specify stream exists).
+        await self.client.multi_append_to_stream(
+            NewEvents(stream_name, [event2, event1], StreamState.EXISTS)
+        )
+
+        # Stream still has 6 events....
+        events = await self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 6)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+        self.assertEqual(events[3].id, event2.id)
+        self.assertEqual(events[4].id, event3.id)
+        self.assertEqual(events[5].id, event4.id)
+
+        # Append events with same ID at end of stream (disable OCC).
+        await self.client.multi_append_to_stream(
+            NewEvents(stream_name, [event2, event1], StreamState.ANY)
+        )
+
+        # Stream still has 6 events....
+        events = await self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 6)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+        self.assertEqual(events[3].id, event2.id)
+        self.assertEqual(events[4].id, event3.id)
+        self.assertEqual(events[5].id, event4.id)
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    async def test_stream_multi_append_many_streams(self) -> None:
+        stream_name1 = str(uuid4())
+        stream_name2 = str(uuid4())
+
+        # Construct four new events.
+        event1 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        event2 = NewEvent(
+            type="OrderUpdated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        event3 = NewEvent(
+            type="OrderDeleted",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        event4 = NewEvent(
+            type="OrderCorrected",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+
+        # Append one event each to two streams.
+        await self.client.multi_append_to_stream(
+            [
+                NewEvents(stream_name1, [event1], StreamState.NO_STREAM),
+                NewEvents(stream_name2, [event2], StreamState.NO_STREAM),
+            ]
+        )
+
+        # Expect each stream has one event.
+        events = await self.client.get_stream(stream_name1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event1.id)
+
+        events = await self.client.get_stream(stream_name2)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Idempotent append.
+        await self.client.multi_append_to_stream(
+            [
+                NewEvents(stream_name1, [event1], StreamState.NO_STREAM),
+                NewEvents(stream_name2, [event2], StreamState.NO_STREAM),
+            ]
+        )
+
+        # Expect each stream still has one event.
+        events = await self.client.get_stream(stream_name1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event1.id)
+
+        events = await self.client.get_stream(stream_name2)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Append errors.
+        with self.assertRaises(WrongCurrentVersionError):
+            await self.client.multi_append_to_stream(
+                [
+                    NewEvents(stream_name1, [event3], StreamState.NO_STREAM),
+                    NewEvents(stream_name2, [event4], StreamState.NO_STREAM),
+                ]
+            )
+
+        with self.assertRaises(WrongCurrentVersionError):
+            await self.client.multi_append_to_stream(
+                [
+                    NewEvents(stream_name1, [event3], 0),
+                    NewEvents(stream_name2, [event4], StreamState.NO_STREAM),
+                ]
+            )
+
+        with self.assertRaises(WrongCurrentVersionError):
+            await self.client.multi_append_to_stream(
+                [
+                    NewEvents(stream_name1, [event3], StreamState.NO_STREAM),
+                    NewEvents(stream_name2, [event4], 0),
+                ]
+            )
+
+        # Expect each stream still has one event.
+        events = await self.client.get_stream(stream_name1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event1.id)
+
+        events = await self.client.get_stream(stream_name2)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Correct append to existing multi-streams.
+        await self.client.multi_append_to_stream(
+            [
+                NewEvents(stream_name1, [event3], 0),
+                NewEvents(stream_name2, [event4], 0),
+            ]
+        )
+
+        # Expect each stream now has two events.
+        events = await self.client.get_stream(stream_name1)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event3.id)
+
+        events = await self.client.get_stream(stream_name2)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event2.id)
+        self.assertEqual(events[1].id, event4.id)
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    async def test_stream_multi_append_wrong_credentials(self) -> None:
+        stream_name1 = str(uuid4())
+
+        # Construct a new event.
+        event1 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        with self.assertRaises(UnauthenticatedError):
+            await self.client.multi_append_to_stream(
+                events=NewEvents(
+                    stream_name=stream_name1,
+                    events=[event1],
+                    current_version=StreamState.NO_STREAM,
+                ),
+                credentials=self.client.construct_call_credentials("foo", "assword"),
+            )
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    async def test_stream_multi_append_stream_already_exists_error(self) -> None:
+        stream_name1 = str(uuid4())
+
+        # Construct a new event.
+        event1 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        await self.client.multi_append_to_stream(
+            events=NewEvents(
+                stream_name=stream_name1,
+                events=[event1],
+                current_version=StreamState.NO_STREAM,
+            ),
+        )
+        # This doesn't fail because its treated as idempotent.
+        await self.client.multi_append_to_stream(
+            events=NewEvents(
+                stream_name=stream_name1,
+                events=[event1],
+                current_version=StreamState.NO_STREAM,
+            ),
+        )
+        # We need a different event.
+        event2 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        # TODO: Thought this might give StreamAlreadyExistsErrorDetails
+        #  but get StreamRevisionConflictErrorDetails instead.
+        #  - What gives StreamAlreadyExistsErrorDetails?
+        with self.assertRaises(WrongCurrentVersionError) as cm:
+            await self.client.multi_append_to_stream(
+                events=NewEvents(
+                    stream_name=stream_name1,
+                    events=[event2],
+                    current_version=StreamState.NO_STREAM,
+                ),
+            )
+        self.assertEqual(cm.exception.stream_name, stream_name1)
+        self.assertEqual(cm.exception.current_version, 0)
+        self.assertEqual(cm.exception.expected_version, -1)
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    async def test_stream_multi_append_same_stream_error(self) -> None:
+        stream_name1 = str(uuid4())
+
+        # Construct a new event.
+
+        with self.assertRaises(MultiAppendToSameStreamError) as cm:
+
+            while True:
+                await self.client.multi_append_to_stream(
+                    events=[
+                        NewEvents(
+                            stream_name=stream_name1,
+                            events=[
+                                NewEvent(
+                                    type="OrderCreated",
+                                    data=random_data(),
+                                    content_type="application/octet-stream",
+                                )
+                            ],
+                            current_version=StreamState.ANY,
+                        ),
+                        NewEvents(
+                            stream_name=stream_name1,
+                            events=[
+                                NewEvent(
+                                    type="OrderCreated",
+                                    data=random_data(),
+                                    content_type="application/octet-stream",
+                                )
+                            ],
+                            current_version=StreamState.ANY,
+                        ),
+                    ],
+                )
+
+        self.assertEqual(cm.exception.stream_name, stream_name1)
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    async def test_stream_multi_append_tombstoned_stream_error(self) -> None:
+        stream_name1 = str(uuid4())
+
+        # Construct a new event.
+        event1 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        await self.client.multi_append_to_stream(
+            events=NewEvents(
+                stream_name=stream_name1,
+                events=[event1],
+                current_version=StreamState.NO_STREAM,
+            ),
+        )
+
+        await self.client.tombstone_stream(
+            stream_name1, current_version=StreamState.EXISTS
+        )
+
+        with self.assertRaises(StreamTombstonedError):
+            await self.client.multi_append_to_stream(
+                events=NewEvents(
+                    stream_name=stream_name1,
+                    events=[event1],
+                    current_version=StreamState.ANY,
+                ),
+            )
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    async def test_stream_multi_append_metadata_conversions_and_errors(self) -> None:
+        stream_name = str(uuid4())
+
+        async def append_helper(metadata: bytes) -> None:
+            self.assertIsInstance(metadata, bytes)
+            event = NewEvent(
+                type="OrderCreated",
+                data=random_data(),
+                metadata=metadata,
+                content_type="application/octet-stream",
+            )
+            await self.client.multi_append_to_stream(
+                events=NewEvents(
+                    stream_name=stream_name,
+                    events=[event],
+                    current_version=StreamState.ANY,
+                ),
+            )
+
+        # These are OK.
+        await append_helper(b"")
+        await append_helper(json.dumps({"a": "1"}).encode())
+
+        # These are not OK.
+        with self.assertRaises(ProgrammingError):
+            await append_helper(random_data(100))
+        with self.assertRaises(ProgrammingError):
+            await append_helper(json.dumps("a").encode())
+        with self.assertRaises(ProgrammingError):
+            await append_helper(json.dumps({"a": 1}).encode())
+        with self.assertRaises(ProgrammingError):
+            await append_helper(json.dumps({"a": 1}).encode())
+        with self.assertRaises(ProgrammingError):
+            await append_helper(json.dumps({"a": {}}).encode())
+
+        events = await self.client.get_stream(stream_name)
+        self.assertEqual(2, len(events))
+        self.assertEqual(
+            json.loads(events[0].metadata.decode()),
+            {"$schema.format": "Bytes", "$schema.name": "OrderCreated"},
+        )
+        self.assertEqual(
+            json.loads(events[1].metadata.decode()),
+            {"$schema.format": "Bytes", "$schema.name": "OrderCreated", "a": "1"},
+        )
 
 
 class TestOptionalClientAuth(TimedTestCase, IsolatedAsyncioTestCase):

@@ -22,8 +22,8 @@ with the KurrentDB team, and are officially supported by Kurrent Inc.
 Although not all aspects of the KurrentDB gRPC API are implemented, most
 features are presented in an easy-to-use interface.
 
-These clients have been tested to work with KurrentDB 25.0.1, EventStoreDB 24.10.6,
-and EventStoreDB 23.10.7, both with and without SSL/TLS, in both single-server and
+These clients have been tested to work with KurrentDB version 25.1 and 25.0, EventStoreDB
+versions 24.10 and EventStoreDB 23.10, both with and without SSL/TLS, in both single-server and
 cluster modes, across Python versions 3.9, 3.10, 3.11, 3.12, 3.13, and 3.14.
 
 The test suite has 100% line and branch coverage. The code has typing annotations
@@ -57,6 +57,7 @@ https://github.com/pyeventsourcing/eventsourcing-kurrentdb) package.
 * [Streams](#streams)
   * [Append events](#append-events)
   * [Idempotent append operations](#idempotent-append-operations)
+  * [Multi-stream append](#multi-stream-append)
   * [Read stream events](#read-stream-events)
   * [Get current version](#get-current-version)
   * [How to implement snapshotting with KurrentDB](#how-to-implement-snapshotting-with-kurrentdb)
@@ -873,13 +874,14 @@ argument to the constant `StreamState.EXISTS`.
 
 The required `events` argument is expected to be a sequence of new event objects. The
 `NewEvent` class should be used to construct new event objects. The `append_to_stream()`
-operation is atomic, so that either all or none of the new events will be recorded. It
-is not possible with KurrentDB atomically to record new events in more than one stream.
+operation is atomic, so that either all or none of the new events will be recorded. Starting
+from version 25.1 of KurrentDB it is possible atomically to record new events in more than one
+stream using the method `multi_append_to_stream()` (see below).
 
-This method has an optional `timeout` argument, which is a Python `float`
+The `append_to_stream()` method has an optional `timeout` argument, which is a Python `float`
 that sets a maximum duration, in seconds, for the completion of the gRPC operation.
 
-This method has an optional `credentials` argument, which can be used to
+The `append_to_stream()` method has an optional `credentials` argument, which can be used to
 override call credentials derived from the connection string URI.
 
 In the example below, a new event, `event1`, is appended to a new stream. The stream
@@ -991,7 +993,7 @@ The example below shows the `append_to_stream()` method being called again with 
 # Retry appending event3.
 commit_position_retry = client.append_to_stream(
     stream_name=stream_name1,
-    current_version=0,
+    current_version=StreamState.ANY,
     events=[event2, event3],
 )
 ```
@@ -1017,6 +1019,80 @@ This idempotent behaviour depends on the `id` attribute of the `NewEvent` class.
 This attribute is, by default, assigned a new and unique version-4 UUID when an
 instance of `NewEvent` is constructed. To set the `id` value of a `NewEvent`,
 the optional `id` constructor argument can be used when constructing `NewEvent` objects.
+
+
+### Multi-append to stream<a id="multi-stream-append"></a>
+
+*requires leader*
+
+*supported by KurrentDB 25.1*
+
+The `multi_append_to_stream()` method can be used to record many sequences of new events,
+each to a different stream. The `multi_append_to_stream()` operation is atomic, so that
+either all or none of the new events will be recorded.
+
+The `multi_append_to_stream()` method has one required argument, `events`, which can be either a single
+instance of `NewEvents` or an iterable of `NewEvents` instances.
+
+The `multi_append_to_stream()` method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
+
+The `multi_append_to_stream()` method has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
+
+The `NewEvents` dataclass can be imported from `kurrentdb`. It has three fields, `stream_name`, `events`,
+and `current_version`. These fields serve the same purpose as the corresponding arguments of the
+`append_to_stream()` method.
+
+The `stream_name` field of `NewEvents` is a Python `str` that indicated a stream to which the contained
+iterable of events will be appended.
+
+The `events` field is an Python `Iterable` of `NewEvent` objects to be appended to the indicated stream.
+Please note, when appending events with `multi_append_to_stream()`, there are some restrictions on the use of
+the `metadata` field of `NewEvent` objects: the value of `metadata` must either be an empty `bytes` string or a
+`bytes` string serialization of a JSON object that has `str` values. The values of `metadata` are okay: `b""`
+is an empty `bytes` string, `b'{"a": "1"}'` is a JSON object with `str` values. These values of `metadata` are
+not okay: `b'\xf5d\xc5W3^b\xb0(\xf9\x01D\x81\xa7Y\x98'` is a random `bytes` string, `b'"abcdef"'` is a JSON string,
+`b'{"a": 1}'` is a JSON object with an integer value, `b'{"a": false}'` is a JSON object with an boolean value,
+b'{"a": {}}', b'{"a": {}}' is a JSON object with a JSON object value. Using values that are not okay will result
+in a `kurrentdbclient.exceptions.ProgrammingError` being raised.
+
+The `current_version` field of `NewEvents` specifies optimistic concurrent control, and is either a Python `int`
+that indicates the expected stream position of the last recorded event in the stream, or a `StreamState` value
+(`StreamState.NO_STREAM` requires the stream does not yet exist or has been deleted, `StreamState.ANY`
+will effectively disable concurrent controls, `StreamState.EXISTS` requires there are at least
+one already recorded event for the stream).
+
+```python
+from kurrentdbclient import NewEvents
+
+new_events1 = NewEvents(
+    stream_name=str(uuid.uuid4()),
+    events=[
+        NewEvent(type='EventType1', data=b'{}'),
+        NewEvent(type='EventType2', data=b'{}'),
+    ],
+    current_version=StreamState.NO_STREAM,
+)
+new_events2 = NewEvents(
+    stream_name=str(uuid.uuid4()),
+    events=[
+        NewEvent(type='EventType3', data=b'{}'),
+        NewEvent(type='EventType4', data=b'{}'),
+    ],
+    current_version=StreamState.NO_STREAM,
+)
+
+client.multi_append_to_stream(
+    events=[
+        new_events1,
+        new_events2,
+    ]
+)
+```
+
+If the `multi_append_to_stream()` operation is successful, the method returns the commit position of
+the last event in the last sequence.
 
 
 ### Read stream events<a id="read-stream-events"></a>

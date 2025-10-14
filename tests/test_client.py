@@ -10,14 +10,14 @@ from tempfile import NamedTemporaryFile
 from threading import Thread
 from time import sleep
 from typing import TYPE_CHECKING, Any, cast
-from unittest import TestCase, skipIf
+from unittest import TestCase, skip, skipIf
 from uuid import UUID, uuid4
 
 from grpc import RpcError, StatusCode
 from grpc._channel import _MultiThreadedRendezvous, _RPCState
 from grpc._cython.cygrpc import IntegratedCall
 
-import kurrentdbclient.protos.Grpc.persistent_pb2 as grpc_persistent
+import kurrentdbclient.protos.v1.persistent_pb2 as grpc_persistent
 from kurrentdbclient import (
     DEFAULT_EXCLUDE_FILTER,
     KDB_SYSTEM_EVENTS_REGEX,
@@ -42,7 +42,7 @@ from kurrentdbclient.connection_spec import (
     NODE_PREFERENCE_LEADER,
     ConnectionSpec,
 )
-from kurrentdbclient.events import CaughtUp, Checkpoint, NewEvent
+from kurrentdbclient.events import CaughtUp, Checkpoint, NewEvent, NewEvents
 from kurrentdbclient.exceptions import (
     AbortedByServerError,
     AlreadyExistsError,
@@ -56,32 +56,69 @@ from kurrentdbclient.exceptions import (
     GrpcDeadlineExceededError,
     GrpcError,
     InternalError,
+    KurrentDBClientError,
     MaximumSubscriptionsReachedError,
+    MultiAppendToSameStreamError,
     NodeIsNotLeaderError,
     NotFoundError,
     OperationFailedError,
     ProgrammingError,
     ReadOnlyReplicaNotFoundError,
+    RecordMaxSizeExceededError,
     ServiceUnavailableError,
     SSLError,
     StreamIsDeletedError,
+    StreamTombstonedError,
+    TransactionMaxSizeExceededError,
+    UnauthenticatedError,
     UnknownError,
     WrongCurrentVersionError,
 )
 from kurrentdbclient.gossip import NODE_STATE_FOLLOWER, NODE_STATE_LEADER
 from kurrentdbclient.persistent import ConnectionInfo, SubscriptionReadReqs
 from kurrentdbclient.projections import ProjectionStatistics
-from kurrentdbclient.protos.Grpc import persistent_pb2
+from kurrentdbclient.protos.v1 import persistent_pb2
 from kurrentdbclient.streams import handle_streams_rpc_error
+from tests.test_unpack_error_status import (
+    status_with_append_record_size_exceeded_error_details_v2,
+    status_with_append_transaction_size_exceeded_error_details_v2,
+    status_with_not_leader_node_error_details_v2,
+    status_with_some_unsupported_error_details_v2,
+    status_with_stream_already_in_append_session_error_details_v2,
+    status_with_stream_revision_conflict_error_details_v2,
+    status_with_stream_tombstoned_error_details_v2,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from unittest.case import _AssertRaisesContext
 
+
 started = datetime.datetime.now()
 last = datetime.datetime.now()
 
-KURRENTDB_DOCKER_IMAGE = os.environ.get("KURRENTDB_DOCKER_IMAGE", "25.1.0")
+KURRENTDB_DOCKER_IMAGE = os.environ.get("KURRENTDB_DOCKER_IMAGE", "25.1")
+
+if "21.9" in KURRENTDB_DOCKER_IMAGE:
+    SERVER_VERSION = (21, 9)
+elif "22.10" in KURRENTDB_DOCKER_IMAGE:
+    SERVER_VERSION = (22, 10)
+elif "23.10" in KURRENTDB_DOCKER_IMAGE:
+    SERVER_VERSION = (23, 10)
+elif "24.2" in KURRENTDB_DOCKER_IMAGE:
+    SERVER_VERSION = (24, 2)
+elif "24.6" in KURRENTDB_DOCKER_IMAGE:
+    SERVER_VERSION = (24, 6)
+elif "24.10" in KURRENTDB_DOCKER_IMAGE:
+    SERVER_VERSION = (24, 10)
+elif "25.0" in KURRENTDB_DOCKER_IMAGE:
+    SERVER_VERSION = (25, 0)
+elif "25.1" in KURRENTDB_DOCKER_IMAGE:
+    SERVER_VERSION = (25, 1)
+else:
+    msg = "Couldn't extract server version from KURRENTDB_DOCKER_IMAGE"
+    raise ValueError(msg)
+
 
 # os.environ["GRPC_VERBOSITY"] = "debug"
 # os.environ["GRPC_TRACE"] = "all"
@@ -549,6 +586,25 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[0].commit_position, commit_position1)
         self.assertEqual(events[2].commit_position, commit_position2)
 
+    def test_append_to_stream_wrong_credentials(self) -> None:
+        self.construct_esdb_client()
+        stream_name1 = str(uuid4())
+
+        # Construct a new event.
+        event1 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            metadata=random_data(),
+            content_type="application/octet-stream",
+        )
+        with self.assertRaises(UnauthenticatedError):
+            self.client.append_to_stream(
+                stream_name=stream_name1,
+                current_version=StreamState.ANY,
+                events=[event1],
+                credentials=self.client.construct_call_credentials("foo", "assword"),
+            )
+
     # def test_stream_append_to_stream_is_atomic(self) -> None:
     #     # This method exists to match other language clients.
     #     self.construct_esdb_client()
@@ -646,7 +702,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.client.append_event(stream_name, current_version=1, event=event1)
         self.assertEqual(cm.exception.args[0], f"Stream {stream_name!r} does not exist")
 
-        # Append new event with correct expected position of 'None'.
+        # Append new event with correct expected position of StreamState.NO_STREAM.
         commit_position0 = self.client.get_commit_position()
         commit_position1 = self.client.append_event(
             stream_name, current_version=StreamState.NO_STREAM, event=event1
@@ -847,6 +903,23 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[0].id, event1.id)
         self.assertEqual(events[1].id, event2.id)
         self.assertEqual(events[2].id, event3.id)
+
+        # Subsequent write of events 2, 3, and 4.
+        self.client.append_events(
+            stream_name,
+            current_version=2,
+            events=[event2, event3, event4],
+        )
+
+        # Stream now has several events with the same ID...
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 6)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+        self.assertEqual(events[3].id, event2.id)
+        self.assertEqual(events[4].id, event3.id)
+        self.assertEqual(events[5].id, event4.id)
 
     def test_resolve_links_when_reading_from_dollar_et_projection(self) -> None:
         if self.KDB_CLUSTER_SIZE > 1 or self.KDB_TLS is not True:
@@ -2526,11 +2599,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 break
 
     @skipIf(
-        "21.10" in KURRENTDB_DOCKER_IMAGE,
-        "Server doesn't support 'caught up' or 'fell behind' messages",
-    )
-    @skipIf(
-        "22.10" in KURRENTDB_DOCKER_IMAGE,
+        SERVER_VERSION <= (22, 10),
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
     def test_subscribe_to_all_include_caught_up(self) -> None:
@@ -2559,7 +2628,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         # Expect to get caught up message.
         for event in subscription:
             if isinstance(event, CaughtUp):
-                if "23.10" in KURRENTDB_DOCKER_IMAGE:
+                if SERVER_VERSION == (23, 10):
                     pass
                 else:
                     self.assertEqual(0, event.stream_position)
@@ -2571,13 +2640,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                     self.assertLessEqual(event.recorded_at, after_subscribing)
                 break
 
-    @skipIf("22.10" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
-    @skipIf("23.10" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
-    @skipIf("24.2" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
-    @skipIf("24.6" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
-    @skipIf("24.10" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
-    @skipIf("25.0" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
-    @skipIf("25.1" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug was fixed")
+    @skipIf(SERVER_VERSION >= (22, 10), "'Extra checkpoint' bug was fixed")
     def test_demonstrate_extra_checkpoint_bug(self) -> None:
         self.construct_esdb_client()
 
@@ -2680,7 +2743,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             count_events_from_commit_position(last_checkpoint_commit_position), 2
         )
 
-    @skipIf("21.10" in KURRENTDB_DOCKER_IMAGE, "'Extra checkpoint' bug not fixed")
+    @skipIf(SERVER_VERSION <= (21, 10), "'Extra checkpoint' bug not fixed")
     def test_extra_checkpoint_bug_is_fixed(self) -> None:
         self.construct_esdb_client()
 
@@ -3181,11 +3244,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         list(subscription)
 
     @skipIf(
-        "21.10" in KURRENTDB_DOCKER_IMAGE,
-        "Server doesn't support 'caught up' or 'fell behind' messages",
-    )
-    @skipIf(
-        "22.10" in KURRENTDB_DOCKER_IMAGE,
+        SERVER_VERSION <= (22, 10),
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
     def test_subscribe_to_stream_include_caught_up(self) -> None:
@@ -3211,7 +3270,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         )
         for event in subscription:
             if isinstance(event, CaughtUp):
-                if "23.10" in KURRENTDB_DOCKER_IMAGE:
+                if SERVER_VERSION == (23, 10):
                     pass
                 else:
                     self.assertEqual(1, event.stream_position)
@@ -4892,7 +4951,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(info.extra_statistics, True)
 
     @skipIf(
-        "21.10" in KURRENTDB_DOCKER_IMAGE,
+        SERVER_VERSION <= (21, 10),
         "v21.10 server becomes unresponsive with this test",
     )
     def test_subscription_to_all_wrong_history_buffer_size_raises_internal_error(
@@ -6322,7 +6381,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
         sleep(1)  # give server time to actually delete the projection....
 
-        if "21.10" in KURRENTDB_DOCKER_IMAGE or "22.10" in KURRENTDB_DOCKER_IMAGE:
+        if SERVER_VERSION in [(21, 10), (22, 10)]:
             # Can delete a projection that has been deleted ("idempotent").
             self.client.delete_projection(
                 name=projection_name,
@@ -6787,6 +6846,732 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         # Todo: Recreate with same name (plus what happens if streams not deleted)...
         # self.client.create_projection(name=projection_name, query=projection_query)
 
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    def test_stream_multi_append_one_stream(self) -> None:
+        cm: _AssertRaisesContext[Any]
+        self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        # Check stream not found.
+        with self.assertRaises(NotFoundError):
+            self.client.get_stream(stream_name)
+
+        # Check stream position is None.
+        self.assertEqual(
+            self.client.get_current_version(stream_name), StreamState.NO_STREAM
+        )
+
+        # Construct four new events.
+        event1 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        event2 = NewEvent(
+            type="OrderUpdated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        event3 = NewEvent(
+            type="OrderDeleted",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        event4 = NewEvent(
+            type="OrderCorrected",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+
+        # Check get error when attempting to append new event to position 1.
+        with self.assertRaises(WrongCurrentVersionError) as cm:
+            self.client.multi_append_to_stream(
+                NewEvents(stream_name, current_version=1, events=[event1])
+            )
+        self.assertEqual(
+            f"Append failed due to a version conflict on stream {stream_name!r}. "
+            f"Expected version: 1. Actual version: -1.",
+            cm.exception.args[0],
+        )
+
+        # Check get error when attempting to append new event expecting stream exists.
+        with self.assertRaises(WrongCurrentVersionError) as cm:
+            self.client.multi_append_to_stream(
+                NewEvents(
+                    stream_name, current_version=StreamState.EXISTS, events=[event1]
+                )
+            )
+        self.assertEqual(
+            f"Append failed due to a version conflict on stream {stream_name!r}. "
+            f"Expected version: -4. Actual version: -1.",
+            cm.exception.args[0],
+        )
+
+        # Check the current_version value is validated.
+        with self.assertRaises(ProgrammingError) as cm:
+            self.client.multi_append_to_stream(
+                NewEvents(stream_name, current_version=-1, events=[event1])
+            )
+        self.assertEqual("Unsupported current_version value: -1", cm.exception.args[0])
+
+        # Append new event with correct expected position of StreamState.NO_STREAM.
+        commit_position0 = self.client.get_commit_position()
+        commit_position1 = self.client.multi_append_to_stream(
+            NewEvents(
+                stream_name, current_version=StreamState.NO_STREAM, events=[event1]
+            )
+        )
+
+        # Check commit position is greater.
+        self.assertGreater(commit_position1, commit_position0)
+
+        # Check stream position is 0.
+        self.assertEqual(self.client.get_current_version(stream_name), 0)
+
+        # Read the stream forwards from the start (expect one event).
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 1)
+
+        # Check the attributes of the recorded event.
+        self.assertEqual(events[0].type, event1.type)
+        self.assertEqual(events[0].data, event1.data)
+        self.assertEqual(events[0].content_type, event1.content_type)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[0].stream_name, stream_name)
+        self.assertEqual(events[0].stream_position, 0)
+        self.assertEqual(events[0].commit_position, commit_position1)
+
+        # Check we can't append another new event at initial position.
+        with self.assertRaises(WrongCurrentVersionError) as cm:
+            self.client.multi_append_to_stream(
+                NewEvents(
+                    stream_name, current_version=StreamState.NO_STREAM, events=[event2]
+                )
+            )
+        self.assertEqual(
+            f"Append failed due to a version conflict on stream '{stream_name}'. "
+            f"Expected version: -1. Actual version: 0.",
+            cm.exception.args[0],
+        )
+
+        # Append another event.
+        commit_position2 = self.client.multi_append_to_stream(
+            NewEvents(stream_name, current_version=0, events=[event2])
+        )
+
+        # Check stream position is 1.
+        self.assertEqual(self.client.get_current_version(stream_name), 1)
+
+        # Check stream position.
+        self.assertGreater(commit_position2, commit_position1)
+
+        # Read the stream (expect two events in 'forwards' order).
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+
+        # Read the stream backwards from the end.
+        events = self.client.get_stream(stream_name, backwards=True)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event2.id)
+        self.assertEqual(events[1].id, event1.id)
+
+        # Read the stream forwards from position 1.
+        events = self.client.get_stream(stream_name, stream_position=1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Read the stream backwards from position 0.
+        events = self.client.get_stream(stream_name, stream_position=0, backwards=True)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event1.id)
+
+        # Read the stream forwards from start with limit.
+        events = self.client.get_stream(stream_name, limit=1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event1.id)
+
+        # Read the stream backwards from end with limit.
+        events = self.client.get_stream(stream_name, backwards=True, limit=1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Check we can't append another new event at second position.
+        with self.assertRaises(WrongCurrentVersionError) as cm:
+            self.client.multi_append_to_stream(
+                NewEvents(stream_name, current_version=0, events=[event3])
+            )
+        self.assertEqual(
+            f"Append failed due to a version conflict on stream '{stream_name}'. "
+            f"Expected version: 0. Actual version: 1.",
+            cm.exception.args[0],
+        )
+
+        # Append another new event.
+        commit_position3 = self.client.multi_append_to_stream(
+            NewEvents(stream_name, current_version=1, events=[event3])
+        )
+
+        # Check stream position is 2.
+        self.assertEqual(self.client.get_current_version(stream_name), 2)
+
+        # Check the commit position.
+        self.assertGreater(commit_position3, commit_position2)
+
+        # Read the stream forwards from start (expect three events).
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Read the stream backwards from end (expect three events).
+        events = self.client.get_stream(stream_name, backwards=True)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event3.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event1.id)
+
+        # Read the stream forwards from position 1 with limit 1.
+        events = self.client.get_stream(stream_name, stream_position=1, limit=1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Read the stream backwards from position 1 with limit 1.
+        events = self.client.get_stream(
+            stream_name, stream_position=1, backwards=True, limit=1
+        )
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Idempotent write of event1.
+        commit_position1_1 = self.client.multi_append_to_stream(
+            NewEvents(
+                stream_name, current_version=StreamState.NO_STREAM, events=[event1]
+            )
+        )
+        self.assertEqual(commit_position1, commit_position1_1)
+
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Idempotent write of event2.
+        commit_position2_1 = self.client.multi_append_to_stream(
+            NewEvents(stream_name, current_version=0, events=[event2])
+        )
+        self.assertEqual(commit_position2_1, commit_position2)
+
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Idempotent write of event3.
+        commit_position3_1 = self.client.multi_append_to_stream(
+            NewEvents(stream_name, current_version=1, events=[event3])
+        )
+        self.assertEqual(commit_position3, commit_position3_1)
+
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Idempotent write of event1, event2.
+        commit_position2_1 = self.client.multi_append_to_stream(
+            NewEvents(
+                stream_name,
+                current_version=StreamState.NO_STREAM,
+                events=[event1, event2],
+            )
+        )
+        self.assertEqual(commit_position2, commit_position2_1)
+
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Idempotent write of event2, event3.
+        commit_position3_1 = self.client.multi_append_to_stream(
+            NewEvents(
+                stream_name,
+                current_version=0,
+                events=[event2, event3],
+            )
+        )
+        self.assertEqual(commit_position3, commit_position3_1)
+
+        # Stream should still have 3 events.
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Mixture of "idempotent" write of event2, event3, with new event4.
+        with self.assertRaises(WrongCurrentVersionError):
+            self.client.multi_append_to_stream(
+                NewEvents(
+                    stream_name,
+                    current_version=0,
+                    events=[event2, event3, event4],
+                )
+            )
+
+        # Stream should still have 3 events.
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 3)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+
+        # Append events with same ID at end of stream (specify current version).
+        self.client.multi_append_to_stream(
+            NewEvents(stream_name, [event2, event3, event4], 2)
+        )
+
+        # Stream now has 6 events....
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 6)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+        self.assertEqual(events[3].id, event2.id)
+        self.assertEqual(events[4].id, event3.id)
+        self.assertEqual(events[5].id, event4.id)
+
+        # Append events with same ID at end of stream (specify stream exists).
+        self.client.multi_append_to_stream(
+            NewEvents(stream_name, [event2, event1], StreamState.EXISTS)
+        )
+
+        # Stream still has 6 events....
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 6)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+        self.assertEqual(events[3].id, event2.id)
+        self.assertEqual(events[4].id, event3.id)
+        self.assertEqual(events[5].id, event4.id)
+
+        # Append events with same ID at end of stream (disable OCC).
+        self.client.multi_append_to_stream(
+            NewEvents(stream_name, [event2, event1], StreamState.ANY)
+        )
+
+        # Stream still has 6 events....
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(len(events), 6)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event2.id)
+        self.assertEqual(events[2].id, event3.id)
+        self.assertEqual(events[3].id, event2.id)
+        self.assertEqual(events[4].id, event3.id)
+        self.assertEqual(events[5].id, event4.id)
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    def test_stream_multi_append_many_streams(self) -> None:
+        self.construct_esdb_client()
+        stream_name1 = str(uuid4())
+        stream_name2 = str(uuid4())
+
+        # Construct four new events.
+        event1 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        event2 = NewEvent(
+            type="OrderUpdated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        event3 = NewEvent(
+            type="OrderDeleted",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        event4 = NewEvent(
+            type="OrderCorrected",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+
+        # Append one event each to two streams.
+        self.client.multi_append_to_stream(
+            [
+                NewEvents(stream_name1, [event1], StreamState.NO_STREAM),
+                NewEvents(stream_name2, [event2], StreamState.NO_STREAM),
+            ]
+        )
+
+        # Expect each stream has one event.
+        events = self.client.get_stream(stream_name1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event1.id)
+
+        events = self.client.get_stream(stream_name2)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Idempotent append.
+        self.client.multi_append_to_stream(
+            [
+                NewEvents(stream_name1, [event1], StreamState.NO_STREAM),
+                NewEvents(stream_name2, [event2], StreamState.NO_STREAM),
+            ]
+        )
+
+        # Expect each stream still has one event.
+        events = self.client.get_stream(stream_name1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event1.id)
+
+        events = self.client.get_stream(stream_name2)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Append errors.
+        with self.assertRaises(WrongCurrentVersionError):
+            self.client.multi_append_to_stream(
+                [
+                    NewEvents(stream_name1, [event3], StreamState.NO_STREAM),
+                    NewEvents(stream_name2, [event4], StreamState.NO_STREAM),
+                ]
+            )
+
+        with self.assertRaises(WrongCurrentVersionError):
+            self.client.multi_append_to_stream(
+                [
+                    NewEvents(stream_name1, [event3], 0),
+                    NewEvents(stream_name2, [event4], StreamState.NO_STREAM),
+                ]
+            )
+
+        with self.assertRaises(WrongCurrentVersionError):
+            self.client.multi_append_to_stream(
+                [
+                    NewEvents(stream_name1, [event3], StreamState.NO_STREAM),
+                    NewEvents(stream_name2, [event4], 0),
+                ]
+            )
+
+        # Expect each stream still has one event.
+        events = self.client.get_stream(stream_name1)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event1.id)
+
+        events = self.client.get_stream(stream_name2)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].id, event2.id)
+
+        # Correct append to existing multi-streams.
+        self.client.multi_append_to_stream(
+            [
+                NewEvents(stream_name1, [event3], 0),
+                NewEvents(stream_name2, [event4], 0),
+            ]
+        )
+
+        # Expect each stream now has two events.
+        events = self.client.get_stream(stream_name1)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event1.id)
+        self.assertEqual(events[1].id, event3.id)
+
+        events = self.client.get_stream(stream_name2)
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0].id, event2.id)
+        self.assertEqual(events[1].id, event4.id)
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    def test_stream_multi_append_wrong_credentials(self) -> None:
+        self.construct_esdb_client()
+        stream_name1 = str(uuid4())
+
+        # Construct a new event.
+        event1 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        with self.assertRaises(UnauthenticatedError):
+            self.client.multi_append_to_stream(
+                events=NewEvents(
+                    stream_name=stream_name1,
+                    events=[event1],
+                    current_version=StreamState.NO_STREAM,
+                ),
+                credentials=self.client.construct_call_credentials("foo", "assword"),
+            )
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    def test_stream_multi_append_stream_already_exists_error(self) -> None:
+        self.construct_esdb_client()
+        stream_name1 = str(uuid4())
+
+        # Construct a new event.
+        event1 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        self.client.multi_append_to_stream(
+            events=NewEvents(
+                stream_name=stream_name1,
+                events=[event1],
+                current_version=StreamState.NO_STREAM,
+            ),
+        )
+        # This doesn't fail because its treated as idempotent.
+        self.client.multi_append_to_stream(
+            events=NewEvents(
+                stream_name=stream_name1,
+                events=[event1],
+                current_version=StreamState.NO_STREAM,
+            ),
+        )
+        # We need a different event.
+        event2 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        # TODO: Thought this might give StreamAlreadyExistsErrorDetails
+        #  but get StreamRevisionConflictErrorDetails instead.
+        #  - What gives StreamAlreadyExistsErrorDetails?
+        with self.assertRaises(WrongCurrentVersionError) as cm:
+            self.client.multi_append_to_stream(
+                events=NewEvents(
+                    stream_name=stream_name1,
+                    events=[event2],
+                    current_version=StreamState.NO_STREAM,
+                ),
+            )
+        self.assertEqual(cm.exception.stream_name, stream_name1)
+        self.assertEqual(cm.exception.current_version, 0)
+        self.assertEqual(cm.exception.expected_version, -1)
+
+    @skip("This works but clogs the server and doesn't increase test coverage")
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    def test_stream_multi_append_record_max_size_exceeded_error(self) -> None:
+        self.construct_esdb_client()
+        stream_name1 = str(uuid4())
+
+        # Construct a new event.
+        with self.assertRaises(RecordMaxSizeExceededError) as cm:
+            size = 16
+            while True:
+                event1 = NewEvent(
+                    type="OrderCreated",
+                    data=random_data(size),
+                    content_type="application/octet-stream",
+                )
+                self.client.multi_append_to_stream(
+                    events=NewEvents(
+                        stream_name=stream_name1,
+                        events=[event1],
+                        current_version=StreamState.ANY,
+                    ),
+                )
+                size *= 2
+
+        self.assertEqual(cm.exception.stream_name, stream_name1)
+        self.assertEqual(cm.exception.event_id, event1.id)
+        self.assertGreater(cm.exception.size, size)
+        self.assertLess(cm.exception.max_size, cm.exception.size)
+
+    @skip("This workds but clogs the server and doesn't increase test coverage")
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    def test_stream_multi_append_transaction_max_size_exceeded_error(self) -> None:
+        self.construct_esdb_client()
+        stream_name1 = str(uuid4())
+
+        # Construct a new event.
+        data_size = 10 * 1024 * 1024
+        num_events = 16
+
+        with self.assertRaises(TransactionMaxSizeExceededError) as cm:
+
+            def generate_events(num_events: int) -> list[NewEvent]:
+                return [
+                    NewEvent(
+                        type="OrderCreated",
+                        data=random_data(data_size),
+                        content_type="application/octet-stream",
+                    )
+                    for _ in range(num_events)
+                ]
+
+            while True:
+                print(num_events)
+                events = generate_events(num_events)
+                start = datetime.datetime.now()
+                self.client.multi_append_to_stream(
+                    events=NewEvents(
+                        stream_name=stream_name1,
+                        events=events,
+                        current_version=StreamState.ANY,
+                    ),
+                )
+                print(
+                    "Rate:",
+                    num_events / (datetime.datetime.now() - start).total_seconds(),
+                    "events/s",
+                )
+                num_events *= 2
+
+        self.assertGreater(cm.exception.size, data_size * num_events / 2)
+        self.assertLess(cm.exception.max_size, cm.exception.size)
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    def test_stream_multi_append_same_stream_error(self) -> None:
+        self.construct_esdb_client()
+        stream_name1 = str(uuid4())
+
+        # Construct a new event.
+
+        with self.assertRaises(MultiAppendToSameStreamError) as cm:
+
+            while True:
+                self.client.multi_append_to_stream(
+                    events=[
+                        NewEvents(
+                            stream_name=stream_name1,
+                            events=[
+                                NewEvent(
+                                    type="OrderCreated",
+                                    data=random_data(),
+                                    content_type="application/octet-stream",
+                                )
+                            ],
+                            current_version=StreamState.ANY,
+                        ),
+                        NewEvents(
+                            stream_name=stream_name1,
+                            events=[
+                                NewEvent(
+                                    type="OrderCreated",
+                                    data=random_data(),
+                                    content_type="application/octet-stream",
+                                )
+                            ],
+                            current_version=StreamState.ANY,
+                        ),
+                    ],
+                )
+
+        self.assertEqual(cm.exception.stream_name, stream_name1)
+
+    # TODO: What gives StreamDeletedErrorDetails?
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    def test_stream_multi_append_tombstoned_stream_error(self) -> None:
+        self.construct_esdb_client()
+        stream_name1 = str(uuid4())
+
+        # Construct a new event.
+        event1 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        self.client.multi_append_to_stream(
+            events=NewEvents(
+                stream_name=stream_name1,
+                events=[event1],
+                current_version=StreamState.NO_STREAM,
+            ),
+        )
+
+        self.client.tombstone_stream(stream_name1, current_version=StreamState.EXISTS)
+
+        with self.assertRaises(StreamTombstonedError):
+            self.client.multi_append_to_stream(
+                events=NewEvents(
+                    stream_name=stream_name1,
+                    events=[event1],
+                    current_version=StreamState.ANY,
+                ),
+            )
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    def test_stream_multi_append_metadata_conversions_and_errors(self) -> None:
+        self.construct_esdb_client()
+        stream_name = str(uuid4())
+
+        def append_helper(metadata: bytes) -> None:
+            self.assertIsInstance(metadata, bytes)
+            event = NewEvent(
+                type="OrderCreated",
+                data=random_data(),
+                metadata=metadata,
+                content_type="application/octet-stream",
+            )
+            self.client.multi_append_to_stream(
+                events=NewEvents(
+                    stream_name=stream_name,
+                    events=[event],
+                    current_version=StreamState.ANY,
+                ),
+            )
+
+        # These are OK.
+        append_helper(b"")
+        append_helper(json.dumps({"a": "1"}).encode())
+
+        # These are not OK.
+        with self.assertRaises(ProgrammingError):
+            append_helper(random_data(100))
+        with self.assertRaises(ProgrammingError):
+            append_helper(json.dumps("a").encode())
+        with self.assertRaises(ProgrammingError):
+            append_helper(json.dumps({"a": 1}).encode())
+        with self.assertRaises(ProgrammingError):
+            append_helper(json.dumps({"a": {}}).encode())
+
+        events = self.client.get_stream(stream_name)
+        self.assertEqual(2, len(events))
+        self.assertEqual(
+            json.loads(events[0].metadata.decode()),
+            {"$schema.format": "Bytes", "$schema.name": "OrderCreated"},
+        )
+        self.assertEqual(
+            json.loads(events[1].metadata.decode()),
+            {"$schema.format": "Bytes", "$schema.name": "OrderCreated", "a": "1"},
+        )
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    def test_stream_multi_append_deadline_exceeded(self) -> None:
+        self.construct_esdb_client()
+        stream_name1 = str(uuid4())
+
+        # Construct a new event.
+        event1 = NewEvent(
+            type="OrderCreated",
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+
+        with self.assertRaises(GrpcDeadlineExceededError):
+            self.client.multi_append_to_stream(
+                events=NewEvents(
+                    stream_name=stream_name1,
+                    events=[event1],
+                    current_version=StreamState.NO_STREAM,
+                ),
+                timeout=0,
+            )
+
 
 PROJECTION_QUERY_TEMPLATE1 = """fromStream('%s')
 .when({
@@ -6804,6 +7589,18 @@ class TestKurrentDBClientWithInsecureConnection(TestKurrentDBClient):
     KDB_TARGET = "localhost:2113"
     KDB_TLS = False
 
+    @skip("Doesn't work with this class")
+    def test_append_to_stream_wrong_credentials(self) -> None:
+        super().test_append_to_stream_wrong_credentials()
+
+    @skip("Doesn't work with this class")
+    def test_stream_multi_append_wrong_credentials(self) -> None:
+        super().test_stream_multi_append_wrong_credentials()
+
+    @skip("Doesn't work with this class")
+    def test_stream_multi_append_deadline_exceeded(self) -> None:
+        super().test_stream_multi_append_deadline_exceeded()
+
 
 # Todo: Test error from sending call credentials to insecure server
 #  StatusCode.UNAUTHENTICATED
@@ -6815,15 +7612,27 @@ class TestClusterNode1(TestKurrentDBClient):
     KDB_TARGET = "127.0.0.1:2110,127.0.0.1:2110"  # make it do discovery
     KDB_CLUSTER_SIZE = 3
 
+    @skip("Doesn't work with this class")
+    def test_stream_multi_append_deadline_exceeded(self) -> None:
+        super().test_stream_multi_append_deadline_exceeded()
+
 
 class TestClusterNode2(TestKurrentDBClient):
     KDB_TARGET = "127.0.0.1:2111,127.0.0.1:2111"  # make it do discovery
     KDB_CLUSTER_SIZE = 3
 
+    @skip("Doesn't work with this class")
+    def test_stream_multi_append_deadline_exceeded(self) -> None:
+        super().test_stream_multi_append_deadline_exceeded()
+
 
 class TestClusterNode3(TestKurrentDBClient):
     KDB_TARGET = "127.0.0.1:2112,127.0.0.1:2112"  # make it do discovery
     KDB_CLUSTER_SIZE = 3
+
+    @skip("Doesn't work with this class")
+    def test_stream_multi_append_deadline_exceeded(self) -> None:
+        super().test_stream_multi_append_deadline_exceeded()
 
 
 class TestRootCertificatesAreOptional(TimedTestCase):
@@ -7063,7 +7872,8 @@ class TestDiscoverScheme(TestCase):
                     events=[event1, event2],
                 )
                 self.assertEqual(len(client.get_stream(stream_name)), 2)
-        self.assertIsNotNone(cm5.exception.leader_grpc_target)
+        self.assertIsNotNone(cm5.exception.host)
+        self.assertIsNotNone(cm5.exception.port)
 
         # Discover three-node cluster, getting cluster info from each node in turn,
         # connect to the leader and connect to a follower, then write to the leader
@@ -7247,6 +8057,28 @@ class TestRequiresLeaderHeader(TimedTestCase):
                 sleep(1)
             else:
                 break
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    def test_reconnects_to_new_leader_on_multi_append(self) -> None:
+        # Fail to write to follower.
+        event1 = NewEvent(type="OrderCreated", data=random_data())
+        stream_name = str(uuid4())
+        with self.assertRaises(NodeIsNotLeaderError):
+            self.reader.multi_append_to_stream(
+                NewEvents(
+                    stream_name, current_version=StreamState.NO_STREAM, events=[event1]
+                )
+            )
+
+        # Swap connection.
+        self._set_reader_connection_on_writer()
+
+        # Reconnect and write to leader.
+        self.writer.multi_append_to_stream(
+            NewEvents(
+                stream_name, current_version=StreamState.NO_STREAM, events=[event1]
+            )
+        )
 
     def test_reconnects_to_new_leader_on_set_stream_metadata(self) -> None:
         # Fail to write to follower.
@@ -7980,9 +8812,102 @@ class TestHandleRpcError(TestCase):
         with self.assertRaises(ServiceUnavailableError):
             raise handle_rpc_error(FakeUnavailableRpcError()) from None
 
-    def test_handle_writing_to_follower_error(self) -> None:
-        with self.assertRaises(NodeIsNotLeaderError):
-            raise handle_rpc_error(FakeWritingToFollowerError()) from None
+    def test_handle_not_leader_node_error(self) -> None:
+        with self.assertRaises(NodeIsNotLeaderError) as cm:
+            raise handle_rpc_error(FakeNotLeaderNodeRpcError()) from None
+
+        # Check the trailing metadata is parsed correctly.
+        self.assertEqual(cm.exception.host, "127.0.0.1")
+        self.assertEqual(cm.exception.port, 2111)
+        self.assertIsNone(cm.exception.node_id)
+
+    def test_handle_not_leader_node_v2_error(self) -> None:
+        leader_host = "127.0.0.1"
+        leader_port = 2111
+        node_id = str(uuid4())
+        with self.assertRaises(NodeIsNotLeaderError) as cm:
+            raise handle_rpc_error(
+                FakeNotLeaderNodeV2RpcError(
+                    host=leader_host,
+                    port=leader_port,
+                    node_id=node_id,
+                )
+            ) from None
+
+        # Check the status details are unpacked correctly.
+        self.assertEqual(cm.exception.host, leader_host)
+        self.assertEqual(cm.exception.port, leader_port)
+        self.assertEqual(cm.exception.node_id, node_id)
+
+    def test_handle_stream_revision_conflict_error_v2(self) -> None:
+        stream_name = str(uuid4())
+        expected_version = 0
+        current_version = -1
+        with self.assertRaises(WrongCurrentVersionError) as cm:
+            raise handle_rpc_error(
+                FakeStreamRevisionConflictV2RpcError(
+                    stream_name,
+                    expected_revision=expected_version,
+                    actual_revision=current_version,
+                )
+            ) from None
+
+        self.assertEqual(stream_name, cm.exception.stream_name)
+        self.assertEqual(expected_version, cm.exception.expected_version)
+        self.assertEqual(current_version, cm.exception.current_version)
+
+    def test_handle_stream_already_in_append_session_error_v2(self) -> None:
+        stream_name = str(uuid4())
+        with self.assertRaises(MultiAppendToSameStreamError) as cm:
+            raise handle_rpc_error(
+                FakeStreamAlreadyInAppendSessionV2RpcError(
+                    stream_name,
+                )
+            ) from None
+
+        self.assertEqual(stream_name, cm.exception.stream_name)
+
+    def test_handle_stream_tombstoned_error_v2(self) -> None:
+        stream_name = str(uuid4())
+        with self.assertRaises(StreamTombstonedError) as cm:
+            raise handle_rpc_error(
+                FakeStreamTombstonedV2RpcError(stream=stream_name)
+            ) from None
+
+        self.assertEqual(stream_name, cm.exception.stream_name)
+
+    def test_handle_append_record_size_exceeded_error_v2(self) -> None:
+        stream_name = str(uuid4())
+        event_id = uuid4()
+        size = 100
+        max_size = 50
+        with self.assertRaises(RecordMaxSizeExceededError) as cm:
+            raise handle_rpc_error(
+                FakeAppendRecordSizeExceededV2RpcError(
+                    stream=stream_name,
+                    record_id=str(event_id),
+                    size=size,
+                    max_size=max_size,
+                )
+            ) from None
+
+        self.assertEqual(stream_name, cm.exception.stream_name)
+        self.assertEqual(event_id, cm.exception.event_id)
+        self.assertEqual(size, cm.exception.size)
+        self.assertEqual(max_size, cm.exception.max_size)
+
+    def test_handle_append_transaction_size_exceeded_error_v2(self) -> None:
+        size = 100
+        max_size = 50
+        with self.assertRaises(TransactionMaxSizeExceededError) as cm:
+            raise handle_rpc_error(
+                FakeAppendTransactionSizeExceededV2RpcError(
+                    size=size, max_size=max_size
+                )
+            ) from None
+
+        self.assertEqual(size, cm.exception.size)
+        self.assertEqual(max_size, cm.exception.max_size)
 
     def test_handle_consumer_too_slow_error(self) -> None:
         with self.assertRaises(ConsumerTooSlowError):
@@ -8002,11 +8927,11 @@ class TestHandleRpcError(TestCase):
         class MyRpcError(RpcError):
             pass
 
-        msg = "some non-Call error"
+        my_rpc_error = MyRpcError("some non-Call error")
         with self.assertRaises(GrpcError) as cm:
-            raise handle_rpc_error(MyRpcError(msg)) from None
+            raise handle_rpc_error(my_rpc_error) from None
         self.assertEqual(cm.exception.__class__, GrpcError)
-        self.assertIsInstance(cm.exception.args[0], MyRpcError)
+        self.assertEqual(cm.exception.args[0], str(my_rpc_error))
 
     def test_streams_unknown_error(self) -> None:
         with self.assertRaises(UnknownError):
@@ -8032,14 +8957,25 @@ class TestHandleRpcError(TestCase):
         with self.assertRaises(FailedPreconditionError):
             raise handle_streams_rpc_error(FakeFailedPreconditionRpcError()) from None
 
+    def test_handle_unsupported_v2_error(self) -> None:
+        with self.assertRaises(KurrentDBClientError) as cm:
+            raise handle_rpc_error(FakeUnsupportedV2RpcError()) from None
+        self.assertEqual(KurrentDBClientError, cm.exception.__class__)
+        self.assertEqual("Actually OK", cm.exception.args[0])
+
 
 class FakeRpcError(_MultiThreadedRendezvous):
-    def __init__(self, status_code: StatusCode, details: str = "") -> None:
+    def __init__(
+        self,
+        status_code: StatusCode,
+        details: str = "",
+        trailing_metadata: list[tuple[str, str | bytes]] | None = None,
+    ) -> None:
         super().__init__(
             state=_RPCState(
                 due=[],
                 initial_metadata=None,
-                trailing_metadata=None,
+                trailing_metadata=trailing_metadata,
                 code=status_code,
                 details=details,
             ),
@@ -8047,6 +8983,9 @@ class FakeRpcError(_MultiThreadedRendezvous):
             response_deserializer=lambda x: x,
             deadline=None,
         )
+
+    def trailing_metadata(self) -> Any:
+        return self._state.trailing_metadata
 
 
 class FakeExceptionThrownByHandlerError(FakeRpcError):
@@ -8066,10 +9005,178 @@ class FakeUnavailableRpcError(FakeRpcError):
         super().__init__(status_code=StatusCode.UNAVAILABLE)
 
 
-class FakeWritingToFollowerError(FakeRpcError):
+class FakeNotLeaderNodeRpcError(FakeRpcError):
     def __init__(self) -> None:
         super().__init__(
-            status_code=StatusCode.NOT_FOUND, details="Leader info available"
+            status_code=StatusCode.NOT_FOUND,
+            details="Leader info available",
+            trailing_metadata=[
+                ("leader-endpoint-host", "127.0.0.1"),
+                ("leader-endpoint-port", "2111"),
+            ],
+        )
+
+
+class FakeNotLeaderNodeV2RpcError(FakeRpcError):
+    def __init__(self, host: str, port: int, node_id: str) -> None:
+        message = (
+            "The server is not the leader node and cannot handle "
+            "the request. Please retry your request against the "
+            f"leader node directly at {host}:{port}"
+        )
+        super().__init__(
+            status_code=StatusCode.FAILED_PRECONDITION,
+            details=message,
+            trailing_metadata=[
+                (
+                    "grpc-status-details-bin",
+                    status_with_not_leader_node_error_details_v2(
+                        message=message,
+                        host="127.0.0.1",
+                        port=2111,
+                        node_id=node_id,
+                    ).SerializeToString(),
+                ),
+            ],
+        )
+
+
+class FakeStreamRevisionConflictV2RpcError(FakeRpcError):
+    def __init__(
+        self, stream: str, expected_revision: int, actual_revision: int
+    ) -> None:
+        message = (
+            f"Append failed due to a revision conflict on stream '{stream}'."
+            f" Expected revision: {expected_revision}."
+            f" Actual revision: {actual_revision}."
+        )
+        super().__init__(
+            status_code=StatusCode.FAILED_PRECONDITION,
+            details=message,
+            trailing_metadata=[
+                (
+                    "grpc-status-details-bin",
+                    status_with_stream_revision_conflict_error_details_v2(
+                        message=message,
+                        stream=stream,
+                        expected_revision=expected_revision,
+                        actual_revision=actual_revision,
+                    ).SerializeToString(),
+                ),
+            ],
+        )
+
+
+class FakeStreamAlreadyInAppendSessionV2RpcError(FakeRpcError):
+    def __init__(self, stream: str) -> None:
+        message = (
+            f"Stream '{stream}' is already part of this append session."
+            f" Appending to the same stream multiple times is currently"
+            f" not supported."
+        )
+        super().__init__(
+            status_code=StatusCode.ABORTED,
+            details=message,
+            trailing_metadata=[
+                (
+                    "grpc-status-details-bin",
+                    status_with_stream_already_in_append_session_error_details_v2(
+                        message=message,
+                        stream=stream,
+                    ).SerializeToString(),
+                ),
+            ],
+        )
+
+
+class FakeStreamTombstonedV2RpcError(FakeRpcError):
+    def __init__(self, stream: str) -> None:
+        message = (
+            f"Stream '{stream}' has been tombstoned. It has been"
+            f" permanently removed from the system and cannot be restored."
+        )
+        super().__init__(
+            status_code=StatusCode.FAILED_PRECONDITION,
+            details=message,
+            trailing_metadata=[
+                (
+                    "grpc-status-details-bin",
+                    status_with_stream_tombstoned_error_details_v2(
+                        message=message,
+                        stream=stream,
+                    ).SerializeToString(),
+                ),
+            ],
+        )
+
+
+class FakeAppendRecordSizeExceededV2RpcError(FakeRpcError):
+    def __init__(self, stream: str, record_id: str, size: int, max_size: int) -> None:
+        size_mb = size / (1024 * 1014)
+        max_size_mb = max_size / (1024 * 1014)
+        diff_mb = size_mb - max_size_mb
+        message = (
+            f"'The size of record {record_id} ({size_mb:.3f} MB) exceeds the maximum"
+            f" allowed size of {max_size_mb:.3f} MB bytes by {diff_mb:.3} MB'"
+        )
+        super().__init__(
+            status_code=StatusCode.INVALID_ARGUMENT,
+            details=message,
+            trailing_metadata=[
+                (
+                    "grpc-status-details-bin",
+                    status_with_append_record_size_exceeded_error_details_v2(
+                        message=message,
+                        stream=stream,
+                        record_id=record_id,
+                        size=size,
+                        max_size=max_size,
+                    ).SerializeToString(),
+                ),
+            ],
+        )
+
+
+class FakeAppendTransactionSizeExceededV2RpcError(FakeRpcError):
+    def __init__(self, size: int, max_size: int) -> None:
+        size_mb = size / (1024 * 1014)
+        max_size_mb = max_size / (1024 * 1014)
+        diff_mb = size_mb - max_size_mb
+        message = (
+            f"Transaction size ({size_mb:.3f} MB) exceeded"
+            f" the maximum allowed size of {max_size_mb:.3f} MB"
+            f" by {diff_mb:.3f} MB, after 26 record(s)."
+        )
+        super().__init__(
+            status_code=StatusCode.ABORTED,
+            details=message,
+            trailing_metadata=[
+                (
+                    "grpc-status-details-bin",
+                    status_with_append_transaction_size_exceeded_error_details_v2(
+                        message=message,
+                        size=size,
+                        max_size=max_size,
+                    ).SerializeToString(),
+                ),
+            ],
+        )
+
+
+class FakeUnsupportedV2RpcError(FakeRpcError):
+    def __init__(self) -> None:
+        message = "Actually OK"
+        super().__init__(
+            status_code=StatusCode.OK,
+            details=message,
+            trailing_metadata=[
+                (
+                    "grpc-status-details-bin",
+                    status_with_some_unsupported_error_details_v2(
+                        message=message,
+                    ).SerializeToString(),
+                ),
+            ],
         )
 
 

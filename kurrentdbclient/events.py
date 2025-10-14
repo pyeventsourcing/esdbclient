@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from typing_extensions import Literal
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
     from datetime import datetime
 
 ContentType = Literal["application/json", "application/octet-stream"]
@@ -26,6 +28,17 @@ class NewEvent:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, (NewEvent, RecordedEvent)) and self.id == other.id
+
+
+@dataclass(frozen=True)
+class NewEvents:
+    """
+    Encapsulates multiple event data to be recorded in a KurrentDB stream.
+    """
+
+    stream_name: str
+    events: Iterable[NewEvent]
+    current_version: int | StreamState
 
 
 @dataclass(frozen=True)
@@ -162,3 +175,9 @@ class FellBehind(RecordedEvent):
     @property
     def is_fell_behind(self) -> bool:
         return True
+
+
+class StreamState(Enum):
+    ANY = "ANY"
+    NO_STREAM = "NO_STREAM"
+    EXISTS = "EXISTS"

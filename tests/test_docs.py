@@ -8,6 +8,8 @@ from pathlib import Path
 # from tempfile import NamedTemporaryFile
 from unittest import TestCase
 
+from tests.test_client import SERVER_VERSION
+
 BASE_DIR = Path(__file__).parents[1]
 
 
@@ -52,6 +54,7 @@ class TestDocs(TestCase):
         is_code = False
         is_md = False
         is_rst = False
+        is_ignoring_remainder_of_code_in_block = False
         last_line = ""
         is_literalinclude = False
         with doc_path.open() as doc_file:
@@ -79,6 +82,7 @@ class TestDocs(TestCase):
                     if not num_code_lines_in_block:
                         self.fail(f"No lines of code in block: {line_index + 1}")
                     is_code = False
+                    is_ignoring_remainder_of_code_in_block = False
                     line = ""
                 elif is_code and is_rst and line.startswith("```"):
                     # Can't finish restructured text block with markdown.
@@ -135,9 +139,16 @@ class TestDocs(TestCase):
                         # Strip four chars of indentation.
                         line = line[4:]
 
-                    if len(line.strip()):
+                    # Exclude version-specific unsupported code.
+                    if SERVER_VERSION < (25, 1) and "multi_append_to_stream" in line:
+                        is_ignoring_remainder_of_code_in_block = True
+
+                    if is_ignoring_remainder_of_code_in_block:
+                        line = ""
+                    elif len(line.strip()):
                         num_code_lines_in_block += 1
                         num_code_lines += 1
+
                 else:
                     line = ""
 

@@ -40,6 +40,7 @@ from kurrentdbclient.common import (
     AbstractReadResponse,
     BasicAuthCallCredentials,
     GrpcOptions,
+    grpc_target,
 )
 from kurrentdbclient.connection import KurrentDBConnection
 from kurrentdbclient.connection_spec import (
@@ -50,7 +51,7 @@ from kurrentdbclient.connection_spec import (
     URI_SCHEMES_NON_DISCOVER,
     ConnectionSpec,
 )
-from kurrentdbclient.events import NewEvent, RecordedEvent
+from kurrentdbclient.events import NewEvent, NewEvents, RecordedEvent, StreamState
 from kurrentdbclient.exceptions import (
     DiscoveryFailedError,
     FollowerNotFoundError,
@@ -68,7 +69,10 @@ from kurrentdbclient.gossip import (
     ClusterMember,
     GossipService,
 )
-from kurrentdbclient.streams import StreamsService, StreamState
+
+if TYPE_CHECKING:
+    from kurrentdbclient.streams import StreamsService
+    from kurrentdbclient.v2streams import V2StreamsService
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -116,7 +120,9 @@ def autoreconnect(f: _TCallable) -> _TCallable:
                     and len(client.connection_spec.targets) == 1
                 )
             ):
-                client.reconnect(e.leader_grpc_target)
+                client.reconnect(
+                    grpc_target(e.host, e.port) if e.host and e.port else None
+                )
                 sleep(0.1)
                 return f(*args, **kwargs)
             raise
@@ -302,6 +308,10 @@ class KurrentDBClient(BaseKurrentDBClient):
     @property
     def streams(self) -> StreamsService:
         return self._connection.streams
+
+    @property
+    def v2streams(self) -> V2StreamsService:  # pragma: no v2cover
+        return self._connection.v2streams
 
     @property
     def persistent_subscriptions(self) -> PersistentSubscriptionsService:
@@ -540,6 +550,29 @@ class KurrentDBClient(BaseKurrentDBClient):
         return self.streams.batch_append(
             stream_name=stream_name,
             current_version=current_version,
+            events=events,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    def multi_append_to_stream(
+        self,
+        /,
+        events: NewEvents | Iterable[NewEvents],
+        *,
+        timeout: float | None = None,
+        credentials: grpc.CallCredentials | None = None,
+    ) -> int:  # pragma: no v2cover
+        """
+        Appends new events to one or many streams.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+        if isinstance(events, NewEvents):
+            events = [events]
+        return self.v2streams.multi_append(
             events=events,
             timeout=timeout,
             metadata=self._call_metadata,

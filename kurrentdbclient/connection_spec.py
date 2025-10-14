@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import ParseResult, parse_qs, urlparse
 from uuid import uuid4
 
+from kurrentdbclient.common import grpc_target
+
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -341,8 +343,7 @@ class ConnectionSpec:
         for i, target in enumerate(self._targets):
             host, _, port = target.partition(":")
             if port == "":
-                port = "2113"
-                self._targets[i] = f"{host}:{port}"
+                self._targets[i] = grpc_target(host, 2113)
 
         self._options = ConnectionOptions(parse_result.query)
         if self._options.tls is True and not (self._username and self._password):

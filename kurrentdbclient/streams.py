@@ -8,13 +8,12 @@ from abc import abstractmethod
 from asyncio import CancelledError
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING, overload, runtime_checkable
 from uuid import UUID, uuid4
 
 import grpc
 import grpc.aio
-from google.protobuf import duration_pb2, empty_pb2
+from google.protobuf import any_pb2, duration_pb2, empty_pb2
 from grpc.aio import AioRpcError, UsageError
 from typing_extensions import Literal, Protocol
 
@@ -44,6 +43,7 @@ from kurrentdbclient.events import (
     FellBehind,
     NewEvent,
     RecordedEvent,
+    StreamState,
 )
 from kurrentdbclient.exceptions import (
     AccessDeniedError,
@@ -59,12 +59,13 @@ from kurrentdbclient.exceptions import (
     UnknownError,
     WrongCurrentVersionError,
 )
-from kurrentdbclient.protos.Grpc import (
+from kurrentdbclient.protos.v1 import (
     shared_pb2,
     status_pb2,
     streams_pb2,
     streams_pb2_grpc,
 )
+from kurrentdbclient.unpack_error_status import unpack_status_details
 
 if TYPE_CHECKING:
     from google.protobuf.timestamp_pb2 import Timestamp
@@ -86,10 +87,6 @@ class _ReadResps(Iterator[streams_pb2.ReadResp], Protocol):
 #         ...  # pragma: no cover
 #
 #
-class StreamState(Enum):
-    ANY = "ANY"
-    NO_STREAM = "NO_STREAM"
-    EXISTS = "EXISTS"
 
 
 class BaseReadResponse:
@@ -545,57 +542,52 @@ class BaseStreamsService(KurrentDBService[TGrpcStreamers]):
         # Construct exception object.
         assert result_oneof == "error", result_oneof
         assert isinstance(response.error, status_pb2.Status)
+        assert isinstance(response.error.details, any_pb2.Any)
 
-        error_details = response.error.details
-        if error_details.Is(shared_pb2.WrongExpectedVersion.DESCRIPTOR):
-            wrong_version = shared_pb2.WrongExpectedVersion()
-            error_details.Unpack(wrong_version)
-
-            csro_oneof = wrong_version.WhichOneof("current_stream_revision_option")
-            if csro_oneof == "current_no_stream":
-                msg = f"Stream {stream_name!r} does not exist"
+        for unpacked_error in unpack_status_details(response.error):
+            if isinstance(unpacked_error, shared_pb2.WrongExpectedVersion):
+                csro_oneof = unpacked_error.WhichOneof("current_stream_revision_option")
+                if csro_oneof == "current_no_stream":
+                    msg = f"Stream {stream_name!r} does not exist"
+                    raise WrongCurrentVersionError(msg)
+                assert csro_oneof == "current_stream_revision"
+                msg = (
+                    f"Stream position of last event is"
+                    f" {unpacked_error.current_stream_revision}"
+                    f" not {current_version}"
+                )
                 raise WrongCurrentVersionError(msg)
-            assert csro_oneof == "current_stream_revision"
-            msg = (
-                f"Stream position of last event is"
-                f" {wrong_version.current_stream_revision}"
-                f" not {current_version}"
-            )
-            raise WrongCurrentVersionError(msg)
 
-        # Todo: Write tests to cover all of this:
-        if error_details.Is(shared_pb2.AccessDenied.DESCRIPTOR):  # pragma: no cover
-            raise AccessDeniedError
-        if error_details.Is(shared_pb2.StreamDeleted.DESCRIPTOR):
-            stream_deleted = shared_pb2.StreamDeleted()
-            error_details.Unpack(stream_deleted)
-            # Todo: Ask DB team if this is ever different from request value.
-            # stream_name = stream_deleted.stream_identifier.stream_name
-            msg = f"Stream {stream_name !r} is deleted"
-            raise StreamIsDeletedError(msg)
-        if error_details.Is(shared_pb2.Timeout.DESCRIPTOR):  # pragma: no cover
-            raise AppendDeadlineExceededError
-        if error_details.Is(shared_pb2.Unknown.DESCRIPTOR):  # pragma: no cover
-            raise UnknownError
-        if error_details.Is(
-            shared_pb2.InvalidTransaction.DESCRIPTOR
-        ):  # pragma: no cover
-            raise InvalidTransactionError
-        if error_details.Is(
-            shared_pb2.MaximumAppendSizeExceeded.DESCRIPTOR
-        ):  # pragma: no cover
-            size_exceeded = shared_pb2.MaximumAppendSizeExceeded()
-            error_details.Unpack(size_exceeded)
-            size = size_exceeded.maxAppendSize
-            msg = f"Max size is {size}"
-            raise MaximumAppendSizeExceededError(msg)
-        if error_details.Is(shared_pb2.BadRequest.DESCRIPTOR):  # pragma: no cover
-            bad_request = shared_pb2.BadRequest()
-            error_details.Unpack(bad_request)
-            msg = f"Bad request: {bad_request.message}"
-            raise BadRequestError(msg)
+            if isinstance(unpacked_error, shared_pb2.StreamDeleted):
+                msg = f"Stream {stream_name !r} is deleted"
+                raise StreamIsDeletedError(msg)
+
+            # Todo: Write tests to cover all of this:
+            # no cover: start
+            if isinstance(unpacked_error, shared_pb2.AccessDenied):
+                raise AccessDeniedError
+
+            if isinstance(unpacked_error, shared_pb2.Timeout):
+                raise AppendDeadlineExceededError
+
+            if isinstance(unpacked_error, shared_pb2.Unknown):
+                raise UnknownError
+
+            if isinstance(unpacked_error, shared_pb2.InvalidTransaction):
+                raise InvalidTransactionError
+
+            if isinstance(unpacked_error, shared_pb2.MaximumAppendSizeExceeded):
+                size = unpacked_error.maxAppendSize
+                msg = f"Max size is {size}"
+                raise MaximumAppendSizeExceededError(msg)
+
+            if isinstance(unpacked_error, shared_pb2.BadRequest):
+                msg = f"Bad request: {unpacked_error.message}"
+                raise BadRequestError(msg)
+            # no cover: start
+
         # Unexpected error details type.
-        raise KurrentDBClientError(error_details)  # pragma: no cover
+        raise KurrentDBClientError(response.error)  # pragma: no cover
 
     @staticmethod
     def _construct_read_request(
@@ -1383,6 +1375,8 @@ def handle_streams_rpc_error(e: grpc.RpcError) -> KurrentDBClientError:
         details = e.details() or ""
         if "WrongExpectedVersion" in details:
             if "Actual version: -1" in details:
+                # Get here when deleting or tombstoning a stream that
+                # does not exist whilst specifying expected version.
                 return NotFoundError(details)
             return WrongCurrentVersionError(details)
         if "is deleted" in details:
