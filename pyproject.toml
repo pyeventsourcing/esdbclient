@@ -27,15 +27,17 @@ classifiers = [
     "Programming Language :: Python",
 ]
 dependencies = [
-  "grpcio[protobuf]>=1.71.0,<2.0",
-  "typing_extensions",
+    "grpcio[protobuf]>=1.75.1,<2.0",
+    "typing_extensions",
+    "googleapis-common-protos",
+    "grpcio-status",
 ]
 
 [project.optional-dependencies]
 opentelemetry = [
-  "opentelemetry-api>=1.28.0,<2.0",
-  "opentelemetry-instrumentation>=0.49b0",
-  "opentelemetry-semantic-conventions>=0.49b0",
+    "opentelemetry-api>=1.28.0,<2.0",
+    "opentelemetry-instrumentation>=0.49b0",
+    "opentelemetry-semantic-conventions>=0.49b0",
 ]
 
 [project.urls]
@@ -200,8 +202,9 @@ omit = [
 ]
 relative_files = true
 
-
 [tool.coverage.report]
+fail_under = 100
+show_missing = true
 exclude_lines = [
   # Have to re-enable the standard pragma
   "pragma: no cover",

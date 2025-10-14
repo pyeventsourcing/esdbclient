@@ -14,7 +14,7 @@ from kurrentdbclient.common import (
     TGrpcStreamers,
     handle_rpc_error,
 )
-from kurrentdbclient.protos.Grpc import gossip_pb2, gossip_pb2_grpc, shared_pb2
+from kurrentdbclient.protos.v1 import gossip_pb2, gossip_pb2_grpc, shared_pb2
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

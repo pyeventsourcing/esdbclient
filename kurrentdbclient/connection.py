@@ -9,6 +9,7 @@ from kurrentdbclient.persistent import (
 )
 from kurrentdbclient.projections import AsyncProjectionsService, ProjectionsService
 from kurrentdbclient.streams import AsyncStreamsService, StreamsService
+from kurrentdbclient.v2streams import AsyncV2StreamsService, V2StreamsService
 
 
 class BaseKurrentDBConnection:
@@ -36,6 +37,11 @@ class KurrentDBConnection(BaseKurrentDBConnection):
             grpc_streamers=self._grpc_streamers,
         )
         self.streams = StreamsService(
+            grpc_channel=grpc_channel,
+            connection_spec=connection_spec,
+            grpc_streamers=self._grpc_streamers,
+        )
+        self.v2streams = V2StreamsService(
             grpc_channel=grpc_channel,
             connection_spec=connection_spec,
             grpc_streamers=self._grpc_streamers,
@@ -95,6 +101,11 @@ class AsyncKurrentDBConnection(BaseKurrentDBConnection):
             grpc_streamers=self._grpc_streamers,
         )
         self.projections = AsyncProjectionsService(
+            grpc_channel,
+            connection_spec=connection_spec,
+            grpc_streamers=self._grpc_streamers,
+        )
+        self.v2streams = AsyncV2StreamsService(
             grpc_channel,
             connection_spec=connection_spec,
             grpc_streamers=self._grpc_streamers,

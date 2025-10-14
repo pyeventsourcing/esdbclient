@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-import grpc
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Any
+    from uuid import UUID
 
 
 class KurrentDBClientError(Exception):
@@ -58,7 +62,7 @@ class CancelledByClientError(KurrentDBClientError):
     """
 
 
-class AbortedByServerError(GrpcError):
+class AbortedByServerError(KurrentDBClientError):
     """
     Raised when gRPC operation is aborted.
     """
@@ -68,40 +72,6 @@ class ConsumerTooSlowError(AbortedByServerError):
     """
     Raised when buffer is overloaded.
     """
-
-
-class NodeIsNotLeaderError(KurrentDBClientError):
-    """
-    Raised when client attempts to write to a node that is not a leader.
-    """
-
-    @property
-    def leader_grpc_target(self) -> str | None:
-        if (
-            self.args
-            and isinstance(self.args[0], (grpc.Call, grpc.aio.AioRpcError))
-            and self.args[0].code() == grpc.StatusCode.NOT_FOUND
-            and self.args[0].details() == "Leader info available"
-        ):
-            # The typing of trailing_metadata is a mess.
-            rpc_error = self.args[0]
-            trailing_metadata: dict[str, str | bytes]
-            if isinstance(rpc_error, grpc.Call):
-                trailing_metadata = {
-                    m.key: m.value for m in rpc_error.trailing_metadata()  # type: ignore[attr-defined]
-                }
-            else:
-                assert isinstance(rpc_error, grpc.aio.AioRpcError)
-                trailing_metadata = rpc_error.trailing_metadata()  # type: ignore[assignment]
-
-            host = trailing_metadata["leader-endpoint-host"]
-            port = trailing_metadata["leader-endpoint-port"]
-            if isinstance(host, bytes):
-                host = host.decode("utf-8")  # pragma: no cover
-            if isinstance(port, bytes):
-                port = port.decode("utf-8")  # pragma: no cover
-            return f"{host}:{port}"
-        return None
 
 
 class NotFoundError(KurrentDBClientError):
@@ -127,6 +97,18 @@ class WrongCurrentVersionError(KurrentDBClientError):
     Raised when expected position does not match the
     stream position of the last event in a stream.
     """
+
+    def __init__(
+        self,
+        *args: Any,
+        stream_name: str | None = None,
+        current_version: int | None = None,
+        expected_version: int | None = None,
+    ) -> None:
+        self.stream_name = stream_name
+        self.current_version = current_version
+        self.expected_version = expected_version
+        super().__init__(*args)
 
 
 class AccessDeniedError(KurrentDBClientError):
@@ -182,6 +164,64 @@ class BadRequestError(KurrentDBClientError):
     """
 
 
+class InvalidArgumentError(KurrentDBClientError):
+    """
+    Raised when append operation fails with an "invalid argument" error.
+    """
+
+
+class RecordMaxSizeExceededError(InvalidArgumentError):
+    """
+    Raised when appending an event that is larger than
+    the maximum allowed event record size.
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        stream_name: str,
+        event_id: UUID,
+        size: int,
+        max_size: int,
+    ):
+        super().__init__(*args)
+        self.stream_name = stream_name
+        self.event_id = event_id
+        self.size = size
+        self.max_size = max_size
+
+
+class TransactionMaxSizeExceededError(AbortedByServerError):
+    """
+    Raised when appending events that together are larger
+    than the maximum allowed transaction size.
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        size: int,
+        max_size: int,
+    ):
+        super().__init__(*args)
+        self.size = size
+        self.max_size = max_size
+
+
+class MultiAppendToSameStreamError(AbortedByServerError):
+    """
+    Raised when appending more than one sequence of events to the same stream.
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        stream_name: str,
+    ):
+        super().__init__(*args)
+        self.stream_name = stream_name
+
+
 class DiscoveryFailedError(KurrentDBClientError):
     """
     Raised when client fails to satisfy node preference using gossip cluster info.
@@ -218,6 +258,56 @@ class ExceptionIteratingRequestsError(KurrentDBClientError):
 class FailedPreconditionError(KurrentDBClientError):
     """
     Raised when a "failed precondition" status error is encountered.
+    """
+
+
+class NodeIsNotLeaderError(FailedPreconditionError):
+    """
+    Raised when client attempts to write to a node that is not a leader.
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        host: str | None = None,
+        port: int | None = None,
+        node_id: str | None = None,
+    ) -> None:
+        self._host = host
+        self._port = port
+        self._node_id = node_id
+        super().__init__(*args)
+
+    @property
+    def host(self) -> str | None:
+        return self._host
+
+    @property
+    def port(self) -> int | None:
+        return self._port
+
+    @property
+    def node_id(self) -> str | None:
+        return self._node_id
+
+
+class StreamTombstonedError(FailedPreconditionError):
+    """
+    Raised when client attempts to write to a stream that has been tombstoned.
+    """
+
+    def __init__(self, *args: Any, stream_name: str) -> None:
+        self._stream_name = stream_name
+        super().__init__(*args)
+
+    @property
+    def stream_name(self) -> str | None:
+        return self._stream_name
+
+
+class UnauthenticatedError(KurrentDBClientError):
+    """
+    Raised when an "unauthenticated" status error is encountered.
     """
 
 

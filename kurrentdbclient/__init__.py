@@ -11,7 +11,9 @@ from kurrentdbclient.events import (
     ContentType,
     FellBehind,
     NewEvent,
+    NewEvents,
     RecordedEvent,
+    StreamState,
 )
 from kurrentdbclient.persistent import (
     AsyncPersistentSubscription,
@@ -22,7 +24,6 @@ from kurrentdbclient.streams import (
     AsyncReadResponse,
     CatchupSubscription,
     ReadResponse,
-    StreamState,
 )
 
 __version__ = "1.0.7"
@@ -42,6 +43,7 @@ __all__ = [
     "FellBehind",
     "KurrentDBClient",
     "NewEvent",
+    "NewEvents",
     "RecordedEvent",
     "ReadResponse",
     "StreamState",

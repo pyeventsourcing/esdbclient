@@ -22,8 +22,11 @@ from weakref import WeakValueDictionary
 
 import grpc
 import grpc.aio
+from grpc_status import rpc_status
 from typing_extensions import Self
 
+import kurrentdbclient.protos.kurrent.rpc.errors_pb2 as kurrent_rpc_errors_pb2
+import kurrentdbclient.protos.v2.streams.errors_pb2 as v2streams_errors_pb2
 from kurrentdbclient.events import RecordedEvent
 from kurrentdbclient.exceptions import (
     AbortedByServerError,
@@ -37,14 +40,21 @@ from kurrentdbclient.exceptions import (
     InternalError,
     KurrentDBClientError,
     MaximumSubscriptionsReachedError,
+    MultiAppendToSameStreamError,
     NodeIsNotLeaderError,
     NotFoundError,
     OperationFailedError,
+    RecordMaxSizeExceededError,
     ServiceUnavailableError,
     SSLError,
+    StreamTombstonedError,
+    TransactionMaxSizeExceededError,
+    UnauthenticatedError,
     UnknownError,
+    WrongCurrentVersionError,
 )
-from kurrentdbclient.protos.Grpc import persistent_pb2, streams_pb2
+from kurrentdbclient.protos.v1 import persistent_pb2, streams_pb2
+from kurrentdbclient.unpack_error_status import unpack_status_details
 
 # Avoid ares resolver.
 if "GRPC_DNS_RESOLVER" not in os.environ:
@@ -65,7 +75,6 @@ __all__ = [
     "KurrentDBService",
     "Metadata",
 ]
-
 
 PROTOBUF_MAX_DEADLINE_SECONDS = 315576000000
 DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER = 5
@@ -201,87 +210,167 @@ def handle_rpc_error(e: grpc.RpcError) -> KurrentDBClientError:  # noqa: PLR0911
     Converts gRPC errors to client exceptions.
     """
     if isinstance(e, (grpc.Call, grpc.aio.AioRpcError)):
+        details_str = e.details() or ""
+
+        rich_status = rpc_status.from_call(e)  # type: ignore[arg-type]
+        if rich_status is not None:
+            # Handle error by unpacking details messages.
+            status_msg = rpc_status.to_status(rich_status)
+            unpacked_details = unpack_status_details(rich_status)
+            for unpacked_detail in unpacked_details:
+                if status_msg.code == grpc.StatusCode.FAILED_PRECONDITION:
+                    if isinstance(
+                        unpacked_detail,
+                        kurrent_rpc_errors_pb2.NotLeaderNodeErrorDetails,
+                    ):
+                        node_info = unpacked_detail.current_leader
+                        return NodeIsNotLeaderError(
+                            rich_status.message,
+                            host=node_info.host,
+                            port=node_info.port,
+                            node_id=node_info.node_id,
+                        )
+                    if isinstance(
+                        unpacked_detail,
+                        v2streams_errors_pb2.StreamRevisionConflictErrorDetails,
+                    ):
+                        return WrongCurrentVersionError(
+                            rich_status.message.replace("revision", "version").replace(
+                                "actual", "current"
+                            ),
+                            stream_name=unpacked_detail.stream,
+                            current_version=unpacked_detail.actual_revision,
+                            expected_version=unpacked_detail.expected_revision,
+                        )
+                    if isinstance(
+                        unpacked_detail,
+                        v2streams_errors_pb2.StreamTombstonedErrorDetails,
+                    ):
+                        return StreamTombstonedError(
+                            rich_status.message, stream_name=unpacked_detail.stream
+                        )
+                if status_msg.code == grpc.StatusCode.INVALID_ARGUMENT:  # noqa: SIM102
+                    if isinstance(
+                        unpacked_detail,
+                        v2streams_errors_pb2.AppendRecordSizeExceededErrorDetails,
+                    ):
+                        return RecordMaxSizeExceededError(
+                            rich_status.message,
+                            stream_name=unpacked_detail.stream,
+                            event_id=UUID(unpacked_detail.record_id),
+                            size=unpacked_detail.size,
+                            max_size=unpacked_detail.max_size,
+                        )
+                if status_msg.code == grpc.StatusCode.ABORTED:
+                    if isinstance(
+                        unpacked_detail,
+                        v2streams_errors_pb2.AppendTransactionSizeExceededErrorDetails,
+                    ):
+                        return TransactionMaxSizeExceededError(
+                            rich_status.message,
+                            size=unpacked_detail.size,
+                            max_size=unpacked_detail.max_size,
+                        )
+                    if isinstance(
+                        unpacked_detail,
+                        v2streams_errors_pb2.StreamAlreadyInAppendSessionErrorDetails,
+                    ):
+                        return MultiAppendToSameStreamError(
+                            rich_status.message,
+                            stream_name=unpacked_detail.stream,
+                        )
+            return KurrentDBClientError(details_str)
+
         if e.code() == grpc.StatusCode.UNKNOWN:
-            details = e.details() or ""
-            if "Exception was thrown by handler" in details:
-                return ExceptionThrownByHandlerError(e)
+            if "Exception was thrown by handler" in details_str:
+                return ExceptionThrownByHandlerError(details_str)
             if (
                 "Envelope callback expected Updated, received Conflict instead"
-                in details
+                in details_str
             ):
                 # Projections.Create does this....
-                return AlreadyExistsError(e)
+                return AlreadyExistsError(details_str)
             if (
                 "Envelope callback expected Updated, received NotFound instead"
-                in details
+                in details_str
             ):
                 # Projections.Update and Projections.Delete does this in < v24.6
-                return NotFoundError(e)  # pragma: no cover
+                return NotFoundError(details_str)  # pragma: no cover
             if (
                 "Envelope callback expected Statistics, received NotFound instead"
-                in details
+                in details_str
             ):
                 # Projections.Statistics does this in < v24.6
-                return NotFoundError(e)  # pragma: no cover
+                return NotFoundError(details_str)  # pragma: no cover
             if (
                 "Envelope callback expected ProjectionState, received NotFound instead"
-                in details
+                in details_str
             ):
                 # Projections.State does this in < v24.6
-                return NotFoundError(e)  # pragma: no cover
+                return NotFoundError(details_str)  # pragma: no cover
             if (
                 "Envelope callback expected ProjectionResult, received NotFound instead"
-                in details
+                in details_str
             ):
                 # Projections.Result does this in < v24.6
-                return NotFoundError(e)  # pragma: no cover
+                return NotFoundError(details_str)  # pragma: no cover
             if (
                 "Envelope callback expected Updated, received OperationFailed instead"
-                in details
+                in details_str
             ):
                 # Projections.Delete does this....
-                return OperationFailedError(e)
-            return UnknownError(e)  # pragma: no cover
+                return OperationFailedError(details_str)
+            return UnknownError(details_str)  # pragma: no cover
 
         if e.code() == grpc.StatusCode.ABORTED:
-            details = e.details() or ""
-            if isinstance(details, str) and "Consumer too slow" in details:
-                return ConsumerTooSlowError()
-            return AbortedByServerError()
+            if "Consumer too slow" in details_str:
+                return ConsumerTooSlowError(details_str)
+            return AbortedByServerError(details_str)
         if (
             e.code() == grpc.StatusCode.CANCELLED
-            and e.details() == "Locally cancelled by application!"
+            and details_str == "Locally cancelled by application!"
         ):
-            return CancelledByClientError(e)
+            return CancelledByClientError(details_str)
         if e.code() == grpc.StatusCode.DEADLINE_EXCEEDED:
-            return GrpcDeadlineExceededError(e)
+            return GrpcDeadlineExceededError(details_str)
+        if e.code() == grpc.StatusCode.UNAUTHENTICATED:
+            return UnauthenticatedError(details_str)
         if e.code() == grpc.StatusCode.UNAVAILABLE:
-            details = e.details() or ""
-            if "SSL_ERROR" in details:
+            if "SSL_ERROR" in details_str:
                 # root_certificates is None and CA cert not installed
-                return SSLError(e)
-            if "empty address list" in details:
+                return SSLError(details_str)
+            if "empty address list" in details_str:
                 # given root_certificates is invalid
-                return SSLError(e)
-            return ServiceUnavailableError(details)
+                return SSLError(details_str)
+            return ServiceUnavailableError(details_str)
         if e.code() == grpc.StatusCode.ALREADY_EXISTS:
-            return AlreadyExistsError(e.details())
+            return AlreadyExistsError(details_str)
         if e.code() == grpc.StatusCode.NOT_FOUND:
-            if e.details() == "Leader info available":
-                return NodeIsNotLeaderError(e)
+            if details_str == "Leader info available":
+                trailing_metadata = {m[0]: m[1] for m in e.trailing_metadata()}  # type: ignore[index]
+                leader_host = trailing_metadata.get("leader-endpoint-host")
+                leader_port = trailing_metadata.get("leader-endpoint-port")
+                return NodeIsNotLeaderError(
+                    details_str,
+                    host=leader_host,
+                    port=(
+                        int(leader_port)
+                        if isinstance(leader_port, str) and leader_port.isdigit()
+                        else None
+                    ),
+                )
             return NotFoundError()
         if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
-            details = e.details() or ""
-            if details is not None and details.startswith(
+            if details_str is not None and details_str.startswith(
                 "Maximum subscriptions reached"
             ):
-                return MaximumSubscriptionsReachedError(details)
+                return MaximumSubscriptionsReachedError(details_str)
             # no cover: start
-            return FailedPreconditionError(details)
+            return FailedPreconditionError(details_str)
             # no cover: stop
         if e.code() == grpc.StatusCode.INTERNAL:  # pragma: no cover
-            return InternalError(e.details())
-    return GrpcError(e)
+            return InternalError(details_str)
+    return GrpcError(str(e))
 
 
 class KurrentDBService(Generic[TGrpcStreamers]):
@@ -546,3 +635,7 @@ class AbstractAsyncPersistentSubscription(AsyncRecordedEventSubscription):
         action: Literal["unknown", "park", "retry", "skip", "stop"],
     ) -> None:
         pass  # pragma: no cover
+
+
+def grpc_target(host: str, port: int | str) -> str:
+    return f"{host}:{port}"

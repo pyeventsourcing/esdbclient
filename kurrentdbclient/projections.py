@@ -15,7 +15,7 @@ from kurrentdbclient.common import (
     handle_rpc_error,
 )
 from kurrentdbclient.exceptions import KurrentDBClientError
-from kurrentdbclient.protos.Grpc import (
+from kurrentdbclient.protos.v1 import (
     projections_pb2,
     projections_pb2_grpc,
     shared_pb2,

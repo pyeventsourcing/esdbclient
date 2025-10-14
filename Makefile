@@ -14,17 +14,23 @@
 # KURRENTDB_DOCKER_IMAGE ?= docker.cloudsmith.io/eventstore/eventstore-ce/eventstoredb-oss:23.10.7-bookworm-slim
 
 # list tags for 24.10: https://docker.kurrent.io/v2/eventstore/eventstoredb-ee/tags/list
-# KURRENTDB_DOCKER_IMAGE ?= docker.cloudsmith.io/eventstore/eventstore/eventstoredb-ee:24.10.6-x64-8.0-bookworm-slim
 
+#KURRENTDB_DOCKER_IMAGE ?= kurrentplatform/kurrentdb:25.1.0-experimental-arm64-8.0-jammy
+
+# What's in the build matrix:
+
+KURRENTDB_DOCKER_IMAGE ?= docker.cloudsmith.io/eventstore/eventstore-ce/eventstoredb-oss:23.10.7-bookworm-slim
+#KURRENTDB_DOCKER_IMAGE ?= docker.cloudsmith.io/eventstore/eventstore/eventstoredb-ee:24.10.6-x64-8.0-bookworm-slim
 #KURRENTDB_DOCKER_IMAGE ?= docker.eventstore.com/kurrent-latest/kurrentdb:25.0.1-x64-8.0-bookworm-slim
-KURRENTDB_DOCKER_IMAGE ?= docker.cloudsmith.io/eventstore/kurrent-preview/kurrentdb:25.1.0-rc.1-x64-8.0-bookworm-slim
+#KURRENTDB_DOCKER_IMAGE ?= docker.kurrent.io/kurrent-latest/kurrentdb:25.1.0-x64-8.0-bookworm-slim
 
-
+NOCOVER_TAGS ?= v2
 
 PYTHONUNBUFFERED=1
+PYTHONPATH=./tests
 SAMPLES_LINE_LENGTH=70
 
-POETRY_VERSION=2.1.2
+POETRY_VERSION=2.2.1
 POETRY ?= poetry@$(POETRY_VERSION)
 
 .PHONY: install-poetry
@@ -95,8 +101,8 @@ lint-python: lint-black lint-ruff lint-isort lint-mypy
 
 .PHONY: test
 test:
-	@timeout --preserve-status --kill-after=10s 10m $(POETRY) run coverage run -m unittest discover ./tests -v
-	$(POETRY) run coverage report --fail-under=100 --show-missing
+	@timeout --preserve-status --kill-after=10s 10m $(POETRY) run python ./runtests.py
+#	$(POETRY) run coverage report
 
 # 	$(POETRY) run python -m pytest -v $(opts) $(call tests,.) & read -t 1 ||
 
@@ -124,14 +130,18 @@ grpc-stubs:
 	  --python_out=. \
 	  --grpc_python_out=. \
 	  --mypy_out=. \
-	  protos/kurrentdbclient/protos/Grpc/code.proto     \
-	  protos/kurrentdbclient/protos/Grpc/shared.proto   \
-	  protos/kurrentdbclient/protos/Grpc/status.proto   \
-	  protos/kurrentdbclient/protos/Grpc/streams.proto  \
-	  protos/kurrentdbclient/protos/Grpc/persistent.proto \
-	  protos/kurrentdbclient/protos/Grpc/gossip.proto \
-	  protos/kurrentdbclient/protos/Grpc/cluster.proto \
-	  protos/kurrentdbclient/protos/Grpc/projections.proto
+	  protos/kurrentdbclient/protos/google/rpc/code.proto     \
+	  protos/kurrentdbclient/protos/kurrent/rpc/errors.proto     \
+	  protos/kurrentdbclient/protos/kurrent/rpc/rpc.proto     \
+	  protos/kurrentdbclient/protos/v1/shared.proto   \
+	  protos/kurrentdbclient/protos/v1/status.proto   \
+	  protos/kurrentdbclient/protos/v1/streams.proto  \
+	  protos/kurrentdbclient/protos/v1/persistent.proto \
+	  protos/kurrentdbclient/protos/v1/gossip.proto \
+	  protos/kurrentdbclient/protos/v1/cluster.proto \
+	  protos/kurrentdbclient/protos/v1/projections.proto \
+	  protos/kurrentdbclient/protos/v2/streams/errors.proto \
+	  protos/kurrentdbclient/protos/v2/streams/streams.proto
 
 .PHONY: start-kurrentdb-insecure
 start-kurrentdb-insecure:

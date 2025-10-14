@@ -59,7 +59,7 @@ from kurrentdbclient.exceptions import (
     ProgrammingError,
     SubscriptionConfirmationError,
 )
-from kurrentdbclient.protos.Grpc import persistent_pb2, persistent_pb2_grpc, shared_pb2
+from kurrentdbclient.protos.v1 import persistent_pb2, persistent_pb2_grpc, shared_pb2
 
 if TYPE_CHECKING:
     from kurrentdbclient.connection_spec import ConnectionSpec

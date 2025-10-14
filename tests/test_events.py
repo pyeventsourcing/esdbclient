@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 from google.protobuf import timestamp_pb2
 
 from kurrentdbclient import CaughtUp, Checkpoint, FellBehind, NewEvent, RecordedEvent
-from kurrentdbclient.protos.Grpc import streams_pb2 as grpc_streams
+from kurrentdbclient.protos.v1 import streams_pb2 as grpc_streams
 from kurrentdbclient.streams import BaseReadResponse
 from tests.test_client import random_data
 
