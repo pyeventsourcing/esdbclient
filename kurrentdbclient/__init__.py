@@ -26,7 +26,7 @@ from kurrentdbclient.streams import (
     ReadResponse,
 )
 
-__version__ = "1.0.7"
+__version__ = "1.1a1"
 
 __all__ = [
     "DEFAULT_EXCLUDE_FILTER",
