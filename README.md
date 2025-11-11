@@ -1054,7 +1054,7 @@ the `metadata` field of `NewEvent` objects: the value of `metadata` must either 
 is an empty `bytes` string, `b'{"a": "1"}'` is a JSON object with `str` values. These values of `metadata` are
 not okay: `b'\xf5d\xc5W3^b\xb0(\xf9\x01D\x81\xa7Y\x98'` is a random `bytes` string, `b'"abcdef"'` is a JSON string,
 `b'{"a": 1}'` is a JSON object with an integer value, `b'{"a": false}'` is a JSON object with an boolean value,
-b'{"a": {}}', b'{"a": {}}' is a JSON object with a JSON object value. Using values that are not okay will result
+`b'{"a": {}}', b'{"a": {}}'` is a JSON object with a JSON object value. Using values that are not okay will result
 in a `kurrentdbclient.exceptions.ProgrammingError` being raised.
 
 The `current_version` field of `NewEvents` specifies optimistic concurrent control, and is either a Python `int`
