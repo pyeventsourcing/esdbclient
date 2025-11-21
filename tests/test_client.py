@@ -1877,6 +1877,26 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             if event.stream_name.startswith("$"):
                 break
 
+    # def test_read_all_filter_by_system_stream(self) -> None:
+    #     # This was a response to Tony's query about filtering for secondary indexes.
+    #     if self.KDB_CLUSTER_SIZE > 1 or self.KDB_TLS is not True:
+    #         self.skipTest("This test doesn't work with this configuration")
+    #
+    #     self.construct_esdb_client()
+    #
+    #     # Read all events.
+    #     read_response = self.client.read_all(
+    #         filter_by_stream_name=True, filter_include=r"\$\$\$scavenges"
+    #     )
+    #     # read_response = self.client.get_stream("$$$scavenges")
+    #
+    #     for event in read_response:
+    #         print(event)
+    #         if event.stream_name.startswith("$"):
+    #             break
+    #     else:
+    #         self.fail("Didn't get an event")
+
     def test_read_all_resolve_links(self) -> None:
         if self.KDB_CLUSTER_SIZE > 1 or self.KDB_TLS is not True:
             self.skipTest("This test doesn't work with this configuration")
