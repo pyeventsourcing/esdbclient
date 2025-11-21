@@ -4,15 +4,45 @@ order: 2
 
 # Appending events
 
+::: info Requirements
+Requires leader node.
+:::
+
 When you start working with KurrentDB, your application streams are empty. The first meaningful operation is to add one or more events to the database using this API.
 
 ::: tip
 Check the [Getting Started](getting-started.md) guide to learn how to configure and use the client SDK.
 :::
 
+
 ## Append your first event
 
 The simplest way to append an event to KurrentDB is to create a `NewEvent` object and call the `append_to_stream()` method.
+
+The `append_to_stream()` method takes a sequence of new event objects that can contain JSON or binary data, which allows you to save more than one event in a single batch.
+
+### Parameters
+
+- `stream_name` (`str`): The target stream to which the contained iterable of
+  events will be appended.
+- `events` (`Iterable[NewEvent]`): The events to append to the indicated stream.
+- `current_version` (`int | StreamState`): Expected version for optimistic
+  concurrency. Use an integer for the expected last recorded event position, or
+  a `StreamState` value:
+  - `StreamState.NO_STREAM` — stream must not exist or must have been deleted
+  - `StreamState.ANY` — disables concurrency checks
+  - `StreamState.EXISTS` — requires the stream to already have at least one event
+- `timeout` (optional): Python `float` that sets a maximum duration, in seconds,
+  for the completion of the gRPC operation.
+- `credentials` (optional): Call credentials that override credentials derived
+  from the connection string URI.
+
+### Return value
+
+On success, `append_to_stream()` returns the commit position (`int`) of the
+last event.
+
+### Example
 
 ```python
 import uuid
@@ -33,19 +63,17 @@ commit_position = client.append_to_stream(
 )
 ```
 
-The `append_to_stream()` method takes a sequence of new event objects that can contain JSON or binary data, which allows you to save more than one event in a single batch.
- 
-Outside the example above, other options exist for dealing with different scenarios. 
-
 ::: tip
 If you are new to Event Sourcing, please study the [Handling concurrency](#handling-concurrency) section below.
 :::
 
 ## Working with NewEvent
 
-Events appended to KurrentDB must be wrapped in a `NewEvent` object. This allows you to specify the event's content, the type of event, and whether it's in JSON format. In its simplest form, you need two required arguments: **type** and **data**, and three optional arguments: **metadata**, **content_type**, and **id**.
+Events appended to KurrentDB via the Python client must be instances of `NewEvent`.
 
-### EventID
+The `NewEvent` dataclass allows you to specify the event's content, the type of event, and whether it's in JSON format. In its simplest form, you need two required arguments: **type** and **data**. There are also three optional arguments: **metadata**, **content_type**, and **id**.
+
+### Event ID
 
 This takes the format of a `UUID` and is used to uniquely identify the event you are trying to append. If two events with the same `UUID` are appended to the same stream in quick succession, KurrentDB will only append one of the events to the stream. 
 
@@ -78,21 +106,21 @@ client.append_to_stream(
 )
 ```
 
-### EventType
+### Event type
 
 Each event should be supplied with an event type. This unique string is used to identify the type of event you are saving. 
 
 It is common to see the explicit event code type name used as the type as it makes serialising and de-serialising of the event easy. However, we recommend against this as it couples the storage to the type and will make it more difficult if you need to version the event at a later date.
 
-### Data
+### Event data
 
 Representation of your event data. It is recommended that you store your events as JSON objects. This allows you to take advantage of all of KurrentDB's functionality, such as projections. That said, you can save events using whatever format suits your workflow. Eventually, the data will be stored as encoded bytes.
 
-### Metadata
+### Event metadata
 
 Storing additional information alongside your event that is not part of the event itself is standard practice. This can be correlation IDs, timestamps, access information, etc. KurrentDB allows you to store a separate byte array containing this information to keep it separate.
 
-### ContentType
+### Event content type
 
 The content type indicates whether the event is stored as JSON or binary format. You can choose between `'application/json'` (default) and `'application/octet-stream'` when creating your `NewEvent` object. 
 
@@ -202,3 +230,108 @@ commit_position = client.append_to_stream(
     credentials=credentials
 )
 ```
+
+## Multi-stream append
+
+::: info Requirements
+Supported by KurrentDB 25.1 and later.
+:::
+
+The `KurrentDBClient` method `multi_append_to_stream()` records many sequences
+of new events, each sequence being appended to a different stream. The operation
+is atomic across all sequences provided.
+
+Use the multi-stream append operation when you want to atomically append new
+events to multiple streams in one call. Either all the provided sequences of
+events are written, or none of them are.
+
+### Parameters
+
+- `events` (required): A single `NewEvents` instance or an iterable of
+  `NewEvents` instances.
+- `timeout` (optional): Python `float` that sets a maximum duration, in seconds,
+  for the completion of the gRPC operation.
+- `credentials` (optional): Call credentials that override credentials derived
+  from the connection string URI.
+
+If the operation succeeds, the method returns the commit position of the last
+event in the last sequence.
+
+### Return value
+
+On success, `multi_append_to_stream()` returns the commit position (`int`) of the
+last event in the last provided sequence.
+
+### NewEvents
+
+Import the `NewEvents` dataclass from `kurrentdbclient`. It has three fields
+that mirror the arguments of `append_to_stream()`:
+
+- `stream_name` (`str`): The target stream to which the contained iterable of
+  events will be appended.
+- `events` (`Iterable[NewEvent]`): The events to append to the indicated stream.
+- `current_version` (`int | StreamState`): Expected version for optimistic
+  concurrency. Use an integer for the expected last recorded event position, or
+  a `StreamState` value:
+  - `StreamState.NO_STREAM` — stream must not exist or must have been deleted
+  - `StreamState.ANY` — disables concurrency checks
+  - `StreamState.EXISTS` — requires the stream to already have at least one event
+
+### Example
+
+```python
+import uuid
+from kurrentdbclient import (
+    KurrentDBClient,
+    NewEvent,
+    NewEvents,
+    StreamState,
+)
+
+# Assuming you have an existing client
+# client = KurrentDBClient(uri="kurrentdb://admin:changeit@localhost:2113?tls=false")
+
+new_events1 = NewEvents(
+    stream_name=str(uuid.uuid4()),
+    events=[
+        NewEvent(type='EventType1', data=b'{}'),
+        NewEvent(type='EventType2', data=b'{}'),
+    ],
+    current_version=StreamState.NO_STREAM,
+)
+
+new_events2 = NewEvents(
+    stream_name=str(uuid.uuid4()),
+    events=[
+        NewEvent(type='EventType3', data=b'{}'),
+        NewEvent(type='EventType4', data=b'{}'),
+    ],
+    current_version=StreamState.NO_STREAM,
+)
+
+commit_position = client.multi_append_to_stream(
+    events=[new_events1, new_events2],
+    # timeout=5.0,              # optional
+    # credentials=credentials,  # optional
+)
+
+print("Committed at:", commit_position)
+```
+
+### Metadata restrictions for multi-append
+
+When appending events with `multi_append_to_stream()`, the `metadata` field of
+each `NewEvent` must be either an empty `bytes` string or a `bytes` string
+containing a JSON object whose values are strings.
+
+The following metadata values are OK:
+- `b""` (empty bytes)
+- `b'{"a": "1"}'` (JSON object with string values)
+
+The following metadata values are NOT OK and will result in a
+`kurrentdbclient.exceptions.ProgrammingError`:
+- Random bytes like `b'\xf5d\xc5W3^b\xb0(\xf9\x01D\x81\xa7Y\x98'`
+- A JSON string like `b'"abcdef"'`
+- JSON object with non-string values, e.g. `b'{"a": 1}'`, `b'{"a": false}'`,
+  or nested objects like `b'{"a": {}}'`
+
