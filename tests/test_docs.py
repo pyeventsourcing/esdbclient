@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ast
+import asyncio
 import contextlib
 import os
 import ssl
@@ -7,6 +9,7 @@ from pathlib import Path
 
 # from tempfile import NamedTemporaryFile
 from unittest import TestCase
+from uuid import uuid4
 
 from tests.test_client import SERVER_VERSION
 
@@ -44,14 +47,37 @@ class TestDocs(TestCase):
             self.fail(f"README file not found: {path}")
         self.check_code_snippets_in_file(path)
 
-    def check_code_snippets_in_file(self, doc_path: Path) -> None:
+    def test_vuepress_docs(self) -> None:
+        docs_path = BASE_DIR / "docs" / "api"
+        docs_paths = list(docs_path.glob("**/*"))
+        for doc_path in docs_paths:
+            if "getting-started" in doc_path.name:
+                print()
+                print("Test vuepress docs sync code examples in", doc_path.name)
+                print()
+                self.check_code_snippets_in_file(doc_path, sync_only=True)
+                print()
+                print("Test vuepress docs async code examples in", doc_path.name)
+                print()
+                self.check_code_snippets_in_file(doc_path, async_only=True)
+            else:
+                continue
+
+    def check_code_snippets_in_file(
+        self, doc_path: Path, *, sync_only: bool = False, async_only: bool = False
+    ) -> None:
         # Extract lines of Python code from the README.md file.
+
+        replacements = {"orders:123": f"orders:123-{uuid4()}"}
 
         print_block_line_numbers = True
         lines = ["import sys"] if print_block_line_numbers else []
         num_code_lines = 0
         num_code_lines_in_block = 0
         is_code = False
+        is_tabs = False
+        is_sync_tab = False
+        is_async_tab = False
         is_md = False
         is_rst = False
         is_ignoring_remainder_of_code_in_block = False
@@ -60,7 +86,9 @@ class TestDocs(TestCase):
         with doc_path.open() as doc_file:
             for line_index, orig_line in enumerate(doc_file, start=-len(lines)):
                 line = orig_line.strip("\n")
-                if line.startswith("```python"):
+                if line.startswith("```python") and not (
+                    (sync_only and is_async_tab) or (async_only and is_sync_tab)
+                ):
                     # Start markdown code block.
                     if is_rst:
                         self.fail(
@@ -149,12 +177,34 @@ class TestDocs(TestCase):
                         num_code_lines_in_block += 1
                         num_code_lines += 1
 
+                elif line.startswith("::: tabs"):
+                    is_tabs = True
+                    line = ""
+
+                elif is_tabs and line.startswith(":::"):
+                    is_tabs = False
+                    is_sync_tab = False
+                    is_async_tab = False
+                    line = ""
+
+                elif is_tabs and line.startswith("@tab sync"):
+                    is_sync_tab = True
+                    is_async_tab = False
+                    line = ""
+
+                elif is_tabs and line.startswith("@tab async"):
+                    is_sync_tab = False
+                    is_async_tab = True
+                    line = ""
+
                 else:
                     line = ""
 
                 if "get_server_certificate" in line:
                     line = line.replace("2113", "2114")
 
+                # if "Block on line" not in line.strip() and line.strip():
+                #     print(line)
                 lines.append(line)
                 last_line = orig_line
 
@@ -170,14 +220,26 @@ class TestDocs(TestCase):
 
         source = "\n".join(lines) + "\n"
 
+        for replacement in replacements.items():
+            source = source.replace(replacement[0], replacement[1])
+
         # # Write the code into a temp file.
         # tempfile = NamedTemporaryFile("w+")
         # tempfile.writelines(source)
         # tempfile.flush()
 
-        exec(  # noqa: S102
-            compile(source=source, filename=doc_path, mode="exec"), globals(), globals()
+        result = eval(  # noqa: S307, PGH001
+            compile(
+                source=source,
+                filename=doc_path,
+                mode="exec",
+                flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT,
+            ),
+            globals(),
+            globals(),
         )
+        if asyncio.iscoroutine(result):
+            asyncio.run(result)
 
         # print(Path.cwd())
         # print("\n".join(lines) + "\n")
