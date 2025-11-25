@@ -4,135 +4,288 @@ order: 1
 
 # Getting started
 
-This guide will help you get started with KurrentDB in your Java application.
+This guide will help you get started with the Python client for KurrentDB.
 It covers the basic steps to connect to KurrentDB, create events, append them
 to streams, and read them back.
 
-## Required packages
+## Install package
 
-Add the following package to your virtual environment:
+Add the `kurrentdbclient` package to your Python project:
+
+
+::: tabs
+@tab uv
+```bash:no-line-numbers
+uv add "kurrentdbclient~=1.1"
+```
+@tab poetry
+```bash:no-line-numbers
+poetry add "kurrentdbclient~=1.1"
+```
+@tab pipenv
+```bash:no-line-numbers
+pipenv install "kurrentdbclient~=1.1"
+```
+@tab pip
+```bash:no-line-numbers
+pip install "kurrentdbclient~=1.1" && pip freeze > requirements.txt
+```
+:::
+
+Once the Python package has been installed, you can import one of the Python client classes for KurrentDB.
+
+## Import class
+
+The Python package `kurrentdbclient` provides two client classes for KurrentDB.
+
+* `KurrentDBClient` provides a **blocking** interface, and is suitable for standard sequential code and multi-threaded applications.
+
+* `AsyncKurrentDBClient` provides an **asynchronous** interface, and is suitable for high-concurrency applications using Python’s native `asyncio` framework.
+
+Both can be imported from the `kurrentdbclient` package.
+
+::: tabs
+@tab sync
+```python:no-line-numbers
+from kurrentdbclient import KurrentDBClient
+```
+@tab async
+```python:no-line-numbers
+from kurrentdbclient import AsyncKurrentDBClient
+```
+:::
+
+The client classes can be constructed with a KurrentDB connection string.
+
+## Connection strings
+
+KurrentDB clients use **connection strings** to configure their connection to KurrentDB.
+KurrentDB connection strings are standardized across all the official KurrentDB clients.
+
+:::info
+When connecting to a production database, ask your server administrator for a valid connection string.
+:::
+
+### Two protocols
+
+KurrentDB connection strings support two protocols.
+
+* **`kurrentdb://`** for **connecting directly** to specific KurrentDB server endpoints.
+
+* **`kurrentdb+discover://`** for connecting using cluster discovery **via DNS A records**.
+
+With the `kurrentdb://` protocol you can specify one or many endpoints, separated by commas. If you specify only one
+endpoint, the client will **connect directly and remain with it**. If you specify
+many endpoints, the client will use them to query for cluster information and **pick an endpoint from the
+obtained cluster information** for continuing operations, according to the node preference specified by the connection
+string - see options below. This process will be repeated if the client detects that it needs
+to reconnect to the cluster. An "endpoint" can be a specified either as a host name or an
+IP address, with a port number.
+
+With the `kurrentdb+discover://` protocol you should specify a fully-qualified domain name of a KurrentDB cluster,
+with an optional port number. Using the cluster's **DNS A records**, the client will query for cluster information
+and pick an endpoint from the cluster information for continuing operations, according to the node preference
+specified by the connection string - see options below. This process will be repeated if the client detects that
+it needs to reconnect to the cluster.
+
+### User info string
+
+Both the `kurrentdb://` and `kurrentdb+discover://` protocols support an optional user info string.
+If it exists, the user info string must be separated from the rest of the URI
+with the `"@"` character. The user info string must include a username and a password,
+separated with the `":"` character.
+
+The user info is sent by the client in a "basic auth" authorization header in each gRPC
+call to a "secure" server. This authorization header is used by the server to authenticate
+the client. The Python client does not allow call credentials to be transferred to
+"insecure" servers (option `tls=false`).
+
+### Examples
+
+In the examples below, `user` is a username and `pass` is a password.
+
+For connecting directly to a single node, use the following format:
+
+```:no-line-numbers
+kurrentdb://user:pass@node1.example.com:2113
+```
+
+For connecting to a cluster, using specific endpoints to obtain cluster information, whilst observing your node
+preference for continuing operations, use the following format:
+
+```:no-line-numbers
+kurrentdb://user:pass@node1.example.com:2113,node2.example.com:2113,node3.example.com:2113
+```
+
+For connecting to a cluster, where `cluster1.example.com` is configured with DNS A records for the cluster endpoints,
+whilst observing your node preference for continuing operations, use the following format:
+
+```:no-line-numbers
+kurrentdb+discover://user:pass@cluster1.example.com:2113
+```
+
+### Options
+
+The table below describes optional query parameters that can be used in the connection string to configure the client.
+
+| Parameter             | Accepted values                                   | Default     | Description                                                                                                                |
+|-----------------------|---------------------------------------------------|-------------|----------------------------------------------------------------------------------------------------------------------------|
+| `tls`                 | `true`, `false`                                   | `true`      | Set to `false` when connecting to KurrentDB running with "insecure" mode.                                                  |
+| `connectionName`      | Any string                                        | Random UUID | Connection name                                                                                                            |
+| `maxDiscoverAttempts` | Integer                                           | `10`        | Number of attempts to discover the cluster.                                                                                |
+| `discoveryInterval`   | Integer                                           | `100`       | Cluster discovery polling interval in milliseconds.                                                                        |
+| `gossipTimeout`       | Integer                                           | `5`         | Gossip timeout in seconds, when the gossip call times out, it will be retried.                                             |
+| `nodePreference`      | `leader`, `follower`, `random`, `readOnlyReplica` | `leader`    | Preferred node role. When creating a client for write operations, always use `leader`.                                     |
+| `tlsVerifyCert`       | `true`, `false`                                   | `true`      | *Not supported*                                                                                                            |
+| `tlsCaFile`           | File system path                                  | None        | Path to the CA file when connecting to a secure cluster with a certificate that's not signed by a trusted CA.              |
+| `defaultDeadline`     | Integer                                           | None        | Default timeout for client operations, in seconds. Can be overridden per operation using the `deadline` method parameters. |
+| `keepAliveInterval`   | Integer                                           | None        | Interval between keep-alive ping calls, in milliseconds.                                                                   |
+| `keepAliveTimeout`    | Integer                                           | None        | Keep-alive ping call timeout, in milliseconds.                                                                             |
+| `userCertFile`        | File system path                                  | None        | User certificate file for X.509 authentication.                                                                            |
+| `userKeyFile`         | File system path                                  | None        | Key file for the user certificate used for X.509 authentication.                                                           |
+
+:::tip
+Please note, all option field names and values are case-insensitive.
+:::
+
+## Start KurrentDB
+
+For local development, you can run KurrentDB in "insecure" mode with Docker.
 
 ```bash
-pip install kurrentdbclient
+export KURRENTDB_IMAGE=docker.kurrent.io/kurrent-latest/kurrentdb:latest
+docker run --rm -p 2113:2113 $KURRENTDB_IMAGE --insecure
 ```
 
-## Connecting to KurrentDB
+In this case, use the following client connection string.
 
-To connect your application to KurrentDB, you need to configure and create a client instance.
+```python:no-line-numbers
+uri = "kurrentdb://127.0.0.1:2113?tls=false"
+```
 
-::: tip Insecure clusters
-The recommended way to connect to KurrentDB is using secure mode (which is
-the default). However, if your KurrentDB instance is running in insecure
-mode, you must explicitly set `tls=false` in your connection string or client configuration.
+Please refer to the KurrentDB documentation for more information about running KurrentDB.
+
+## Connect to KurrentDB
+
+To connect to KurrentDB, construct a client class with a connection string. After connecting, you can use
+the client methods of `client` to perform operations on KurrentDB.
+
+The example below connects to a KurrentDB server running locally in "insecure" mode.
+
+::: tabs
+@tab sync
+```python
+uri = "kurrentdb://127.0.0.1:2113?tls=false"
+client = KurrentDBClient(uri)
+# immediately connected to KurrentDB
+```
+@tab async
+```python
+uri = "kurrentdb://127.0.0.1:2113?tls=false"
+client = AsyncKurrentDBClient(uri)
+await client.connect()  # connect to KurrentDB
+```
 :::
 
-KurrentDB uses connection strings to configure the client connection. The connection string supports two protocols:
-
-- **`kurrentdb://`** - for connecting directly to specific node endpoints (single node or multi-node cluster with explicit endpoints)
-- **`kurrentdb+discover://`** - for connecting using cluster discovery via DNS or gossip endpoints
-
-When using `kurrentdb://`, you specify the exact endpoints to connect to. The client will connect directly to these endpoints. For multi-node clusters, you can specify multiple endpoints separated by commas, and the client will query each node's Gossip API to get cluster information, then picks a node based on the URI's node preference.
-
-With `kurrentdb+discover://`, the client uses cluster discovery to find available nodes. This is particularly useful when you have a DNS A record pointing to cluster nodes or when you want the client to automatically discover the cluster topology.
-
-::: info Gossip support
-Since EventStoreDB 22.10, the database supports gossip on single-node deployments, so
-`kurrentdb+discover://` can be used for any topology, including single-node setups.
+:::tip
+With `AsyncKurrentDBClient` you must `await` a call to its `connect()` method after constructing the client.
 :::
 
-For cluster connections using discovery, use the following format:
+:::tip
+The sync and async client classes have identical methods, except the methods of `AsyncKurrentDBClient` are
+defined with `async def` and so must be `await`-ed when called. 
+:::
 
+## Test the connection
+
+You can test the connection by getting the database "commit position", which is the
+position in the database of the last recorded event.
+
+You can get the "commit position" by calling the client method `get_commit_position()`.
+
+::: tabs
+@tab sync
+```python
+client.get_commit_position()
 ```
-kurrentdb+discover://admin:changeit@cluster.dns.name:2113
+@tab async
+```python
+await client.get_commit_position()
 ```
+:::
 
-Where `cluster.dns.name` is a DNS `A` record that points to all cluster nodes.
+If you have just started KurrentDB for the first time, the returned value will be zero, `0`, which
+indicates that no events have been recorded.
 
-For direct connections to specific endpoints, you can specify individual nodes:
+:::caution
+If the connection fails, check KurrentDB is running locally in "insecure" mode (see above).
+:::
 
-```
-kurrentdb://admin:changeit@node1.dns.name:2113,node2.dns.name:2113,node3.dns.name:2113
-```
 
-Or for a single node:
 
-```
-kurrentdb://admin:changeit@localhost:2113
-```
+## Writing to KurrentDB
 
-There are a number of query parameters that can be used in the connection string to instruct the cluster how and where the connection should be established. All query parameters are optional.
+KurrentDB is an event store database. So let's get started by appending an event!
 
-| Parameter             | Accepted values                                   | Default  | Description                                                                                                                                    |
-|-----------------------|---------------------------------------------------|----------|------------------------------------------------------------------------------------------------------------------------------------------------|
-| `tls`                 | `true`, `false`                                   | `true`   | Use secure connection, set to `false` when connecting to a non-secure server or cluster.                                                       |
-| `connectionName`      | Any string                                        | None     | Connection name                                                                                                                                |
-| `maxDiscoverAttempts` | Number                                            | `10`     | Number of attempts to discover the cluster.                                                                                                    |
-| `discoveryInterval`   | Number                                            | `100`    | Cluster discovery polling interval in milliseconds.                                                                                            |
-| `gossipTimeout`       | Number                                            | `5`      | Gossip timeout in seconds, when the gossip call times out, it will be retried.                                                                 |
-| `nodePreference`      | `leader`, `follower`, `random`, `readOnlyReplica` | `leader` | Preferred node role. When creating a client for write operations, always use `leader`.                                                         |
-| `tlsVerifyCert`       | `true`, `false`                                   | `true`   | In secure mode, set to `true` when using an untrusted connection to the node if you don't have the CA file available. Don't use in production. |
-| `tlsCaFile`           | String, file path                                 | None     | Path to the CA file when connecting to a secure cluster with a certificate that's not signed by a trusted CA.                                  |
-| `defaultDeadline`     | Number                                            | None     | Default timeout for client operations, in milliseconds. Most clients allow overriding the deadline per operation.                              |
-| `keepAliveInterval`   | Number                                            | `10`     | Interval between keep-alive ping calls, in seconds.                                                                                            |
-| `keepAliveTimeout`    | Number                                            | `10`     | Keep-alive ping call timeout, in seconds.                                                                                                      |
-| `userCertFile`        | String, file path                                 | None     | User certificate file for X.509 authentication.                                                                                                |
-| `userKeyFile`         | String, file path                                 | None     | Key file for the user certificate used for X.509 authentication.                                                                               |
+The client method `append_to_stream()` writes new events in KurrentDB.
 
-When connecting to an insecure instance, specify `tls=false` parameter. For example, for a node running locally use `kurrentdb://localhost:2113?tls=false`. Note that usernames and passwords aren't provided there because insecure deployments don't support authentication and authorisation.
+The example below appends the first new event of stream `"orders:123"`.
 
-## Creating a client
-
-First, create a client and get it connected to the database.
-
-```py
-client = KurrentDBClient(uri="kurrentdb://admin:changeit@localhost:2113?tls=false")
-```
-
-The client instance can be used as a singleton across the whole application. It doesn't need to open or close the connection.
-
-## Creating an event
-
-This package defines a `NewEvent` class and a `RecordedEvent` class. The `NewEvent`
-class should be used when writing events to the database. The `RecordedEvent`
-class is used when reading events from the database.
-
-```py
-new_event = NewEvent(
-    type='OrderCreated',
-    data=b'{"name": "Greg"}',
-)
-```
-
-## Appending events
-
-Each event in the database has its own unique identifier (UUID). The database uses it to ensure idempotent writes, but it only works if you specify the stream revision when appending events to the stream.
-
-In the snippet below, we append the event to the stream `orders`.
-
-```py
-import uuid
+::: tabs
+@tab sync
+```python
 from kurrentdbclient import NewEvent, StreamState
 
-# Define a new stream name.
-stream_name = str(uuid.uuid4())
-
-# Append the new events to the new stream.
-commit_position = client.append_to_stream(
-    stream_name=stream_name,
+client.append_to_stream(
+    stream_name="orders:123",
+    events=[
+        NewEvent(type="OrderCreated", data=b'{"name": "Greg"}'),
+    ],
     current_version=StreamState.NO_STREAM,
-    events=[event1],
-)
-
-```
-
-Here we are appending events without checking if the stream exists or if the stream version matches the expected event version. See more advanced scenarios in [appending events documentation](./appending-events.md).
-
-## Reading events
-
-Finally, we can read events back from the stream.
-
-```py
-events = client.get_stream(
-    stream_name=stream_name
 )
 ```
+@tab async
+```python
+from kurrentdbclient import NewEvent, StreamState
+
+await client.append_to_stream(
+    stream_name="orders:123",
+    events=[
+        NewEvent(type="OrderCreated", data=b'{"name": "Greg"}'),
+    ],
+    current_version=StreamState.NO_STREAM,
+)
+```
+:::
+
+The `stream_name` parameter identifies the "stream" to which events will be appended.
+
+The `events` parameter is a list of `NewEvent` objects. The `NewEvent` class is a Python `dataclass`. 
+
+The `current_version` parameter activates optimistic concurrent control. The `StreamState.NO_STREAM`
+argument indicates we require the stream has no previously recorded events.
+
+See [Appending events](./appending-events.md) for more information about writing to KurrentDB.
+
+## Reading from KurrentDB
+
+The client method `read_stream()` returns an iterator of events that have been recorded in KurrentDB.
+
+The example below reads and prints the events of stream `"orders:123"`.
+
+::: tabs
+@tab sync
+```python
+for event in client.read_stream("orders:123"):
+    print(event)
+```
+@tab async
+```python
+async for event in await client.read_stream("orders:123"):
+    print(event)
+```
+:::
+
+The first parameter is used to identify the stream. In the example above, the given argument is `"orders:123"`.
+
+See [Reading events](./appending-events.md) for more information about reading from KurrentDB.
