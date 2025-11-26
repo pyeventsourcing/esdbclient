@@ -229,7 +229,7 @@ KurrentDB is an event store database. So let's get started by appending an event
 
 The client method `append_to_stream()` writes new events in KurrentDB.
 
-The example below appends the first new event of stream `"orders:123"`.
+The example below appends the first new event of stream `"order:123"`.
 
 ::: tabs
 @tab sync
@@ -237,7 +237,7 @@ The example below appends the first new event of stream `"orders:123"`.
 from kurrentdbclient import NewEvent, StreamState
 
 client.append_to_stream(
-    stream_name="orders:123",
+    stream_name="order:123",
     events=[
         NewEvent(type="OrderCreated", data=b'{"name": "Greg"}'),
     ],
@@ -249,7 +249,7 @@ client.append_to_stream(
 from kurrentdbclient import NewEvent, StreamState
 
 await client.append_to_stream(
-    stream_name="orders:123",
+    stream_name="order:123",
     events=[
         NewEvent(type="OrderCreated", data=b'{"name": "Greg"}'),
     ],
@@ -271,21 +271,21 @@ See [Appending events](./appending-events.md) for more information about writing
 
 The client method `read_stream()` returns an iterator of events that have been recorded in KurrentDB.
 
-The example below reads and prints the events of stream `"orders:123"`.
+The example below reads and prints the events of stream `"order:123"`.
 
 ::: tabs
 @tab sync
 ```python
-for event in client.read_stream("orders:123"):
+for event in client.read_stream("order:123"):
     print(event)
 ```
 @tab async
 ```python
-async for event in await client.read_stream("orders:123"):
+async for event in await client.read_stream("order:123"):
     print(event)
 ```
 :::
 
-The first parameter is used to identify the stream. In the example above, the given argument is `"orders:123"`.
+The first parameter is used to identify the stream. In the example above, the given argument is `"order:123"`.
 
 See [Reading events](./appending-events.md) for more information about reading from KurrentDB.

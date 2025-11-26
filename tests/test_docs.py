@@ -51,7 +51,10 @@ class TestDocs(TestCase):
         docs_path = BASE_DIR / "docs" / "api"
         docs_paths = list(docs_path.glob("**/*"))
         for doc_path in docs_paths:
-            if "getting-started" in doc_path.name:
+            if (
+                "getting-started" in doc_path.name
+                or "appending-events" in doc_path.name
+            ):
                 print()
                 print("Test vuepress docs sync code examples in", doc_path.name)
                 print()
@@ -68,7 +71,10 @@ class TestDocs(TestCase):
     ) -> None:
         # Extract lines of Python code from the README.md file.
 
-        replacements = {"orders:123": f"orders:123-{uuid4()}"}
+        replacements = {
+            "order:123": f"order:123-{uuid4()}",
+            "order:456": f"order:456-{uuid4()}",
+        }
 
         print_block_line_numbers = True
         lines = ["import sys"] if print_block_line_numbers else []
