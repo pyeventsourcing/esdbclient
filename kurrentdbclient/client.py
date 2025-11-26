@@ -529,8 +529,8 @@ class KurrentDBClient(BaseKurrentDBClient):
         /,
         stream_name: str,
         *,
-        current_version: int | StreamState,
         events: NewEvent | Iterable[NewEvent],
+        current_version: int | StreamState,
         timeout: float | None = None,
         credentials: grpc.CallCredentials | None = None,
     ) -> int:
