@@ -20,11 +20,10 @@ Events in KurrentDB are organized in "streams". You can use the `append_to_strea
 new events to a stream in KurrentDB. 
 
 ::: info What is a stream?
-A stream is a sequence of recorded events, each with a unique integer position. A stream has a name,
-which is used to uniquely identify the stream in KurrentDB. The positions of events in a stream
-are gapless.
+A stream in KurrentDB is a sequence of recorded events, each with a unique integer position. Each stream has
+a unique name. The positions of events in a stream are gapless.
 
-Stream positions in KurrentDB are "zero-based". This the first event in a stream has position `0`, the
+Stream positions in KurrentDB are "zero-based". The first event in a stream has position `0`, the
 second event has position `1`, the third has position `2`, and so on.
 :::
 
@@ -52,7 +51,7 @@ Please study the [Optimistic concurrency control](#optimistic-concurrency-contro
 :::
 
 The `append_to_stream()` method is idempotent. If you call `append_to_stream()` twice with the same event IDs and
-the same `expected_version` then the second call will succeed idempotently without creating duplicate events.
+the same `current_version` then the second call will succeed idempotently without creating duplicate events.
 
 ### Parameters
 
@@ -132,13 +131,13 @@ also specify the content type, metadata, and a unique ID.
 
 ### Fields
 
-| Name         | Type    | Required | Default              | Description               |
-|--------------|---------|----------|----------------------|---------------------------|
-| type         | `str`   | Yes      |                      | The type of the event     |
-| data         | `bytes` | Yes      |                      | The content of the event  |
-| metadata     | `bytes` | No       | `b""`                | Event metadata            |
-| content_type | `str`   | No       | `"application/json"` | The format of the content |
-| id           | `UUID`  | No       | `uuid.uuid4()`       | A unique ID for the event |
+| Name           | Type    | Required | Default              | Description               |
+|----------------|---------|----------|----------------------|---------------------------|
+| `type`         | `str`   | Yes      |                      | The type of the event     |
+| `data`         | `bytes` | Yes      |                      | The content of the event  |
+| `metadata`     | `bytes` | No       | `b""`                | Event metadata            |
+| `content_type` | `str`   | No       | `"application/json"` | The format of the content |
+| `id`           | `UUID`  | No       | `uuid.uuid4()`       | A unique ID for the event |
 
 
 ### Event type
@@ -344,7 +343,7 @@ Sometime an append operation can succeed in KurrentDB, but the response can fail
 due to a network failure. For this reason, under certain conditions, KurrentDB allows requests to succeed
 idempotently.
 
-If you call `append_to_stream()` twice with the same event IDs and the same `expected_version` then the second
+If you call `append_to_stream()` twice with the same event IDs and the same `current_version` then the second
 call will succeed idempotently.
 
 The examples below shows the last operations succeeding idempotently.
