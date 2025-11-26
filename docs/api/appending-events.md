@@ -14,6 +14,11 @@ There are two client methods for writing events to KurrentDB.
 
 Let's explore what KurrentDB can do in more detail.
 
+::: info Requires leader
+If you are using a KurrentDB cluster, please note, events can be appended only to leader nodes.
+:::
+
+
 ## Append to stream
 
 Events in KurrentDB are organized in "streams". You can use the `append_to_stream()` method to append
@@ -26,11 +31,6 @@ a unique name. The positions of events in a stream are gapless.
 Stream positions in KurrentDB are "zero-based". The first event in a stream has position `0`, the
 second event has position `1`, the third has position `2`, and so on.
 :::
-
-::: info Requires leader
-Appending events in KurrentDB requires a connection to a leader node.
-:::
-
 
 
 ### Description
@@ -339,18 +339,20 @@ else:
 
 ## Idempotent append
 
-Sometime an append operation can succeed in KurrentDB, but the response can fail to reach the client, perhaps
-due to a network failure. For this reason, under certain conditions, KurrentDB allows requests to succeed
-idempotently.
+Under certain conditions, KurrentDB allows append requests to succeed idempotently. Sometimes an
+append operation can succeed in KurrentDB, but the response can fail to reach the client, perhaps
+due to a network failure.
 
-If you call `append_to_stream()` twice with the same event IDs and the same `current_version` then the second
-call will succeed idempotently.
+If you call `append_to_stream()` twice with the same event IDs and the same `current_version` then
+the second call will succeed idempotently.
 
-The examples below shows the last operations succeeding idempotently.
+The examples below show the operations in the previous examples succeeding idempotently.
 
 ::: tabs
 @tab sync
 ```python:no-line-numbers
+assert 2 == client.get_current_version("order:123")
+
 client.append_to_stream(
     stream_name="order:123",
     current_version=StreamState.NO_STREAM,
@@ -373,6 +375,8 @@ assert 2 == client.get_current_version("order:123")
 ```
 @tab async
 ```python:no-line-numbers
+assert 2 == await client.get_current_version("order:123")
+
 await client.append_to_stream(
     stream_name="order:123",
     current_version=StreamState.NO_STREAM,
@@ -395,13 +399,12 @@ assert 2 == await client.get_current_version("order:123")
 ```
 :::
 
-This does provide for retries of apparently failed operations, that were actually successful, to apparently
-succeed, when in fact they have already succeeded, and without this provision would fail when retried.
+The idempotent append behavior means that retries of apparently failed operations, that were actually successful,
+will be apparently successful without actually having any further effect.
 
-This feature can be understood as a kind of "forgiveness" that avoid KurrentDB failing operations that have
-previously succeeded. In that sense, it avoids clients needing to probe to see if an apparently failed request
-actually succeeded. But it also avoids recording duplicate events when optimistic concurrency controls are
-partially or fully disabled.
+The idempotent append behavior can be understood as a kind of "forgiveness" for optimistic concurrency control failures,
+without which clients would need to probe the database to discover if an apparently failed request actually succeeded.
+But it also avoids recording duplicate events when optimistic concurrency controls are partially or fully disabled.
 
 The examples below show `append_to_stream()` being called with `event1`, `event2`, and `event3` whilst optimistic
 concurrency controls have been either fully or partially disabled, and that the stream has not changed.
@@ -459,8 +462,9 @@ time when disabling concurrency controls, or by specifying correctly the positio
 
 ## User credentials
 
-You can use the `credentials` parameter of `append_to_stream()` to override the credentials given with the user
-info part of a client connection string.
+You can use the `credentials` parameter of `append_to_stream()` to override the credentials given with the [user
+info](./getting-started.md#user-info-string) part of a client connection string. The helper method
+`construct_call_credentials()` constructs a `grpc.CallCredentials` object from a username and password.
 
 ::: tabs
 @tab sync

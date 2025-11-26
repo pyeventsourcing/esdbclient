@@ -128,21 +128,20 @@ kurrentdb+discover://user:pass@cluster1.example.com:2113
 
 The table below describes optional query parameters that can be used in the connection string to configure the client.
 
-| Parameter             | Accepted values                                   | Default     | Description                                                                                                                |
-|-----------------------|---------------------------------------------------|-------------|----------------------------------------------------------------------------------------------------------------------------|
-| `tls`                 | `true`, `false`                                   | `true`      | Set to `false` when connecting to KurrentDB running with "insecure" mode.                                                  |
-| `connectionName`      | Any string                                        | Random UUID | Connection name                                                                                                            |
-| `maxDiscoverAttempts` | Integer                                           | `10`        | Number of attempts to discover the cluster.                                                                                |
-| `discoveryInterval`   | Integer                                           | `100`       | Cluster discovery polling interval in milliseconds.                                                                        |
-| `gossipTimeout`       | Integer                                           | `5`         | Gossip timeout in seconds, when the gossip call times out, it will be retried.                                             |
-| `nodePreference`      | `leader`, `follower`, `random`, `readOnlyReplica` | `leader`    | Preferred node role. When creating a client for write operations, always use `leader`.                                     |
-| `tlsVerifyCert`       | `true`, `false`                                   | `true`      | *Not supported*                                                                                                            |
-| `tlsCaFile`           | File system path                                  | None        | Path to the CA file when connecting to a secure cluster with a certificate that's not signed by a trusted CA.              |
-| `defaultDeadline`     | Integer                                           | None        | Default timeout for client operations, in seconds. Can be overridden per operation using the `deadline` method parameters. |
-| `keepAliveInterval`   | Integer                                           | None        | Interval between keep-alive ping calls, in milliseconds.                                                                   |
-| `keepAliveTimeout`    | Integer                                           | None        | Keep-alive ping call timeout, in milliseconds.                                                                             |
-| `userCertFile`        | File system path                                  | None        | User certificate file for X.509 authentication.                                                                            |
-| `userKeyFile`         | File system path                                  | None        | Key file for the user certificate used for X.509 authentication.                                                           |
+| Parameter             | Accepted values                                   | Default     | Description                                                                                                                                         |
+|-----------------------|---------------------------------------------------|-------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
+| `tls`                 | `true`, `false`                                   | `true`      | Set to `false` when connecting to KurrentDB running with "insecure" mode.                                                                           |
+| `connectionName`      | Any string                                        | Random UUID | Connection name                                                                                                                                     |
+| `maxDiscoverAttempts` | Integer                                           | `10`        | Number of attempts to discover the cluster.                                                                                                         |
+| `discoveryInterval`   | Integer                                           | `100`       | Cluster discovery polling interval in milliseconds.                                                                                                 |
+| `gossipTimeout`       | Integer                                           | `5`         | Gossip timeout in seconds, when the gossip call times out, it will be retried.                                                                      |
+| `nodePreference`      | `leader`, `follower`, `random`, `readOnlyReplica` | `leader`    | Preferred node role. When creating a client for write operations, always use `leader`.                                                              |
+| `tlsCaFile`           | File system path                                  | None        | Path to the CA file when connecting to a secure cluster with a certificate that's not signed by a trusted CA.                                       |
+| `defaultDeadline`     | Integer                                           | None        | Maximum duration, in seconds, for completion of client operations. Can be overridden per operation using the `timeout` parameter of client methods. |
+| `keepAliveInterval`   | Integer                                           | None        | Interval between keep-alive ping calls, in milliseconds.                                                                                            |
+| `keepAliveTimeout`    | Integer                                           | None        | Keep-alive ping call timeout, in milliseconds.                                                                                                      |
+| `userCertFile`        | File system path                                  | None        | User certificate file for X.509 authentication.                                                                                                     |
+| `userKeyFile`         | File system path                                  | None        | Key file for the user certificate used for X.509 authentication.                                                                                    |
 
 :::tip
 Please note, all option field names and values are case-insensitive.
@@ -157,18 +156,16 @@ export KURRENTDB_IMAGE=docker.kurrent.io/kurrent-latest/kurrentdb:latest
 docker run --rm -p 2113:2113 $KURRENTDB_IMAGE --insecure
 ```
 
-In this case, use the following client connection string.
+Then use connection string `kurrentdb://127.0.0.1:2113?tls=false` when connecting to KurrentDB.
 
-```python:no-line-numbers
-uri = "kurrentdb://127.0.0.1:2113?tls=false"
-```
-
-Please refer to the KurrentDB documentation for more information about running KurrentDB.
 
 ## Connect to KurrentDB
 
-To connect to KurrentDB, construct a client class with a connection string. After connecting, you can use
-the client methods of `client` to perform operations on KurrentDB.
+Construct a client with a connection string.
+
+::: warning
+If you are using the async client, you will need also to call the async `connect()` method.
+:::
 
 The example below connects to a KurrentDB server running locally in "insecure" mode.
 
@@ -188,11 +185,7 @@ await client.connect()  # connect to KurrentDB
 :::
 
 :::tip
-With `AsyncKurrentDBClient` you must `await` a call to its `connect()` method after constructing the client.
-:::
-
-:::tip
-The sync and async client classes have identical methods, except the methods of `AsyncKurrentDBClient` are
+The sync and async client classes have identical methods, except the methods of the async client are
 defined with `async def` and so must be `await`-ed when called. 
 :::
 
