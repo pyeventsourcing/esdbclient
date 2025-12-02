@@ -489,15 +489,15 @@ class KurrentDBClient(BaseKurrentDBClient):
         self,
         stream_name: str,
         *,
-        current_version: int | StreamState,
         events: Iterable[NewEvent],
+        current_version: int | StreamState,
         timeout: float | None = None,
         credentials: grpc.CallCredentials | None = None,
     ) -> int:
         return self.append_to_stream(
             stream_name=stream_name,
-            current_version=current_version,
             events=events,
+            current_version=current_version,
             timeout=timeout,
             credentials=credentials,
         )
@@ -506,8 +506,8 @@ class KurrentDBClient(BaseKurrentDBClient):
         self,
         stream_name: str,
         *,
-        current_version: int | StreamState,
         event: NewEvent,
+        current_version: int | StreamState,
         timeout: float | None = None,
         credentials: grpc.CallCredentials | None = None,
     ) -> int:
@@ -516,8 +516,8 @@ class KurrentDBClient(BaseKurrentDBClient):
         """
         return self.append_to_stream(
             stream_name=stream_name,
-            current_version=current_version,
             events=event,
+            current_version=current_version,
             timeout=timeout,
             credentials=credentials,
         )

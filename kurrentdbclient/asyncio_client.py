@@ -253,15 +253,15 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         self,
         stream_name: str,
         *,
-        current_version: int | StreamState,
         events: Iterable[NewEvent],
+        current_version: int | StreamState,
         timeout: float | None = None,
         credentials: grpc.CallCredentials | None = None,
     ) -> int:
         return await self.append_to_stream(
             stream_name=stream_name,
-            current_version=current_version,
             events=events,
+            current_version=current_version,
             timeout=timeout,
             credentials=credentials,
         )
