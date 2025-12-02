@@ -517,6 +517,7 @@ class AsyncPersistentSubscription(
                 ):  # pragma: no cover
                     raise SubscriptionConfirmationError
                 self._subscription_id = subscription_id
+                self._read_reqs.subscription_id = subscription_id.encode()
             else:  # pragma: no cover
                 msg = f"Expected subscription confirmation, got: {first_read_resp}"
                 raise KurrentDBClientError(msg)
