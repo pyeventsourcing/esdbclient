@@ -54,6 +54,7 @@ class TestDocs(TestCase):
             if (
                 "getting-started" in doc_path.name
                 or "appending-events" in doc_path.name
+                or "reading-events" in doc_path.name
             ):
                 print()
                 print("Test vuepress docs sync code examples in", doc_path.name)

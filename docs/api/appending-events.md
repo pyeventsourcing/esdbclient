@@ -4,15 +4,16 @@ order: 2
 
 # Appending events
 
-KurrentDB is an append-only event store database. The [Getting started](./getting-started.md#writing-to-kurrentdb) page 
-introduced the topic of writing to KurrentDB.
+KurrentDB is an append-only event store database. Events in KurrentDB are
+organized within individual streams.
 
 There are two client methods for writing events to KurrentDB.
 
 * [`append_to_stream()`](#append-to-stream)
 * [`multi_append_to_stream()`](#multi-append-to-stream)
 
-Let's explore what KurrentDB can do in more detail.
+The [Getting started](./getting-started.md#writing-to-kurrentdb) page  introduced the topic of writing to
+KurrentDB. Let's explore what KurrentDB can do in more detail.
 
 ::: info Requires leader
 If you are using a KurrentDB cluster, please note, events can be appended only to leader nodes.
@@ -55,13 +56,13 @@ the same `current_version` then the second call will succeed idempotently withou
 
 ### Parameters
 
-| Name              | Type                   | Required | Default | Description                                                    |
-|-------------------|------------------------|----------|---------|----------------------------------------------------------------|
-| `stream_name`     | `str`                  | Yes      |         | Stream to which new events will be appended.                   |
-| `events`          | `Iterable[NewEvent]`   | Yes      |         | Events to append to the stream.                                |
-| `current_version` | `int \| StreamState`   | Yes      |         | Activate or deactivate optimistic concurrent control.          |                                                                               
-| `timeout`         | `float`                | No       | None    | Maximum duration, in seconds, for completion of the operation. |                                                                         
-| `credentials`     | `grpc.CallCredentials` | No       | None    | Override credentials derived from the connection string.       |                                                                         
+| Name              | Type                 | Required | Default  | Description                                                    |
+|-------------------|----------------------|----------|----------|----------------------------------------------------------------|
+| `stream_name`     | `str`                | Yes      |          | Stream to which new events will be appended.                   |
+| `events`          | `Iterable[NewEvent]` | Yes      |          | Events to append to the stream.                                |
+| `current_version` | `int \| StreamState` | Yes      |          | Activate or deactivate optimistic concurrent control.          |                                                                               
+| `timeout`         | `float`              | No       | `None`   | Maximum duration, in seconds, for completion of the operation. |                                                                         
+| `credentials`     | `CallCredentials`    | No       | `None`   | Override credentials derived from the connection string.       |                                                                         
 
 ### Return value
 
@@ -529,11 +530,11 @@ The `multi_append_to_stream()` method is also idempotent.
 
 ### Parameters
 
-| Name              | Type                   | Required | Default | Description                                                    |
-|-------------------|------------------------|----------|---------|----------------------------------------------------------------|
-| `events`          | `Iterable[NewEvents]`  | Yes      |         | Events to append to the stream.                                |
-| `timeout`         | `float`                | No       | None    | Maximum duration, in seconds, for completion of the operation. |                                                                         
-| `credentials`     | `grpc.CallCredentials` | No       | None    | Override credentials derived from the connection string.       |                                                                         
+| Name              | Type                  | Required | Default | Description                                                    |
+|-------------------|-----------------------|----------|---------|----------------------------------------------------------------|
+| `events`          | `Iterable[NewEvents]` | Yes      |         | Events to append to the stream.                                |
+| `timeout`         | `float`               | No       | `None`  | Maximum duration, in seconds, for completion of the operation. |                                                                         
+| `credentials`     | `CallCredentials`     | No       | `None`  | Override credentials derived from the connection string.       |                                                                         
 
 
 ### Return value
