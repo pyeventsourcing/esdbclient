@@ -2473,6 +2473,62 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             pass
         self.assertTrue(cast(AsyncPersistentSubscription, s)._is_stopped)
 
+    async def test_persistent_subscription_sets_subscription_id_on_read_reqs(
+        self,
+    ) -> None:
+        """Test that AsyncPersistentSubscription.init() sets subscription_id on _read_reqs.
+
+        This is a regression test for issue #35 where ACK messages were sent with
+        an empty subscription_id field because _read_reqs.subscription_id was not
+        being set in the async version (it was only set in the sync version).
+        """
+        group_name = str(uuid4())
+        await self.client.create_subscription_to_all(group_name, from_end=True)
+
+        subscription = await self.client.read_subscription_to_all(group_name)
+        sub = cast(AsyncPersistentSubscription, subscription)
+
+        # Verify subscription_id property is set correctly
+        expected_subscription_id = f"$all::{group_name}"
+        self.assertEqual(sub.subscription_id, expected_subscription_id)
+
+        # Verify _read_reqs.subscription_id is also set (this was the bug fix)
+        self.assertEqual(
+            sub._read_reqs.subscription_id,
+            expected_subscription_id.encode(),
+        )
+
+        await subscription.stop()
+
+    async def test_persistent_subscription_to_stream_sets_subscription_id_on_read_reqs(
+        self,
+    ) -> None:
+        """Test that AsyncPersistentSubscription.init() sets subscription_id for streams.
+
+        This is a regression test for issue #35 where ACK messages were sent with
+        an empty subscription_id field.
+        """
+        group_name = str(uuid4())
+        stream_name = str(uuid4())
+        await self.client.create_subscription_to_stream(group_name, stream_name)
+
+        subscription = await self.client.read_subscription_to_stream(
+            group_name, stream_name
+        )
+        sub = cast(AsyncPersistentSubscription, subscription)
+
+        # Verify subscription_id property is set correctly
+        expected_subscription_id = f"{stream_name}::{group_name}"
+        self.assertEqual(sub.subscription_id, expected_subscription_id)
+
+        # Verify _read_reqs.subscription_id is also set (this was the bug fix)
+        self.assertEqual(
+            sub._read_reqs.subscription_id,
+            expected_subscription_id.encode(),
+        )
+
+        await subscription.stop()
+
     # async def test_subscribe_to_all_raises_discovery_failed(self) -> None:
     #     await self.client._connection.close()
     #     # Reconstruct connection with wrong port (to inspire ServiceUnavailble).
