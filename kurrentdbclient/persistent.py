@@ -161,6 +161,7 @@ class BaseSubscriptionReadReqs:
                     action=grpc_action,
                 )
             )
+        # print("Sending batch of n/acks to server:", read_req)
         return read_req
 
     def _update_last_ack_batch_time(self) -> None:
@@ -394,6 +395,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                         if len(batch_ids):
                             assert batch_action is not None
                             self._update_last_ack_batch_time()
+                            # print("Sending n/ack batch after queue poisoned")
                             return self._construct_ack_or_nack_read_req(
                                 subscription_id=self.subscription_id,
                                 event_ids=batch_ids,
@@ -410,6 +412,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                             # Action changed, hold this ack and send the batch.
                             self._ack_held = (event_id, action)
                             self._update_last_ack_batch_time()
+                            # print("Sending n/ack batch after action change")
                             return self._construct_ack_or_nack_read_req(
                                 subscription_id=self.subscription_id,
                                 event_ids=batch_ids,
@@ -422,6 +425,7 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                         # Send the batch if full.
                         if len(batch_ids) >= self._max_ack_batch_size:
                             self._update_last_ack_batch_time()
+                            # print("Sending fully filled n/ack batch")
                             return self._construct_ack_or_nack_read_req(
                                 subscription_id=self.subscription_id,
                                 event_ids=batch_ids,
@@ -431,6 +435,9 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                     self._update_last_ack_batch_time()  # positive next get_timeout
                     # Send a non-empty batch at least every "max ack delay".
                     if len(batch_ids) > 0:
+                        # print(
+                        #     "Sending non-empty n/ack batch after ack delay timeout"
+                        # )
                         assert batch_action is not None
                         return self._construct_ack_or_nack_read_req(
                             subscription_id=self.subscription_id,
@@ -517,6 +524,8 @@ class AsyncPersistentSubscription(
                 ):  # pragma: no cover
                     raise SubscriptionConfirmationError
                 self._subscription_id = subscription_id
+                self._read_reqs.subscription_id = subscription_id.encode()
+
             else:  # pragma: no cover
                 msg = f"Expected subscription confirmation, got: {first_read_resp}"
                 raise KurrentDBClientError(msg)

@@ -9,7 +9,7 @@ from collections import Counter
 from tempfile import NamedTemporaryFile
 from threading import Thread
 from time import sleep
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 from unittest import TestCase, skip, skipIf
 from uuid import UUID, uuid4
 
@@ -118,6 +118,15 @@ elif "25.1" in KURRENTDB_DOCKER_IMAGE:
 else:
     msg = "Couldn't extract server version from KURRENTDB_DOCKER_IMAGE"
     raise ValueError(msg)
+
+T = TypeVar("T")
+
+
+class MyCounter(Counter[T]):
+    """TODO: Remove this when dropping support for Python 3.9"""
+
+    def total(self) -> int:
+        return sum(self.values())
 
 
 # os.environ["GRPC_VERBOSITY"] = "debug"
@@ -4416,6 +4425,183 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.client.read_subscription_to_all(group_name=group_name1)
         subscription1.stop()
         subscription2.stop()
+
+    def test_subscription_to_all_event_not_redelivered_after_ack(self) -> None:
+        # This test was added to ensure that acks are effective, which requires
+        # acks are send with the received subscriber_id. This wasn't being done
+        # in the async client, as reported by Bruno van de Werve in:
+        # https://github.com/pyeventsourcing/kurrentdbclient/issues/35
+
+        self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name1 = f"my-subscription-{uuid4().hex}"
+        stream_name1 = str(uuid4())
+        max_retry_count = 3
+        self.client.create_subscription_to_all(
+            group_name=group_name1,
+            from_end=True,
+            message_timeout=1,
+            max_retry_count=max_retry_count,
+        )
+        print("Created persistent subscription")
+
+        # Start consumer.
+        subscription1 = self.client.read_subscription_to_all(group_name=group_name1)
+        print("Started persistent subscription consumer #1")
+
+        # Append some events.
+        num_appended_events = 1
+        events = [
+            NewEvent(type="SomethingHappened", data=random_data(), metadata=b"{}")
+            for _ in range(num_appended_events)
+        ]
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=events,
+        )
+        for new_event in events:
+            print("Appended event:", new_event.id)
+        appended_event_ids = {e.id for e in events}
+
+        print("Consuming appended events...")
+        acked_event_ids = set[UUID]()
+        with subscription1:
+            while len(acked_event_ids) < num_appended_events:
+                event = next(subscription1)
+                if event.id not in appended_event_ids:
+                    continue  # Ignore any other events (shouldn't get here)
+                print("Received event:", event.id)
+                if event.id in acked_event_ids:
+                    self.fail(f"Acked event was redelivered: {event.id}")
+                subscription1.ack(event)
+                print("Acked event:", event.id)
+                acked_event_ids.add(event.id)
+
+        print("Stopped persistent subscription consumer #1")
+
+        # Append some more events.
+        events = [
+            NewEvent(type="SomethingHappened", data=random_data(), metadata=b"{}")
+            for _ in range(num_appended_events)
+        ]
+        self.client.append_events(
+            stream_name1,
+            current_version=num_appended_events - 1,
+            events=events,
+        )
+        for new_event in events:
+            print("Appended event:", new_event.id)
+
+        # Start another consumer.
+        subscription2 = self.client.read_subscription_to_all(group_name=group_name1)
+        print("Started persistent subscription consumer #2")
+        unacked_events_received = MyCounter[UUID]()
+        with subscription2:
+            while (
+                unacked_events_received.total() < max_retry_count * num_appended_events
+            ):
+                event = next(subscription2)
+                if event.id in acked_event_ids:
+                    self.fail("Acked event was redelivered")
+                print("Received event:", event.id)
+                unacked_events_received.update([event.id])
+        print("Stopped persistent subscription consumer #2")
+        print("None of the acked events was redelivered")
+
+    def test_subscription_to_stream_event_not_redelivered_after_ack(
+        self,
+    ) -> None:
+        # This test was added to ensure that acks are effective, which requires
+        # acks are send with the received subscriber_id. This wasn't being done
+        # in the async client, as reported by Bruno van de Werve in:
+        # https://github.com/pyeventsourcing/kurrentdbclient/issues/35
+
+        self.construct_esdb_client()
+
+        # Create persistent subscription.
+        group_name1 = f"my-subscription-{uuid4().hex}"
+        stream_name1 = str(uuid4())
+        max_retry_count = 3
+        self.client.create_subscription_to_stream(
+            group_name=group_name1,
+            stream_name=stream_name1,
+            from_end=True,
+            message_timeout=1,
+            max_retry_count=max_retry_count,
+        )
+        print("Created persistent subscription")
+
+        # Start consumer.
+        subscription1 = self.client.read_subscription_to_stream(
+            group_name=group_name1,
+            stream_name=stream_name1,
+        )
+        print("Started persistent subscription consumer #1")
+
+        # Append some events.
+        num_appended_events = 1
+        events = [
+            NewEvent(type="SomethingHappened", data=random_data(), metadata=b"{}")
+            for _ in range(num_appended_events)
+        ]
+        self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=events,
+        )
+        for new_event in events:
+            print("Appended event:", new_event.id)
+        appended_event_ids = {e.id for e in events}
+
+        print("Consuming appended events...")
+        acked_event_ids = set[UUID]()
+        with subscription1:
+            while len(acked_event_ids) < num_appended_events:
+                event = next(subscription1)
+                if event.id not in appended_event_ids:
+                    continue  # Ignore any other events (shouldn't get here)
+                print("Received event:", event.id)
+                if event.id in acked_event_ids:
+                    self.fail(f"Acked event was redelivered: {event.id}")
+                subscription1.ack(event)
+                print("Acked event:", event.id)
+                acked_event_ids.add(event.id)
+
+        print("Stopped persistent subscription consumer #1")
+
+        # Append some more events.
+        events = [
+            NewEvent(type="SomethingHappened", data=random_data(), metadata=b"{}")
+            for _ in range(num_appended_events)
+        ]
+        self.client.append_events(
+            stream_name1,
+            current_version=num_appended_events - 1,
+            events=events,
+        )
+        for new_event in events:
+            print("Appended event:", new_event.id)
+
+        # Start another consumer.
+        subscription2 = self.client.read_subscription_to_stream(
+            group_name=group_name1,
+            stream_name=stream_name1,
+        )
+        print("Started persistent subscription consumer #2")
+        unacked_events_received = MyCounter[UUID]()
+        with subscription2:
+            while (
+                unacked_events_received.total() < max_retry_count * num_appended_events
+            ):
+                event = next(subscription2)
+                if event.id in acked_event_ids:
+                    self.fail("Acked event was redelivered")
+                print("Received event:", event.id)
+                unacked_events_received.update([event.id])
+        print("Stopped persistent subscription consumer #2")
+        print("None of the acked events was redelivered")
 
     def test_subscription_get_info(self) -> None:
         self.construct_esdb_client()

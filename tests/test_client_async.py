@@ -7,7 +7,7 @@ import os
 from tempfile import NamedTemporaryFile
 from typing import cast
 from unittest import IsolatedAsyncioTestCase, skip, skipIf
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from kurrentdbclient import (
     AsyncPersistentSubscription,
@@ -56,6 +56,7 @@ from tests.test_client import (
     KURRENTDB_DOCKER_IMAGE,
     PROJECTION_QUERY_TEMPLATE1,
     SERVER_VERSION,
+    MyCounter,
     TimedTestCase,
     get_ca_certificate,
     get_server_certificate,
@@ -2483,6 +2484,183 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
     #
     #     await self.client.subscribe_to_all()
     #     # with self.assertRaises(ServiceUnavailable):
+
+    async def test_subscription_to_all_event_not_redelivered_after_ack(self) -> None:
+        # This test was added to ensure that acks are effective, which requires
+        # acks are send with the received subscriber_id. This wasn't being done
+        # in the async client, as reported by Bruno van de Werve in:
+        # https://github.com/pyeventsourcing/kurrentdbclient/issues/35
+
+        # Create persistent subscription.
+        group_name1 = f"my-subscription-{uuid4().hex}"
+        stream_name1 = str(uuid4())
+        max_retry_count = 3
+        await self.client.create_subscription_to_all(
+            group_name=group_name1,
+            from_end=True,
+            message_timeout=1,
+            max_retry_count=max_retry_count,
+        )
+        print("Created persistent subscription")
+
+        # Start consumer.
+        subscription1 = await self.client.read_subscription_to_all(
+            group_name=group_name1
+        )
+        print("Started persistent subscription consumer #1")
+
+        # Append some events.
+        num_appended_events = 1
+        events = [
+            NewEvent(type="SomethingHappened", data=random_data(), metadata=b"{}")
+            for _ in range(num_appended_events)
+        ]
+        await self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=events,
+        )
+        for new_event in events:
+            print("Appended event:", new_event.id)
+        appended_event_ids = {e.id for e in events}
+
+        print("Consuming appended events...")
+        acked_event_ids = set[UUID]()
+        async with subscription1:
+            while len(acked_event_ids) < num_appended_events:
+                event = await subscription1.__anext__()
+                if event.id not in appended_event_ids:
+                    continue  # Ignore any other events (shouldn't get here)
+                print("Received event:", event.id)
+                if event.id in acked_event_ids:
+                    self.fail(f"Acked event was redelivered: {event.id}")
+                await subscription1.ack(event)
+                print("Acked event:", event.id)
+                acked_event_ids.add(event.id)
+
+        print("Stopped persistent subscription consumer #1")
+
+        # Append some more events.
+        events = [
+            NewEvent(type="SomethingHappened", data=random_data(), metadata=b"{}")
+            for _ in range(num_appended_events)
+        ]
+        await self.client.append_events(
+            stream_name1,
+            current_version=num_appended_events - 1,
+            events=events,
+        )
+        for new_event in events:
+            print("Appended event:", new_event.id)
+
+        # Start another consumer.
+        subscription2 = await self.client.read_subscription_to_all(
+            group_name=group_name1
+        )
+        print("Started persistent subscription consumer #2")
+        unacked_events_received = MyCounter[UUID]()
+        async with subscription2:
+            while (
+                unacked_events_received.total() < max_retry_count * num_appended_events
+            ):
+                event = await subscription2.__anext__()
+                if event.id in acked_event_ids:
+                    self.fail("Acked event was redelivered")
+                print("Received event:", event.id)
+                unacked_events_received.update([event.id])
+        print("Stopped persistent subscription consumer #2")
+        print("None of the acked events was redelivered")
+
+    async def test_subscription_to_stream_event_not_redelivered_after_ack(
+        self,
+    ) -> None:
+        # This test was added to ensure that acks are effective, which requires
+        # acks are send with the received subscriber_id. This wasn't being done
+        # in the async client, as reported by Bruno van de Werve in:
+        # https://github.com/pyeventsourcing/kurrentdbclient/issues/35
+
+        # Create persistent subscription.
+        group_name1 = f"my-subscription-{uuid4().hex}"
+        stream_name1 = str(uuid4())
+        max_retry_count = 3
+        await self.client.create_subscription_to_stream(
+            group_name=group_name1,
+            stream_name=stream_name1,
+            from_end=True,
+            message_timeout=1,
+            max_retry_count=max_retry_count,
+        )
+        print("Created persistent subscription")
+
+        # Start consumer.
+        subscription1 = await self.client.read_subscription_to_stream(
+            group_name=group_name1,
+            stream_name=stream_name1,
+        )
+        print("Started persistent subscription consumer #1")
+
+        # Append some events.
+        num_appended_events = 1
+        events = [
+            NewEvent(type="SomethingHappened", data=random_data(), metadata=b"{}")
+            for _ in range(num_appended_events)
+        ]
+        await self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=events,
+        )
+        for new_event in events:
+            print("Appended event:", new_event.id)
+        appended_event_ids = {e.id for e in events}
+
+        print("Consuming appended events...")
+        acked_event_ids = set[UUID]()
+        async with subscription1:
+            while len(acked_event_ids) < num_appended_events:
+                event = await subscription1.__anext__()
+                if event.id not in appended_event_ids:
+                    continue  # Ignore any other events (shouldn't get here)
+                print("Received event:", event.id)
+                if event.id in acked_event_ids:
+                    self.fail(f"Acked event was redelivered: {event.id}")
+                await subscription1.ack(event)
+                print("Acked event:", event.id)
+                acked_event_ids.add(event.id)
+
+        print("Stopped persistent subscription consumer #1")
+
+        # Append some more events.
+        events = [
+            NewEvent(type="SomethingHappened", data=random_data(), metadata=b"{}")
+            for _ in range(num_appended_events)
+        ]
+        await self.client.append_events(
+            stream_name1,
+            current_version=num_appended_events - 1,
+            events=events,
+        )
+        for new_event in events:
+            print("Appended event:", new_event.id)
+
+        # Start another consumer.
+        subscription2 = await self.client.read_subscription_to_stream(
+            group_name=group_name1,
+            stream_name=stream_name1,
+        )
+        print("Started persistent subscription consumer #2")
+        unacked_events_received = MyCounter[UUID]()
+        async with subscription2:
+            while (
+                unacked_events_received.total() < max_retry_count * num_appended_events
+            ):
+                event = await subscription2.__anext__()
+                if event.id in acked_event_ids:
+                    self.fail("Acked event was redelivered")
+                print("Received event:", event.id)
+                unacked_events_received.update([event.id])
+        print("Stopped persistent subscription consumer #2")
+        print("None of the acked events was redelivered")
 
     async def test_create_projection(self) -> None:
         # Create "continuous" projection.
