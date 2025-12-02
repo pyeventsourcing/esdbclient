@@ -3794,108 +3794,40 @@ span.
 
 ## Contributors<a id="contributors"></a>
 
-### Install Poetry<a id="install-poetry"></a>
+Clone the GitHub repo and the use the following `make` commands.
 
-The first thing is to check you have Poetry installed.
+Install Poetry.
 
-    $ poetry --version
+    $ make install-poetry
 
-If you don't, then please [install Poetry](https://python-poetry.org/docs/#installing-with-the-official-installer).
-
-    $ curl -sSL https://install.python-poetry.org | python3 -
-
-It will help to make sure Poetry's bin directory is in your `PATH` environment variable.
-
-But in any case, make sure you know the path to the `poetry` executable. The Poetry
-installer tells you where it has been installed, and how to configure your shell.
-
-Please refer to the [Poetry docs](https://python-poetry.org/docs/) for guidance on
-using Poetry.
-
-### Setup for PyCharm users<a id="setup-for-pycharm-users"></a>
-
-You can easily obtain the project files using PyCharm (menu "Git > Clone...").
-PyCharm will then usually prompt you to open the project.
-
-Open the project in a new window. PyCharm will then usually prompt you to create
-a new virtual environment.
-
-Create a new Poetry virtual environment for the project. If PyCharm doesn't already
-know where your `poetry` executable is, then set the path to your `poetry` executable
-in the "New Poetry Environment" form input field labelled "Poetry executable". In the
-"New Poetry Environment" form, you will also have the opportunity to select which
-Python executable will be used by the virtual environment.
-
-PyCharm will then create a new Poetry virtual environment for your project, using
-a particular version of Python, and also install into this virtual environment the
-project's package dependencies according to the project's `poetry.lock` file.
-
-You can add different Poetry environments for different Python versions, and switch
-between them using the "Python Interpreter" settings of PyCharm. If you want to use
-a version of Python that isn't installed, either use your favourite package manager,
-or install Python by downloading an installer for recent versions of Python directly
-from the [Python website](https://www.python.org/downloads/).
-
-Once project dependencies have been installed, you should be able to run tests
-from within PyCharm (right-click on the `tests` folder and select the 'Run' option).
-
-Because of a conflict between pytest and PyCharm's debugger and the coverage tool,
-you may need to add ``--no-cov`` as an option to the test runner template. Alternatively,
-just use the Python Standard Library's ``unittest`` module.
-
-You should also be able to open a terminal window in PyCharm, and run the project's
-Makefile commands from the command line (see below).
-
-### Setup from command line<a id="setup-from-command-line"></a>
-
-Obtain the project files, using Git or suitable alternative.
-
-In a terminal application, change your current working directory
-to the root folder of the project files. There should be a Makefile
-in this folder.
-
-Use the Makefile to create a new Poetry virtual environment for the
-project and install the project.
+Install packages.
 
     $ make install
 
-Please note, if you create the virtual environment in this way, and then try to
-open the project in PyCharm and configure the project to use this virtual
-environment as an "Existing Poetry Environment", PyCharm sometimes has some
-issues (don't know why) which might be problematic. If you encounter such
-issues, you can resolve these issues by deleting the virtual environment
-and creating the Poetry virtual environment using PyCharm (see above).
-
-### Install timeout command
-
-If you are running on a Mac, you may need to install the timeout command. You
-can do this by installing GNU Coreutils with Homebrew.
-
-    $ brew install coreutils
-
-### Project Makefile commands<a id="project-makefile-commands"></a>
-
-You can start KurrentDB using the following command.
+Start KurrentDB.
 
     $ make start-kurrentdb
 
-You can run tests using the following command (needs KurrentDB to be running).
+Run tests.
 
     $ make test
+
+If you are running on a Mac, you may need to install the timeout command before running tests. You
+can do this by installing GNU Coreutils with Homebrew.
+
+    $ brew install coreutils
 
 You can stop KurrentDB using the following command.
 
     $ make stop-kurrentdb
 
-You can check the formatting of the code using the following command.
+Check the formatting of the code.
 
     $ make lint
 
-You can reformat the code using the following command.
+Reformat the code.
 
     $ make fmt
-
-### Making changes
 
 Tests belong in `./tests`.
 
@@ -3905,3 +3837,5 @@ Edit package dependencies in `pyproject.toml`. Update the `poetry.lock` file, an
 the project's virtual environment, with the following command.
 
     $ make update
+
+Before pushing changes to the repo or a PR, please run `make lint test`.
