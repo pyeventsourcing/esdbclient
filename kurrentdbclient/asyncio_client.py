@@ -300,7 +300,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         *,
         timeout: float | None = None,
         credentials: grpc.CallCredentials | None = None,
-    ) -> int:  # pragma: no v2cover
+    ) -> int:  # pragma: <25.1 no cover
         """
         Appends new events to one or many streams.
         """
@@ -325,6 +325,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        filter_by_prefix: bool = False,
         limit: int = sys.maxsize,
         timeout: float | None = None,
         credentials: grpc.CallCredentials | None = None,
@@ -339,10 +340,34 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
+            filter_by_prefix=filter_by_prefix,
             limit=limit,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
+        )
+
+    async def read_index(
+        self,
+        index_name: str,
+        *,
+        commit_position: int | None = None,
+        limit: int = sys.maxsize,
+        timeout: float | None = None,
+        credentials: grpc.CallCredentials | None = None,
+    ) -> AsyncReadResponse:  # pragma: <25.1 no cover
+
+        if not index_name.startswith("$idx-"):
+            index_name = f"$idx-{index_name}"
+
+        return await self.read_all(
+            commit_position=commit_position,
+            filter_include=(index_name,),
+            filter_by_stream_name=True,
+            filter_by_prefix=True,
+            limit=limit,
+            timeout=timeout,
+            credentials=credentials,
         )
 
     @retrygrpc
@@ -492,6 +517,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        filter_by_prefix: bool = False,
         include_checkpoints: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
@@ -511,6 +537,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
+            filter_by_prefix=filter_by_prefix,
             subscribe=True,
             include_checkpoints=include_checkpoints,
             window_size=window_size,
@@ -520,6 +547,27 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
+        )
+
+    async def subscribe_to_index(
+        self,
+        index_name: str,
+        *,
+        commit_position: int | None = None,
+        timeout: float | None = None,
+        credentials: grpc.CallCredentials | None = None,
+    ) -> AbstractAsyncCatchupSubscription:  # pragma: <25.1 no cover
+
+        if not index_name.startswith("$idx-"):
+            index_name = f"$idx-{index_name}"
+
+        return await self.subscribe_to_all(
+            commit_position=commit_position,
+            filter_include=(index_name,),
+            filter_by_stream_name=True,
+            filter_by_prefix=True,
+            timeout=timeout,
+            credentials=credentials,
         )
 
     #

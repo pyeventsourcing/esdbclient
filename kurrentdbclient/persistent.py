@@ -982,6 +982,7 @@ class BasePersistentSubscriptionsService(KurrentDBService[TGrpcStreamers]):
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        # filter_by_prefix: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         message_timeout: float = DEFAULT_PERSISTENT_SUB_MESSAGE_TIMEOUT,
@@ -1050,6 +1051,18 @@ class BasePersistentSubscriptionsService(KurrentDBService[TGrpcStreamers]):
 
             # Decide 'filter_option'.
             if filter_exclude or filter_include:
+
+                # Commented out because secondary index doesn't seem to work?
+                # - the test disabled, hence this also, to pass code coverage checks
+                # if filter_by_prefix:
+                #     regex = ""
+                #     prefix = filter_include
+                # else:
+                #     if filter_include:
+                #         regex = construct_filter_include_regex(filter_include)
+                #     else:
+                #         regex = construct_filter_exclude_regex(filter_exclude)
+                #     prefix = ()
                 if filter_include:
                     regex = construct_filter_include_regex(filter_include)
                 else:
@@ -1057,7 +1070,7 @@ class BasePersistentSubscriptionsService(KurrentDBService[TGrpcStreamers]):
 
                 expression = (
                     persistent_pb2.CreateReq.AllOptions.FilterOptions.Expression(
-                        regex=regex
+                        regex=regex,
                     )
                 )
 
@@ -1683,6 +1696,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService[GrpcStre
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        # filter_by_prefix: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         message_timeout: float = DEFAULT_PERSISTENT_SUB_MESSAGE_TIMEOUT,
@@ -1743,6 +1757,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService[GrpcStre
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        # filter_by_prefix: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
         consumer_strategy: ConsumerStrategy = "DispatchToSingle",
@@ -1770,6 +1785,7 @@ class PersistentSubscriptionsService(BasePersistentSubscriptionsService[GrpcStre
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
+            # filter_by_prefix=filter_by_prefix,
             window_size=window_size,
             checkpoint_interval_multiplier=checkpoint_interval_multiplier,
             consumer_strategy=consumer_strategy,

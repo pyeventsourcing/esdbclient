@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from kurrentdbclient.connection_spec import ConnectionSpec
 
 
-# no v2cover: start
+# no cover <25.1: start
 
 
 class BaseStreamsService(KurrentDBService[TGrpcStreamers]):
@@ -227,4 +227,4 @@ class AsyncV2StreamsService(BaseStreamsService[AsyncGrpcStreamers]):
             raise CancelledByClientError from None  # pragma: no cover
 
 
-# no v2cover: stop
+# no cover <25.1: stop

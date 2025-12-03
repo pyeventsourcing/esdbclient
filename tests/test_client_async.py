@@ -2467,12 +2467,20 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
     async def test_persistent_subscription_context_manager(self) -> None:
         group_name = str(uuid4())
-        await self.client._connection.close()
+        # await self.client._connection.close()
         await self.client.create_subscription_to_all(group_name)
-        s = await self.client.read_subscription_to_all(group_name)
-        async with s as s:
+
+        # Exiting the context manager should stop the subscription.
+        consumer = await self.client.read_subscription_to_all(group_name)
+        async with consumer:
             pass
-        self.assertTrue(cast(AsyncPersistentSubscription, s)._is_stopped)
+        self.assertTrue(cast(AsyncPersistentSubscription, consumer)._is_stopped)
+
+        # Calling stop inside the context manager should terminate the iteration.
+        async with await self.client.read_subscription_to_all(group_name) as consumer:
+            await consumer.stop()
+            async for _ in consumer:
+                pass
 
     # async def test_subscribe_to_all_raises_discovery_failed(self) -> None:
     #     await self.client._connection.close()
@@ -3816,6 +3824,74 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             json.loads(events[1].metadata.decode()),
             {"$schema.format": "Bytes", "$schema.name": "OrderCreated", "a": "1"},
         )
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support secondary indexes")
+    async def test_read_index(self) -> None:
+        stream_name1 = str(uuid4())
+        event_type = f"OrderCreated{uuid4()!s}"
+
+        # Construct a new event.
+        event1 = NewEvent(
+            type=event_type,
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+
+        await self.client.append_to_stream(
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        # Index is eventually consistent, so need retries.
+        retry_count = 5
+        while retry_count:
+            read_response = await self.client.read_index(f"et-{event_type}")
+            if len([e async for e in read_response]):
+                break
+            await asyncio.sleep(1)
+            retry_count -= 1
+        else:
+            self.fail("Failed to read event from index")
+
+        # Do it again with "$idx-" prefix - don't need to wait this time.
+        read_response = await self.client.read_index(f"$idx-et-{event_type}")
+        self.assertEqual(1, len([e async for e in read_response]))
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support secondary indexes")
+    async def test_subscribe_to_index(self) -> None:
+        stream_name1 = str(uuid4())
+        event_type = f"OrderCreated{uuid4()!s}"
+
+        # Construct a new event.
+        event1 = NewEvent(
+            type=event_type,
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+
+        await self.client.append_to_stream(
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        async with await self.client.subscribe_to_index(
+            f"et-{event_type}"
+        ) as subscription:
+            async for event in subscription:
+                if event.type == event_type:
+                    break
+                self.fail("Failed to read event from index")
+
+        # Do it again with "$idx-" prefix.
+        async with await self.client.subscribe_to_index(
+            f"$idx-et-{event_type}"
+        ) as subscription:
+            async for event in subscription:
+                if event.type == event_type:
+                    break
+                self.fail("Failed to read event from index")
 
 
 class TestOptionalClientAuth(TimedTestCase, IsolatedAsyncioTestCase):

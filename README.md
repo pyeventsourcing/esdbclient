@@ -67,9 +67,11 @@ https://github.com/pyeventsourcing/eventsourcing-kurrentdb) package.
   * [Set stream metadata](#set-stream-metadata)
   * [Delete stream](#delete-stream)
   * [Tombstone stream](#tombstone-stream)
+  * [Read using secondary index](#read-index)
 * [Catch-up subscriptions](#catch-up-subscriptions)
   * [Subscribe to all events](#subscribe-to-all-events)
   * [Subscribe to stream events](#subscribe-to-stream-events)
+  * [Subscribe using secondary index](#subscribe-to-index)
   * [How to implement exactly-once event processing](#how-to-implement-exactly-once-event-processing)
 * [Persistent subscriptions](#persistent-subscriptions)
   * [Create subscription to all](#create-subscription-to-all)
@@ -1929,6 +1931,40 @@ commit_position = client.tombstone_stream(stream_name=stream_name1, current_vers
 
 After tombstoning a stream, it's not possible to append new events.
 
+### Read using secondary index<a id="read-index"></a>
+
+The method `read_index()` can be used to read from all events using a secondary index.
+
+This method has one required argument, `index_name`.
+
+The required `index_name` argument is a Python `str` that uniquely identifies
+an index from which to read, for example `"et-EventType"`. The KurrentDB convention
+for index names to start with `"idx-"` is supported by making it optional. That is
+to say, both `"et-EventType"` and `"$idx-et-EventType"` will return the same results.
+
+This method has four optional arguments, `commit_position`, `limit`, `timeout`,
+and `credentials`.
+
+The optional `commit_position` argument is a Python `int` that can be used to
+specify a commit position from which to start reading. The default value of
+`commit_position` is `None`. Please note, if a commit position is specified,
+it must be an actually existing commit position in the database. If this position
+corresponds to an event in the index, it will be returned. That is, reading is with
+this method is inclusive.
+
+The optional `limit` argument is an integer which restricts the number of events that
+will be returned. The default value is `sys.maxint`.
+
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
+
+The filtering of events is done on the KurrentDB server. The
+`limit` argument is applied on the server after filtering.
+
+...
 
 ## Catch-up subscriptions<a id="catch-up-subscriptions"></a>
 
@@ -2210,6 +2246,40 @@ subscription = client.subscribe_to_stream(
     stream_position=1,
 )
 ```
+
+### Subscribe using secondary index<a id="subscribe-to-index"></a>
+
+The`subscribe_to_index()` method can be used to start a catch-up subscription
+that uses a secondary index from which events recorded in the database can
+be obtained in the order they were recorded. This method returns a "catch-up
+subscription" iterator.
+
+This method has one required argument, `index_name`.
+
+The required `index_name` argument is a Python `str` that uniquely identifies
+an index from which to read, for example `"et-EventType"`. The KurrentDB convention
+for index names to start with `"idx-"` is supported by making it optional. That is
+to say, both `"et-EventType"` and `"$idx-et-EventType"` will return the same results.
+
+This method has three optional arguments, `commit_position`, `timeout`,
+and `credentials`.
+
+The optional `commit_position` argument is a Python `int` that can be used to
+specify a commit position from which to start reading. The default value of
+`commit_position` is `None`. Please note, if a commit position is specified,
+it must be an actually existing commit position in the database. If this position
+corresponds to an event in the index, it will not be returned. That is, subscribing
+with this method is not inclusive. This is designed to help event-processing
+components checkpoint their progress with the commit positions of received events,
+and then resume from the last recorded commit position without receiving duplicate
+events.
+
+The optional `timeout` argument is a Python `float` which sets a
+maximum duration, in seconds, for the completion of the gRPC operation.
+
+The optional `credentials` argument can be used to
+override call credentials derived from the connection string URI.
+
 
 ### How to implement exactly-once event processing<a id="how-to-implement-exactly-once-event-processing"></a>
 

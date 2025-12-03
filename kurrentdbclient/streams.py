@@ -601,6 +601,7 @@ class BaseStreamsService(KurrentDBService[TGrpcStreamers]):
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        filter_by_prefix: bool = False,
         limit: int = sys.maxsize,
         subscribe: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
@@ -675,13 +676,19 @@ class BaseStreamsService(KurrentDBService[TGrpcStreamers]):
             )
 
             # Decide 'expression'
-            if filter_include:
-                regex = construct_filter_include_regex(filter_include)
+            if filter_by_prefix:
+                prefix = filter_include
+                regex = ""
             else:
-                regex = construct_filter_exclude_regex(filter_exclude)
+                prefix = ()
+                if filter_include:
+                    regex = construct_filter_include_regex(filter_include)
+                else:
+                    regex = construct_filter_exclude_regex(filter_exclude)
 
             expression = streams_pb2.ReadReq.Options.FilterOptions.Expression(
-                regex=regex
+                regex=regex,
+                prefix=prefix,
             )
 
             if filter_by_stream_name:
@@ -842,6 +849,7 @@ class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        filter_by_prefix: bool = False,
         limit: int = sys.maxsize,
         timeout: float | None = None,
         metadata: Metadata | None = None,
@@ -861,6 +869,7 @@ class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        filter_by_prefix: bool = False,
         subscribe: Literal[True],
         include_checkpoints: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
@@ -887,6 +896,7 @@ class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        filter_by_prefix: bool = False,
         limit: int = sys.maxsize,
         subscribe: bool = False,
         include_checkpoints: bool = False,
@@ -915,6 +925,7 @@ class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
+            filter_by_prefix=filter_by_prefix,
             limit=limit,
             subscribe=subscribe,
             window_size=window_size,
@@ -1045,6 +1056,7 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        filter_by_prefix: bool = False,
         limit: int = sys.maxsize,
         timeout: float | None = None,
         metadata: Metadata | None = None,
@@ -1064,6 +1076,7 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        filter_by_prefix: bool = False,
         subscribe: Literal[True],
         include_checkpoints: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
@@ -1090,6 +1103,7 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
         filter_exclude: Sequence[str] = (),
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        filter_by_prefix: bool = False,
         limit: int = sys.maxsize,
         subscribe: bool = False,
         include_checkpoints: bool = False,
@@ -1118,6 +1132,7 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
+            filter_by_prefix=filter_by_prefix,
             limit=limit,
             subscribe=subscribe,
             window_size=window_size,
@@ -1133,7 +1148,7 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
         )
         # assert isinstance(read_resps, _ReadResps)  # a _MultiThreadedRendezvous
 
-        if subscribe is False:
+        if not subscribe:
             return ReadResponse(
                 read_resps=read_resps,
                 stream_name=stream_name,

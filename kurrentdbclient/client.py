@@ -310,7 +310,7 @@ class KurrentDBClient(BaseKurrentDBClient):
         return self._connection.streams
 
     @property
-    def v2streams(self) -> V2StreamsService:  # pragma: no v2cover
+    def v2streams(self) -> V2StreamsService:  # pragma: <25.1 no cover
         return self._connection.v2streams
 
     @property
@@ -565,7 +565,7 @@ class KurrentDBClient(BaseKurrentDBClient):
         *,
         timeout: float | None = None,
         credentials: grpc.CallCredentials | None = None,
-    ) -> int:  # pragma: no v2cover
+    ) -> int:  # pragma: <25.1 no cover
         """
         Appends new events to one or many streams.
         """
@@ -679,6 +679,7 @@ class KurrentDBClient(BaseKurrentDBClient):
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        filter_by_prefix: bool = False,
         limit: int = sys.maxsize,
         timeout: float | None = None,
         credentials: grpc.CallCredentials | None = None,
@@ -693,10 +694,34 @@ class KurrentDBClient(BaseKurrentDBClient):
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
+            filter_by_prefix=filter_by_prefix,
             limit=limit,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
+        )
+
+    def read_index(
+        self,
+        index_name: str,
+        *,
+        commit_position: int | None = None,
+        limit: int = sys.maxsize,
+        timeout: float | None = None,
+        credentials: grpc.CallCredentials | None = None,
+    ) -> AbstractReadResponse:  # pragma: <25.1 no cover
+
+        if not index_name.startswith("$idx-"):
+            index_name = f"$idx-{index_name}"
+
+        return self.read_all(
+            commit_position=commit_position,
+            filter_include=(index_name,),
+            filter_by_stream_name=True,
+            filter_by_prefix=True,
+            limit=limit,
+            timeout=timeout,
+            credentials=credentials,
         )
 
     @retrygrpc
@@ -827,6 +852,7 @@ class KurrentDBClient(BaseKurrentDBClient):
         filter_exclude: Sequence[str] = DEFAULT_EXCLUDE_FILTER,
         filter_include: Sequence[str] = (),
         filter_by_stream_name: bool = False,
+        filter_by_prefix: bool = False,
         include_checkpoints: bool = False,
         window_size: int = DEFAULT_WINDOW_SIZE,
         checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
@@ -846,6 +872,7 @@ class KurrentDBClient(BaseKurrentDBClient):
             filter_exclude=filter_exclude,
             filter_include=filter_include,
             filter_by_stream_name=filter_by_stream_name,
+            filter_by_prefix=filter_by_prefix,
             subscribe=True,
             include_checkpoints=include_checkpoints,
             window_size=window_size,
@@ -855,6 +882,27 @@ class KurrentDBClient(BaseKurrentDBClient):
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
+        )
+
+    def subscribe_to_index(
+        self,
+        index_name: str,
+        *,
+        commit_position: int | None = None,
+        timeout: float | None = None,
+        credentials: grpc.CallCredentials | None = None,
+    ) -> AbstractCatchupSubscription:  # pragma: <25.1 no cover
+
+        if not index_name.startswith("$idx-"):
+            index_name = f"$idx-{index_name}"
+
+        return self.subscribe_to_all(
+            commit_position=commit_position,
+            filter_include=(index_name,),
+            filter_by_stream_name=True,
+            filter_by_prefix=True,
+            timeout=timeout,
+            credentials=credentials,
         )
 
     # @overload
@@ -1078,6 +1126,62 @@ class KurrentDBClient(BaseKurrentDBClient):
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
         )
+
+    # @retrygrpc
+    # @autoreconnect
+    # def create_subscription_to_index(
+    #     self,
+    #     group_name: str,
+    #     *,
+    #     index_name: str,
+    #     from_end: bool = False,
+    #     commit_position: int | None = None,
+    #     window_size: int = DEFAULT_WINDOW_SIZE,
+    #     checkpoint_interval_multiplier: int = DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
+    #     consumer_strategy: ConsumerStrategy = "DispatchToSingle",
+    #     message_timeout: float = DEFAULT_PERSISTENT_SUB_MESSAGE_TIMEOUT,
+    #     max_retry_count: int = DEFAULT_PERSISTENT_SUB_MAX_RETRY_COUNT,
+    #     min_checkpoint_count: int = DEFAULT_PERSISTENT_SUB_MIN_CHECKPOINT_COUNT,
+    #     max_checkpoint_count: int = DEFAULT_PERSISTENT_SUB_MAX_CHECKPOINT_COUNT,
+    #     checkpoint_after: float = DEFAULT_PERSISTENT_SUB_CHECKPOINT_AFTER,
+    #     max_subscriber_count: int = DEFAULT_PERSISTENT_SUB_MAX_SUBSCRIBER_COUNT,
+    #     live_buffer_size: int = DEFAULT_PERSISTENT_SUB_LIVE_BUFFER_SIZE,
+    #     read_batch_size: int = DEFAULT_PERSISTENT_SUB_READ_BATCH_SIZE,
+    #     history_buffer_size: int = DEFAULT_PERSISTENT_SUB_HISTORY_BUFFER_SIZE,
+    #     extra_statistics: bool = False,
+    #     timeout: float | None = None,
+    #     credentials: grpc.CallCredentials | None = None,
+    # ) -> None:
+    #     if not index_name.startswith("$idx-"):
+    #         index_name = f"$idx-{index_name}"
+    #
+    #     timeout = timeout if timeout is not None else self._default_deadline
+    #
+    #     return self.persistent_subscriptions.create(
+    #         group_name=group_name,
+    #         from_end=from_end,
+    #         commit_position=commit_position,
+    #         resolve_links=False,
+    #         consumer_strategy=consumer_strategy,
+    #         filter_include=(index_name,),
+    #         filter_by_stream_name=True,
+    #         filter_by_prefix=True,
+    #         window_size=window_size,
+    #         checkpoint_interval_multiplier=checkpoint_interval_multiplier,
+    #         message_timeout=message_timeout,
+    #         max_retry_count=max_retry_count,
+    #         min_checkpoint_count=min_checkpoint_count,
+    #         max_checkpoint_count=max_checkpoint_count,
+    #         checkpoint_after=checkpoint_after,
+    #         max_subscriber_count=max_subscriber_count,
+    #         live_buffer_size=live_buffer_size,
+    #         read_batch_size=read_batch_size,
+    #         history_buffer_size=history_buffer_size,
+    #         extra_statistics=extra_statistics,
+    #         timeout=timeout,
+    #         metadata=self._call_metadata,
+    #         credentials=credentials or self._call_credentials,
+    #     )
 
     @overload
     def create_subscription_to_stream(

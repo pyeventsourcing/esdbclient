@@ -9,16 +9,18 @@ from coverage.results import display_covered, should_fail_under
 
 nocover_tags = []
 
-if "25.1" not in os.getenv("KURRENTDB_DOCKER_IMAGE", ""):
-    nocover_tags.append("v2")
+if "25.1" in os.getenv("KURRENTDB_DOCKER_IMAGE", ""):
+    pass
+else:
+    nocover_tags.append(r"<25\.1")
 
 cov = coverage.Coverage()
 exclude_lines = cov.get_option("report:exclude_lines") or []
 print("Coverage exclude_lines:")
 for tag in nocover_tags:
     exclude_lines += [
-        rf"pragma: no {tag}cover",
-        rf"no {tag}cover: start(?s:.)*?no {tag}cover: stop",
+        rf"pragma: {tag} no cover",
+        rf"no cover {tag}: start(?s:.)*?no cover {tag}: stop",
     ]
 for exclude_line in exclude_lines:
     print(" - ", exclude_line)

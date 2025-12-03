@@ -24,8 +24,6 @@
 #KURRENTDB_DOCKER_IMAGE ?= docker.kurrent.io/kurrent-latest/kurrentdb:25.0.1-x64-8.0-bookworm-slim
 KURRENTDB_DOCKER_IMAGE ?= docker.kurrent.io/kurrent-latest/kurrentdb:25.1.0-x64-8.0-bookworm-slim
 
-NOCOVER_TAGS ?= v2
-
 PYTHONUNBUFFERED=1
 PYTHONPATH=./tests
 SAMPLES_LINE_LENGTH=70

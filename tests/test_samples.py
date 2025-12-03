@@ -3,11 +3,12 @@ import sys
 import traceback
 from pathlib import Path
 from time import sleep
-from unittest import TestCase
+from unittest import TestCase, skip
 
 from tests.test_client import get_duration, get_elapsed_time
 
 
+@skip("Samples for docs on previous EventStoreDB website")
 class TestSamples(TestCase):
     def test(self) -> None:
         # Gather samples.
@@ -94,6 +95,7 @@ class TestSamples(TestCase):
             self.fail(f"{sample_failures} samples failed")
 
 
+@skip("Samples for docs on previous EventStoreDB website")
 class TestSamplesAsync(TestCase):
     def test(self) -> None:
         # Gather samples.

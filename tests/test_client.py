@@ -7778,6 +7778,197 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 timeout=0,
             )
 
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support secondary indexes")
+    def test_read_index(self) -> None:
+        self.construct_esdb_client()
+        stream_name1 = str(uuid4())
+
+        event_type = f"OrderCreated{uuid4()!s}"
+
+        # Append a new event.
+        event1 = NewEvent(
+            type=event_type,
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+
+        self.client.append_to_stream(
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        # Index is eventually consistent, so need retries.
+        retry_count = 5
+        while retry_count:
+            events = list(
+                self.client.read_index(index_name=f"et-{event_type}"),
+            )
+            if len(events):
+                self.assertEqual(1, len(events))
+                self.assertEqual(event1.id, events[0].id)
+                break
+            sleep(1)
+            retry_count -= 1
+        else:
+            self.fail("Failed to read event from index")
+
+        # Do it again with "$idx-" prefix - don't need to wait this time.
+        events = list(self.client.read_index(f"$idx-et-{event_type}"))
+        self.assertEqual(1, len(events))
+        self.assertEqual(event1.id, events[0].id)
+
+        # Append a new event.
+        event2 = NewEvent(
+            type=event_type,
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+
+        stream_name2 = str(uuid4())
+
+        commit_position2 = self.client.append_to_stream(
+            stream_name=stream_name2,
+            events=[event2],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        # Read index from commit_position2.
+        retry_count = 5
+        while retry_count:
+            events = list(
+                self.client.read_index(
+                    index_name=f"et-{event_type}",
+                    commit_position=commit_position2,
+                )
+            )
+            if len(events):
+                self.assertEqual(1, len(events))
+                self.assertEqual(event2.id, events[0].id)
+                break
+            sleep(1)
+            retry_count -= 1
+        else:
+            self.fail("Failed to read event from index")
+
+        # Read index with limit.
+        events = list(
+            self.client.read_index(
+                index_name=f"et-{event_type}",
+                limit=1,
+            )
+        )
+        self.assertEqual(1, len(events))
+        self.assertEqual(event1.id, events[0].id)
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support secondary indexes")
+    def test_subscribe_to_index(self) -> None:
+        self.construct_esdb_client()
+        stream_name1 = str(uuid4())
+        event_type = f"OrderCreated{uuid4()!s}"
+
+        # Construct a new event.
+        event1 = NewEvent(
+            type=event_type,
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+
+        commit_position1 = self.client.append_to_stream(
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        with self.client.subscribe_to_index(f"et-{event_type}") as subscription:
+            for event in subscription:
+                if event.type == event_type:
+                    break
+                self.fail("Failed to read event from index")
+
+        # Do it again with "$idx-" prefix.
+        with self.client.subscribe_to_index(f"$idx-et-{event_type}") as subscription:
+            for event in subscription:
+                if event.id == event1.id:
+                    break
+                self.fail("Failed to read event from index")
+
+        # Append another event.
+        event2 = NewEvent(
+            type=event_type,
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        commit_position2 = self.client.append_to_stream(
+            stream_name=stream_name1,
+            events=[event2],
+            current_version=0,
+        )
+        event3 = NewEvent(
+            type=event_type,
+            data=random_data(),
+            content_type="application/octet-stream",
+        )
+        self.client.append_to_stream(
+            stream_name=stream_name1,
+            events=[event3],
+            current_version=1,
+        )
+
+        # Subscribe from commit_position1.
+        with self.client.subscribe_to_index(
+            index_name=f"et-{event_type}",
+            commit_position=commit_position1,
+        ) as subscription:
+            for event in subscription:
+                if event.id == event2.id:
+                    break
+                self.fail("Failed to read event from index")
+
+        # Subscribe from commit_position2.
+        with self.client.subscribe_to_index(
+            index_name=f"et-{event_type}",
+            commit_position=commit_position2,
+        ) as subscription:
+            for event in subscription:
+                if event.id == event3.id:
+                    break
+                self.fail("Failed to read event from index")
+
+    # @skipIf(SERVER_VERSION < (25, 1), "Doesn't support secondary indexes")
+    # def test_create_subscription_to_index(self) -> None:
+    #     self.construct_esdb_client()
+    #     stream_name1 = str(uuid4())
+    #     event_type = f"OrderCreated{uuid4()!s}"
+    #
+    #     # Construct a new event.
+    #     event1 = NewEvent(
+    #         type=event_type,
+    #         data=random_data(),
+    #         content_type="application/octet-stream",
+    #     )
+    #
+    #     self.client.append_to_stream(
+    #         stream_name=stream_name1,
+    #         events=[event1],
+    #         current_version=StreamState.NO_STREAM,
+    #     )
+    #
+    #     group_name = f"group-{uuid4()}"
+    #
+    #     self.client.create_subscription_to_index(
+    #         group_name=group_name,
+    #         index_name=f"et-{event_type}",
+    #     )
+    #
+    #     with self.client.read_subscription_to_all(
+    #         group_name=group_name
+    #     ) as subscription:
+    #         for event in subscription:
+    #             if event.type == event_type:
+    #                 break
+    #             self.fail("Failed to read event from index")
+
 
 PROJECTION_QUERY_TEMPLATE1 = """fromStream('%s')
 .when({
