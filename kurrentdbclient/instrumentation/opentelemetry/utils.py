@@ -3,21 +3,20 @@ from __future__ import annotations
 import inspect
 import re
 import traceback
-from collections.abc import Coroutine, Iterator, MutableMapping
+from collections.abc import Callable, Coroutine, Iterator, MutableMapping
 from contextlib import contextmanager
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
+    Concatenate,
     Protocol,
     TypeVar,
-    Union,
     cast,
 )
 
 import wrapt
 from opentelemetry.trace import Span, SpanKind, Status, StatusCode, Tracer
-from typing_extensions import Concatenate, ParamSpec
+from typing_extensions import ParamSpec
 
 from kurrentdbclient.instrumentation.opentelemetry.attributes import Attributes
 
@@ -130,7 +129,7 @@ def _patch_class(
 # Define type variables for overloaded spanner functions.
 AsyncSpannerResponse = SpannerResponse[Coroutine[Any, Any, R]]
 S = TypeVar("S")
-OverloadedSpannerResponse = Union[SpannerResponse[R], AsyncSpannerResponse[S]]
+OverloadedSpannerResponse = SpannerResponse[R] | AsyncSpannerResponse[S]
 
 
 @contextmanager

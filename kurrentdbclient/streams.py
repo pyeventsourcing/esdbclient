@@ -8,14 +8,14 @@ from abc import abstractmethod
 from asyncio import CancelledError
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, overload, runtime_checkable
+from typing import TYPE_CHECKING, Literal, overload, runtime_checkable
 from uuid import UUID, uuid4
 
 import grpc
 import grpc.aio
 from google.protobuf import any_pb2, duration_pb2, empty_pb2
 from grpc.aio import AioRpcError, UsageError
-from typing_extensions import Literal, Protocol
+from typing_extensions import Protocol
 
 from kurrentdbclient.common import (
     DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,

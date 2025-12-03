@@ -44,7 +44,7 @@ from opentelemetry.trace import (
     set_tracer_provider,
 )
 
-import kurrentdbclient
+import kurrentdbclient.instrumentation.opentelemetry
 from kurrentdbclient import (
     AsyncKurrentDBClient,
     KurrentDBClient,

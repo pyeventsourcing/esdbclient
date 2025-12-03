@@ -4,18 +4,19 @@ import asyncio
 import json
 import sys
 from asyncio import Event, Lock
+from collections.abc import Callable
 from functools import wraps
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
+    Literal,
     TypeVar,
     cast,
     overload,
 )
 
 import grpc.aio
-from typing_extensions import Literal, Self
+from typing_extensions import Self
 
 from kurrentdbclient.client import DEFAULT_EXCLUDE_FILTER, BaseKurrentDBClient
 from kurrentdbclient.common import (
@@ -37,12 +38,12 @@ from kurrentdbclient.common import (
     AbstractAsyncCatchupSubscription,
     AbstractAsyncPersistentSubscription,
     GrpcOptions,
-    grpc_target,
 )
 from kurrentdbclient.connection import AsyncKurrentDBConnection
 from kurrentdbclient.connection_spec import (
     NODE_PREFERENCE_LEADER,
     URI_SCHEMES_NON_DISCOVER,
+    grpc_target,
 )
 from kurrentdbclient.events import NewEvent, NewEvents, RecordedEvent, StreamState
 from kurrentdbclient.exceptions import (

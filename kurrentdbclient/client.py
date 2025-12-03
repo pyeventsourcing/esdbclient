@@ -4,20 +4,21 @@ import json
 import random
 import sys
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from functools import wraps
 from threading import Event, Lock
 from time import sleep
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
+    Literal,
     TypeVar,
     cast,
     overload,
 )
 
 import grpc
-from typing_extensions import Literal, Self
+from typing_extensions import Self
 
 from kurrentdbclient.common import (
     DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
@@ -40,7 +41,6 @@ from kurrentdbclient.common import (
     AbstractReadResponse,
     BasicAuthCallCredentials,
     GrpcOptions,
-    grpc_target,
 )
 from kurrentdbclient.connection import KurrentDBConnection
 from kurrentdbclient.connection_spec import (
@@ -50,6 +50,7 @@ from kurrentdbclient.connection_spec import (
     NODE_PREFERENCE_REPLICA,
     URI_SCHEMES_NON_DISCOVER,
     ConnectionSpec,
+    grpc_target,
 )
 from kurrentdbclient.events import NewEvent, NewEvents, RecordedEvent, StreamState
 from kurrentdbclient.exceptions import (
@@ -71,10 +72,6 @@ from kurrentdbclient.gossip import (
 )
 
 if TYPE_CHECKING:
-    from kurrentdbclient.streams import StreamsService
-    from kurrentdbclient.v2streams import V2StreamsService
-
-if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
     from kurrentdbclient.persistent import (
@@ -87,6 +84,8 @@ if TYPE_CHECKING:
         ProjectionState,
         ProjectionStatistics,
     )
+    from kurrentdbclient.streams import StreamsService
+    from kurrentdbclient.v2streams import V2StreamsService
 
 # Matches the 'type' of "system" events.
 KDB_SYSTEM_EVENTS_REGEX = r"\$.+"

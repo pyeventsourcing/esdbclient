@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import json
 import os
+from collections import Counter
 from tempfile import NamedTemporaryFile
 from typing import cast
 from unittest import IsolatedAsyncioTestCase, skip, skipIf
@@ -56,7 +57,6 @@ from tests.test_client import (
     KURRENTDB_DOCKER_IMAGE,
     PROJECTION_QUERY_TEMPLATE1,
     SERVER_VERSION,
-    MyCounter,
     TimedTestCase,
     get_ca_certificate,
     get_server_certificate,
@@ -2566,7 +2566,7 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             group_name=group_name1
         )
         print("Started persistent subscription consumer #2")
-        unacked_events_received = MyCounter[UUID]()
+        unacked_events_received = Counter[UUID]()
         async with subscription2:
             while (
                 unacked_events_received.total() < max_retry_count * num_appended_events
@@ -2657,7 +2657,7 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             stream_name=stream_name1,
         )
         print("Started persistent subscription consumer #2")
-        unacked_events_received = MyCounter[UUID]()
+        unacked_events_received = Counter[UUID]()
         async with subscription2:
             while (
                 unacked_events_received.total() < max_retry_count * num_appended_events

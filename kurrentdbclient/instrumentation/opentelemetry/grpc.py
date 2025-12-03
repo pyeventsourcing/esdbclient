@@ -3,17 +3,18 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import grpc
 import opentelemetry.trace as trace_api
 from opentelemetry.instrumentation.utils import unwrap
 from opentelemetry.propagate import inject
 from opentelemetry.semconv.trace import SpanAttributes
+from typing_extensions import Self
 from wrapt import wrap_function_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
     from types import FunctionType
 
     from grpc._channel import _Rendezvous
@@ -30,6 +31,55 @@ try:
 
 except ImportError:  # pragma: no cover
     OpenTelemetryClientInterceptor = None  # type: ignore
+
+
+class InterceptServerStream:
+    def __init__(self, rendezvous: _Rendezvous, span: trace_api.Span) -> None:
+        self._rendezvous = rendezvous
+        self._span = span
+
+    def __iter__(self) -> Self:
+        return self
+
+    def __next__(self) -> Any:
+        try:
+            return next(self._rendezvous)
+        except StopIteration:
+            self._span.end()
+            raise
+        except grpc.RpcError as err:
+            err_code_value_int = err.code().value[0]
+            self._span.set_attribute(
+                SpanAttributes.RPC_GRPC_STATUS_CODE, err_code_value_int
+            )
+            self._span.set_status(
+                trace_api.Status(
+                    status_code=trace_api.StatusCode.ERROR,
+                    description=f"{type(err).__name__}: {err}",
+                )
+            )
+            self._span.record_exception(err)
+            self._span.end()
+            raise
+        except Exception as err:  # pragma: no cover
+            self._span.set_status(
+                trace_api.Status(
+                    status_code=trace_api.StatusCode.ERROR,
+                    description=f"{type(err).__name__}: {err}",
+                )
+            )
+            self._span.record_exception(err)
+            self._span.end()
+            raise
+
+    def __del__(self) -> None:
+        self.cancel()
+        span = self._span
+        if span.is_recording():
+            span.end()
+
+    def cancel(self) -> None:
+        self._rendezvous.cancel()
 
 
 def try_wrap_opentelemetry_intercept_grpc_server_stream() -> None:
@@ -114,52 +164,3 @@ def _replacement_intercept_server_stream(
             raise err
         else:
             return InterceptServerStream(rendezvous, span)
-
-
-class InterceptServerStream:
-    def __init__(self, rendezvous: _Rendezvous, span: trace_api.Span) -> None:
-        self._rendezvous = rendezvous
-        self._span = span
-
-    def __iter__(self) -> InterceptServerStream:
-        return self
-
-    def __next__(self) -> Any:
-        try:
-            return next(self._rendezvous)
-        except StopIteration:
-            self._span.end()
-            raise
-        except grpc.RpcError as err:
-            err_code_value_int = err.code().value[0]
-            self._span.set_attribute(
-                SpanAttributes.RPC_GRPC_STATUS_CODE, err_code_value_int
-            )
-            self._span.set_status(
-                trace_api.Status(
-                    status_code=trace_api.StatusCode.ERROR,
-                    description=f"{type(err).__name__}: {err}",
-                )
-            )
-            self._span.record_exception(err)
-            self._span.end()
-            raise
-        except Exception as err:  # pragma: no cover
-            self._span.set_status(
-                trace_api.Status(
-                    status_code=trace_api.StatusCode.ERROR,
-                    description=f"{type(err).__name__}: {err}",
-                )
-            )
-            self._span.record_exception(err)
-            self._span.end()
-            raise
-
-    def __del__(self) -> None:
-        self.cancel()
-        span = self._span
-        if span.is_recording():
-            span.end()
-
-    def cancel(self) -> None:
-        self._rendezvous.cancel()

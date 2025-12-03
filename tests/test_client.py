@@ -9,7 +9,7 @@ from collections import Counter
 from tempfile import NamedTemporaryFile
 from threading import Thread
 from time import sleep
-from typing import TYPE_CHECKING, Any, TypeVar, cast
+from typing import TYPE_CHECKING, Any, cast
 from unittest import TestCase, skip, skipIf
 from uuid import UUID, uuid4
 
@@ -118,15 +118,6 @@ elif "25.1" in KURRENTDB_DOCKER_IMAGE:
 else:
     msg = "Couldn't extract server version from KURRENTDB_DOCKER_IMAGE"
     raise ValueError(msg)
-
-T = TypeVar("T")
-
-
-class MyCounter(Counter[T]):
-    """TODO: Remove this when dropping support for Python 3.9"""
-
-    def total(self) -> int:
-        return sum(self.values())
 
 
 # os.environ["GRPC_VERBOSITY"] = "debug"
@@ -4497,7 +4488,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         # Start another consumer.
         subscription2 = self.client.read_subscription_to_all(group_name=group_name1)
         print("Started persistent subscription consumer #2")
-        unacked_events_received = MyCounter[UUID]()
+        unacked_events_received = Counter[UUID]()
         with subscription2:
             while (
                 unacked_events_received.total() < max_retry_count * num_appended_events
@@ -4590,7 +4581,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             stream_name=stream_name1,
         )
         print("Started persistent subscription consumer #2")
-        unacked_events_received = MyCounter[UUID]()
+        unacked_events_received = Counter[UUID]()
         with subscription2:
             while (
                 unacked_events_received.total() < max_retry_count * num_appended_events

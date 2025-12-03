@@ -10,6 +10,7 @@ from threading import Event
 from time import sleep
 from typing import (
     TYPE_CHECKING,
+    Literal,
     cast,
     overload,
     runtime_checkable,
@@ -18,7 +19,7 @@ from uuid import UUID
 
 import grpc
 from grpc.aio import AioRpcError, StreamStreamCall
-from typing_extensions import Literal, Protocol, TypedDict
+from typing_extensions import Protocol, Self, TypedDict
 
 from kurrentdbclient.common import (
     DEFAULT_CHECKPOINT_INTERVAL_MULTIPLIER,
@@ -202,7 +203,7 @@ class AsyncSubscriptionReadReqs(
         self.errored: BaseException | None = None
         self._batch_ids: list[UUID] = []
 
-    def __aiter__(self) -> AsyncSubscriptionReadReqs:
+    def __aiter__(self) -> Self:
         return self
 
     async def __anext__(self) -> persistent_pb2.ReadReq:
@@ -747,6 +748,25 @@ class SubscriptionUpdateStreamKwargs(SubscriptionUpdateKwargs):
 
 
 @dataclass
+class Measurement:
+    key: str
+    value: int
+
+
+@dataclass
+class ConnectionInfo:
+    from_: str
+    username: str
+    average_items_per_second: int
+    total_items: int
+    count_since_last_measurement: int
+    observed_measurements: list[Measurement]
+    available_slots: int
+    in_flight_messages: int
+    connection_name: str
+
+
+@dataclass
 class SubscriptionInfo:
     event_source: str
     group_name: str
@@ -939,25 +959,6 @@ class SubscriptionInfo:
             ),
         }
         return kwargs
-
-
-@dataclass
-class ConnectionInfo:
-    from_: str
-    username: str
-    average_items_per_second: int
-    total_items: int
-    count_since_last_measurement: int
-    observed_measurements: list[Measurement]
-    available_slots: int
-    in_flight_messages: int
-    connection_name: str
-
-
-@dataclass
-class Measurement:
-    key: str
-    value: int
 
 
 class BasePersistentSubscriptionsService(KurrentDBService[TGrpcStreamers]):

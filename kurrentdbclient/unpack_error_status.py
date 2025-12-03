@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from google.protobuf import any_pb2, descriptor_pool, message_factory
 from google.protobuf.descriptor import Descriptor

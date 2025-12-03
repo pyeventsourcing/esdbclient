@@ -2,16 +2,22 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from uuid import UUID, uuid4
 
-from typing_extensions import Literal
+from typing_extensions import Self
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from datetime import datetime
 
 ContentType = Literal["application/json", "application/octet-stream"]
+
+
+class StreamState(Enum):
+    ANY = "ANY"
+    NO_STREAM = "NO_STREAM"
+    EXISTS = "EXISTS"
 
 
 @dataclass(frozen=True)
@@ -27,7 +33,7 @@ class NewEvent:
     id: UUID = field(default_factory=uuid4)
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, (NewEvent, RecordedEvent)) and self.id == other.id
+        return isinstance(other, NewEvent | RecordedEvent) and self.id == other.id
 
 
 @dataclass(frozen=True)
@@ -57,7 +63,7 @@ class RecordedEvent:
     commit_position: int
     prepare_position: int
     recorded_at: datetime | None = None
-    link: RecordedEvent | None = None
+    link: Self | None = None
     retry_count: int | None = None
 
     @property
@@ -175,9 +181,3 @@ class FellBehind(RecordedEvent):
     @property
     def is_fell_behind(self) -> bool:
         return True
-
-
-class StreamState(Enum):
-    ANY = "ANY"
-    NO_STREAM = "NO_STREAM"
-    EXISTS = "EXISTS"

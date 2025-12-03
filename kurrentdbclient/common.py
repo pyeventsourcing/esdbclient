@@ -15,7 +15,6 @@ from typing import (
     Generic,
     Literal,
     TypeVar,
-    Union,
 )
 from uuid import UUID
 from weakref import WeakValueDictionary
@@ -94,12 +93,36 @@ DEFAULT_PERSISTENT_SUB_READ_BATCH_SIZE = 200
 DEFAULT_PERSISTENT_SUB_HISTORY_BUFFER_SIZE = 500
 
 
-GrpcOption = tuple[str, Union[str, int]]
+GrpcOption = tuple[str, str | int]
 GrpcOptions = tuple[GrpcOption, ...]
 
 
 class BaseGrpcStreamer:
     pass
+
+
+TGrpcStreamer = TypeVar("TGrpcStreamer", bound=BaseGrpcStreamer)
+
+
+class BaseGrpcStreamers(Generic[TGrpcStreamer]):
+    def __init__(self) -> None:
+        self.map: WeakValueDictionary[int, TGrpcStreamer] = WeakValueDictionary()
+        self.lock = threading.Lock()
+
+    def add(self, streamer: TGrpcStreamer) -> None:
+        with self.lock:
+            self.map[id(streamer)] = streamer
+
+    def __iter__(self) -> Iterator[TGrpcStreamer]:
+        with self.lock:
+            return iter(tuple(self.map.values()))
+
+    def remove(self, streamer: TGrpcStreamer) -> None:
+        with self.lock, contextlib.suppress(KeyError):
+            self.map.pop(id(streamer))
+
+
+TGrpcStreamers = TypeVar("TGrpcStreamers", bound=BaseGrpcStreamers[Any])
 
 
 class GrpcStreamer(BaseGrpcStreamer, ABC):
@@ -127,6 +150,14 @@ class GrpcStreamer(BaseGrpcStreamer, ABC):
         return is_stopped
 
 
+class GrpcStreamers(BaseGrpcStreamers[GrpcStreamer]):
+    def close(self) -> None:
+        for grpc_streamer in self:
+            # print("closing streamer")
+            grpc_streamer.stop()
+            # print("closed streamer")
+
+
 class AsyncGrpcStreamer(BaseGrpcStreamer, ABC):
     def __init__(self, grpc_streamers: AsyncGrpcStreamers) -> None:
         self._grpc_streamers = grpc_streamers
@@ -152,44 +183,12 @@ class AsyncGrpcStreamer(BaseGrpcStreamer, ABC):
         return is_stopped
 
 
-TGrpcStreamer = TypeVar("TGrpcStreamer", bound=BaseGrpcStreamer)
-
-
-class BaseGrpcStreamers(Generic[TGrpcStreamer]):
-    def __init__(self) -> None:
-        self.map: WeakValueDictionary[int, TGrpcStreamer] = WeakValueDictionary()
-        self.lock = threading.Lock()
-
-    def add(self, streamer: TGrpcStreamer) -> None:
-        with self.lock:
-            self.map[id(streamer)] = streamer
-
-    def __iter__(self) -> Iterator[TGrpcStreamer]:
-        with self.lock:
-            return iter(tuple(self.map.values()))
-
-    def remove(self, streamer: TGrpcStreamer) -> None:
-        with self.lock, contextlib.suppress(KeyError):
-            self.map.pop(id(streamer))
-
-
-class GrpcStreamers(BaseGrpcStreamers[GrpcStreamer]):
-    def close(self) -> None:
-        for grpc_streamer in self:
-            # print("closing streamer")
-            grpc_streamer.stop()
-            # print("closed streamer")
-
-
 class AsyncGrpcStreamers(BaseGrpcStreamers[AsyncGrpcStreamer]):
     async def close(self) -> None:
         for async_grpc_streamer in self:
             # print("closing streamer")
             await async_grpc_streamer.stop()
             # print("closed streamer")
-
-
-TGrpcStreamers = TypeVar("TGrpcStreamers", bound=BaseGrpcStreamers[Any])
 
 
 class BasicAuthCallCredentials(grpc.AuthMetadataPlugin):
@@ -209,7 +208,7 @@ def handle_rpc_error(e: grpc.RpcError) -> KurrentDBClientError:  # noqa: PLR0911
     """
     Converts gRPC errors to client exceptions.
     """
-    if isinstance(e, (grpc.Call, grpc.aio.AioRpcError)):
+    if isinstance(e, grpc.Call | grpc.aio.AioRpcError):
         details_str = e.details() or ""
 
         rich_status = rpc_status.from_call(e)  # type: ignore[arg-type]
@@ -411,23 +410,19 @@ def construct_recorded_event(
     read_event: streams_pb2.ReadResp.ReadEvent | persistent_pb2.ReadResp.ReadEvent,
 ) -> RecordedEvent | None:
     assert isinstance(
-        read_event, (streams_pb2.ReadResp.ReadEvent, persistent_pb2.ReadResp.ReadEvent)
+        read_event, streams_pb2.ReadResp.ReadEvent | persistent_pb2.ReadResp.ReadEvent
     )
     event = read_event.event
     assert isinstance(
         event,
-        (
-            streams_pb2.ReadResp.ReadEvent.RecordedEvent,
-            persistent_pb2.ReadResp.ReadEvent.RecordedEvent,
-        ),
+        streams_pb2.ReadResp.ReadEvent.RecordedEvent
+        | persistent_pb2.ReadResp.ReadEvent.RecordedEvent,
     )
     link = read_event.link
     assert isinstance(
         link,
-        (
-            streams_pb2.ReadResp.ReadEvent.RecordedEvent,
-            persistent_pb2.ReadResp.ReadEvent.RecordedEvent,
-        ),
+        streams_pb2.ReadResp.ReadEvent.RecordedEvent
+        | persistent_pb2.ReadResp.ReadEvent.RecordedEvent,
     )
 
     if event.id.string == "":  # pragma: no cover
@@ -510,14 +505,9 @@ def construct_recorded_event(
     #     )
 
 
-try:  # pragma: no cover
-    _ContextManager = AbstractContextManager[Iterator[RecordedEvent]]
-except TypeError:  # pragma: no cover
-    # For Python <= v3.9.
-    _ContextManager = AbstractContextManager  # type: ignore
-
-
-class RecordedEventIterator(Iterator[RecordedEvent], _ContextManager):
+class RecordedEventIterator(
+    Iterator[RecordedEvent], AbstractContextManager[Iterator[RecordedEvent]]
+):
     def __init__(self) -> None:
         self._is_context_manager_active = False
 
@@ -569,14 +559,10 @@ class AbstractPersistentSubscription(RecordedEventSubscription):
         pass  # pragma: no cover
 
 
-try:  # pragma: no cover
-    _AsyncContextManager = AbstractAsyncContextManager[AsyncIterator[RecordedEvent]]
-except TypeError:  # pragma: no cover
-    # For Python <= v3.9.
-    _AsyncContextManager = AbstractAsyncContextManager  # type: ignore
-
-
-class AsyncRecordedEventIterator(AsyncIterator[RecordedEvent], _AsyncContextManager):
+class AsyncRecordedEventIterator(
+    AsyncIterator[RecordedEvent],
+    AbstractAsyncContextManager[AsyncIterator[RecordedEvent]],
+):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._is_context_manager_active = False
@@ -635,7 +621,3 @@ class AbstractAsyncPersistentSubscription(AsyncRecordedEventSubscription):
         action: Literal["unknown", "park", "retry", "skip", "stop"],
     ) -> None:
         pass  # pragma: no cover
-
-
-def grpc_target(host: str, port: int | str) -> str:
-    return f"{host}:{port}"

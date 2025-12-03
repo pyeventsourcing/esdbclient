@@ -26,7 +26,6 @@ KURRENTDB_DOCKER_IMAGE ?= docker.kurrent.io/kurrent-latest/kurrentdb:25.1.0-x64-
 
 PYTHONUNBUFFERED=1
 PYTHONPATH=./tests
-SAMPLES_LINE_LENGTH=70
 
 POETRY_VERSION=2.2.1
 POETRY ?= poetry@$(POETRY_VERSION)
@@ -52,8 +51,7 @@ fmt: fmt-isort fmt-black fmt-ruff
 
 .PHONY: fmt-black
 fmt-black:
-	$(POETRY) run black --extend-exclude=samples .
-	$(POETRY) run black --line-length=$(SAMPLES_LINE_LENGTH) ./samples
+	$(POETRY) run black .
 
 .PHONY: fmt-ruff
 fmt-ruff:
@@ -66,16 +64,14 @@ fmt-ruff-unsafe:
 
 .PHONY: fmt-isort
 fmt-isort:
-	$(POETRY) run isort --extend-skip=samples .
-	$(POETRY) run isort --line-length=$(SAMPLES_LINE_LENGTH) samples
+	$(POETRY) run isort .
 
 .PHONY: lint
 lint: lint-python
 
 .PHONY: lint-black
 lint-black:
-	$(POETRY) run black --check --diff --extend-exclude samples .
-	$(POETRY) run black --check --diff --line-length=$(SAMPLES_LINE_LENGTH) ./samples
+	$(POETRY) run black --check --diff .
 
 .PHONY: lint-ruff
 lint-ruff:
@@ -87,8 +83,7 @@ lint-ruff:
 
 .PHONY: lint-isort
 lint-isort:
-	$(POETRY) run isort --check-only --diff --extend-skip-glob samples .
-	$(POETRY) run isort --check-only --diff --line-length=$(SAMPLES_LINE_LENGTH) samples
+	$(POETRY) run isort --check-only --diff .
 
 .PHONY: lint-mypy
 lint-mypy:

@@ -1,7 +1,8 @@
-import grpc.aio
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from kurrentdbclient.common import AsyncGrpcStreamers, GrpcStreamers
-from kurrentdbclient.connection_spec import ConnectionSpec
 from kurrentdbclient.gossip import AsyncGossipService, GossipService
 from kurrentdbclient.persistent import (
     AsyncPersistentSubscriptionsService,
@@ -10,6 +11,11 @@ from kurrentdbclient.persistent import (
 from kurrentdbclient.projections import AsyncProjectionsService, ProjectionsService
 from kurrentdbclient.streams import AsyncStreamsService, StreamsService
 from kurrentdbclient.v2streams import AsyncV2StreamsService, V2StreamsService
+
+if TYPE_CHECKING:
+    import grpc.aio
+
+    from kurrentdbclient.connection_spec import ConnectionSpec
 
 
 class BaseKurrentDBConnection:

@@ -6,7 +6,6 @@ import sys
 from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     Generic,
     Literal,
     Protocol,
@@ -61,13 +60,14 @@ from kurrentdbclient.instrumentation.opentelemetry.utils import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Callable, Iterable, Sequence
     from uuid import UUID
 
     import grpc
     from opentelemetry.util.types import AttributeValue
 
     from kurrentdbclient.client import BaseKurrentDBClient
+
 
 STREAMS_APPEND = "streams.append"
 STREAMS_SUBSCRIBE = "streams.subscribe"

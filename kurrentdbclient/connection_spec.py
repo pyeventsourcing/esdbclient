@@ -5,8 +5,6 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import ParseResult, parse_qs, urlparse
 from uuid import uuid4
 
-from kurrentdbclient.common import grpc_target
-
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
@@ -56,6 +54,10 @@ VALID_CONNECTION_QUERY_STRING_FIELDS = [
     "UserCertFile",
     "UserKeyFile",
 ]
+
+
+def grpc_target(host: str, port: int | str) -> str:
+    return f"{host}:{port}"
 
 
 class ConnectionOptions:
