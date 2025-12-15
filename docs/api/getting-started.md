@@ -16,19 +16,19 @@ Add the `kurrentdbclient` package to your Python project:
 ::: tabs
 @tab uv
 ```bash:no-line-numbers
-uv add "kurrentdbclient~=1.1"
+uv add "kurrentdbclient~=1.2"
 ```
 @tab poetry
 ```bash:no-line-numbers
-poetry add "kurrentdbclient~=1.1"
+poetry add "kurrentdbclient~=1.2"
 ```
 @tab pipenv
 ```bash:no-line-numbers
-pipenv install "kurrentdbclient~=1.1"
+pipenv install "kurrentdbclient~=1.2"
 ```
 @tab pip
 ```bash:no-line-numbers
-pip install "kurrentdbclient~=1.1" && pip freeze > requirements.txt
+pip install "kurrentdbclient~=1.2" && pip freeze > requirements.txt
 ```
 :::
 
@@ -186,7 +186,7 @@ await client.connect()  # connect to KurrentDB
 
 :::tip
 The sync and async client classes have identical methods, except the methods of the async client are
-defined with `async def` and so must be `await`-ed when called. 
+defined with `async def` and so must be `await`-ed when called.
 :::
 
 ## Test the connection
@@ -253,7 +253,7 @@ await client.append_to_stream(
 
 The `stream_name` parameter identifies the "stream" to which events will be appended.
 
-The `events` parameter is a list of `NewEvent` objects. The `NewEvent` class is a Python `dataclass`. 
+The `events` parameter is a list of `NewEvent` objects. The `NewEvent` class is a Python `dataclass`.
 
 The `current_version` parameter activates optimistic concurrent control. The `StreamState.NO_STREAM`
 argument indicates we require the stream has no previously recorded events.
