@@ -281,4 +281,4 @@ async for event in await client.read_stream("order:123"):
 
 The first parameter is used to identify the stream. In the example above, the given argument is `"order:123"`.
 
-See [Reading events](./appending-events.md) for more information about reading from KurrentDB.
+See [Reading events](./reading-events.md) for more information about reading from KurrentDB.
