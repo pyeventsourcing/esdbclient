@@ -37,6 +37,7 @@ from kurrentdbclient.exceptions import (
     GrpcDeadlineExceededError,
     GrpcError,
     InternalError,
+    InvalidCommitPositionError,
     KurrentDBClientError,
     MaximumSubscriptionsReachedError,
     MultiAppendToSameStreamError,
@@ -319,6 +320,11 @@ def handle_rpc_error(e: grpc.RpcError) -> KurrentDBClientError:  # noqa: PLR0911
             ):
                 # Projections.Delete does this....
                 return OperationFailedError(details_str)
+            # no cover <25.1: start
+            if "Unexpected FilteredReadAllResult: InvalidPosition" in details_str:
+                # Commit position does not exist.
+                return InvalidCommitPositionError(details_str)
+            # no cover <25.1: stop
             return UnknownError(details_str)  # pragma: no cover
 
         if e.code() == grpc.StatusCode.ABORTED:

@@ -24,7 +24,7 @@ class Benchmark(KurrentDBClientTestCase):
         print("Benchmarking client with blocking I/0...")
         print()
 
-        self.construct_esdb_client()
+        self.construct_client()
         # stream_name = "benchmark-" + uuid.uuid4().hex
         stream_name = "benchmark-static-000001"
         print("Warming up...")
@@ -92,7 +92,6 @@ class AsyncBenchmark(IsolatedAsyncioTestCase):
             uri="kdb://admin:changeit@localhost:2114",
             root_certificates=get_server_certificate("localhost:2114"),
         )
-        await self.client.connect()
 
     async def _test_benchmark(self) -> None:
         print("Benchmarking client with async I/0...")

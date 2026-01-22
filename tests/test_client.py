@@ -56,6 +56,7 @@ from kurrentdbclient.exceptions import (
     GrpcDeadlineExceededError,
     GrpcError,
     InternalError,
+    InvalidCommitPositionError,
     KurrentDBClientError,
     MaximumSubscriptionsReachedError,
     MultiAppendToSameStreamError,
@@ -115,6 +116,8 @@ elif "25.0" in KURRENTDB_DOCKER_IMAGE:
     SERVER_VERSION = (25, 0)
 elif "25.1" in KURRENTDB_DOCKER_IMAGE:
     SERVER_VERSION = (25, 1)
+elif "26.0" in KURRENTDB_DOCKER_IMAGE:
+    SERVER_VERSION = (26, 0)
 else:
     msg = "Couldn't extract server version from KURRENTDB_DOCKER_IMAGE"
     raise ValueError(msg)
@@ -460,7 +463,7 @@ class KurrentDBClientTestCase(TimedTestCase):
     KDB_TLS = True
     KDB_CLUSTER_SIZE = 1
 
-    def construct_esdb_client(self, qs: str = "") -> None:
+    def construct_client(self, qs: str = "") -> None:
         if self.KDB_CLUSTER_SIZE > 1:
             qs = f"MaxDiscoverAttempts=2&DiscoveryInterval=100&GossipTimeout=1&{qs}"
         if self.KDB_TLS:
@@ -498,21 +501,21 @@ class KurrentDBClientTestCase(TimedTestCase):
 
 class TestKurrentDBClient(KurrentDBClientTestCase):
     def test_context_manager(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         self.assertFalse(self.client.is_closed)
         with self.client:
             self.assertFalse(self.client.is_closed)
         self.assertTrue(self.client.is_closed)
 
     def test_close(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         self.assertFalse(self.client.is_closed)
         self.client.close()
         self.assertTrue(self.client.is_closed)
         self.client.close()
         self.assertTrue(self.client.is_closed)
 
-        self.construct_esdb_client()
+        self.construct_client()
         self.assertFalse(self.client.is_closed)
         self.client.close()
         self.assertTrue(self.client.is_closed)
@@ -524,7 +527,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         # logical because the stream might be written after the subscription. So here
         # we just test get_stream().
 
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         read_response = self.client.read_stream(stream_name)
@@ -559,7 +562,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     def test_stream_append_to_stream(self) -> None:
         # This method exists to match other language clients.
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -587,7 +590,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[2].commit_position, commit_position2)
 
     def test_append_to_stream_wrong_credentials(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name1 = str(uuid4())
 
         # Construct a new event.
@@ -649,7 +652,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     def test_stream_append_event_with_current_version(self) -> None:
         cm: _AssertRaisesContext[Any]
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         # Check stream not found.
@@ -925,7 +928,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         if self.KDB_CLUSTER_SIZE > 1 or self.KDB_TLS is not True:
             self.skipTest("This test doesn't work with this configuration")
 
-        self.construct_esdb_client()
+        self.construct_client()
         event_type = "EventType" + str(uuid4()).replace("-", "")[:5]
 
         # Append new events (stream does not exist).
@@ -959,7 +962,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 subscription.stop()
 
     def test_stream_append_event_with_stream_state_any(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         # Append new event (works, stream does not exist).
@@ -982,7 +985,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[1].id, event2.id)
 
     def test_stream_append_event_with_stream_state_stream_exists(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         event1 = NewEvent(type="Snapshot", data=random_data())
@@ -1122,7 +1125,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     #     self.assertEqual(events[1].id, event2.id)
 
     def test_stream_append_events_with_current_version(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         commit_position0 = self.client.get_commit_position()
@@ -1177,7 +1180,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[1].id, event2.id)
 
     def test_stream_append_events_with_stream_state_any(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         commit_position0 = self.client.get_commit_position()
@@ -1226,7 +1229,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert events[3].commit_position == commit_position4
 
     def test_stream_append_events_with_stream_state_stream_exists(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         commit_position0 = self.client.get_commit_position()
@@ -1280,7 +1283,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert events[3].commit_position == commit_position4
 
     def test_commit_position(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         event1 = NewEvent(type="Snapshot", data=b"{}", metadata=b"{}")
@@ -1302,7 +1305,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(self.client.get_commit_position(), commit_position)
 
     def test_stream_append_events_raises_deadline_exceeded(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         large_data = b"a" * 10000
         # Append two events.
@@ -1335,7 +1338,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         #     self.client.get_stream(stream_name1, timeout=0)
 
     def test_read_all_filter_default(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         num_old_events = len(list(self.client.read_all()))
 
@@ -1502,7 +1505,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(expected, actual)
 
     def test_read_all_filter_include_event_types(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         commit_position = self.client.get_commit_position()
 
@@ -1584,7 +1587,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         )
 
     def test_read_all_filter_exclude_event_types(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
@@ -1719,7 +1722,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         )
 
     def test_read_all_filter_include_stream_identifiers(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
@@ -1774,7 +1777,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         )
 
     def test_read_all_filter_exclude_stream_identifiers(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
@@ -1837,7 +1840,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         )
 
     def test_read_all_filter_include_ignores_filter_exclude(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
@@ -1868,7 +1871,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         if self.KDB_CLUSTER_SIZE > 1 or self.KDB_TLS is not True:
             self.skipTest("This test doesn't work with this configuration")
 
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Read all events.
         read_response = self.client.read_all(filter_exclude=[])
@@ -1901,7 +1904,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         if self.KDB_CLUSTER_SIZE > 1 or self.KDB_TLS is not True:
             self.skipTest("This test doesn't work with this configuration")
 
-        self.construct_esdb_client()
+        self.construct_client()
         commit_position = self.client.get_commit_position()
 
         # Append new events.
@@ -1959,7 +1962,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertGreater(count, 1)
 
     def test_stream_delete_with_current_version(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         # Check stream not found.
@@ -2060,7 +2063,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.client.delete_stream(stream_name, current_version=3)
 
     def test_read_all_raises_deadline_exceeded(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
@@ -2087,8 +2090,34 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         with self.assertRaises(GrpcDeadlineExceededError):
             list(read_response)
 
+    @skipIf(
+        SERVER_VERSION <= (25, 0),
+        "Server doesn't give enough information about "
+        "'Unexpected FilteredReadAllResult' to be sure",
+    )
+    def test_read_all_raises_invalid_commit_position(self) -> None:
+        self.construct_client()
+
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+
+        # Append new event.
+        stream_name1 = str(uuid4())
+        commit_position = self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1],
+        )
+
+        # Timeout reading all events.
+        read_response = self.client.read_all(
+            commit_position=commit_position - 1, limit=1
+        )
+
+        with self.assertRaises(InvalidCommitPositionError):
+            list(read_response)
+
     def test_read_all_can_be_stopped(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
         event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
@@ -2121,7 +2150,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(0, len(events))
 
     def test_get_commit_position(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
 
@@ -2140,7 +2169,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(0, commit_position3)
 
     def test_stream_delete_with_any_current_version(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         # Check stream not found.
@@ -2210,7 +2239,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.client.delete_stream(stream_name, current_version=StreamState.ANY)
 
     def test_stream_delete_expecting_stream_exists(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         # Check stream not found.
@@ -2287,7 +2316,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.client.delete_stream(stream_name, current_version=StreamState.EXISTS)
 
     def test_tombstone_stream_with_current_version(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         # Check stream not found.
@@ -2339,7 +2368,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.client.append_events(stream_name, current_version=1, events=[event3])
 
     def test_tombstone_stream_with_any_current_version(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name1 = str(uuid4())
 
         # Can tombstone stream that doesn't exist, while expecting "any" version.
@@ -2385,7 +2414,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.client.get_current_version(stream_name2)
 
     def test_tombstone_stream_expecting_stream_exists(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         # Check stream not found.
@@ -2431,7 +2460,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.client.get_current_version(stream_name)
 
     def test_subscribe_to_all_filter_exclude_system_events(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
@@ -2477,7 +2506,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[2].id, event6.id)
 
     def test_subscribe_to_all_filter_exclude_nothing(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -2502,7 +2531,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.fail("Didn't get the $metadata event")
 
     def test_subscribe_to_all_filter_include_event_types(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -2536,7 +2565,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertGreater(len(events), 0)
 
     def test_subscribe_to_all_filter_include_stream_names(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -2592,7 +2621,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 break
 
     def test_subscribe_to_all_include_checkpoints(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -2623,7 +2652,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
     def test_subscribe_to_all_include_caught_up(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         commit_position = self.client.get_commit_position()
 
@@ -2662,7 +2691,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     @skipIf(SERVER_VERSION >= (22, 10), "'Extra checkpoint' bug was fixed")
     def test_demonstrate_extra_checkpoint_bug(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         initial_commit_position = self.client.get_commit_position()
 
@@ -2765,7 +2794,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     @skipIf(SERVER_VERSION <= (21, 10), "'Extra checkpoint' bug not fixed")
     def test_extra_checkpoint_bug_is_fixed(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -2874,7 +2903,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.fail(fail_msg)
 
     def test_subscribe_to_all_from_commit_position_zero(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -2898,7 +2927,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(count, 1)
 
     def test_subscribe_to_all_from_commit_position_current(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -2934,7 +2963,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[1].id, event3.id)
 
     def test_subscribe_to_all_from_end(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append an event.
         event1 = NewEvent(type="OrderCreated", data=random_data())
@@ -2972,7 +3001,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[1].id, event3.id)
 
     def test_subscribe_to_all_raises_deadline_exceeded(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -3002,7 +3031,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.fail("Didn't get any events before deadline, despite retries")
 
     def test_subscribe_to_all_can_be_stopped(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append new events.
         event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
@@ -3026,7 +3055,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     def _test_subscribe_to_all_raises_consumer_too_slow(self) -> None:
         # Todo: The server behaviour is too unreliable to run this test.
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Subscribe from the end.
         subscription = self.client.subscribe_to_all(
@@ -3052,7 +3081,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     def _a_better_test_subscribe_to_all_raises_consumer_too_slow(self) -> None:
         # Todo: The server behaviour is too unreliable to run this test.
 
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Subscribe from the beginning.
         subscription = self.client.subscribe_to_all()
@@ -3074,7 +3103,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.fail("Didn't see 'ConsumerTooSlow' error")
 
     def test_subscribe_to_stream_from_start(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
@@ -3129,7 +3158,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[2].id, event9.id)
 
     def test_subscribe_to_stream_from_end(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
@@ -3181,7 +3210,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[2].id, event9.id)
 
     def test_subscribe_to_stream_from_stream_position(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
@@ -3241,7 +3270,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[3].id, event9.id)
 
     def test_subscribe_to_stream_can_be_stopped(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Subscribe to a stream.
         stream_name1 = str(uuid4())
@@ -3268,7 +3297,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         "Server doesn't support 'caught up' or 'fell behind' messages",
     )
     def test_subscribe_to_stream_include_caught_up(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         event1 = NewEvent(type="OrderCreated", data=random_data())
         event2 = NewEvent(type="OrderUpdated", data=random_data())
@@ -3305,7 +3334,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 break
 
     def test_subscription_to_all_read_with_ack_event_id(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3339,7 +3368,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert events[-1].data == event3.data
 
     def test_subscription_to_all_read_with_ack_event_object(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3373,7 +3402,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert events[-1].data == event3.data
 
     def test_subscription_to_all_read_with_nack_unknown(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3407,7 +3436,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert events[-1].data == event3.data
 
     def test_subscription_to_all_read_with_nack_park(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3441,7 +3470,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert events[-1].data == event3.data
 
     def test_subscription_to_all_replay_parked(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3489,7 +3518,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert replayed_events[-1].data == event3.data
 
     def test_subscription_to_all_ack_with_wrong_object(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3523,7 +3552,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertIsInstance(cm.exception.__cause__, ValueError)
 
     def test_subscription_to_stream_replay_parked(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3574,7 +3603,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert replayed_events[-1].data == event3.data
 
     def test_subscription_to_all_read_with_nack_retry(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3620,7 +3649,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 break
 
     def test_subscription_to_all_read_with_nack_skip(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3654,7 +3683,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert events[-1].data == event3.data
 
     def test_subscription_to_all_read_with_nack_stop(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3688,7 +3717,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert events[-1].data == event3.data
 
     def test_persistent_subscription_ack_after_stop(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         group_name = str(uuid4())
         self.client.create_subscription_to_all(group_name)
@@ -3711,7 +3740,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     def test_subscription_to_all_read_with_message_timeout_event_buffer_size_1(
         self,
     ) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3760,7 +3789,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     def test_subscription_to_all_read_with_message_timeout_event_buffer_size_10(
         self,
     ) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3809,7 +3838,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     def test_subscription_to_all_read_with_max_retry_count_3(
         self,
     ) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3943,7 +3972,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     #     # subscription1.stop()
 
     def test_subscription_to_all_can_be_stopped(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -3973,7 +4002,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert len(events) == 0
 
     def test_subscription_to_all_from_commit_position(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append one event.
         stream_name1 = str(uuid4())
@@ -4000,8 +4029,16 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         # Read events from subscription.
         subscription = self.client.read_subscription_to_all(group_name=group_name)
 
+        seen_first = False
+
         events = []
         for event in subscription:
+
+            # Demonstrate commit position is inclusive.
+            if not seen_first:
+                self.assertEqual(event.commit_position, commit_position)
+                seen_first = True
+
             subscription.ack(event)
 
             events.append(event)
@@ -4017,7 +4054,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert events[2].id == event3.id
 
     def test_subscription_to_all_from_end(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -4061,7 +4098,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert events[2].data == event3.data
 
     def test_subscription_to_all_filter_exclude_event_types(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -4094,7 +4131,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 break
 
     def test_subscription_to_all_filter_exclude_stream_names(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         stream_name1 = str(uuid4())
         prefix1 = str(uuid4())
@@ -4158,7 +4195,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 break
 
     def test_subscription_to_all_filter_include_event_types(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -4190,7 +4227,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 break
 
     def test_subscription_to_all_filter_include_stream_names(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         stream_name1 = str(uuid4())
         prefix1 = str(uuid4())
@@ -4263,7 +4300,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     def test_subscription_to_all_filter_nothing(self) -> None:
         if self.KDB_CLUSTER_SIZE > 1 or self.KDB_TLS is not True:
             self.skipTest("This test doesn't work with this configuration")
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-subscription-{uuid4().hex}"
@@ -4284,7 +4321,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     def test_subscription_to_all_resolve_links(self) -> None:
         if self.KDB_CLUSTER_SIZE > 1 or self.KDB_TLS is not True:
             self.skipTest("This test doesn't work with this configuration")
-        self.construct_esdb_client()
+        self.construct_client()
         commit_position = self.client.get_commit_position()
 
         event_type = "EventType" + str(uuid4()).replace("-", "")[:5]
@@ -4340,7 +4377,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 break
 
     def test_subscription_to_all_with_consumer_strategy_round_robin(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name1 = f"my-subscription-{uuid4().hex}"
@@ -4401,7 +4438,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertLess((len1 - len2) ** 2, 2)
 
     def test_subscription_to_all_raises_maximum_subscriptions_reached(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name1 = f"my-subscription-{uuid4().hex}"
@@ -4423,7 +4460,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         # in the async client, as reported by Bruno van de Werve in:
         # https://github.com/pyeventsourcing/kurrentdbclient/issues/35
 
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name1 = f"my-subscription-{uuid4().hex}"
@@ -4509,7 +4546,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         # in the async client, as reported by Bruno van de Werve in:
         # https://github.com/pyeventsourcing/kurrentdbclient/issues/35
 
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name1 = f"my-subscription-{uuid4().hex}"
@@ -4595,7 +4632,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         print("None of the acked events was redelivered")
 
     def test_subscription_get_info(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         group_name = f"my-subscription-{uuid4().hex}"
 
@@ -4617,7 +4654,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(connection_info.from_, "")
 
     def test_subscriptions_list(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         subscriptions_before = self.client.list_subscriptions()
 
@@ -4647,7 +4684,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertIn(group_name2, group_names)
 
     def test_subscription_to_all_already_exists(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         group_name = f"my-subscription-{uuid4().hex}"
 
@@ -4659,7 +4696,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.client.create_subscription_to_all(group_name)
 
     def test_subscription_to_all_update(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         group_name = f"my-subscription-{uuid4().hex}"
 
@@ -5154,7 +5191,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     def test_subscription_to_all_wrong_history_buffer_size_raises_internal_error(
         self,
     ) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         group_name = f"my-group-{uuid4().hex}"
 
@@ -5176,7 +5213,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     def test_subscription_to_all_invalid_consumer_strategy(
         self,
     ) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         group_name = f"my-group-{uuid4().hex}"
 
@@ -5195,7 +5232,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             )
 
     def test_subscription_delete(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         group_name = f"my-subscription-{uuid4().hex}"
 
@@ -5225,7 +5262,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.client.delete_subscription(group_name=group_name)
 
     def test_subscription_to_stream_from_start(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append some events.
         stream_name1 = str(uuid4())
@@ -5306,7 +5343,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[5].id, event12.id)
 
     def test_subscription_to_stream_from_stream_position(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append some events.
         stream_name1 = str(uuid4())
@@ -5343,8 +5380,16 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             stream_name=stream_name2,
         )
 
+        seen_first = False
+
         events = []
         for event in subscription:
+
+            # Demonstrate stream position is inclusive.
+            if not seen_first:
+                self.assertEqual(event.stream_position, 1)
+                seen_first = True
+
             subscription.ack(event)
             events.append(event)
             if event.id == event6.id:
@@ -5386,7 +5431,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[4].id, event12.id)
 
     def test_subscription_to_stream_from_end(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append some events.
         stream_name1 = str(uuid4())
@@ -5455,7 +5500,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     def test_subscription_to_stream_with_consumer_strategy_round_robin(
         self,
     ) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         stream_name1 = str(uuid4())
 
@@ -5516,7 +5561,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events2[1].id, event4.id)
 
     def test_subscription_to_stream_can_be_stopped(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Append some events.
         stream_name1 = str(uuid4())
@@ -5560,7 +5605,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(0, len(events))
 
     def test_subscription_to_stream_get_info(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         stream_name = str(uuid4())
         group_name = f"my-subscription-{uuid4().hex}"
@@ -5584,7 +5629,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(info.group_name, group_name)
 
     def test_stream_subscriptions_list(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         stream_name = str(uuid4())
 
@@ -5608,7 +5653,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertIn(group_name, group_names)
 
     def test_subscription_to_stream_update(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         group_name = f"my-subscription-{uuid4().hex}"
         stream_name = f"my-stream-{uuid4().hex}"
@@ -6120,7 +6165,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(info.extra_statistics, True)
 
     def test_subscription_to_stream_raises_maximum_subscriptions_reached(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         # Create persistent subscription.
         group_name = f"my-group-{uuid4().hex}"
@@ -6144,7 +6189,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         subscription2.stop()
 
     def test_subscription_to_stream_already_exists(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         group_name = f"my-group-{uuid4().hex}"
         stream_name = f"my-stream-{uuid4().hex}"
@@ -6157,7 +6202,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.client.create_subscription_to_stream(group_name, stream_name)
 
     def test_subscription_to_stream_delete(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         stream_name = str(uuid4())
         group_name = f"my-subscription-{uuid4().hex}"
@@ -6196,7 +6241,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     def test_subscription_to_stream_resolve_links(self) -> None:
         if self.KDB_CLUSTER_SIZE > 1 or self.KDB_TLS is not True:
             self.skipTest("This test doesn't work with this configuration")
-        self.construct_esdb_client()
+        self.construct_client()
 
         event_type = "EventType" + str(uuid4()).replace("-", "")[:5]
 
@@ -6360,7 +6405,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     #         print()
 
     def test_stream_metadata_get_and_set(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         # Append batch of new events.
@@ -6463,7 +6508,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.client.get_stream_metadata(stream_name)
 
     def test_gossip_read(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         if self.KDB_CLUSTER_SIZE == 1:
             cluster_info = self.client.read_gossip()
             self.assertEqual(len(cluster_info), 1)
@@ -6499,7 +6544,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             self.fail(f"Test doesn't work with cluster size {self.KDB_CLUSTER_SIZE}")
 
     def test_create_projection(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         # Create "continuous" projection.
         projection_name = str(uuid4())
         self.client.create_projection(query="", name=projection_name)
@@ -6540,7 +6585,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             )
 
     def test_update_projection(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         projection_name = str(uuid4())
 
         # Raises NotFound unless projection exists.
@@ -6558,7 +6603,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         )
 
     def test_delete_projection(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         projection_name = str(uuid4())
 
         # Raises NotFound unless projection exists.
@@ -6591,7 +6636,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 )
 
     def test_get_projection_statistics(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         projection_name = str(uuid4())
 
         # Raises NotFound unless projection exists.
@@ -6610,7 +6655,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     # @skip("Listing projection statistics is flaky (error thrown by handler)")
     # # Todo: Figure out why this sometimes works and sometimes doesn't.
     def test_list_all_projection_statistics(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         projection_name = str(uuid4())
 
         # Create named projection.
@@ -6628,7 +6673,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     # @skip("Listing projection statistics is flaky (error thrown by handler)")
     # # Todo: Figure out why this sometimes works and sometimes doesn't.
     def test_list_continuous_projection_statistics(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         projection_name = str(uuid4())
 
         # Create named projection.
@@ -6644,7 +6689,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertIsInstance(statistics[0], ProjectionStatistics)
 
     def test_disable_projection(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         projection_name = str(uuid4())
 
         # Raises NotFound unless projection exists.
@@ -6658,7 +6703,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.client.disable_projection(name=projection_name)
 
     def test_abort_projection(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         projection_name = str(uuid4())
 
         # Raises NotFound unless projection exists.
@@ -6672,7 +6717,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.client.abort_projection(name=projection_name)
 
     def test_enable_projection(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         projection_name = str(uuid4())
 
         # Raises NotFound unless projection exists.
@@ -6686,7 +6731,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.client.enable_projection(name=projection_name)
 
     def test_reset_projection(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         projection_name = str(uuid4())
 
         # Raises NotFound unless projection exists.
@@ -6700,7 +6745,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.client.reset_projection(name=projection_name)
 
     def test_get_projection_state(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         projection_name = str(uuid4())
 
         # Raises NotFound unless projection exists.
@@ -6727,7 +6772,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(state.value, {})
 
     def test_get_projection_state_partition(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = "stream-partitioned-projection-" + str(uuid4())
         projection_name = str(uuid4())
         projection_query = (
@@ -6816,11 +6861,11 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     #     self.assertEqual(state.value, {})
 
     def test_restart_projections_subsystem(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         self.client.restart_projections_subsystem()
 
     def test_projection_example(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
 
         application_stream_name = "account-" + str(uuid4())
         emitted_stream_name = "emitted-" + str(uuid4())
@@ -7046,7 +7091,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
     def test_stream_multi_append_one_stream(self) -> None:
         cm: _AssertRaisesContext[Any]
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         # Check stream not found.
@@ -7377,7 +7422,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
     def test_stream_multi_append_many_streams(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name1 = str(uuid4())
         stream_name2 = str(uuid4())
 
@@ -7492,7 +7537,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
     def test_stream_multi_append_wrong_credentials(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name1 = str(uuid4())
 
         # Construct a new event.
@@ -7513,7 +7558,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
     def test_stream_multi_append_stream_already_exists_error(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name1 = str(uuid4())
 
         # Construct a new event.
@@ -7561,7 +7606,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     @skip("This works but clogs the server and doesn't increase test coverage")
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
     def test_stream_multi_append_record_max_size_exceeded_error(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name1 = str(uuid4())
 
         # Construct a new event.
@@ -7590,7 +7635,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
     @skip("This workds but clogs the server and doesn't increase test coverage")
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
     def test_stream_multi_append_transaction_max_size_exceeded_error(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name1 = str(uuid4())
 
         # Construct a new event.
@@ -7632,7 +7677,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
     def test_stream_multi_append_same_stream_error(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name1 = str(uuid4())
 
         # Construct a new event.
@@ -7673,7 +7718,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
     def test_stream_multi_append_tombstoned_stream_error(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name1 = str(uuid4())
 
         # Construct a new event.
@@ -7703,7 +7748,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
     def test_stream_multi_append_metadata_conversions_and_errors(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name = str(uuid4())
 
         def append_helper(metadata: bytes) -> None:
@@ -7749,7 +7794,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
     def test_stream_multi_append_deadline_exceeded(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name1 = str(uuid4())
 
         # Construct a new event.
@@ -7771,7 +7816,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support secondary indexes")
     def test_read_index(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name1 = str(uuid4())
 
         event_type = f"OrderCreated{uuid4()!s}"
@@ -7854,7 +7899,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
 
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support secondary indexes")
     def test_subscribe_to_index(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         stream_name1 = str(uuid4())
         event_type = f"OrderCreated{uuid4()!s}"
 
@@ -8841,7 +8886,7 @@ class TestRaisesDiscoveryFailed(KurrentDBClientTestCase):
 
     def test(self) -> None:
         with self.assertRaises(DiscoveryFailedError):
-            self.construct_esdb_client()
+            self.construct_client()
 
 
 class TestConnectsDespiteBadTarget(KurrentDBClientTestCase):
@@ -8849,7 +8894,7 @@ class TestConnectsDespiteBadTarget(KurrentDBClientTestCase):
     KDB_TLS = False
 
     def test(self) -> None:
-        self.construct_esdb_client()
+        self.construct_client()
         self.client.get_commit_position()
         self.assertEqual("localhost:2113", self.client.connection_target)
 
@@ -8860,14 +8905,14 @@ class TestConnectToPreferredNode(KurrentDBClientTestCase):
 
     def test_no_followers(self) -> None:
         with self.assertRaises(FollowerNotFoundError):
-            self.construct_esdb_client("NodePreference=follower")
+            self.construct_client("NodePreference=follower")
 
     def test_no_read_only_replicas(self) -> None:
         with self.assertRaises(ReadOnlyReplicaNotFoundError):
-            self.construct_esdb_client("NodePreference=readonlyreplica")
+            self.construct_client("NodePreference=readonlyreplica")
 
     def test_random(self) -> None:
-        self.construct_esdb_client("NodePreference=random")
+        self.construct_client("NodePreference=random")
 
 
 class TestSubscriptionReadRequest(TimedTestCase):

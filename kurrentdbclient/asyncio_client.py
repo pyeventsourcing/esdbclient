@@ -52,6 +52,7 @@ from kurrentdbclient.exceptions import (
     GrpcError,
     NodeIsNotLeaderError,
     NotFoundError,
+    ProgrammingError,
     ServiceUnavailableError,
 )
 
@@ -70,6 +71,7 @@ def autoreconnect(f: _TCallable) -> _TCallable:
     async def autoreconnect_decorator(
         client: AsyncKurrentDBClient, *args: Any, **kwargs: Any
     ) -> Any:
+        await client.connect()
         try:
             return await f(client, *args, **kwargs)
 
@@ -129,22 +131,36 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
             private_key=private_key,
             certificate_chain=certificate_chain,
         )
+        self._connection: AsyncKurrentDBConnection | None = None
         self._is_reconnection_required = Event()
-        self._reconnection_lock = Lock()
+        self._connection_lock = Lock()
+
+    async def connect(self) -> None:
+        if self._connection is None:
+            async with self._connection_lock:
+                if self._connection is None:
+                    self._connection = await self._connect()
+                else:  # for coverage with Python <= 3.11
+                    pass
+
+    @property
+    def connection(self) -> AsyncKurrentDBConnection:
+        connection = self._connection
+        if connection is None:
+            msg = "Connection was never established"
+            raise ProgrammingError(msg)
+        return connection
 
     @property
     def connection_target(self) -> str:
-        return self._connection.grpc_target
-
-    async def connect(self) -> None:
-        self._connection = await self._connect()
+        return self.connection.grpc_target
 
     async def reconnect(self, grpc_target: str | None = None) -> None:
         self._is_reconnection_required.set()
-        async with self._reconnection_lock:
+        async with self._connection_lock:
             if self._is_reconnection_required.is_set():
                 new = await self._connect(grpc_target)
-                old, self._connection = self._connection, new
+                old, self._connection = self.connection, new
                 await old.close()
                 self._is_reconnection_required.clear()
             else:  # pragma: no cover
@@ -283,7 +299,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         if isinstance(events, NewEvent):
             events = [events]
 
-        return await self._connection.streams.batch_append(
+        return await self.connection.streams.batch_append(
             stream_name=stream_name,
             current_version=current_version,
             events=events,
@@ -308,7 +324,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         timeout = timeout if timeout is not None else self._default_deadline
         if isinstance(events, NewEvents):
             events = [events]
-        return await self._connection.v2streams.multi_append(
+        return await self.connection.v2streams.multi_append(
             events=events,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -334,7 +350,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         Reads recorded events in "all streams" in the database.
         """
-        return await self._connection.streams.read(
+        return await self.connection.streams.read(
             commit_position=commit_position,
             backwards=backwards,
             resolve_links=resolve_links,
@@ -442,7 +458,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         Reads recorded events from the named stream.
         """
-        return await self._connection.streams.read(
+        return await self.connection.streams.read(
             stream_name=stream_name,
             stream_position=stream_position,
             backwards=backwards,
@@ -531,7 +547,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         Starts a catch-up subscription, from which all
         recorded events in the database can be received.
         """
-        return await self._connection.streams.read(
+        return await self.connection.streams.read(
             commit_position=commit_position,
             from_end=from_end,
             resolve_links=resolve_links,
@@ -637,7 +653,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         Starts a catch-up subscription from which
         recorded events in a stream can be received.
         """
-        return await self._connection.streams.read(
+        return await self.connection.streams.read(
             stream_name=stream_name,
             stream_position=stream_position,
             from_end=from_end,
@@ -662,7 +678,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
     ) -> None:
         # Todo: Reconsider using current_version=None to indicate "stream exists"?
         timeout = timeout if timeout is not None else self._default_deadline
-        await self._connection.streams.delete(
+        await self.connection.streams.delete(
             stream_name=stream_name,
             current_version=current_version,
             timeout=timeout,
@@ -681,7 +697,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         credentials: grpc.CallCredentials | None = None,
     ) -> None:
         timeout = timeout if timeout is not None else self._default_deadline
-        await self._connection.streams.tombstone(
+        await self.connection.streams.tombstone(
             stream_name=stream_name,
             current_version=current_version,
             timeout=timeout,
@@ -699,12 +715,13 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         credentials: grpc.CallCredentials | None = None,
     ) -> int | Literal[StreamState.NO_STREAM]:
         """
-        Returns the current position of the end of a stream.
+        Returns the current position of the end of a stream,
+        or StreamState.NO_STREAM if the stream is not found.
         """
         try:
             events = [
                 e
-                async for e in await self._connection.streams.read(
+                async for e in await self.connection.streams.read(
                     stream_name=stream_name,
                     backwards=True,
                     limit=1,
@@ -841,7 +858,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        await self._connection.persistent_subscriptions.create(
+        await self.connection.persistent_subscriptions.create(
             group_name=group_name,
             from_end=from_end,
             commit_position=commit_position,
@@ -973,7 +990,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        await self._connection.persistent_subscriptions.create(
+        await self.connection.persistent_subscriptions.create(
             group_name=group_name,
             stream_name=stream_name,
             from_end=from_end,
@@ -1011,7 +1028,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         Reads a persistent subscription on all streams.
         """
-        return await self._connection.persistent_subscriptions.read(
+        return await self.connection.persistent_subscriptions.read(
             group_name=group_name,
             event_buffer_size=event_buffer_size,
             max_ack_batch_size=max_ack_batch_size,
@@ -1039,7 +1056,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         Reads a persistent subscription on one stream.
         """
-        return await self._connection.persistent_subscriptions.read(
+        return await self.connection.persistent_subscriptions.read(
             group_name=group_name,
             stream_name=stream_name,
             event_buffer_size=event_buffer_size,
@@ -1064,7 +1081,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         Gets info for a persistent subscription.
         """
-        return await self._connection.persistent_subscriptions.get_info(
+        return await self.connection.persistent_subscriptions.get_info(
             group_name=group_name,
             stream_name=stream_name,
             timeout=timeout,
@@ -1083,7 +1100,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         Lists all persistent subscriptions.
         """
-        return await self._connection.persistent_subscriptions.list(
+        return await self.connection.persistent_subscriptions.list(
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1101,7 +1118,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         Lists persistent stream subscriptions.
         """
-        return await self._connection.persistent_subscriptions.list(
+        return await self.connection.persistent_subscriptions.list(
             stream_name=stream_name,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -1262,7 +1279,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
             extra_statistics=extra_statistics,
         )
 
-        await self._connection.persistent_subscriptions.update(
+        await self.connection.persistent_subscriptions.update(
             group_name=group_name,
             stream_name=stream_name,
             **kwargs,
@@ -1417,7 +1434,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
             extra_statistics=extra_statistics,
         )
 
-        await self._connection.persistent_subscriptions.update(
+        await self.connection.persistent_subscriptions.update(
             group_name=group_name,
             **kwargs,
             timeout=timeout if timeout is not None else self._default_deadline,
@@ -1437,7 +1454,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
     ) -> None:
         timeout = timeout if timeout is not None else self._default_deadline
 
-        await self._connection.persistent_subscriptions.replay_parked(
+        await self.connection.persistent_subscriptions.replay_parked(
             group_name=group_name,
             stream_name=stream_name,
             timeout=timeout,
@@ -1460,7 +1477,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        await self._connection.persistent_subscriptions.delete(
+        await self.connection.persistent_subscriptions.delete(
             group_name=group_name,
             stream_name=stream_name,
             timeout=timeout,
@@ -1485,7 +1502,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        await self._connection.projections.create(
+        await self.connection.projections.create(
             query=query,
             name=name,
             emit_enabled=emit_enabled,
@@ -1511,7 +1528,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        await self._connection.projections.update(
+        await self.connection.projections.update(
             name=name,
             query=query,
             emit_enabled=emit_enabled,
@@ -1537,7 +1554,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        await self._connection.projections.delete(
+        await self.connection.projections.delete(
             name=name,
             delete_emitted_streams=delete_emitted_streams,
             delete_state_stream=delete_state_stream,
@@ -1561,7 +1578,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        return await self._connection.projections.get_statistics(
+        return await self.connection.projections.get_statistics(
             name=name,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -1581,7 +1598,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        return await self._connection.projections.list_statistics(
+        return await self.connection.projections.list_statistics(
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1600,7 +1617,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        return await self._connection.projections.list_statistics(
+        return await self.connection.projections.list_statistics(
             all=True,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -1621,7 +1638,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        await self._connection.projections.disable(
+        await self.connection.projections.disable(
             name=name,
             write_checkpoint=True,
             timeout=timeout,
@@ -1643,7 +1660,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        await self._connection.projections.disable(
+        await self.connection.projections.disable(
             name=name,
             write_checkpoint=False,
             timeout=timeout,
@@ -1665,7 +1682,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        await self._connection.projections.enable(
+        await self.connection.projections.enable(
             name=name,
             timeout=timeout,
             metadata=self._call_metadata,
@@ -1686,7 +1703,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        await self._connection.projections.reset(
+        await self.connection.projections.reset(
             name=name,
             write_checkpoint=True,
             timeout=timeout,
@@ -1709,7 +1726,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        return await self._connection.projections.get_state(
+        return await self.connection.projections.get_state(
             name=name,
             partition=partition,
             timeout=timeout,
@@ -1752,7 +1769,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         """
         timeout = timeout if timeout is not None else self._default_deadline
 
-        return await self._connection.projections.restart_subsystem(
+        return await self.connection.projections.restart_subsystem(
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
@@ -1761,7 +1778,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
     async def close(self) -> None:
         if not self._is_closed:
             try:
-                esdb_connection = self._connection
+                esdb_connection = self.connection
                 del self._connection
             except AttributeError:  # pragma: no cover
                 pass
@@ -1770,6 +1787,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
                 self._is_closed = True
 
     async def __aenter__(self) -> Self:
+        await self.connect()
         return self
 
     async def __aexit__(self, *args: object, **kwargs: Any) -> None:

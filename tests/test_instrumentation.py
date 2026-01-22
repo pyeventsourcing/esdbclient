@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 from abc import ABC, abstractmethod
 from copy import deepcopy
@@ -1333,7 +1332,7 @@ class AsyncKurrentDBClientInstrumentorTestCase(
 
     @staticmethod
     async def async_break_client_connection(client: AsyncKurrentDBClient) -> None:
-        await client._connection._grpc_channel.close(grace=None)
+        await client.connection._grpc_channel.close(grace=None)
         client.connection_spec._targets = ["localhost:1000"]
 
 
@@ -1640,22 +1639,6 @@ class TestUtils(
         self.assertEqual(repr(expected_events), repr(events))
         self.assertIsNotNone(_extract_context_from_event(events[0]))
         self.assertIsNone(_extract_context_from_event(events[1]))
-
-
-class AsyncTestUtils(
-    AsyncKurrentDBClientInstrumentorTestCase,
-    BaseUtilsTestCase[AsyncKurrentDBClient],
-):
-    def construct_client(
-        self,
-        uri_schema: str = "",
-        user_info: str = "",
-        grpc_target: str = "",
-        qs: str = "",
-    ) -> AsyncKurrentDBClient:
-        client = super().construct_client(uri_schema, user_info, grpc_target, qs)
-        asyncio.run(client.connect())
-        return client
 
 
 class TestWhatAlexeyAskedFor(KurrentDBClientInstrumentorTestCase):
@@ -2255,7 +2238,6 @@ class AsyncTestWhatAlexeyAskedFor(AsyncKurrentDBClientInstrumentorTestCase):
     async def test_append_to_stream(self) -> None:
         # Construct client.
         client = self.construct_client()
-        await client.connect()
 
         # Check there are zero spans.
         self.check_spans(num_spans=0)
@@ -2380,7 +2362,6 @@ class AsyncTestWhatAlexeyAskedFor(AsyncKurrentDBClientInstrumentorTestCase):
 
     async def test_subscribe_to_stream(self) -> None:
         client = self.construct_client()
-        await client.connect()
 
         cm: _AssertRaisesContext[Any]
 
@@ -2464,7 +2445,6 @@ class AsyncTestWhatAlexeyAskedFor(AsyncKurrentDBClientInstrumentorTestCase):
 
     async def test_subscribe_to_all(self) -> None:
         client = self.construct_client()
-        await client.connect()
         cm: _AssertRaisesContext[Any]
 
         # Subscribe to all.
@@ -2548,7 +2528,6 @@ class AsyncTestWhatAlexeyAskedFor(AsyncKurrentDBClientInstrumentorTestCase):
 
     async def test_read_subscription_to_stream(self) -> None:
         client = self.construct_client()
-        await client.connect()
         cm: _AssertRaisesContext[Any]
 
         # Create and read subscription to a stream.
@@ -2641,7 +2620,6 @@ class AsyncTestWhatAlexeyAskedFor(AsyncKurrentDBClientInstrumentorTestCase):
 
     async def test_read_subscription_to_all(self) -> None:
         client = self.construct_client()
-        await client.connect()
         cm: _AssertRaisesContext[Any]
 
         # Create and read subscription to all.
@@ -2986,7 +2964,6 @@ class AsyncTestReadAndGetStream(AsyncKurrentDBClientInstrumentorTestCase):
 
     async def test_read_stream(self) -> None:
         client = self.construct_client()
-        await client.connect()
 
         # Check there are zero spans.
         self.check_spans(num_spans=0)
@@ -3117,7 +3094,6 @@ class AsyncTestReadAndGetStream(AsyncKurrentDBClientInstrumentorTestCase):
 
     async def test_get_stream(self) -> None:
         client = self.construct_client()
-        await client.connect()
 
         self.check_spans(num_spans=0)
 
@@ -3516,7 +3492,6 @@ class AsyncTestReadAndGetStreamWithGrpcInstrumentor(
 
     async def test_read_stream(self) -> None:
         client = self.construct_client()
-        await client.connect()
 
         # Check there are zero spans.
         self.check_spans(num_spans=0)
@@ -3654,7 +3629,6 @@ class AsyncTestReadAndGetStreamWithGrpcInstrumentor(
 
     async def test_get_stream(self) -> None:
         client = self.construct_client()
-        await client.connect()
 
         self.check_spans(num_spans=0)
 

@@ -4,315 +4,338 @@ order: 2
 
 # Appending events
 
-KurrentDB is an append-only event store database. Events in KurrentDB are
-organized within individual streams.
+This guide describes the Python client methods for recording new events in KurrentDB.
 
-There are two client methods for writing events to KurrentDB.
+## Introduction
 
-* [`append_to_stream()`](#append-to-stream)
-* [`multi_append_to_stream()`](#multi-append-to-stream)
+In KurrentDB, events are appended to [streams](#what-is-a-stream).
 
-The [Getting started](./getting-started.md#writing-to-kurrentdb) page  introduced the topic of writing to
-KurrentDB. Let's explore what KurrentDB can do in more detail.
+The Python client for KurrentDB has two methods for writing new events:
+
+* [`append_to_stream()`](#append-to-stream) – write a collection of events to a named stream
+* [`multi_append_to_stream()`](#multi-append-to-stream) – write many collections of events, each to a different stream
 
 ::: info Requires leader
-If you are using a KurrentDB cluster, please note, events can be appended only to leader nodes.
+When connecting to a KurrentDB cluster, events can be written only to the leader node.
 :::
 
+These methods are atomic and [idempotent](#idempotent-append-behavior). All or none of the new events will be recorded once.
 
-## Append to stream
+The Python client for KurrentDB also has methods for getting and setting [stream metadata](@server/features/streams.md#metadata-and-reserved-names):
 
-Events in KurrentDB are organized in "streams". You can use the `append_to_stream()` method to append
-new events to a stream in KurrentDB. 
+* [`get_stream_metadata()`](#get-stream-metadata)
+* [`set_stream_metadata()`](#set-stream-metadata)
 
-::: info What is a stream?
-A stream in KurrentDB is a sequence of recorded events, each with a unique integer position. Each stream has
-a unique name. The positions of events in a stream are gapless.
+## What is a stream?
 
-Stream positions in KurrentDB are "zero-based". The first event in a stream has position `0`, the
+A stream in KurrentDB is a sequence of recorded events, each with a unique integer
+position. Each stream has a unique name. The positions of events in a stream are
+zero-based and gapless. The first event in a stream has position `0`, the
 second event has position `1`, the third has position `2`, and so on.
-:::
 
+## Events in KurrentDB
 
-### Description
+KurrentDB organises events in streams within a global transaction log.
 
-When appending events with `append_to_stream()`, you must provide a stream name and an iterable of `NewEvent`
-objects. You must also specify what optimistic concurrency control you want KurrentDB to activate before recording
-the new events.
+Two sequence numbers are assigned to each recorded event:
 
-Optionally, you can also specify a timeout for the completion of the operation, and override
-credentials given in the "user info" part of the connection string.
+* **stream position** – the position of a recorded event within
+ its stream
+* **commit position** – the position of a recorded event in the global
+transaction log
 
-The `append_to_stream()` method is atomic, which means that either all or none of the new events will be recorded.
+These numbers are assigned when new events are recorded, and used when recorded events are read.
 
-Use the `current_version` parameter to active or deactivate optimistic concurrency control.
+## New events
 
-::: tip
-Please study the [Optimistic concurrency control](#optimistic-concurrency-control) section below for more information about optimistic concurrent controls in KurrentDB.
-:::
+The `NewEvent` class is provided for specifying new events before calling an append method.
 
-The `append_to_stream()` method is idempotent. If you call `append_to_stream()` twice with the same event IDs and
-the same `current_version` then the second call will succeed idempotently without creating duplicate events.
-
-### Parameters
-
-| Name              | Type                 | Required | Default  | Description                                                    |
-|-------------------|----------------------|----------|----------|----------------------------------------------------------------|
-| `stream_name`     | `str`                | Yes      |          | Stream to which new events will be appended.                   |
-| `events`          | `Iterable[NewEvent]` | Yes      |          | Events to append to the stream.                                |
-| `current_version` | `int \| StreamState` | Yes      |          | Activate or deactivate optimistic concurrent control.          |                                                                               
-| `timeout`         | `float`              | No       | `None`   | Maximum duration, in seconds, for completion of the operation. |                                                                         
-| `credentials`     | `CallCredentials`    | No       | `None`   | Override credentials derived from the connection string.       |                                                                         
-
-### Return value
-
-On success, `append_to_stream()` returns a commit position (`int`). The "commit position" is the
-position in the database of the last event recorded event. The value returned from `append_to_stream()`
-can be used when redirecting a user to an eventually consistent view.
-
-
-### Example
-
-The example below connects to KurrentDB and appends a new event to a new stream.
-
-::: tabs
-@tab sync
-```python:no-line-numbers
-from kurrentdbclient import KurrentDBClient, NewEvent, StreamState
-
-# Connect to KurrentDB
-uri = "kurrentdb://127.0.0.1:2113?tls=false"
-client = KurrentDBClient(uri)
-
-
-# Construct a new event object
-event1 = NewEvent(
-    type="OrderCreated",
-    data=b'{"order_id": "order:123"}',
-)
-
-# Append the event to a stream
-commit_position = client.append_to_stream(
-    stream_name="order:123",
-    current_version=StreamState.NO_STREAM,
-    events=[event1],
-)
-```
-@tab async
-```python:no-line-numbers
-from kurrentdbclient import AsyncKurrentDBClient, NewEvent, StreamState
-
-# Connect to KurrentDB
-uri = "kurrentdb://127.0.0.1:2113?tls=false"
-client = AsyncKurrentDBClient(uri)
-await client.connect()
-
-# Construct a new event object
-event1 = NewEvent(
-    type="OrderCreated",
-    data=b'{"order_id": "order:123"}',
-)
-
-# Append the event to a stream
-commit_position = await client.append_to_stream(
-    stream_name="order:123",
-    current_version=StreamState.NO_STREAM,
-    events=[event1],
-)
-```
-:::
-
-
-## The NewEvent class
-
-Use the `NewEvent` dataclass when appending new events to KurrentDB.
-
-The `NewEvent` dataclass allows you to specify a event's type and content. Optionally, you can
-also specify the content type, metadata, and a unique ID.
-
-### Fields
-
-| Name           | Type    | Required | Default              | Description               |
-|----------------|---------|----------|----------------------|---------------------------|
-| `type`         | `str`   | Yes      |                      | The type of the event     |
-| `data`         | `bytes` | Yes      |                      | The content of the event  |
-| `metadata`     | `bytes` | No       | `b""`                | Event metadata            |
-| `content_type` | `str`   | No       | `"application/json"` | The format of the content |
-| `id`           | `UUID`  | No       | `uuid.uuid4()`       | A unique ID for the event |
+| Field          | Type    | Description               | Default              |
+|----------------|---------|---------------------------|----------------------|
+| `type`         | `str`   | The type of the event     |                      |
+| `data`         | `bytes` | The content of the event  |                      |
+| `metadata`     | `bytes` | Event metadata            | `b""`                |
+| `content_type` | `str`   | The format of the content | `"application/json"` |
+| `id`           | `UUID`  | A unique ID for the event | `uuid.uuid4()`       |
 
 
 ### Event type
 
-Each new event should be supplied with an event `type`. Usually `NewEvent` objects are serialised representations
-of different types of domain events. It is common to for the `type` string of a `NewEvent` object to represent a
-domain event class, as it makes serialising and de-serialising of the event easy.
+Each new event must be supplied with an event `type` string.
 
 ### Event data
 
-Usually the serialized state of a domain event object. If you serialize your domain events as JSON objects,
-you can take advantage of of KurrentDB's other functionality, such as projections. But you can serialize events
-using whatever format suits your requirements. The data will be stored as encoded bytes.
+The `data` field is a Python bytes object that carries the event payload. Usually the serialized state of a domain event object. If you serialize your
+domain events as JSON objects, you can take advantage of KurrentDB's other functionality, such as projections. But you
+can serialize events using whatever format suits your requirements. The data will be stored as encoded bytes.
 
 ### Event metadata
 
-Storing additional information alongside your event that is not part of the event itself is supported by KurrentDB.
-This can be correlation IDs, timestamps, access information, etc. KurrentDB allows you to store a separate byte array
-containing this information to keep it separate.
+The `metadata` field is a Python bytes object that carries salient information about the event. It can be used for storing additional information alongside your event
+payload, such as correlation IDs, timestamps, access information, etc. KurrentDB allows you to store a separate byte array containing this information to keep it separate.
 
 ### Event content type
 
-The content type indicates whether the event is stored as JSON or binary format. You can choose between
-`'application/json'` (default) and `'application/octet-stream'` when creating your `NewEvent` object.
-For example, if you are using Message Pack or Protobuf to serialise your domain events, or you are
-serialising with JSON but also using application-level compression or encryption, then you can use
-`'application/octet-stream'` as the content type.
+The `content_type` field indicates whether the event is stored as JSON or binary format. You can choose between
+`'application/json'` (default) and `'application/octet-stream'`. For example, if you are using Message Pack or
+Protobuf to serialise your domain events, or you are serialising with JSON but also using application-level
+compression or encryption, then you can use `'application/octet-stream'` as the content type. The default
+value is `'application/json'`.
 
 ### Event ID
 
-Events can be uniquely identified using the `id` field of `NewEvent`. If two events with the same `UUID`
-are appended to the same stream with the same optimistic concurrency control, KurrentDB will only append
-one of the events to the stream.
-
-## Optimistic concurrency control
-
-When appending events to a stream, you must supply a `current_version` argument. This informs KurrentDB of
-the state you expect the stream to be in when appending an event. If the stream isn't in that state, a
-`WrongCurrentVersionError` exception will be raised.
-
-There are several available options for the `current_version` argument: 
-- Integer value - The stream position of the last recorded event
-- `StreamState.NO_STREAM` - Stream should not exist
-- `StreamState.EXISTS` - Stream should exist
-- `StreamState.ANY` - No concurrency check
-
-Usually, you will use: either `StreamState.NO_STREAM` when writing new events to a new stream; or the stream position
-of the last recorded event in the stream when writing subsequent events to an existing stream. This will protect the
-stream from becoming inconsistent due to conflicting concurrent writers.
-
-Alternatively, you can specify `StreamState.EXISTS`, which requires only that the stream already has at least one event.
-
-Or, you can fully deactivate concurrency control by specifying `StreamState.ANY`.
+The `id` field is a `UUID` object that can uniquely identify the event. KurrentDB does not enforce unique event IDs,
+however they are used to activate [idempotent append behavior](#idempotent-append-behavior). If two events with the
+same `UUID` are appended to the same stream with the same optimistic concurrency control, KurrentDB will only append
+one of the events to the stream. The default value is a new version 4 UUID.
 
 ### Examples
 
-Let's recall that the stream `"order:123"` was created in the [example](#example) above.
+Here's an example where only the `type` string and binary `data` are provided.
 
-The example below shows that a second event can be successfully appended with `current_version`
-as the stream position of the first appended event, which is `0`.
+```python:no-line-numbers
+from kurrentdbclient import NewEvent
+
+order_created = NewEvent(
+    type="OrderCreated",
+    data=b'{"name": "Greg"}',
+)
+```
+
+You may also specify `metadata`, `content_type` and an `id`.
+
+```python:no-line-numbers
+from uuid import uuid4
+
+order_created = NewEvent(
+    type="OrderCreated",
+    data=b'{"name": "Greg"}',
+    metadata=b'{"correlation_id": "56"}',
+    content_type="application/json",
+    id=uuid4(),
+)
+```
+
+
+
+## Append to stream
+
+The Python client's `append_to_stream()` method appends new events to a named stream.
+
+This method is atomic and [idempotent](#idempotent-append-behavior).
+
+Provide a `stream_name` argument, an `events` argument, and a `current_version` argument.
+
+The `events` argument must be an iterable of [`NewEvent`](#new-events) objects. The `current_version` parameter specifies
+what [optimistic concurrency control](#optimistic-concurrency-control) you want KurrentDB to apply.
+
+| Parameter         | Description                                                                                                                                              | Default  |
+|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| `stream_name`     | Stream to which the `events` will be appended.                                                                                                           |          |
+| `events`          | The [NewEvent](#new-events) objects to be appended to the stream.                                                                                        |          |
+| `current_version` | The [optimistic concurrency control](#optimistic-concurrency-control) for appending `events`.                                                            |          |
+| `timeout`         | Maximum duration of operation (in seconds).                                                                                                              | `None`   |
+| `credentials`     | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`   |
+
+If successful, `append_to_stream()` returns the commit position (`int`) of the last event
+it appended. This value represents that event’s position in the global transaction log,
+and can be used by applications to wait until eventually consistent views reflect newly
+recorded events.
+
+### Optimistic concurrency control
+
+The `current_version` argument of can be used to inform KurrentDB of the state you expect
+a stream to be in when appending events.
+
+There are several available options for the `current_version` argument:
+- `StreamState.ANY` - No concurrency check
+- `StreamState.EXISTS` - Stream should exist
+- `StreamState.NO_STREAM` - Stream should not exist
+- `int` value - Stream position of the last recorded event
+
+If the optimistic concurrency control fails, a `WrongCurrentVersionError` exception will be raised.
+
+Usually you will use `StreamState.NO_STREAM` when writing new events to a new stream, and then
+the correct stream position of the last recorded event in the stream when writing subsequent events.
+This will protect the stream from becoming inconsistent due to conflicting concurrent writers.
+
+Alternatively, you can specify `StreamState.EXISTS`, which requires only that the stream already
+has at least one event.
+
+Or, you can fully deactivate concurrency control by specifying `StreamState.ANY`.
+
+Let's see how to activate and deactivate optimistic concurrency control.
+
+### Append to new stream
+
+Here's an example appending the first event to stream `'order-123'`.
+The `current_version` argument `StreamState.NO_STREAM` requires that no events
+have been appended for this stream name.
 
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-event2 = NewEvent(
-    type="OrderUpdated",
-    data=b'{"status": "processing"}',
-)
+from kurrentdbclient import KurrentDBClient, StreamState
 
+# Connect to KurrentDB
+connection_string = "kurrentdb://127.0.0.1:2113?tls=false"
+client = KurrentDBClient(connection_string)
+
+# Create a new stream with a new event
 client.append_to_stream(
-    stream_name="order:123",
-    current_version=0,  # <-- correct value
-    events=[event2],
+    stream_name="order-123",
+    current_version=StreamState.NO_STREAM,  # <-- correct value
+    events=[order_created],
 )
 ```
 @tab async
 ```python:no-line-numbers
-event2 = NewEvent(
-    type="OrderUpdated",
-    data=b'{"status": "processing"}',
-)
+from kurrentdbclient import AsyncKurrentDBClient, StreamState
 
+# Connect to KurrentDB
+connection_string = "kurrentdb://127.0.0.1:2113?tls=false"
+client = AsyncKurrentDBClient(connection_string)
+
+# Create a new stream with a new event
 await client.append_to_stream(
-    stream_name="order:123",
-    current_version=0,  # <-- correct value
-    events=[event2],
+    stream_name="order-123",
+    current_version=StreamState.NO_STREAM,  # <-- correct value
+    events=[order_created],
 )
 ```
 :::
 
-The example below shows that a third event can be successfully appended with `current_version`
+### Append to existing stream
+
+Here's an example appending a second event to stream `'order-123'`. The
+`current_version` argument `0` is the position of the first event in the stream.
+
+::: tabs
+@tab sync
+```python:no-line-numbers
+payment_received = NewEvent(
+    type="PaymentCompleted",
+    data=b'{}',
+)
+
+client.append_to_stream(
+    stream_name="order-123",
+    current_version=0,  # <-- correct value
+    events=[payment_received],
+)
+```
+@tab async
+```python:no-line-numbers
+payment_received = NewEvent(
+    type="PaymentCompleted",
+    data=b'{}',
+)
+
+await client.append_to_stream(
+    stream_name="order-123",
+    current_version=0,  # <-- correct value
+    events=[payment_received],
+)
+```
+:::
+
+Here's an example that shows a third event can be successfully appended with `current_version`
 as the stream position of the second appended event, which is `1`.
 
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-event3 = NewEvent(
-    type="OrderUpdated",
-    data=b'{"status": "shipped"}',
+product_shipped = NewEvent(
+    type="ProductShipped",
+    data=b'{}',
 )
 
 client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=1,  # <-- correct value
-    events=[event3],
+    events=[product_shipped],
 )
 ```
 @tab async
 ```python:no-line-numbers
-event3 = NewEvent(
-    type="OrderUpdated",
-    data=b'{"status": "shipped"}',
+product_shipped = NewEvent(
+    type="ProductShipped",
+    data=b'{}',
 )
 
 await client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=1,  # <-- correct value
-    events=[event3],
+    events=[product_shipped],
 )
 ```
 :::
 
-The operation in the example below fails because we use `StreamState.NO_STREAM` as the value of
-`current_version`, however the stream already exists.
+### Wrong current version error
+
+Here's an example that shows optimistic concurrent control rejecting an append options.
+In this example,`StreamState.NO_STREAM` is specified as the value of `current_version`,
+however the stream already exists, and so the append operation fails.
 
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-from kurrentdbclient.exceptions import WrongCurrentVersionError 
+from kurrentdbclient.exceptions import WrongCurrentVersionError
+
+product_received = NewEvent(
+    type="ProductReceived",
+    data=b'{}',
+)
 
 try:
     client.append_to_stream(
-        stream_name="order:123",
+        stream_name="order-123",
         current_version=StreamState.NO_STREAM,  # <-- wrong value
-        events=[event3],
+        events=[product_received],
     )
-    
+
 except WrongCurrentVersionError:
     print("Stream already exists!")
-    
+
 else:
     raise Exception("Shouldn't get here")
 ```
 @tab async
 ```python:no-line-numbers
-from kurrentdbclient.exceptions import WrongCurrentVersionError 
+from kurrentdbclient.exceptions import WrongCurrentVersionError
+
+product_received = NewEvent(
+    type="ProductReceived",
+    data=b'{}',
+)
 
 try:
     await client.append_to_stream(
-        stream_name="order:123",
+        stream_name="order-123",
         current_version=StreamState.NO_STREAM,  # <-- wrong value
-        events=[event3],
+        events=[product_received],
     )
-    
+
 except WrongCurrentVersionError:
     print("Stream already exists!")
-    
+
 else:
     raise Exception("Shouldn't get here")
 ```
 :::
 
-The operation in the example below fails because we use `0` as the value of
-`current_version`, however the stream position of the last recorded event
-is now `2`.
+Similarly, the append operation in the example below fails because the value of
+`current_version` is `0`, however the stream position of the last recorded event
+in stream `order-123` is `2`.
 
 ::: tabs
 @tab sync
 ```python:no-line-numbers
 try:
     client.append_to_stream(
-        stream_name="order:123",
+        stream_name="order-123",
         current_version=0,  # <-- incorrect value
-        events=[event3],
+        events=[product_shipped],
     )
 
 except WrongCurrentVersionError:
@@ -325,9 +348,9 @@ else:
 ```python:no-line-numbers
 try:
     await client.append_to_stream(
-        stream_name="order:123",
+        stream_name="order-123",
         current_version=0,  # <-- incorrect value
-        events=[event3],
+        events=[product_shipped],
     )
 
 except WrongCurrentVersionError:
@@ -338,167 +361,143 @@ else:
 ```
 :::
 
-## Idempotent append
+### Idempotent append behavior
 
-Under certain conditions, KurrentDB allows append requests to succeed idempotently. Sometimes an
-append operation can succeed in KurrentDB, but the response can fail to reach the client, perhaps
-due to a network failure.
+When [optimistic concurrency control](#optimistic-concurrency-control) is activated,
+retrying a successful append operation will return without failing due to the previous success.
 
-If you call `append_to_stream()` twice with the same event IDs and the same `current_version` then
-the second call will succeed idempotently.
+When optimistic concurrent control is [fully or partially disabled](#optimistic-concurrency-control),
+a successful append operation will return without appending duplicate events.
 
-The examples below show the operations in the previous examples succeeding idempotently.
+Without KurrentDB's idempotent append behavior, a client would need to probe
+the database to determine whether an apparently failed request had actually succeeded.
+This behavior depends on events having unique event IDs, which is the default when constructing [`NewEvent`](#new-events) objects.
+
+Please note, KurrentDB does not enforce unique event IDs. The idempotent append behaviour does not protect against
+recording more than one event with the same ID, for example by appending an event with
+the same ID in a different stream, or in the same stream when specifying correctly
+the position of the last recorded event, or in the same stream at a much later
+time when disabling concurrency controls.
+
+Here are some examples showing previous operations succeeding idempotently.
 
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-assert 2 == client.get_current_version("order:123")
+# Check the stream has exactly three events.
+assert len(client.get_stream("order-123")) == 3
 
+# Retry order created - succeeds idempotently.
 client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=StreamState.NO_STREAM,
-    events=[event1],
+    events=[order_created],
 )
 
+# Retry payment received - succeeds idempotently.
 client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=0,
-    events=[event2],
+    events=[payment_received],
 )
 
+# Retry product shipped - succeeds idempotently.
 client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=1,
-    events=[event3],
+    events=[product_shipped],
 )
 
-assert 2 == client.get_current_version("order:123")
+# Check the stream has exactly three events.
+assert len(client.get_stream("order-123")) == 3
 ```
 @tab async
 ```python:no-line-numbers
-assert 2 == await client.get_current_version("order:123")
+# Check the stream has exactly two events.
+assert len(await client.get_stream("order-123")) == 3
 
+# Retry appending first event - succeeds idempotently.
 await client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=StreamState.NO_STREAM,
-    events=[event1],
+    events=[order_created],
 )
 
+# Retry appending second event - succeeds idempotently.
 await client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=0,
-    events=[event2],
+    events=[payment_received],
 )
 
+# Retry appending third event - succeeds idempotently.
 await client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=1,
-    events=[event3],
+    events=[product_shipped],
 )
 
-assert 2 == await client.get_current_version("order:123")
+# Check the stream has exactly three events.
+assert len(await client.get_stream("order-123")) == 3
 ```
 :::
 
-The idempotent append behavior means that retries of apparently failed operations, that were actually successful,
-will be apparently successful without actually having any further effect.
-
-The idempotent append behavior can be understood as a kind of "forgiveness" for optimistic concurrency control failures,
-without which clients would need to probe the database to discover if an apparently failed request actually succeeded.
-But it also avoids recording duplicate events when optimistic concurrency controls are partially or fully disabled.
-
-The examples below show `append_to_stream()` being called with `event1`, `event2`, and `event3` whilst optimistic
-concurrency controls have been either fully or partially disabled, and that the stream has not changed.
+Here are some examples showing idempotent append behavior when optimistic
+concurrency controls have been either fully or partially disabled. Duplicate events are
+not recorded: the steam still has exactly two events.
 
 ::: tabs
 @tab sync
 ```python:no-line-numbers
+# Fully disabled concurrency control - succeeds idempotently.
 client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=StreamState.ANY,
-    events=[event1],
+    events=[order_created],
 )
 
+# Partially disabled concurrency control - succeeds idempotently.
 client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=StreamState.EXISTS,
-    events=[event2],
+    events=[payment_received],
 )
 
+# Partially disabled concurrency control - succeeds idempotently.
 client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=StreamState.EXISTS,
-    events=[event3],
+    events=[product_shipped],
 )
 
-assert 2 == client.get_current_version("order:123")
+# Check the stream has exactly three events.
+assert len(client.get_stream("order-123")) == 3
 ```
 @tab async
 ```python:no-line-numbers
+# Fully disabled concurrency control - succeeds idempotently.
 await client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=StreamState.ANY,
-    events=[event1],
+    events=[order_created],
 )
 
+# Partially disabled concurrency control - succeeds idempotently.
 await client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=StreamState.EXISTS,
-    events=[event2],
+    events=[payment_received],
 )
 
+# Partially disabled concurrency control - succeeds idempotently.
 await client.append_to_stream(
-    stream_name="order:123",
+    stream_name="order-123",
     current_version=StreamState.EXISTS,
-    events=[event3],
+    events=[product_shipped],
 )
 
-assert 2 == await client.get_current_version("order:123")
-```
-:::
-
-Please note, whilst in many cases this will avoid recording duplicates, this does not protect against recording
-more than one event with the same ID, for example by appending an event with the same ID, either at a much later
-time when disabling concurrency controls, or by specifying correctly the position of the last recorded event.
-
-## User credentials
-
-You can use the `credentials` parameter of `append_to_stream()` to override the credentials given with the [user
-info](./getting-started.md#user-info-string) part of a client connection string. The helper method
-`construct_call_credentials()` constructs a `grpc.CallCredentials` object from a username and password.
-
-::: tabs
-@tab sync
-```python:no-line-numbers
-# Construct call credentials
-credentials = client.construct_call_credentials(
-    username="admin", 
-    password="changeit",
-)
-
-# Use credentials for this specific operation
-commit_position = client.append_to_stream(
-    stream_name="order:123",
-    current_version=StreamState.ANY,
-    events=[event3],
-    credentials=credentials,
-)
-```
-@tab async
-```python:no-line-numbers
-# Construct call credentials
-credentials = client.construct_call_credentials(
-    username="admin", 
-    password="changeit",
-)
-
-# Use credentials for this specific operation
-commit_position = await client.append_to_stream(
-    stream_name="order:123",
-    current_version=StreamState.ANY,
-    events=[event3],
-    credentials=credentials,
-)
+# Check the stream has exactly three events.
+assert len(await client.get_stream("order-123")) == 3
 ```
 :::
 
@@ -508,40 +507,69 @@ commit_position = await client.append_to_stream(
 Supported by KurrentDB 25.1 and later.
 :::
 
-You can use the`multi_append_to_stream()` to append new events atomically to multiple
+You can use the `multi_append_to_stream()` method to append new events to multiple
 streams.
 
+This method is atomic and [idempotent](#idempotent-append-behavior).
+
+Provide an `events` argument, an iterable of [`NewEvents`](#the-newevents-class) objects.
+Each specifies a stream name, a collection of
+[`NewEvent`](#new-events) objects to be appended to that stream, and an
+[optimistic concurrency control](#optimistic-concurrency-control) to be used when
+appending those events to that stream.
+
+| Parameter     | Description                                                                                                  | Default |
+|---------------|--------------------------------------------------------------------------------------------------------------|---------|
+| `events`      | An iterable of [NewEvents](#the-newevents-class) objects.                                                    |         |
+| `timeout`     | Maximum duration of operation (in seconds).                                                                 | `None`  |
+| `credentials` | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`  |
+
+If successful, `multi_append_to_stream()` returns the commit position (`int`) of the last event
+it appended. This value represents the event’s position in the global transaction log
+and can be used to ensure that eventually consistent views reflect the new events.
+
+### The NewEvents class
+
+Use the `NewEvents` dataclass when [appending events to multiple streams](#multi-append-to-stream).
+
+The fields of a `NewEvents` object specify a `stream_name`, the `events` to be
+appended to that stream, and a `current_version` value for [optimistic concurrency control](#optimistic-concurrency-control)
+of that stream.
+These fields have the same meaning as the corresponding parameters of [`append_to_stream()`](#append-to-stream).
+
+| Field             | Type                 | Description                                                            |
+|-------------------|----------------------|------------------------------------------------------------------------|
+| `stream_name`     | `str`                | Stream to which new events will be appended.                           |
+| `events`          | `Iterable[NewEvent]` | The [`NewEvent`](#new-events) objects to append to the stream. |
+| `current_version` | `int\|StreamState`   | The [optimistic concurrency](#optimistic-concurrency-control) control  |
+
+The fields of a `NewEvents` object are like the arguments of [`append_to_stream()`](#append-to-stream).
+Because [`multi_append_to_stream()`](#multi-append-to-stream) allows many such things in one call, many
+streams can be written to in one atomic operation.
+
+### Metadata restrictions
+
+When appending events with `multi_append_to_stream()`, the `metadata` field of
+each `NewEvent` must be either an empty `bytes` string or a `bytes` string
+containing a JSON object whose values are strings.
+
+The following metadata values are acceptable.
+
+|   | Description                    | Examples        |
+|---|--------------------------------|-----------------|
+| ✅ | Empty bytes                    | `b""`           |
+| ✅ | JSON object with string values | `b'{"a": "1"}'` |
 
 
-### Description
+The following metadata values are NOT acceptable and will cause a
+`ProgrammingError` exception.
 
-Use the multi-stream append operation when you want to atomically append new
-events to multiple streams in one call.
-
-When appending events with `multi_append_to_stream()` you must provide an iterable of `NewEvents`
-objects.
-
-Optionally, you can also specify a timeout for the completion of the operation, and override
-credentials given in the "user info" part of the connection string.
-
-The `multi_append_to_stream()` method is atomic, which means that either all or none of the new events will be recorded.
-
-The `multi_append_to_stream()` method is also idempotent.
-
-### Parameters
-
-| Name              | Type                  | Required | Default | Description                                                    |
-|-------------------|-----------------------|----------|---------|----------------------------------------------------------------|
-| `events`          | `Iterable[NewEvents]` | Yes      |         | Events to append to the stream.                                |
-| `timeout`         | `float`               | No       | `None`  | Maximum duration, in seconds, for completion of the operation. |                                                                         
-| `credentials`     | `CallCredentials`     | No       | `None`  | Override credentials derived from the connection string.       |                                                                         
-
-
-### Return value
-
-On success, `append_to_stream()` returns a commit position (`int`). The "commit position" is the
-position in the database of the last event recorded event. The value returned from `multi_append_to_stream()`
-can be used when redirecting a user to an eventually consistent view.
+|   | Description                        | Examples                                      |
+|---|------------------------------------|-----------------------------------------------|
+| ❌ | Random bytes                       | `b'\xf5d\xc5W3^b\xb0(\xf9\x01D\x81\xa7Y\x98'` |
+| ❌ | JSON string                      | `b'"abcdef"'`                                 |
+| ❌ | JSON object with non-string values | `b'{"a": 1}'` or `b'{"a": false}'`            |
+| ❌ | Nested JSON objects                | `b'{"a": {}}'`                                |
 
 ### Example
 
@@ -552,101 +580,164 @@ The example below appends new events to two streams.
 ```python:no-line-numbers
 from kurrentdbclient import NewEvents
 
-new_events1 = NewEvents(
-    stream_name="order:123",
+student_events = NewEvents(
+    stream_name="student-123",
     events=[
-        NewEvent(type='EventType1', data=b'{}'),
-        NewEvent(type='EventType2', data=b'{}'),
+        NewEvent(
+            type='StudentRegistered',
+            data=b'{"name": "Joe"}'
+        ),
+        NewEvent(
+            type='StudentJoinedCourse',
+            data=b'{"course_id": "course-456"}'
+        ),
     ],
-    current_version=2,
+    current_version=StreamState.NO_STREAM,
 )
 
-new_events2 = NewEvents(
-    stream_name="order:456",
+course_events = NewEvents(
+    stream_name="course-456",
     events=[
-        NewEvent(type='EventType3', data=b'{}'),
-        NewEvent(type='EventType4', data=b'{}'),
+        NewEvent(
+            type='CourseCreated',
+            data=b'{"name": "French"}'
+        ),
+        NewEvent(
+            type='StudentJoinedCourse',
+            data=b'{"student_id": "student-123"}'
+        ),
     ],
     current_version=StreamState.NO_STREAM,
 )
 
 client.multi_append_to_stream(
-    events=[new_events1, new_events2],
+    events=[student_events, course_events],
 )
 ```
 @tab async
 ```python:no-line-numbers
 from kurrentdbclient import NewEvents
 
-new_events1 = NewEvents(
-    stream_name="order:123",
+student_events = NewEvents(
+    stream_name="student-123",
     events=[
-        NewEvent(type='EventType1', data=b'{}'),
-        NewEvent(type='EventType2', data=b'{}'),
+        NewEvent(
+            type='StudentRegistered',
+            data=b'{"name": "Joe"}'
+        ),
+        NewEvent(
+            type='StudentJoinedCourse',
+            data=b'{"course_id": "course-456"}'
+        ),
     ],
-    current_version=2,
+    current_version=StreamState.NO_STREAM,
 )
 
-new_events2 = NewEvents(
-    stream_name="order:456",
+course_events = NewEvents(
+    stream_name="course-456",
     events=[
-        NewEvent(type='EventType3', data=b'{}'),
-        NewEvent(type='EventType4', data=b'{}'),
+        NewEvent(
+            type='CourseCreated',
+            data=b'{"name": "French"}'
+        ),
+        NewEvent(
+            type='StudentJoinedCourse',
+            data=b'{"student_id": "student-123"}'
+        ),
     ],
     current_version=StreamState.NO_STREAM,
 )
 
 await client.multi_append_to_stream(
-    events=[new_events1, new_events2],
+    events=[student_events, course_events],
 )
 ```
 :::
 
+## Get stream metadata
 
-## The NewEvents class
+You can use the `get_stream_metadata()` method to get [stream metadata](@server/features/streams.md#metadata-and-reserved-names).
 
-Use the `NewEvents` dataclass when appending event to multiple streams.
+Provide a `stream_name` argument.
 
-The `NewEvents` dataclass allows you to specify the stream name, events to be
-appended to that stream, and optimistic concurrency controls for that stream.
+| Parameter     | Description                                                                                                                                              | Default |
+|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
+| `stream_name` | Metadata for this stream will be returned.                                                                                                               |         |
+| `timeout`     | Maximum duration of operation (in seconds).                                                                                                              | `None`  |
+| `credentials` | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`  |
 
-### Fields
+If successful, `get_stream_metadata()` returns a Python `dict` of metadata keys and values for the named stream, along with the current version of the stream's metadata stream.
+If the named stream does not exist, the `dict` will be empty and the current version value will be `StreamState.NO_STREAM`. These two values can
+be used as arguments of `metadata` and `current_version` when calling [`set_stream_metadata()`](#set-stream-metadata).
 
-The `NewEvents` dataclass has three fields, which are effectively the parameters of
-the `append_to_stream()` method that are missing from the `multi_append_to_stream()`
-method.
+### Example
 
-| Name              | Type                   | Required | Default | Description                                           |
-|-------------------|------------------------|----------|---------|-------------------------------------------------------|
-| `stream_name`     | `str`                  | Yes      |         | Stream to which new events will be appended.          |
-| `events`          | `Iterable[NewEvent]`   | Yes      |         | The `NewEvent` objects to append to the stream.       |
-| `current_version` | `int \| StreamState`   | Yes      |         | Activate or deactivate optimistic concurrent control. |                                                                               
+The example below gets metadata for stream `"order-123"`.
 
-The sections above describe the fields of the `NewEvent` class, and also the behavior of the optimistic concurrency
-controls, and apply consistently to the operation of `multi_append_to_stream()`.
+::: tabs
+@tab sync
+```python:no-line-numbers
+metadata, current_version = client.get_stream_metadata(
+    stream_name="order-123",
+)
+```
+@tab async
+```python:no-line-numbers
+metadata, current_version = await client.get_stream_metadata(
+    stream_name="order-123",
+)
+```
+:::
 
-There is one main difference: restrictions on the use of the `metadata` field of `NewEvent`.
+## Set stream metadata
 
-### Metadata restrictions for multi-append
+You can use the `set_stream_metadata()` method to set [stream metadata](@server/features/streams.md#metadata-and-reserved-names).
 
-When appending events with `multi_append_to_stream()`, the `metadata` field of
-each `NewEvent` must be either an empty `bytes` string or a `bytes` string
-containing a JSON object whose values are strings.
+Provide a `stream_name` argument, a Python `dict` of stream metadata keys and values, and optionally the current version of the stream's metadata stream.
 
-The following metadata values are OK.
+The named stream's metadata will be overwritten with the given `dict`.
 
-|   | Description                    | Examples        |
-|---|--------------------------------|-----------------|
-| ✅ | Empty bytes                    | `b""`           |
-| ✅ | JSON object with string values | `b'{"a": "1"}'` |
+| Parameter         | Description                                                                                                                                              | Default           |
+|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------|
+| `stream_name`     | Metadata for this stream will be updated.                                                                                                                |                   |
+| `metadata`        | A Python `dict` of stream metadata keys and values.                                                                                                      |                   |
+| `current_version` | The [optimistic concurrency control](#optimistic-concurrency-control) for setting stream metadata.                                                       | `StreamState.ANY` |
+| `timeout`         | Maximum duration of operation (in seconds).                                                                                                              | `None`            |
+| `credentials`     | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`            |
 
+If successful, `set_stream_metadata()` returns `None`.
 
-The following metadata values are NOT okay and will cause a
-`ProgrammingError` exception.
+If the named stream does not exist, the metadata will be set anyway. This allows streams to be configured before they are used.
 
-|   | Description                        | Examples                                      |
-|---|------------------------------------|-----------------------------------------------|
-| ❌ | Random bytes                       | `b'\xf5d\xc5W3^b\xb0(\xf9\x01D\x81\xa7Y\x98'` |
-| ❌ | JSON string                      | `b'"abcdef"'`                                 |
-| ❌ | JSON object with non-string values | `b'{"a": 1}'` or `b'{"a": false}'`            |
-| ❌ | Nested JSON objects                | `b'{"a": {}}'`                                |
+### Example
+
+The example below sets metadata for stream `"order-123"`.
+
+::: tabs
+@tab sync
+```python:no-line-numbers
+metadata["foo"] = "bar"
+
+client.set_stream_metadata(
+    stream_name="order-123",
+    metadata=metadata,
+    current_version=current_version,
+)
+
+metadata, _ = client.get_stream_metadata("order-123")
+assert metadata["foo"] == "bar"
+```
+@tab async
+```python:no-line-numbers
+metadata["foo"] = "bar"
+
+await client.set_stream_metadata(
+    stream_name="order-123",
+    metadata=metadata,
+    current_version=current_version,
+)
+
+metadata, _ = await client.get_stream_metadata("order-123")
+assert metadata["foo"] == "bar"
+```
+:::

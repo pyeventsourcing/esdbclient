@@ -322,3 +322,9 @@ class InternalError(GrpcError):
     """
     Raised when a grpc INTERNAL error is encountered.
     """
+
+
+class InvalidCommitPositionError(KurrentDBClientError):
+    """
+    Raised when reading from an commit position that does not exist.
+    """

@@ -51,10 +51,13 @@ class TestDocs(TestCase):
         docs_path = BASE_DIR / "docs" / "api"
         docs_paths = list(docs_path.glob("**/*"))
         for doc_path in docs_paths:
-            if (
-                "getting-started" in doc_path.name
-                or "appending-events" in doc_path.name
-                or "reading-events" in doc_path.name
+            if doc_path.name in (
+                "getting-started.md",
+                "reading-events.md",
+                "appending-events.md",
+                "subscriptions.md",
+                "persistent-subscriptions.md",
+                "delete-stream.md",
             ):
                 print()
                 print("Test vuepress docs sync code examples in", doc_path.name)
@@ -67,15 +70,26 @@ class TestDocs(TestCase):
             else:
                 continue
 
+    @staticmethod
+    def randomize_names(source: str) -> str:
+        replacements = {
+            "acc-123": f"acc-123-{uuid4()}",
+            "order-123": f"order-123-{uuid4()}",
+            "order:456": f"order:456-{uuid4()}",
+            "student-123": f"student-123-{uuid4()}",
+            "course-456": f"course-456-{uuid4()}",
+            "stream-subscription": f"stream-subscription-{uuid4()}",
+            "transaction-log-subscription": f"transaction-log-subscription-{uuid4()}",
+        }
+        for replacement in replacements.items():
+            source = source.replace(replacement[0], replacement[1])
+
+        return source
+
     def check_code_snippets_in_file(
         self, doc_path: Path, *, sync_only: bool = False, async_only: bool = False
     ) -> None:
         # Extract lines of Python code from the README.md file.
-
-        replacements = {
-            "order:123": f"order:123-{uuid4()}",
-            "order:456": f"order:456-{uuid4()}",
-        }
 
         print_block_line_numbers = True
         lines = ["import sys"] if print_block_line_numbers else []
@@ -90,11 +104,31 @@ class TestDocs(TestCase):
         is_ignoring_remainder_of_code_in_block = False
         last_line = ""
         is_literalinclude = False
+        is_major_section_supported = True
         with doc_path.open() as doc_file:
             for line_index, orig_line in enumerate(doc_file, start=-len(lines)):
                 line = orig_line.strip("\n")
-                if line.startswith("```python") and not (
-                    (sync_only and is_async_tab) or (async_only and is_sync_tab)
+
+                # Skipping of unsupported functions.
+                if line.startswith("## "):
+                    is_major_section_supported = True
+                if line.startswith("Supported by KurrentDB "):
+                    supported_version = tuple(
+                        int(i)
+                        for i in (
+                            line.partition("Supported by KurrentDB ")[2]
+                            .split(" ")[0]
+                            .split(".")
+                        )
+                    )
+                    if supported_version > SERVER_VERSION:
+                        is_major_section_supported = False
+                if (
+                    line.startswith("```python")
+                    and is_major_section_supported
+                    and not (
+                        (sync_only and is_async_tab) or (async_only and is_sync_tab)
+                    )
                 ):
                     # Start markdown code block.
                     if is_rst:
@@ -227,9 +261,6 @@ class TestDocs(TestCase):
 
         source = "\n".join(lines) + "\n"
 
-        for replacement in replacements.items():
-            source = source.replace(replacement[0], replacement[1])
-
         # # Write the code into a temp file.
         # tempfile = NamedTemporaryFile("w+")
         # tempfile.writelines(source)
@@ -237,7 +268,7 @@ class TestDocs(TestCase):
 
         result = eval(  # noqa: S307, PGH001
             compile(
-                source=source,
+                source=self.randomize_names(source),
                 filename=doc_path,
                 mode="exec",
                 flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT,

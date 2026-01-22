@@ -70,7 +70,6 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             uri="kdb://admin:changeit@localhost:2114",
             root_certificates=get_server_certificate("localhost:2114"),
         )
-        await self.client.connect()
         self._reader: AsyncKurrentDBClient | None = None
         self._writer: AsyncKurrentDBClient | None = None
 
@@ -89,14 +88,12 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             uri="kdb://admin:changeit@localhost:2110,localhost:2110?NodePreference=follower",
             root_certificates=get_ca_certificate(),
         )
-        await self._reader.connect()
 
     async def setup_writer(self) -> None:
         self._writer = AsyncKurrentDBClient(
             uri="kdb://admin:changeit@localhost:2110,localhost:2110?NodePreference=leader",
             root_certificates=get_ca_certificate(),
         )
-        await self._writer.connect()
 
     async def asyncTearDown(self) -> None:
         try:
@@ -133,6 +130,38 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             pass
         finally:
             await super().asyncTearDown()
+
+    async def test_connect_thread_safety(self) -> None:
+        # Aquire the connection lock...
+        await self.client._connection_lock.acquire()
+
+        # Try to connect, waits for lock...
+        async def connect_and_lock() -> None:
+            await self.client.connect()
+
+        async def sleep_and_connect() -> int:
+            # Wait for the other to wait for the lock.
+            await asyncio.sleep(0.1)
+            # Actually connect.
+            connection = await self.client._connect()
+            self.client._connection = connection
+            # Now release the lock, the other attempt won't call _connect().
+            self.client._connection_lock.release()
+            # Return the id of the connection.
+            return id(connection)
+
+        task1 = asyncio.create_task(connect_and_lock())
+        task2 = asyncio.create_task(sleep_and_connect())
+
+        results = await asyncio.gather(task1, task2)
+
+        # Check the connection is unchanged.
+        self.assertEqual(results[1], id(self.client._connection))
+
+    async def test_connection_never_established_error(self) -> None:
+        with self.assertRaises(ProgrammingError) as cm:
+            self.client.connection  # noqa: B018
+        self.assertEqual(str(cm.exception), "Connection was never established")
 
     async def test_esdb_scheme_discovery_single_node_cluster(self) -> None:
         client = AsyncKurrentDBClient(
@@ -439,7 +468,8 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             )
 
     async def test_append_events_reconnects_closed_connection(self) -> None:
-        await self.client._connection.close()
+        await self.client.connect()
+        await self.client.connection.close()
         # Append events.
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
@@ -450,7 +480,8 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         )
 
     async def test_append_events_raises_service_unavailable(self) -> None:
-        await self.client._connection.close()
+        await self.client.connect()
+        await self.client.connection.close()
         self.client.connection_spec._targets = ["localhost:2222"]
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
@@ -462,7 +493,8 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             )
 
     async def test_append_events_raises_discovery_failed(self) -> None:
-        await self.client._connection.close()
+        await self.client.connect()
+        await self.client.connection.close()
         self.client.connection_spec._targets = ["localhost:2222", "localhost:2222"]
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
@@ -582,12 +614,13 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             await self.client.get_stream(str(uuid4()))
 
     async def test_get_stream_reconnects(self) -> None:
-        await self.client._connection.close()
+        with self.assertRaises(NotFoundError):
+            await self.client.get_stream(str(uuid4()))
+        await self.client.connection.close()
         with self.assertRaises(NotFoundError):
             await self.client.get_stream(str(uuid4()))
 
     async def test_get_stream_raises_service_unavailable(self) -> None:
-        await self.client._connection.close()
         self.client.connection_spec._targets = ["localhost:2222"]
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
@@ -682,6 +715,7 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
     async def test_tombstone_stream_reconnects_to_leader(self) -> None:
         await self.setup_writer()
+        await self.writer.connect()
 
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
@@ -692,6 +726,7 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         )
 
         await self.setup_reader()
+        await self.reader.connect()
         self.reader.connection_spec.options._node_preference = "leader"
 
         await self.reader.tombstone_stream(stream_name1, current_version=0)
@@ -757,8 +792,6 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         await asyncio.gather(Worker(self.client).run(), Worker(self.client).run())
 
     async def test_subscribe_to_all_reconnects(self) -> None:
-        # Reconstruct connection with wrong port (to inspire UsageError).
-        await self.client._connection.close()
         catchup_subscription = await self.client.subscribe_to_all()
         self.assertIsInstance(catchup_subscription, AsyncCatchupSubscription)
 
@@ -1584,7 +1617,7 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             await self.client.update_subscription_to_all(group_name=group_name)
         with self.assertRaises(NotFoundError):
             # raises in update()
-            await self.client._connection.persistent_subscriptions.update(
+            await self.client.connection.persistent_subscriptions.update(
                 group_name=group_name,
                 metadata=self.client._call_metadata,
                 credentials=self.client._call_credentials,
@@ -2334,47 +2367,48 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
     async def test_persistent_subscription_reconnects_closed_connection(self) -> None:
         group_name = str(uuid4())
         stream_name1 = str(uuid4())
-        await self.client._connection.close()
+        await self.client.connect()
+
+        await self.client.connection.close()
         await self.client.create_subscription_to_all(group_name)
 
-        await self.client._connection.close()
+        await self.client.connection.close()
         await self.client.create_subscription_to_stream(group_name, stream_name1)
 
-        await self.client._connection.close()
+        await self.client.connection.close()
         await self.client.get_subscription_info(group_name, stream_name1)
 
-        await self.client._connection.close()
+        await self.client.connection.close()
         await self.client.list_subscriptions()
 
-        await self.client._connection.close()
+        await self.client.connection.close()
         await self.client.list_subscriptions_to_stream(stream_name1)
 
-        await self.client._connection.close()
+        await self.client.connection.close()
         await self.client.update_subscription_to_all(group_name)
 
-        await self.client._connection.close()
+        await self.client.connection.close()
         await self.client.update_subscription_to_stream(group_name, stream_name1)
 
-        await self.client._connection.close()
+        await self.client.connection.close()
         await self.client.replay_parked_events(group_name)
 
-        await self.client._connection.close()
+        await self.client.connection.close()
         s = await self.client.read_subscription_to_all(group_name)
         await s.stop()
 
-        await self.client._connection.close()
+        await self.client.connection.close()
         s = await self.client.read_subscription_to_stream(group_name, stream_name1)
         await s.stop()
 
-        await self.client._connection.close()
+        await self.client.connection.close()
         await self.client.delete_subscription(group_name)
 
-        await self.client._connection.close()
+        await self.client.connection.close()
         await self.client.delete_subscription(group_name, stream_name1)
 
     async def test_persistent_subscription_stop_called_twice(self) -> None:
         group_name = str(uuid4())
-        await self.client._connection.close()
         await self.client.create_subscription_to_all(group_name)
         s = await self.client.read_subscription_to_all(group_name)
         await s.stop()
@@ -2384,7 +2418,6 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
     async def test_persistent_subscription_ack_after_stop(self) -> None:
         group_name = str(uuid4())
-        await self.client._connection.close()
         await self.client.create_subscription_to_all(group_name)
 
         # Can't ack after subscription has been stopped (not context manager).

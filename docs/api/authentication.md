@@ -1,9 +1,9 @@
 ---
 title: Authentication
-order: 7
+order: 8
 ---
 
-# Client x.509 certificate 
+# Client x.509 certificate
 
 <Badge type="info" vertical="middle" text="License Required"/>
 
@@ -16,21 +16,24 @@ X.509 certificates are digital certificates that use the X.509 public key infras
 
 ## Connect using an x.509 certificate
 
-To connect using an x.509 certificate, you need to provide the certificate and
-the private key to the client. If both username or password and certificate
-authentication data are supplied, the client prioritizes user credentials for
-authentication. The client will throw an error if the certificate and the key
-are not both provided.
+To connect using an x.509 certificate, you need to [configure the client](./getting-started.md#client-configuration)
+by providing the certificate and the private key to the client.
 
-The client supports the following parameters:
+Use the following client [connection string](./connection-strings.md#options) options:
 
 | Parameter      | Description                                                                    |
 |----------------|--------------------------------------------------------------------------------|
 | `userCertFile` | The file containing the X.509 user certificate in PEM format.                  |
 | `userKeyFile`  | The file containing the user certificate’s matching private key in PEM format. |
 
-To authenticate, include these two parameters in your connection string or constructor when initializing the client:
+### Example
 
-```rs
-client = KurrentDBClient(uri="kurrentdb://localhost:2113?tls=true&userCertFile={pathToCaFile}&userKeyFile={pathToKeyFile}")
+Here's an example for connecting to KurrentDB with a client certificate.
+
+```python:no-line-numbers
+connection_string = (
+    "kurrentdb://node1.example.com:2113?"
+    "userCertFile=/path/to/user_cert.pem&"
+    "userKeyFile=/path/to/user_key.pem"
+)
 ```

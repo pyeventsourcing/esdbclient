@@ -18,6 +18,7 @@ import wrapt
 from opentelemetry.trace import Span, SpanKind, Status, StatusCode, Tracer
 from typing_extensions import ParamSpec
 
+from kurrentdbclient import AsyncKurrentDBClient
 from kurrentdbclient.instrumentation.opentelemetry.attributes import Attributes
 
 if TYPE_CHECKING:
@@ -76,6 +77,8 @@ def apply_spanner(
             args: Any,
             kwargs: Any,
         ) -> R:
+            if isinstance(instance, AsyncKurrentDBClient):
+                await instance.connect()
             # Use the spanner function to execute the spanned function.
             with async_spanner(tracer, instance, original, *args, **kwargs) as result:
                 return await result

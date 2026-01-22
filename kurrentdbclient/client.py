@@ -733,7 +733,8 @@ class KurrentDBClient(BaseKurrentDBClient):
         credentials: grpc.CallCredentials | None = None,
     ) -> int | Literal[StreamState.NO_STREAM]:
         """
-        Returns the current position of the end of a stream.
+        Returns the current position of the end of a stream,
+        or StreamState.NO_STREAM if the stream is not found.
         """
         try:
             last_event = next(
