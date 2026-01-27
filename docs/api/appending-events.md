@@ -144,7 +144,7 @@ recorded events.
 
 ### Optimistic concurrency control
 
-The `current_version` argument of can be used to inform KurrentDB of the state you expect
+The `current_version` argument can be used to inform KurrentDB of the state you expect
 a stream to be in when appending events.
 
 There are several available options for the `current_version` argument:
