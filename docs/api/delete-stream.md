@@ -42,7 +42,7 @@ the next scavenging process. The stream can still be reopened by appending new e
 | `timeout`         | Maximum duration of operation (in seconds).                                                                                                              | `None`   |
 | `credentials`     | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`   |
 
-If successful, `delete_stream()` returns `Nona`.
+If successful, `delete_stream()` returns `None`.
 
 ### Example
 
@@ -156,7 +156,7 @@ the stream name, it will raise an exception if you try to append to it again.
 | `timeout`         | Maximum duration of operation (in seconds).                                                                                                              | `None`   |
 | `credentials`     | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`   |
 
-If successful, `tombstone_stream()` returns `Nona`.
+If successful, `tombstone_stream()` returns `None`.
 
 ### Example
 
