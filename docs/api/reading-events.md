@@ -194,21 +194,21 @@ In the example below, we read a maximum of two events from the stream:
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-events = client.read_stream(
+events = client.get_stream(
     stream_name="order-123",
     limit=2
 )
 
-assert len(tuple(events)) == 2
+assert len(events) == 2
 ```
 @tab async
 ```python:no-line-numbers
-events = await client.read_stream(
+events = await client.get_stream(
     stream_name="order-123",
     limit=2
 )
 
-assert len([e async for e in events]) == 2
+assert len(events) == 2
 ```
 :::
 
