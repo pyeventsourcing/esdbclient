@@ -585,7 +585,7 @@ You can subscribe to all the events in a secondary index, optionally starting af
 
 | Parameter         | Description                                                                                                                                              | Default |
 |-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
-| `index_name`      | Secondary index from which events will be read.                                                                                                          |         |
+| `index_name`      | Name of secondary index (`"$idx-"` prefix is optional).                                                                                                  |         |
 | `commit_position` | Position after which to start reading events.                                                                                                            | `None`  |
 | `timeout`         | Maximum duration of operation (in seconds).                                                                                                              | `None`  |
 | `credentials`     | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`  |

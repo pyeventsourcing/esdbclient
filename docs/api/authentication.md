@@ -1,9 +1,8 @@
 ---
-title: Authentication
-order: 8
+order: 9
 ---
 
-# Client x.509 certificate
+# Authentication
 
 <Badge type="info" vertical="middle" text="License Required"/>
 

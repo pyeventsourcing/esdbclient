@@ -752,12 +752,12 @@ Use the `read_index()` method to read events from a secondary index in KurrentDB
 
 You can read events from a secondary index starting from any commit position.
 
-| Parameter         | Description                                                                              | Default |
-|-------------------|------------------------------------------------------------------------------------------|---------|
-| `index_name`      | Secondary index from which events will be read.                                          |         |
-| `commit_position` | Position from which to start reading events.                                             | `None`  |
-| `limit`           | Maximum number of events to return.                                                      | `None`  |
-| `timeout`         | Maximum duration of operation (in seconds).                                             | `None`  |
+| Parameter         | Description                                                                                                                                              | Default |
+|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
+| `index_name`      | Name of secondary index (`"$idx-"` prefix is optional).                                                                                                  |         |
+| `commit_position` | Position from which to start reading events.                                                                                                             | `None`  |
+| `limit`           | Maximum number of events to return.                                                                                                                      | `None`  |
+| `timeout`         | Maximum duration of operation (in seconds).                                                                                                              | `None`  |
 | `credentials`     | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`  |
 
 On success, `read_index()` returns an iterable of `RecordedEvent` objects.

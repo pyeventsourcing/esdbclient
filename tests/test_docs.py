@@ -58,6 +58,7 @@ class TestDocs(TestCase):
                 "subscriptions.md",
                 "persistent-subscriptions.md",
                 "delete-stream.md",
+                "projections.md",
             ):
                 print()
                 print("Test vuepress docs sync code examples in", doc_path.name)
