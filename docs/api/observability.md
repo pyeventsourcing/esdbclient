@@ -4,7 +4,7 @@ order: 9
 
 # Observability
 
-This guide explains how to export telemetry data from the Python clients.
+This guide explains how to instrument and export telemetry data from the Python clients.
 
 ## Introduction
 
@@ -13,7 +13,7 @@ The Python client package provide [OpenTelemetry](https://opentelemetry.io) intr
 This enables you to monitor, trace, and troubleshoot your event store operations with
 distributed tracing support, for both the sync and async Python clients.
 
-## Activating telemetry
+## Instrumenting a client
 
 The Python client instrumentors depend on various OpenTelemetry Python packages, which
 you will need to install.
@@ -60,7 +60,7 @@ AsyncKurrentDBClientInstrumentor().uninstrument()
 :::
 
 
-## Exporting telemetry
+## Exporting telemetry data
 
 In order to export telemetry data, you will need to
 initialise the global "tracer provider".

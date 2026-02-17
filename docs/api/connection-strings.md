@@ -50,44 +50,23 @@ the client. The Python client does not allow call credentials to be transferred 
 
 In the examples below, `user` is a username and `pass` is a password.
 
-For connecting directly to a single node, use the following format:
+For connecting directly to a single node:
 
 ```:no-line-numbers
-kurrentdb://user:pass@node1.example.com:2113
+kurrentdb://user:pass@node1:2113
 ```
 
-For connecting to a cluster, using specific endpoints to obtain cluster information, whilst observing your node
-preference for continuing operations, use the following format:
+For connecting to a cluster using specific endpoints to obtain cluster information:
 
 ```:no-line-numbers
-kurrentdb://user:pass@node1.example.com:2113,node2.example.com:2113,node3.example.com:2113
+kurrentdb://user:pass@node1:2113,node2:2113,node3:2113
 ```
 
-For connecting to a cluster, where `cluster1.example.com` is configured with DNS A records for the cluster endpoints,
-whilst observing your node preference for continuing operations, use the following format:
+For connecting to a cluster configured with DNS A records for the cluster endpoints:
 
 ```:no-line-numbers
-kurrentdb+discover://user:pass@cluster1.example.com:2113
+kurrentdb+discover://user:pass@cluster1:2113
 ```
-
-## Options
-
-The table below describes optional query parameters that can be used in the connection string to configure the client.
-All option field names and values are case-insensitive.
-| Parameter             | Accepted values                                   | Default     | Description                                                                                                                                         |
-|-----------------------|---------------------------------------------------|-------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| `tls`                 | `true`, `false`                                   | `true`      | Set to `false` when connecting to KurrentDB running with "insecure" mode.                                                                           |
-| `connectionName`      | Any string                                        | Random UUID | Connection name                                                                                                                                     |
-| `maxDiscoverAttempts` | Integer                                           | `10`        | Number of attempts to discover the cluster.                                                                                                         |
-| `discoveryInterval`   | Integer                                           | `100`       | Cluster discovery polling interval in milliseconds.                                                                                                 |
-| `gossipTimeout`       | Integer                                           | `5`         | Gossip timeout in seconds, when the gossip call times out, it will be retried.                                                                      |
-| `nodePreference`      | `leader`, `follower`, `random`, `readOnlyReplica` | `leader`    | Preferred node role. When creating a client for write operations, always use `leader`.                                                              |
-| `tlsCaFile`           | File system path                                  | None        | Path to the CA file when connecting to a secure cluster with a certificate that's not signed by a trusted CA.                                       |
-| `defaultDeadline`     | Integer                                           | None        | Maximum duration, in seconds, for completion of client operations. Can be overridden per operation using the `timeout` parameter of client methods. |
-| `keepAliveInterval`   | Integer                                           | None        | Interval between keep-alive ping calls, in milliseconds.                                                                                            |
-| `keepAliveTimeout`    | Integer                                           | None        | Keep-alive ping call timeout, in milliseconds.                                                                                                      |
-| `userCertFile`        | File system path                                  | None        | User certificate file for X.509 authentication.                                                                                                     |
-| `userKeyFile`         | File system path                                  | None        | Key file for the user certificate used for X.509 authentication.                                                                                    |
 
 ## User certificates
 
@@ -102,10 +81,26 @@ Then use the `userCertFile` and `userKeyFile` connection string options.
 
 Here's an example for connecting to KurrentDB with a client certificate.
 
-```python:no-line-numbers
-connection_string = (
-    "kurrentdb://node1.example.com:2113?"
-    "userCertFile=/path/to/user_cert.pem&"
-    "userKeyFile=/path/to/user_key.pem"
-)
+```:no-line-numbers
+kurrentdb://node1:2113?userCertFile=user_cert.pem&userKeyFile=user_key.pem
 ```
+
+## Connection options
+
+The table below describes optional query parameters that can be used in the connection string to configure the client.
+All option field names and values are case-insensitive.
+| Field name            | Accepted values                                   | Default     | Description                                                                                                                                         |
+|-----------------------|---------------------------------------------------|-------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
+| `tls`                 | `true`, `false`                                   | `true`      | Set to `false` when connecting to KurrentDB running with "insecure" mode.                                                                           |
+| `connectionName`      | Any string                                        | Random UUID | Connection name                                                                                                                                     |
+| `maxDiscoverAttempts` | Integer                                           | `10`        | Number of attempts to discover the cluster.                                                                                                         |
+| `discoveryInterval`   | Integer                                           | `100`       | Cluster discovery polling interval in milliseconds.                                                                                                 |
+| `gossipTimeout`       | Integer                                           | `5`         | Gossip timeout in seconds, when the gossip call times out, it will be retried.                                                                      |
+| `nodePreference`      | `leader`, `follower`, `random`, `readOnlyReplica` | `leader`    | Preferred node role. When creating a client for write operations, always use `leader`.                                                              |
+| `tlsCaFile`           | File system path                                  | None        | Path to the CA file when connecting to a secure cluster with a certificate that's not signed by a trusted CA.                                       |
+| `defaultDeadline`     | Integer                                           | None        | Maximum duration, in seconds, for completion of client operations. Can be overridden per operation using the `timeout` parameter of client methods. |
+| `keepAliveInterval`   | Integer                                           | None        | Interval between keep-alive ping calls, in milliseconds.                                                                                            |
+| `keepAliveTimeout`    | Integer                                           | None        | Keep-alive ping call timeout, in milliseconds.                                                                                                      |
+| `userCertFile`        | File system path                                  | None        | User certificate file for X.509 authentication.                                                                                                     |
+| `userKeyFile`         | File system path                                  | None        | Key file for the user certificate used for X.509 authentication.                                                                                    |
+
