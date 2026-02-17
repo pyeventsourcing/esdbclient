@@ -29,6 +29,7 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import (
     BatchSpanProcessor,
+    ConsoleSpanExporter,
     SimpleSpanProcessor,
     SpanExporter,
 )
@@ -113,7 +114,7 @@ def init_tracer_provider(
 init_tracer_provider(
     span_exporters=[
         _in_memory_span_exporter,
-        # ConsoleSpanExporter(),
+        ConsoleSpanExporter(),
         # OTLPSpanExporter(endpoint="http://127.0.0.1:4318/v1/traces"),
     ],
 )

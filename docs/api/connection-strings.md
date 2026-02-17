@@ -1,5 +1,5 @@
 ---
-order: 8
+order: 2
 ---
 
 # Connection strings
@@ -88,3 +88,24 @@ All option field names and values are case-insensitive.
 | `keepAliveTimeout`    | Integer                                           | None        | Keep-alive ping call timeout, in milliseconds.                                                                                                      |
 | `userCertFile`        | File system path                                  | None        | User certificate file for X.509 authentication.                                                                                                     |
 | `userKeyFile`         | File system path                                  | None        | Key file for the user certificate used for X.509 authentication.                                                                                    |
+
+## User certificates
+
+<Badge type="info" vertical="middle" text="License Required"/>
+
+To authenticate a client with an X.509 certificate, you need:
+
+* KurrentDB version 25.0+ [configured for user certificates](@server/security/user-authentication.html#user-x-509-certificates); and
+* A valid client certificate and private key.
+
+Then use the `userCertFile` and `userKeyFile` connection string options.
+
+Here's an example for connecting to KurrentDB with a client certificate.
+
+```python:no-line-numbers
+connection_string = (
+    "kurrentdb://node1.example.com:2113?"
+    "userCertFile=/path/to/user_cert.pem&"
+    "userKeyFile=/path/to/user_key.pem"
+)
+```
