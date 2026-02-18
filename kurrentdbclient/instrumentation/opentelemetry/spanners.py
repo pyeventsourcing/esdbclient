@@ -32,6 +32,7 @@ from kurrentdbclient import (
     AsyncReadResponse,
     KurrentDBClient,
     NewEvent,
+    NewEvents,
     ReadResponse,
     RecordedEvent,
     StreamState,
@@ -70,14 +71,17 @@ if TYPE_CHECKING:
 
 
 STREAMS_APPEND = "streams.append"
+STREAMS_MULTI_APPEND = "streams.multi-append"
 STREAMS_SUBSCRIBE = "streams.subscribe"
 SPAN_NAMES_BY_CLIENT_METHOD = {
     KurrentDBClient.append_to_stream.__qualname__: STREAMS_APPEND,
+    KurrentDBClient.multi_append_to_stream.__qualname__: STREAMS_MULTI_APPEND,
     KurrentDBClient.subscribe_to_all.__qualname__: STREAMS_SUBSCRIBE,
     KurrentDBClient.subscribe_to_stream.__qualname__: STREAMS_SUBSCRIBE,
     KurrentDBClient.read_subscription_to_all.__qualname__: STREAMS_SUBSCRIBE,
     KurrentDBClient.read_subscription_to_stream.__qualname__: STREAMS_SUBSCRIBE,
     AsyncKurrentDBClient.append_to_stream.__qualname__: STREAMS_APPEND,
+    AsyncKurrentDBClient.multi_append_to_stream.__qualname__: STREAMS_MULTI_APPEND,
     AsyncKurrentDBClient.subscribe_to_all.__qualname__: STREAMS_SUBSCRIBE,
     AsyncKurrentDBClient.subscribe_to_stream.__qualname__: STREAMS_SUBSCRIBE,
     AsyncKurrentDBClient.read_subscription_to_all.__qualname__: STREAMS_SUBSCRIBE,
@@ -85,11 +89,13 @@ SPAN_NAMES_BY_CLIENT_METHOD = {
 }
 SPAN_KINDS_BY_CLIENT_METHOD = {
     KurrentDBClient.append_to_stream.__qualname__: SpanKind.PRODUCER,
+    KurrentDBClient.multi_append_to_stream.__qualname__: SpanKind.PRODUCER,
     KurrentDBClient.subscribe_to_all.__qualname__: SpanKind.CONSUMER,
     KurrentDBClient.subscribe_to_stream.__qualname__: SpanKind.CONSUMER,
     KurrentDBClient.read_subscription_to_all.__qualname__: SpanKind.CONSUMER,
     KurrentDBClient.read_subscription_to_stream.__qualname__: SpanKind.CONSUMER,
     AsyncKurrentDBClient.append_to_stream.__qualname__: SpanKind.PRODUCER,
+    AsyncKurrentDBClient.multi_append_to_stream.__qualname__: SpanKind.PRODUCER,
     AsyncKurrentDBClient.subscribe_to_all.__qualname__: SpanKind.CONSUMER,
     AsyncKurrentDBClient.subscribe_to_stream.__qualname__: SpanKind.CONSUMER,
     AsyncKurrentDBClient.read_subscription_to_all.__qualname__: SpanKind.CONSUMER,
@@ -346,6 +352,30 @@ class AsyncAppendToStreamMethod(Protocol):
         pass  # pragma: no cover
 
 
+class MultiAppendToStreamMethod(Protocol):
+    def __call__(
+        self,
+        /,
+        events: NewEvents | Iterable[NewEvents],
+        *,
+        timeout: float | None = None,
+        credentials: grpc.CallCredentials | None = None,
+    ) -> int:
+        pass  # pragma: no cover
+
+
+class AsyncMultiAppendToStreamMethod(Protocol):
+    async def __call__(
+        self,
+        /,
+        events: NewEvents | Iterable[NewEvents],
+        *,
+        timeout: float | None = None,
+        credentials: grpc.CallCredentials | None = None,
+    ) -> int:
+        pass  # pragma: no cover
+
+
 @overload
 def span_append_to_stream(
     tracer: Tracer,
@@ -401,10 +431,71 @@ def span_append_to_stream(
                 db_operation_name=span_name,
                 stream_name=stream_name,
             )
-            events = _set_context_in_events(span.get_span_context(), events)
+            events = _set_context_in_new_event_objects(span.get_span_context(), events)
             yield spanned_func(
                 stream_name,
                 current_version=current_version,
+                events=events,
+                timeout=timeout,
+                credentials=credentials,
+            )
+        except Exception as e:
+            _set_span_error(span, e)
+            raise
+        else:
+            _set_span_ok(span)
+
+
+@overload
+def span_multi_append_to_stream(
+    tracer: Tracer,
+    instance: BaseKurrentDBClient,
+    spanned_func: AsyncMultiAppendToStreamMethod,
+    /,
+    events: NewEvents | Iterable[NewEvents],
+    *,
+    timeout: float | None = None,
+    credentials: grpc.CallCredentials | None = None,
+) -> AsyncSpannerResponse[int]:
+    pass  # pragma: no cover
+
+
+@overload
+def span_multi_append_to_stream(
+    tracer: Tracer,
+    instance: BaseKurrentDBClient,
+    spanned_func: MultiAppendToStreamMethod,
+    /,
+    events: NewEvents | Iterable[NewEvents],
+    *,
+    timeout: float | None = None,
+    credentials: grpc.CallCredentials | None = None,
+) -> SpannerResponse[int]:
+    pass  # pragma: no cover
+
+
+def span_multi_append_to_stream(
+    tracer: Tracer,
+    instance: BaseKurrentDBClient,
+    spanned_func: MultiAppendToStreamMethod | AsyncMultiAppendToStreamMethod,
+    /,
+    events: NewEvents | Iterable[NewEvents],
+    *,
+    timeout: float | None = None,
+    credentials: grpc.CallCredentials | None = None,
+) -> OverloadedSpannerResponse[int, int]:  # pragma: <25.1 no cover
+
+    span_name, span_kind = _get_span_name_and_kind(spanned_func)
+
+    with _start_span(tracer, span_name, span_kind) as span:
+        try:
+            _enrich_span(
+                span=span,
+                client=instance,
+                db_operation_name=span_name,
+            )
+            events = _set_context_in_new_events_objects(span.get_span_context(), events)
+            yield spanned_func(
                 events=events,
                 timeout=timeout,
                 credentials=credentials,
@@ -1035,7 +1126,7 @@ METADATA_TRACE_ID = "$traceId"
 METADATA_SPAN_ID = "$spanId"
 
 
-def _set_context_in_events(
+def _set_context_in_new_event_objects(
     context: SpanContext, events: NewEvent | Iterable[NewEvent]
 ) -> Sequence[NewEvent]:
     # Kind of propagate OpenTelemetry context in "standard KurrentDB" style.
@@ -1061,6 +1152,25 @@ def _set_context_in_events(
                 )
         reconstructed_events.append(event)
     return reconstructed_events
+
+
+def _set_context_in_new_events_objects(
+    context: SpanContext, events: NewEvents | Iterable[NewEvents]
+) -> Sequence[NewEvents]:  # pragma: <25.1 no cover
+    # Kind of propagate OpenTelemetry context in "standard KurrentDB" style.
+    if isinstance(events, NewEvents):
+        events = [events]
+    return [
+        NewEvents(
+            new_events_obj.stream_name,
+            _set_context_in_new_event_objects(
+                context,
+                new_events_obj.events,
+            ),
+            current_version=new_events_obj.current_version,
+        )
+        for new_events_obj in events
+    ]
 
 
 def _extract_context_from_event(

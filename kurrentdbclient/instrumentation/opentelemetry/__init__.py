@@ -20,6 +20,7 @@ from kurrentdbclient.instrumentation.opentelemetry.spanners import (
     span_append_to_stream,
     span_catchup_subscription,
     span_get_stream,
+    span_multi_append_to_stream,
     span_persistent_subscription,
     span_read_stream,
 )
@@ -70,6 +71,12 @@ class KurrentDBClientInstrumentor(_BaseInstrumentor):
         )
         apply_spanner(
             patched_class=KurrentDBClient,
+            spanned_func=KurrentDBClient.multi_append_to_stream,
+            spanner_func=span_multi_append_to_stream,
+            tracer=tracer,
+        )
+        apply_spanner(
+            patched_class=KurrentDBClient,
             spanned_func=KurrentDBClient.subscribe_to_stream,
             spanner_func=span_catchup_subscription,
             tracer=tracer,
@@ -112,6 +119,7 @@ class KurrentDBClientInstrumentor(_BaseInstrumentor):
 
     def _uninstrument(self, **kwargs: Any) -> None:
         unwrap(KurrentDBClient, "append_to_stream")
+        unwrap(KurrentDBClient, "multi_append_to_stream")
         unwrap(KurrentDBClient, "subscribe_to_stream")
         unwrap(KurrentDBClient, "subscribe_to_all")
         unwrap(KurrentDBClient, "read_subscription_to_stream")
@@ -134,6 +142,12 @@ class AsyncKurrentDBClientInstrumentor(_BaseInstrumentor):
             patched_class=AsyncKurrentDBClient,
             spanned_func=AsyncKurrentDBClient.append_to_stream,
             spanner_func=span_append_to_stream,
+            tracer=tracer,
+        )
+        apply_spanner(
+            patched_class=AsyncKurrentDBClient,
+            spanned_func=AsyncKurrentDBClient.multi_append_to_stream,
+            spanner_func=span_multi_append_to_stream,
             tracer=tracer,
         )
         apply_spanner(
@@ -176,6 +190,7 @@ class AsyncKurrentDBClientInstrumentor(_BaseInstrumentor):
 
     def _uninstrument(self, **kwargs: Any) -> None:
         unwrap(AsyncKurrentDBClient, "append_to_stream")
+        unwrap(AsyncKurrentDBClient, "multi_append_to_stream")
         unwrap(AsyncKurrentDBClient, "subscribe_to_stream")
         unwrap(AsyncKurrentDBClient, "subscribe_to_all")
         unwrap(AsyncKurrentDBClient, "read_subscription_to_stream")

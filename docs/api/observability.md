@@ -149,12 +149,13 @@ For detailed configuration options, refer to the OpenTelemetry [Python documenta
 ### What gets traced
 
 At this time, the instrumented methods are [`append_to_stream()`](./appending-events.md#append-to-stream),
+[`multi_append_to_stream()`](./appending-events.md#multi-append-to-stream),
 [`subscribe_to_stream()`](./subscriptions.md#subscribe-to-stream),
 [`subscribe_to_all()`](./subscriptions.md#subscribe-to-all),
 [`read_subscription_to_stream()`](./persistent-subscriptions.md#read-subscription-to-stream),
 and [`read_subscription_to_all()`](./persistent-subscriptions.md#read-subscription-to-all).
 
-The append method is instrumented by spanning the method call with a "producer" span.
+The append methods are instrumented by spanning the method call with a "producer" span.
 
 The subscription methods are instrumented by instrumenting the response iterators,
 creating a "consumer" span for each recorded event received.
@@ -163,11 +164,12 @@ The producer spans add span context information to event metadata. The "consumer
 spans extract this information from the recorded event metadata, and make each
 "consumer" span a child of a "producer" parent span.
 
+
 ### Producer span
 
 Each span includes attributes to help with monitoring and debugging.
 
-Producer spans have the following attributes:
+Producer spans for [appending to a single stream](./appending-events.md#append-to-stream) have the following attributes:
 
 | Attribute                    | Description                            | Example             |
 |------------------------------|----------------------------------------|---------------------|
@@ -175,6 +177,16 @@ Producer spans have the following attributes:
 | db.system                    | Database system identifier             | `"kurrentdb"`       |
 | db.user                      | Database user name                     | `"admin"`           |
 | db.kurrentdb.stream          | Stream name or identifier              | `"user-events-123"` |
+| server.address               | KurrentDB server address               | `"localhost"`       |
+| server.port                  | KurrentDB server port                  | `"2113"`            |
+
+Producer spans for [appending to multiple streams](./appending-events.md#multi-append-to-stream) have the following attributes:
+
+| Attribute                    | Description                            | Example             |
+|------------------------------|----------------------------------------|---------------------|
+| db.operation                 | Type of operation performed            | `"streams.append"`  |
+| db.system                    | Database system identifier             | `"kurrentdb"`       |
+| db.user                      | Database user name                     | `"admin"`           |
 | server.address               | KurrentDB server address               | `"localhost"`       |
 | server.port                  | KurrentDB server port                  | `"2113"`            |
 
@@ -218,6 +230,7 @@ Here's an instrumentor span for a successful [`append_to_stream()`](./appending-
     }
 }
 ```
+
 
 ### Consumer span
 
@@ -278,6 +291,7 @@ Here's an instrumentor span from a [catch-up subscription](./subscriptions.md) o
     }
 }
 ```
+
 
 ### Span errors
 

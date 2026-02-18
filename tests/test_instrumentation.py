@@ -12,7 +12,7 @@ from typing import (
     cast,
     overload,
 )
-from unittest import IsolatedAsyncioTestCase, TestCase
+from unittest import IsolatedAsyncioTestCase, TestCase, skipIf
 from uuid import uuid4
 
 import opentelemetry.instrumentation.grpc.version as instrumentation_grpc_version
@@ -27,9 +27,8 @@ from opentelemetry.instrumentation.grpc import (
 )
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
-from opentelemetry.sdk.trace.export import (
+from opentelemetry.sdk.trace.export import (  # ConsoleSpanExporter,
     BatchSpanProcessor,
-    ConsoleSpanExporter,
     SimpleSpanProcessor,
     SpanExporter,
 )
@@ -49,6 +48,7 @@ from kurrentdbclient import (
     AsyncKurrentDBClient,
     KurrentDBClient,
     NewEvent,
+    NewEvents,
     RecordedEvent,
     StreamState,
 )
@@ -66,7 +66,7 @@ from kurrentdbclient.instrumentation.opentelemetry import (
 from kurrentdbclient.instrumentation.opentelemetry.spanners import (
     _enrich_span,
     _extract_context_from_event,
-    _set_context_in_events,
+    _set_context_in_new_event_objects,
 )
 from kurrentdbclient.instrumentation.opentelemetry.utils import (
     AsyncSpannerResponse,
@@ -77,6 +77,7 @@ from kurrentdbclient.instrumentation.opentelemetry.utils import (
     _start_span,
     apply_spanner,
 )
+from tests.test_client import SERVER_VERSION
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -114,7 +115,7 @@ def init_tracer_provider(
 init_tracer_provider(
     span_exporters=[
         _in_memory_span_exporter,
-        ConsoleSpanExporter(),
+        # ConsoleSpanExporter(),
         # OTLPSpanExporter(endpoint="http://127.0.0.1:4318/v1/traces"),
     ],
 )
@@ -1548,7 +1549,7 @@ class TestUtils(
 
         # Single event, empty metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b"")
-        events = _set_context_in_events(context, event1)
+        events = _set_context_in_new_event_objects(context, event1)
         expected_events = [
             NewEvent(
                 type="SomethingHappened",
@@ -1562,7 +1563,7 @@ class TestUtils(
 
         # Single event, json metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b"{}")
-        events = _set_context_in_events(context, event1)
+        events = _set_context_in_new_event_objects(context, event1)
         expected_events = [
             NewEvent(
                 type="SomethingHappened",
@@ -1576,7 +1577,7 @@ class TestUtils(
 
         # Single event, json metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b'{"my-key": "my-value"}')
-        events = _set_context_in_events(context, event1)
+        events = _set_context_in_new_event_objects(context, event1)
         expected_events = [
             NewEvent(
                 type="SomethingHappened",
@@ -1590,7 +1591,7 @@ class TestUtils(
 
         # Single event, non-json metadata.
         event1 = NewEvent("SomethingHappened", b"{}", b"12345")
-        events = _set_context_in_events(context, event1)
+        events = _set_context_in_new_event_objects(context, event1)
         expected_events = [
             NewEvent(
                 type="SomethingHappened",
@@ -1606,7 +1607,7 @@ class TestUtils(
         event1 = NewEvent(
             "SomethingHappened", b"{}", b"", content_type="application/octet-stream"
         )
-        events = _set_context_in_events(context, event1)
+        events = _set_context_in_new_event_objects(context, event1)
         expected_events = [
             NewEvent(
                 type="SomethingHappened",
@@ -1622,7 +1623,7 @@ class TestUtils(
         # Multiple events.
         event1 = NewEvent("SomethingHappened", b"{}", b"")
         event2 = NewEvent("SomethingHappened", b"{}", b"12345")
-        events = _set_context_in_events(context, [event1, event2])
+        events = _set_context_in_new_event_objects(context, [event1, event2])
         expected_events = [
             NewEvent(
                 type="SomethingHappened",
@@ -1890,6 +1891,134 @@ class TestWhatAlexeyAskedFor(KurrentDBClientInstrumentorTestCase):
             },
             error=cm.exception,
             server_port="1000",
+        )
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    def test_multi_append_to_stream(self) -> None:
+        # Construct client.
+        client = self.construct_client()
+
+        # Check there are zero spans.
+        self.check_spans(num_spans=0)
+
+        # Append to stream.
+        stream_name = "instrumentation-test-" + str(uuid4())
+
+        event_with_json_metadata = NewEvent(
+            type="SomethingHappened",
+            data=b"{}",
+            metadata=b'{"my-key": "my-value"}',
+        )
+        event_with_empty_metadata = NewEvent(
+            type="SomethingHappened",
+            data=b"{}",
+            metadata=b"",
+        )
+        # event_with_non_json_metadata = NewEvent(
+        #     type="SomethingHappened",
+        #     data=b"{}",
+        #     metadata=b"0123456",
+        # )
+        client.multi_append_to_stream(
+            [
+                NewEvents(
+                    stream_name,
+                    events=[
+                        event_with_json_metadata,
+                        event_with_empty_metadata,
+                        # event_with_non_json_metadata,
+                    ],
+                    current_version=StreamState.NO_STREAM,
+                ),
+            ],
+        )
+
+        # Check there is one "producer" span.
+        self.check_spans(
+            num_spans=1,
+            span_index=0,
+            parent_span_index=None,
+            span_name="streams.multi-append",
+            span_kind=trace_api.SpanKind.PRODUCER,
+            span_attributes={
+                "db.operation": "streams.multi-append",
+                # "db.kurrentdb.stream": stream_name,
+            },
+        )
+
+        # Get the span context.
+        span_context = _get_in_memory_spans()[0].context
+
+        # Get the recorded events.
+        events = client.get_stream(stream_name)
+
+        # Check we didn't generate any new spans by reading the stream.
+        self.check_spans(num_spans=1)
+
+        # Check recorded event metadata has correct span and trace IDs.
+        def extract_metadata_span_id(event: RecordedEvent) -> int:
+            return extract_metadata_int_from_hex(event, "$spanId")
+
+        def extract_metadata_trace_id(event: RecordedEvent) -> int:
+            return extract_metadata_int_from_hex(event, "$traceId")
+
+        def extract_metadata_int_from_hex(event: RecordedEvent, key: str) -> int:
+            return int(json.loads(event.metadata)[key], 16)
+
+        # First event should have span context.
+        self.assertEqual(event_with_json_metadata.id, events[0].id)
+        self.assertEqual(span_context.span_id, extract_metadata_span_id(events[0]))
+        self.assertEqual(span_context.trace_id, extract_metadata_trace_id(events[0]))
+        # - original metadata should be conserved
+        self.assertEqual("my-value", json.loads(events[0].metadata)["my-key"])
+
+        # Second event should have span context.
+        self.assertEqual(event_with_empty_metadata.id, events[1].id)
+        self.assertEqual(span_context.span_id, extract_metadata_span_id(events[1]))
+        self.assertEqual(span_context.trace_id, extract_metadata_trace_id(events[1]))
+
+        # Cover edge cases:
+        # - events arg is a single NewEvents
+        client.multi_append_to_stream(
+            NewEvents(
+                stream_name=stream_name,
+                events=[NewEvent("SomethingHappened", b"")],
+                current_version=1,
+            )
+        )
+        self.check_spans(
+            num_spans=2,
+            span_index=1,
+            parent_span_index=None,
+            span_name="streams.multi-append",
+            span_kind=trace_api.SpanKind.PRODUCER,
+            span_attributes={
+                "db.operation": "streams.multi-append",
+                # "db.kurrentdb.stream": stream_name,
+            },
+        )
+
+        # Check span after error.
+        self.break_client_connection(client)
+        with self.assertRaises(ServiceUnavailableError) as cm:
+            client.multi_append_to_stream(
+                NewEvents(
+                    stream_name=stream_name,
+                    events=[NewEvent("SomethingHappened", b"")],
+                    current_version=1,
+                ),
+            )
+        self.check_spans(
+            num_spans=3,
+            span_index=2,
+            parent_span_index=None,
+            span_name="streams.multi-append",
+            span_kind=trace_api.SpanKind.PRODUCER,
+            span_attributes={
+                "db.operation": "streams.multi-append",
+                # "db.kurrentdb.stream": stream_name,
+            },
+            error=cm.exception,
         )
 
     def test_subscribe_to_stream(self) -> None:
@@ -2357,6 +2486,128 @@ class AsyncTestWhatAlexeyAskedFor(AsyncKurrentDBClientInstrumentorTestCase):
             span_attributes={
                 "db.operation": "streams.append",
                 "db.kurrentdb.stream": stream_name,
+            },
+            error=cm.exception,
+        )
+
+    @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
+    async def test_multi_append_to_stream(self) -> None:
+        # Construct client.
+        client = self.construct_client()
+
+        # Check there are zero spans.
+        self.check_spans(num_spans=0)
+
+        # Append to stream.
+        stream_name = "instrumentation-test-" + str(uuid4())
+
+        event_with_json_metadata = NewEvent(
+            type="SomethingHappened",
+            data=b"{}",
+            metadata=b'{"my-key": "my-value"}',
+        )
+        event_with_empty_metadata = NewEvent(
+            type="SomethingHappened",
+            data=b"{}",
+            metadata=b"",
+        )
+        await client.multi_append_to_stream(
+            NewEvents(
+                stream_name,
+                events=[
+                    event_with_json_metadata,
+                    event_with_empty_metadata,
+                ],
+                current_version=StreamState.NO_STREAM,
+            )
+        )
+
+        # Check there is one "producer" span.
+        self.check_spans(
+            num_spans=1,
+            span_index=0,
+            parent_span_index=None,
+            span_name="streams.multi-append",
+            span_kind=trace_api.SpanKind.PRODUCER,
+            span_attributes={
+                "db.operation": "streams.multi-append",
+                # "db.kurrentdb.stream": stream_name,
+            },
+        )
+
+        # Get the span context.
+        spans = _get_in_memory_spans()
+        span_context = spans[0].context
+
+        # Get the recorded events.
+        events = await client.get_stream(stream_name)
+
+        # Check we didn't generate any new spans by reading the stream.
+        self.check_spans(num_spans=1)
+
+        # Check recorded event metadata has correct span and trace IDs.
+        def extract_metadata_span_id(event: RecordedEvent) -> int:
+            return extract_metadata_int_from_hex(event, "$spanId")
+
+        def extract_metadata_trace_id(event: RecordedEvent) -> int:
+            return extract_metadata_int_from_hex(event, "$traceId")
+
+        def extract_metadata_int_from_hex(event: RecordedEvent, key: str) -> int:
+            return int(json.loads(event.metadata)[key], 16)
+
+        # First event should have span context.
+        self.assertEqual(event_with_json_metadata.id, events[0].id)
+        self.assertEqual(span_context.span_id, extract_metadata_span_id(events[0]))
+        self.assertEqual(span_context.trace_id, extract_metadata_trace_id(events[0]))
+        # - original metadata should be conserved
+        self.assertEqual("my-value", json.loads(events[0].metadata)["my-key"])
+
+        # Second event should have span context.
+        self.assertEqual(event_with_empty_metadata.id, events[1].id)
+        self.assertEqual(span_context.span_id, extract_metadata_span_id(events[1]))
+        self.assertEqual(span_context.trace_id, extract_metadata_trace_id(events[1]))
+
+        # Cover edge cases:
+        # - events arg is a single NewEvent
+        # - stream_name is keyword arg
+        await client.multi_append_to_stream(
+            NewEvents(
+                stream_name=stream_name,
+                events=[NewEvent("SomethingHappened", b"")],
+                current_version=1,
+            )
+        )
+        self.check_spans(
+            num_spans=2,
+            span_index=1,
+            parent_span_index=None,
+            span_name="streams.multi-append",
+            span_kind=trace_api.SpanKind.PRODUCER,
+            span_attributes={
+                "db.operation": "streams.multi-append",
+                # "db.kurrentdb.stream": stream_name,
+            },
+        )
+
+        # Check span after error.
+        await self.async_break_client_connection(client)
+        with self.assertRaises(ServiceUnavailableError) as cm:
+            await client.multi_append_to_stream(
+                NewEvents(
+                    stream_name=stream_name,
+                    events=[NewEvent("SomethingHappened", b"")],
+                    current_version=1,
+                )
+            )
+        self.check_spans(
+            num_spans=3,
+            span_index=2,
+            parent_span_index=None,
+            span_name="streams.multi-append",
+            span_kind=trace_api.SpanKind.PRODUCER,
+            span_attributes={
+                "db.operation": "streams.multi-append",
+                # "db.kurrentdb.stream": stream_name,
             },
             error=cm.exception,
         )
