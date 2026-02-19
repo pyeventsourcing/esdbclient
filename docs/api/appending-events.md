@@ -2,7 +2,7 @@
 order: 3
 ---
 
-# Appending events
+# Appending Events
 
 This guide describes the Python client methods for recording new events in KurrentDB.
 
@@ -26,7 +26,7 @@ The Python client for KurrentDB also has methods for getting and setting [stream
 * [`get_stream_metadata()`](#get-stream-metadata)
 * [`set_stream_metadata()`](#set-stream-metadata)
 
-## What is a stream?
+## What is a Stream?
 
 A stream in KurrentDB is a sequence of recorded events, each with a unique integer
 position. Each stream has a unique name. The positions of events in a stream are
@@ -46,7 +46,7 @@ transaction log
 
 These numbers are assigned when new events are recorded, and used when recorded events are read.
 
-## New events
+## New Events
 
 The `NewEvent` class is provided for specifying new events before calling an append method.
 
@@ -59,22 +59,22 @@ The `NewEvent` class is provided for specifying new events before calling an app
 | `id`           | `UUID`  | A unique ID for the event | `uuid.uuid4()`       |
 
 
-### Event type
+### Event Type
 
 Each new event must be supplied with an event `type` string.
 
-### Event data
+### Event Data
 
 The `data` field is a Python bytes object that carries the event payload. Usually the serialized state of a domain event object. If you serialize your
 domain events as JSON objects, you can take advantage of KurrentDB's other functionality, such as projections. But you
 can serialize events using whatever format suits your requirements. The data will be stored as encoded bytes.
 
-### Event metadata
+### Event Metadata
 
 The `metadata` field is a Python bytes object that carries salient information about the event. It can be used for storing additional information alongside your event
 payload, such as correlation IDs, timestamps, access information, etc. KurrentDB allows you to store a separate byte array containing this information to keep it separate.
 
-### Event content type
+### Event Content Type
 
 The `content_type` field indicates whether the event is stored as JSON or binary format. You can choose between
 `'application/json'` (default) and `'application/octet-stream'`. For example, if you are using Message Pack or
@@ -118,7 +118,7 @@ order_created = NewEvent(
 
 
 
-## Append to stream
+## Append to Stream
 
 The Python client's `append_to_stream()` method appends new events to a named stream.
 
@@ -142,7 +142,7 @@ it appended. This value represents that event’s position in the global transac
 and can be used by applications to wait until eventually consistent views reflect newly
 recorded events.
 
-### Optimistic concurrency control
+### Optimistic Concurrency Control
 
 The `current_version` argument can be used to inform KurrentDB of the state you expect
 a stream to be in when appending events.
@@ -166,7 +166,7 @@ Or, you can fully deactivate concurrency control by specifying `StreamState.ANY`
 
 Let's see how to activate and deactivate optimistic concurrency control.
 
-### Append to new stream
+### Append to New Stream
 
 Here's an example appending the first event to stream `'order-123'`.
 The `current_version` argument `StreamState.NO_STREAM` requires that no events
@@ -205,7 +205,7 @@ await client.append_to_stream(
 ```
 :::
 
-### Append to existing stream
+### Append to Existing Stream
 
 Here's an example appending a second event to stream `'order-123'`. The
 `current_version` argument `0` is the position of the first event in the stream.
@@ -271,7 +271,7 @@ await client.append_to_stream(
 ```
 :::
 
-### Wrong current version error
+### Wrong Current Version Error
 
 Here's an example that shows optimistic concurrent control rejecting an append options.
 In this example,`StreamState.NO_STREAM` is specified as the value of `current_version`,
@@ -361,7 +361,7 @@ else:
 ```
 :::
 
-### Idempotent append behavior
+### Idempotent Append Behavior
 
 When [optimistic concurrency control](#optimistic-concurrency-control) is activated,
 retrying a successful append operation will return without failing due to the previous success.
@@ -501,7 +501,7 @@ assert len(await client.get_stream("order-123")) == 3
 ```
 :::
 
-## Multi-append to stream
+## Multi-Append to Stream
 
 ::: info
 Supported by KurrentDB 25.1 and later.
@@ -528,7 +528,7 @@ If successful, `multi_append_to_stream()` returns the commit position (`int`) of
 it appended. This value represents the event’s position in the global transaction log
 and can be used to ensure that eventually consistent views reflect the new events.
 
-### The NewEvents class
+### The NewEvents Class
 
 Use the `NewEvents` dataclass when [appending events to multiple streams](#multi-append-to-stream).
 
@@ -547,7 +547,7 @@ The fields of a `NewEvents` object are like the arguments of [`append_to_stream(
 Because [`multi_append_to_stream()`](#multi-append-to-stream) allows many such things in one call, many
 streams can be written to in one atomic operation.
 
-### Metadata restrictions
+### Metadata Restrictions
 
 When appending events with `multi_append_to_stream()`, the `metadata` field of
 each `NewEvent` must be either an empty `bytes` string or a `bytes` string
@@ -654,7 +654,7 @@ await client.multi_append_to_stream(
 ```
 :::
 
-## Get stream metadata
+## Get Stream Metadata
 
 You can use the `get_stream_metadata()` method to get [stream metadata](@server/features/streams.md#metadata-and-reserved-names).
 
@@ -689,7 +689,7 @@ metadata, current_version = await client.get_stream_metadata(
 ```
 :::
 
-## Set stream metadata
+## Set Stream Metadata
 
 You can use the `set_stream_metadata()` method to set [stream metadata](@server/features/streams.md#metadata-and-reserved-names).
 

@@ -95,7 +95,7 @@ commit_position = await client.append_to_stream(
 :::
 
 
-## Create projection
+## Create Projection
 
 Use the `create_projection()` method to create a "continuous" projection with a Javascript "query".
 
@@ -166,7 +166,7 @@ await client.create_projection(
 ```
 :::
 
-## Get projection state
+## Get Projection State
 
 Use the `get_projection_state()` method to get a projection's current state.
 
@@ -208,7 +208,7 @@ assert [None, "2.10", True] == state.value["list"]
 :::
 
 
-## Disable projection
+## Disable Projection
 
 Use the `disable_projection()` method to stop a projection processing new events.
 
@@ -233,7 +233,7 @@ await client.disable_projection(name="projection-order-123")
 ```
 :::
 
-## Update projection
+## Update Projection
 
 Use the `update_projection()` method to adjust the projection query.
 
@@ -270,7 +270,7 @@ await client.update_projection(
 ```
 :::
 
-## Reset projection
+## Reset Projection
 
 Use the `reset_projection()` method to reset the current state of a projection.
 
@@ -299,7 +299,7 @@ await client.reset_projection(
 ```
 :::
 
-## Enable projection
+## Enable Projection
 
 Use the `enable_projection()` method to start a projection that has been disabled.
 
@@ -326,7 +326,7 @@ await client.enable_projection(
 ```
 :::
 
-## Get projection statistics
+## Get Projection Statistics
 
 Use the `get_projection_statistics()` method to get statistics for a projection.
 
@@ -355,7 +355,7 @@ assert "Running" == statistics.status
 ```
 :::
 
-## List continuous projection statistics
+## List Continuous Projection Statistics
 
 Use the `list_continuous_projection_statistics()` method to get a list of statistics for all continuous projections.
 
@@ -389,7 +389,7 @@ assert isinstance(statistics[0], ProjectionStatistics)
 ```
 :::
 
-## List all projection statistics
+## List All Projection Statistics
 
 Use the `list_all_projection_statistics()` method to get a list of statistics for all projections.
 
@@ -419,7 +419,7 @@ assert isinstance(statistics[0], ProjectionStatistics)
 ```
 :::
 
-## Abort projection
+## Abort Projection
 
 Use the `abort_projection()` method to abort a projection.
 
@@ -446,7 +446,7 @@ await client.abort_projection(
 ```
 :::
 
-## Delete projection
+## Delete Projection
 
 Use the `delete_projection()` method to delete a projection.
 
@@ -490,7 +490,7 @@ await client.delete_projection(
 
 On success, this method will return `None`.
 
-## Restart projections subsystem
+## Restart Projections Subsystem
 
 Use the `restart_projections_subsystem()` method to restart the projections subsystem.
 
@@ -512,7 +512,7 @@ await client.restart_projections_subsystem()
 ```
 :::
 
-## The ProjectionStatistics class
+## The ProjectionStatistics Class
 
 The `ProjectionStatistics` dataclass is defined with the following fields:
 

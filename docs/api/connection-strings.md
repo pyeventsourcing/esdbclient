@@ -2,17 +2,17 @@
 order: 2
 ---
 
-# Connection strings
+# Connection Strings
 
 This guide explains the standardized connection string format used by all official KurrentDB clients.
 
 :::info
-Ask your server administrator for a valid connection string to a production database.
+For production services, ask your service provider for a valid connection string.
 :::
 
 KurrentDB clients use a connection string to configure their connection to KurrentDB.
 
-## Two protocols
+## Two Protocols
 
 KurrentDB connection strings support two protocols.
 
@@ -34,7 +34,7 @@ and pick an endpoint from the cluster information for continuing operations, acc
 specified by the connection string - see options below. This process will be repeated if the client detects that
 it needs to reconnect to the cluster.
 
-## User info
+## User Info
 
 Both the `kurrentdb://` and `kurrentdb+discover://` protocols support an optional user info string.
 If it exists, the user info string must be separated from the rest of the URI
@@ -68,7 +68,7 @@ For connecting to a cluster configured with DNS A records for the cluster endpoi
 kurrentdb+discover://user:pass@cluster1:2113
 ```
 
-## User certificates
+## User Certificates
 
 <Badge type="info" vertical="middle" text="License Required"/>
 
@@ -85,7 +85,7 @@ Here's an example for connecting to KurrentDB with a client certificate.
 kurrentdb://node1:2113?userCertFile=user_cert.pem&userKeyFile=user_key.pem
 ```
 
-## Connection options
+## Connection Options
 
 The table below describes optional query parameters that can be used in the connection string to configure the client.
 All option field names and values are case-insensitive.

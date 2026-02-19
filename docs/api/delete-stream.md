@@ -2,7 +2,7 @@
 order: 5
 ---
 
-# Deleting events
+# Deleting Events
 
 This guide describes the Python client methods for deleting streams.
 
@@ -21,7 +21,7 @@ The Python clients have two methods for deleting streams:
 * `delete_stream()` – soft delete
 * `tombstone_stream()` – hard delete
 
-## Delete stream
+## Delete Stream
 
 The `delete_stream()` method "soft deletes" a stream in KurrentDB.
 
@@ -137,7 +137,7 @@ await client.delete_stream(
 :::
 
 
-## Tombstone stream
+## Tombstone Stream
 
 The `tombstone_stream()` method "hard deletes" a stream in KurrentDB.
 

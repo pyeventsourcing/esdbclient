@@ -2,7 +2,7 @@
 order: 4
 ---
 
-# Reading events
+# Reading Events
 
 This guide describes the Python client methods for reading events from KurrentDB.
 
@@ -19,7 +19,7 @@ The Python clients for KurrentDB have four methods for reading events:
 * [`read_index()`](#read-index) – returns a streaming iterable of events from a secondary index
 
 
-## Recorded events
+## Recorded Events
 
 The Python client for KurrentDB uses the `RecordedEvent` class when presenting recorded events.
 
@@ -44,7 +44,7 @@ Additionally, it specifies the event's stream name and stream position, the comm
 You will never need to construct a `RecordedEvent` object. However, all events returned from KurrentDB by the Python clients are
 presented as `RecordedEvent` objects, and so it is important to understand these fields.
 
-## Get stream
+## Get Stream
 
 Use the `get_stream()` method to get a `tuple` of events from a stream in KurrentDB.
 
@@ -130,7 +130,7 @@ commit_position = await client.append_to_stream(
 ```
 :::
 
-### Reading forwards
+### Reading Forwards
 
 The simplest way to get stream events is to supply a `stream_name` argument.
 This is a typical operation when retrieving events to construct a decision model
@@ -151,7 +151,7 @@ for event in await client.get_stream(stream_name="order-123"):
 ```
 :::
 
-### Reading backwards
+### Reading Backwards
 
 Set the `backwards` parameter to `True` to get stream events in reverse order.
 
@@ -185,7 +185,7 @@ Alternatively, call the more convenient method `get_current_version()`.
 :::
 
 
-### Limited number
+### Limited Number
 
 Passing in a `limit` argument allows you to restrict the number of events that are returned.
 
@@ -213,7 +213,7 @@ assert len(events) == 2
 :::
 
 
-### From stream position
+### From Stream Position
 
 Specifying a `stream_position` argument will get events from a specific position. This is
 useful, for example, when advancing a snapshot of an aggregate to the latest current state.
@@ -244,7 +244,7 @@ for event in await client.get_stream(
 ```
 :::
 
-### Resolving link events
+### Resolving Link Events
 
 KurrentDB projections can create "link events" that are pointers to events you have appended to a stream.
 
@@ -270,7 +270,7 @@ for event in await client.get_stream(
 :::
 
 
-### Not found error
+### Not Found Error
 
 Reading a stream that doesn't exist will raise a `NotFoundError` exception.
 
@@ -300,7 +300,7 @@ except Exception as e:
 :::
 
 
-## Read stream
+## Read Stream
 
 Use the `read_stream()` method to read events from a stream in KurrentDB.
 
@@ -325,7 +325,7 @@ On success, `read_stream()` returns an iterable of `RecordedEvent` objects.
 
 Please note, a `NotFoundError` exception will be raised if the stream does not exist.
 
-### Reading forwards
+### Reading Forwards
 
 The simplest way to read a stream is to supply a `stream_name` argument and read
 every event already recorded in that stream. This is a typical operation when retrieving
@@ -344,7 +344,7 @@ async for event in await client.read_stream(stream_name="order-123"):
 ```
 :::
 
-### Reading backwards
+### Reading Backwards
 
 Set `backwards=True` to read stream events in reverse order.
 
@@ -377,7 +377,7 @@ Read backwards with a limit of `1` to find the last position in the stream.
 Alternatively, call the convenience Python client method `get_current_version()`.
 :::
 
-### Limited number
+### Limited Number
 
 Passing in a `limit` argument allows you to restrict the number of events that are returned.
 
@@ -403,7 +403,7 @@ assert len([e async for e in events]) == 2
 :::
 
 
-### From stream position
+### From Stream Position
 
 Specifying a `stream_position` argument will start reading from a specific position in the stream. This is
 useful, for example, when advancing a snapshot of an aggregate to the latest current state.
@@ -434,7 +434,7 @@ async for event in await client.read_stream(
 Please note, reading a stream from a specific position is inclusive, which means
 the event at that position will be returned by the response.
 
-### Resolving link events
+### Resolving Link Events
 
 KurrentDB projections can create "link events" that are pointers to events you have appended to a stream.
 
@@ -460,7 +460,7 @@ async for event in await client.read_stream(
 :::
 
 
-### Not found error
+### Not Found Error
 
 Reading a stream that doesn't exist will raise a `NotFoundError` exception.
 
@@ -490,7 +490,7 @@ except Exception as e:
 :::
 
 
-## Read all
+## Read All
 
 Use the `read_all()` method to read events from the global transaction log.
 
@@ -512,7 +512,7 @@ a limited number of events. You can also filter events by type string or stream 
 
 On success, `read_all()` returns an iterable of `RecordedEvent` objects.
 
-### Server-side filtering
+### Server-Side Filtering
 
 KurrentDB supports server-side filtering of events while reading from, or subscribing
 to, the global transaction log, so that you can receive only the events you care about.
@@ -554,7 +554,7 @@ literally when matching event types and stream names. Python's raw string litera
 to avoid doubling of escape backslashes. For example `r"\$.*"` can be used to match system
 event types that all start with the `$` character.
 
-### Reading forwards
+### Reading Forwards
 
 The simplest way to read events from the global transaction log is to call `read_all()` without arguments.
 
@@ -579,7 +579,7 @@ async for event in events:
 ```
 :::
 
-### Reading backwards
+### Reading Backwards
 
 Set `backwards=True` to read the global transaction log backwards from the end.
 
@@ -614,7 +614,7 @@ Read one event backwards to find the last position in the global transaction log
 Alternatively, call the more convenient Python client method `get_commit_position()`.
 :::
 
-### Limited number
+### Limited Number
 
 Passing in a `limit` allows you to restrict the number of events that are returned.
 
@@ -631,7 +631,7 @@ events = await client.read_all(limit=100)
 ```
 :::
 
-### From commit position
+### From Commit Position
 
 You can also start reading from a specific position in the global transaction log.
 
@@ -652,7 +652,7 @@ Please note, an `InvalidCommitPositionError` exception will be raised
 if the commit position does not exist.
 
 
-### Resolving link events
+### Resolving Link Events
 
 KurrentDB projections can create "link events" that are pointers to events you have appended to a stream.
 
@@ -670,7 +670,7 @@ events = await client.read_all(resolve_links=True)
 :::
 
 
-### Filtering examples
+### Filtering Examples
 
 You can read more selectively from the global transaction log with [server-side filtering](#server-side-filtering) by supplying an argument for either the `filter_include` or the `filter_exclude` parameters.
 
@@ -742,7 +742,7 @@ events = await client.read_all(
 :::
 
 
-## Read index
+## Read Index
 
 ::: info
 Supported by KurrentDB 25.1 and later.
@@ -762,7 +762,7 @@ You can read events from a secondary index starting from any commit position.
 
 On success, `read_index()` returns an iterable of `RecordedEvent` objects.
 
-### Reading forwards
+### Reading Forwards
 
 The simplest way to read from a secondary index is to call `read_index()` with the name of an index.
 
@@ -790,7 +790,7 @@ async for event in events:
 :::
 
 
-### From commit position
+### From Commit Position
 
 You can also start reading a secondary index from a specific position in the global transaction log.
 
@@ -820,7 +820,7 @@ Please note, an `InvalidCommitPositionError` exception will be raised
 if the commit position does not exist.
 
 
-### Limited number
+### Limited Number
 
 Passing in a `limit` allows you to restrict the number of events that are returned.
 

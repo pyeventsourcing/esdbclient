@@ -2,7 +2,7 @@
 order: 6
 ---
 
-# Catch-up subscriptions
+# Catch-up Subscriptions
 
 This guide describes the Python client methods for catch-up subscriptions.
 
@@ -20,7 +20,7 @@ The Python clients for KurrentDB have three methods for catch-up subscriptions.
 * [`subscribe_to_all()`](#subscribe-to-all) - returns a catch-up subscription to global transaction log
 * [`subscribe_to_index()`](#subscribe-to-index) – returns a catch-up subscription to a secondary index
 
-## Subscribe to stream
+## Subscribe to Stream
 
 The `subscribe_to_stream()` method returns a catch-up subscription to a stream.
 
@@ -124,7 +124,7 @@ await client.append_to_stream(
 ```
 :::
 
-### Basic subscription
+### Basic Subscription
 
 The simplest way to subscribe to a stream is to supply a `stream_name` argument.
 
@@ -153,7 +153,7 @@ async for event in subscription:
 ```
 :::
 
-### After stream position
+### After Stream Position
 
 Specifying a `stream_position` argument will get events after that position.
 
@@ -182,7 +182,7 @@ async for event in await client.subscribe_to_stream(
 ```
 :::
 
-### From end of stream
+### From End of Stream
 
 Here's an example of subscribing from the end of a stream for "live events" only.
 
@@ -203,7 +203,7 @@ subscription = await client.subscribe_to_stream(
 ```
 :::
 
-### Resolving link events
+### Resolving Link Events
 
 When you subscribe to a stream with link events (e.g., category streams), set `resolve_links` to `True`.
 
@@ -236,7 +236,7 @@ a [filtered subscription](#subscribe-to-all) for a specific type or stream name 
 than subscribing to the corresponding system projection.
 
 
-### Stream not found error
+### Stream Not Found Error
 
 Subscribing to a stream that doesn't exist will raise a `NotFoundError` exception.
 
@@ -266,7 +266,7 @@ except Exception as e:
 :::
 
 
-## Subscribe to all
+## Subscribe To All
 
 The `subscribe_to_all()` method returns a catch-up subscription to the global transaction log.
 
@@ -296,7 +296,7 @@ On success, `subscribe_to_all()` returns an iterable of `RecordedEvent` objects.
 
 Let's see how to use `subscribe_to_all()` by looking at some examples.
 
-### Basic subscription
+### Basic Subscription
 
 ::: tabs
 @tab sync
@@ -321,7 +321,7 @@ async for event in subscription:
 ```
 :::
 
-### After commit position
+### After Commit Position
 
 Specifying a `commit_position` argument will get events after that position in the global transaction log.
 
@@ -346,7 +346,7 @@ async for event in await client.subscribe_to_all(
 ```
 :::
 
-### Live events only
+### Live Events Only
 
 Here's an example of subscribing from the end of the global transaction log.
 
@@ -363,7 +363,7 @@ subscription = await client.subscribe_to_all(from_end=True)
 ```
 :::
 
-### Resolving link events
+### Resolving Link Events
 
 KurrentDB projections can create "link events" that are pointers to events you have appended to a stream.
 
@@ -381,7 +381,7 @@ subscription = await client.subscribe_to_all(resolve_links=True)
 :::
 
 
-### Filtering by event type
+### Filtering by Event Type
 
 Here's an example of filtering for certain event types.
 
@@ -404,7 +404,7 @@ async for event in await client.subscribe_to_all(
 ```
 :::
 
-### Filtering by stream name
+### Filtering by Stream Name
 
 Here's an example of filtering for a stream category.
 
@@ -573,7 +573,7 @@ await process_events_with_checkpointing(client, Projection())
 
 The same principles can be applied when processing events from a stream or a secondary index.
 
-## Subscribe to index
+## Subscribe to Index
 
 ::: info
 Supported by KurrentDB 25.1 and later.
@@ -596,7 +596,7 @@ On success, `subscribe_to_index()` returns an iterable of `RecordedEvent` object
 
 Let's see how to use `subscribe_to_index()` by looking at some examples.
 
-### Basic subscription
+### Basic Subscription
 
 ::: tabs
 @tab sync
@@ -622,7 +622,7 @@ async for event in subscription:
 :::
 
 
-### After commit position
+### After Commit Position
 
 ::: tabs
 @tab sync
@@ -654,7 +654,7 @@ async for event in subscription:
 :::
 
 
-## Handling dropped subscriptions
+## Handling Dropped Subscriptions
 
 An application which hosts the subscription can go offline for some time for
 different reasons. It could be a crash, infrastructure failure, or a new version
@@ -701,7 +701,7 @@ while True:
 ```
 :::
 
-## Handling subscription state changes
+## Handling Subscription State Changes
 
 ::: info EventStoreDB 23.10.0+
 This feature requires EventStoreDB version 23.10.0 or later.
