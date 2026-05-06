@@ -145,6 +145,7 @@ start-kurrentdb-insecure:
     --env "KURRENTDB_START_STANDARD_PROJECTIONS=true" \
     --env "KURRENTDB_ENABLE_ATOM_PUB_OVER_HTTP=true" \
     --env "KURRENTDB_ALLOW_UNKNOWN_OPTIONS=true" \
+    --env "KURRENTDB_TELEMETRY_OPTOUT=true" \
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
     --env "EVENTSTORE_ADVERTISE_NODE_PORT_TO_CLIENT_AS=2113" \
     --env "EVENTSTORE_RUN_PROJECTIONS=All" \
@@ -163,6 +164,7 @@ start-kurrentdb-secure:
     --env "KURRENTDB_RUN_PROJECTIONS=All" \
     --env "KURRENTDB_START_STANDARD_PROJECTIONS=true" \
     --env "KURRENTDB_ALLOW_UNKNOWN_OPTIONS=true" \
+    --env "KURRENTDB_TELEMETRY_OPTOUT=true" \
     --env "EVENTSTORE_ADVERTISE_HOST_TO_CLIENT_AS=localhost" \
     --env "EVENTSTORE_ADVERTISE_NODE_PORT_TO_CLIENT_AS=2114" \
     --env "EVENTSTORE_RUN_PROJECTIONS=All" \
@@ -179,6 +181,7 @@ start-kurrentdb-secure-21-10-9:
     --env "KURRENTDB_ADVERTISE_HTTP_PORT_TO_CLIENT_AS=2114" \
     --env "KURRENTDB_RUN_PROJECTIONS=All" \
     --env "KURRENTDB_START_STANDARD_PROJECTIONS=true" \
+    --env "KURRENTDB_TELEMETRY_OPTOUT=true" \
     --name my-kurrentdb-secure \
     eventstore/eventstore:21.10.9-buster-slim \
     --dev
