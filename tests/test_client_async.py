@@ -780,7 +780,9 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         )
 
         class Worker:
-            def __init__(self, client: AsyncKurrentDBClient, stream_name: str, event_id: UUID) -> None:
+            def __init__(
+                self, client: AsyncKurrentDBClient, stream_name: str, event_id: UUID
+            ) -> None:
                 self.client = client
                 self.stream_name = stream_name
                 self.event_id = event_id
@@ -793,7 +795,10 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                     if event.id == self.event_id:
                         await subscription.stop()
 
-        await asyncio.gather(Worker(self.client, stream_name1, event1.id).run(), Worker(self.client, stream_name2, event3.id).run())
+        await asyncio.gather(
+            Worker(self.client, stream_name1, event1.id).run(),
+            Worker(self.client, stream_name2, event3.id).run(),
+        )
 
         # Important to know calling stop() doesn't cancel the current task.
         self.assertFalse(asyncio.current_task().cancelled())
@@ -811,7 +816,8 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 at_async_for.set()
                 try:
                     async for event in self.subscription:
-                        raise AssertionError(f"async for didn't raise asyncio.CancelledError {event}")
+                        msg = f"async for didn't raise asyncio.CancelledError {event}"
+                        raise AssertionError(msg)
                 except asyncio.CancelledError:
                     self.was_cancelled = True
                     raise
@@ -820,7 +826,7 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             worker = Worker(subscription)
             task = asyncio.create_task(worker.run())
             await at_async_for.wait()
-            await asyncio.sleep(0.1) # Try to make sure we got into _get_next_read_resp
+            await asyncio.sleep(0.1)  # Try to make sure we got into _get_next_read_resp
             task.cancel()
             with self.assertRaises(asyncio.CancelledError):
                 await task

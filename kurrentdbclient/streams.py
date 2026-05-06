@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import datetime
 import math
 import sys
@@ -15,7 +14,7 @@ from uuid import UUID, uuid4
 import grpc
 import grpc.aio
 from google.protobuf import any_pb2, duration_pb2, empty_pb2
-from grpc.aio import AioRpcError, UsageError
+from grpc.aio import AioRpcError
 from typing_extensions import Protocol
 
 from kurrentdbclient.common import (
