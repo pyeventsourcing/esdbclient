@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import datetime
 import math
@@ -169,24 +170,21 @@ class AsyncReadResponse(BaseReadResponse, AsyncGrpcStreamer, AbstractAsyncReadRe
         BaseReadResponse.__init__(self, stream_name=stream_name)
         AsyncGrpcStreamer.__init__(self, grpc_streamers=grpc_streamers)
         AbstractAsyncReadResponse.__init__(self)
-        self.aio_call = aio_call
+        self._aio_call = aio_call
         self.read_resp_iter = aio_call.__aiter__()
 
     async def __anext__(self) -> RecordedEvent:
-        try:
-            while True:
+        while True:
+            try:
                 read_resp = await self._get_next_read_resp()
-                recorded_event = self._filter_recorded_event(
-                    self._convert_read_resp(read_resp)
-                )
-                if recorded_event is not None:
-                    return recorded_event
-        except CancelledByClientError:
-            await self.stop()
-            raise StopAsyncIteration from None
-        except:
-            await self.stop()
-            raise
+            except BaseException:
+                await self.stop()
+                raise
+            recorded_event = self._filter_recorded_event(
+                self._convert_read_resp(read_resp)
+            )
+            if recorded_event is not None:
+                return recorded_event
 
     async def _get_next_read_resp(self) -> streams_pb2.ReadResp:
         try:
@@ -199,21 +197,21 @@ class AsyncReadResponse(BaseReadResponse, AsyncGrpcStreamer, AbstractAsyncReadRe
                     "",
                     "",
                 )
-        except grpc.RpcError as e:
-            raise handle_streams_rpc_error(e) from None
         except CancelledError:
-            raise CancelledByClientError from None
+            await self.stop()
+            task = asyncio.current_task()
+            if task is not None and task.cancelling():
+                raise
+            else:
+                raise StopAsyncIteration
         else:
             assert isinstance(read_resp, streams_pb2.ReadResp)
             return read_resp
 
     async def stop(self) -> None:
-        if not await self._set_is_stopped():
-            # Get a UsageError (when testing) by closing
-            # channel and then canceling a call.
-            with contextlib.suppress(UsageError):
-                self.aio_call.cancel()
-            self._grpc_streamers.remove(self)
+        self._grpc_streamers.remove(self)
+        if not self._aio_call.cancelled():
+            self._aio_call.cancel()
 
 
 class AsyncCatchupSubscription(AsyncReadResponse, AbstractAsyncCatchupSubscription):
@@ -957,7 +955,11 @@ class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
                 include_fell_behind=include_fell_behind,
                 grpc_streamers=self._grpc_streamers,
             )
-            await response.check_confirmation()
+            try:
+                await response.check_confirmation()
+            except BaseException:
+                response.stop()
+                raise
         return response
 
     async def delete(

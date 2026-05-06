@@ -759,37 +759,72 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         self.assertEqual(events[-2].id, event1.id)
         self.assertEqual(events[-1].id, event2.id)
 
-    async def test_subscribe_to_all_with_gather(self) -> None:
+    async def test_subscribe_to_stream_with_gather_all_complete(self) -> None:
         # Append events.
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
+        event2 = NewEvent(type="OrderCreated", data=b"{}")
+        event3 = NewEvent(type="OrderUpdated", data=b"{}")
+        event4 = NewEvent(type="OrderUpdated", data=b"{}")
         await self.client.append_events(
             stream_name=stream_name1,
-            events=[event1],
+            events=[event1, event2],
             current_version=StreamState.NO_STREAM,
         )
 
         stream_name2 = str(uuid4())
-        event2 = NewEvent(type="OrderCreated", data=b"{}")
         await self.client.append_events(
             stream_name=stream_name2,
-            events=[event2],
+            events=[event3, event4],
             current_version=StreamState.NO_STREAM,
         )
 
         class Worker:
-            def __init__(self, client: AsyncKurrentDBClient) -> None:
+            def __init__(self, client: AsyncKurrentDBClient, stream_name: str, event_id: UUID) -> None:
                 self.client = client
+                self.stream_name = stream_name
+                self.event_id = event_id
 
             async def run(self) -> None:
-                catchup_subscription = await self.client.subscribe_to_all()
+                subscription = await self.client.subscribe_to_stream(self.stream_name)
                 events = []
-                async for event in catchup_subscription:
+                async for event in subscription:
                     events.append(event)
-                    if event.id == event2.id:
-                        await catchup_subscription.stop()
+                    if event.id == self.event_id:
+                        await subscription.stop()
 
-        await asyncio.gather(Worker(self.client).run(), Worker(self.client).run())
+        await asyncio.gather(Worker(self.client, stream_name1, event1.id).run(), Worker(self.client, stream_name2, event3.id).run())
+
+        # Important to know calling stop() doesn't cancel the current task.
+        self.assertFalse(asyncio.current_task().cancelled())
+
+    async def test_subscribe_to_all_with_task_cancel(self) -> None:
+
+        at_async_for = asyncio.Event()
+
+        class Worker:
+            def __init__(self, subscription) -> None:
+                self.subscription = subscription
+                self.was_cancelled = False
+
+            async def run(self) -> None:
+                at_async_for.set()
+                try:
+                    async for event in self.subscription:
+                        raise AssertionError(f"async for didn't raise asyncio.CancelledError {event}")
+                except asyncio.CancelledError:
+                    self.was_cancelled = True
+                    raise
+
+        async with await self.client.subscribe_to_stream(str(uuid4())) as subscription:
+            worker = Worker(subscription)
+            task = asyncio.create_task(worker.run())
+            await at_async_for.wait()
+            await asyncio.sleep(0.1) # Try to make sure we got into _get_next_read_resp
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            self.assertTrue(worker.was_cancelled)
 
     async def test_subscribe_to_all_reconnects(self) -> None:
         catchup_subscription = await self.client.subscribe_to_all()
