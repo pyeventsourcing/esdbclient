@@ -98,9 +98,9 @@ if TYPE_CHECKING:
 started = datetime.datetime.now()
 last = datetime.datetime.now()
 
-KURRENTDB_DOCKER_IMAGE = os.environ.get("KURRENTDB_DOCKER_IMAGE", "25.1")
+# KURRENTDB_DOCKER_IMAGE = os.environ.get("KURRENTDB_DOCKER_IMAGE", "25.1")
 # KURRENTDB_DOCKER_IMAGE = os.environ.get("KURRENTDB_DOCKER_IMAGE", "26.0")
-# KURRENTDB_DOCKER_IMAGE = os.environ.get("KURRENTDB_DOCKER_IMAGE", "26.1")
+KURRENTDB_DOCKER_IMAGE = os.environ.get("KURRENTDB_DOCKER_IMAGE", "26.1")
 
 if "21.9" in KURRENTDB_DOCKER_IMAGE:
     SERVER_VERSION = (21, 9)
@@ -8177,7 +8177,7 @@ class TestDiscoverScheme(TestCase):
         with self.assertRaises(DiscoveryFailedError) as cm1:
             KurrentDBClient(uri)
         self.assertIn(":2113", str(cm1.exception))
-        self.assertIn("DNS server returned answer with no data", str(cm1.exception))
+        self.assertIn("errors resolving my-unresolvable-cluster", str(cm1.exception))
         self.assertNotIn("Deadline Exceeded", str(cm1.exception))
 
         # Cluster name not configured in DNS, non-default port.
@@ -8188,7 +8188,7 @@ class TestDiscoverScheme(TestCase):
         with self.assertRaises(DiscoveryFailedError) as cm2:
             KurrentDBClient(uri)
         self.assertIn(":9898", str(cm2.exception))
-        self.assertIn("DNS server returned answer with no data", str(cm2.exception))
+        self.assertIn("errors resolving my-unresolvable-cluster", str(cm2.exception))
         self.assertNotIn("Deadline Exceeded", str(cm2.exception))
 
         # Name is resolvable but 'service not available' on port 2222.
