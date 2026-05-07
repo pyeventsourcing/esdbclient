@@ -937,7 +937,7 @@ class TestApplySpanner(IsolatedAsyncioTestCase):
         elif span.parent is not None:
             current_span = cast(trace_sdk.Span, trace_api.get_current_span())
             self.assertTrue(current_span.name.startswith("test_"), current_span.name)
-            context: SpanContext | None = current_span.get_span_context()  # type: ignore[no-untyped-call]
+            context: SpanContext | None = current_span.get_span_context()
             self.assertIsNotNone(context)
             assert context is not None  # for mypy
             self.assertEqual(context.span_id, span.parent.span_id)

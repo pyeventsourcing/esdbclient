@@ -196,13 +196,14 @@ class AsyncReadResponse(BaseReadResponse, AsyncGrpcStreamer, AbstractAsyncReadRe
                     "",
                     "",
                 )
-        except CancelledError:
+        except CancelledError as e:
             await self.stop()
             task = asyncio.current_task()
             if task is not None and task.cancelling():
                 raise
-            else:
-                raise StopAsyncIteration
+            raise StopAsyncIteration from e
+        except grpc.RpcError as e:
+            raise handle_streams_rpc_error(e) from e
         else:
             assert isinstance(read_resp, streams_pb2.ReadResp)
             return read_resp
@@ -957,7 +958,7 @@ class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
             try:
                 await response.check_confirmation()
             except BaseException:
-                response.stop()
+                await response.stop()
                 raise
         return response
 

@@ -27,6 +27,7 @@ from kurrentdbclient.common import (
     DEFAULT_PERSISTENT_SUB_MESSAGE_TIMEOUT,
     DEFAULT_PERSISTENT_SUB_MIN_CHECKPOINT_COUNT,
     DEFAULT_PERSISTENT_SUB_READ_BATCH_SIZE,
+    AbstractAsyncCatchupSubscription,
 )
 from kurrentdbclient.events import CaughtUp, NewEvents
 from kurrentdbclient.exceptions import (
@@ -801,14 +802,16 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         )
 
         # Important to know calling stop() doesn't cancel the current task.
-        self.assertFalse(asyncio.current_task().cancelled())
+        current_task = asyncio.current_task()
+        if current_task is not None:
+            self.assertFalse(current_task.cancelled())
 
     async def test_subscribe_to_all_with_task_cancel(self) -> None:
 
         at_async_for = asyncio.Event()
 
         class Worker:
-            def __init__(self, subscription) -> None:
+            def __init__(self, subscription: AbstractAsyncCatchupSubscription) -> None:
                 self.subscription = subscription
                 self.was_cancelled = False
 
@@ -909,6 +912,7 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                     assert event.recorded_at is not None
                     self.assertGreaterEqual(event.recorded_at, before_recording)
                     after_subscribing = datetime.datetime.now(tz=datetime.timezone.utc)
+                    # Note, difference with server clock makes this fail occasionally.
                     self.assertLessEqual(event.recorded_at, after_subscribing)
                 break
 
