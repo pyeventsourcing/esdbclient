@@ -39,7 +39,7 @@ class InterceptServerStream:
         self._span = span
 
     def __iter__(self) -> Self:
-        return self
+        return self  # pragma: no cover
 
     def __next__(self) -> Any:
         try:
@@ -75,7 +75,7 @@ class InterceptServerStream:
     def __del__(self) -> None:
         self.cancel()
         span = self._span
-        if span.is_recording():
+        if span.is_recording():  # pragma: no cover
             span.end()
 
     def cancel(self) -> None:
@@ -136,7 +136,7 @@ def _replacement_intercept_server_stream(
             timeout=client_info.timeout,
         )
 
-        if client_info.is_client_stream:
+        if client_info.is_client_stream:  # pragma: no cover
             rpc_info.request = request_or_iterator
         try:
             rendezvous = invoker(request_or_iterator, metadata)

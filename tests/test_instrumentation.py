@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from abc import ABC, abstractmethod
 from copy import deepcopy
+from time import sleep
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -3492,20 +3493,10 @@ class TestReadAndGetStreamWithGrpcInstrumentor(KurrentDBClientInstrumentorTestCa
             current_version=StreamState.NO_STREAM,
         )
 
+        sleep(1)
         self.check_spans(
             num_spans=2,
             span_index=0,
-            parent_span_index=1,
-            span_name="/event_store.client.streams.Streams/BatchAppend",
-            span_kind=trace_api.SpanKind.CLIENT,
-            instrumentation_scope_name="opentelemetry.instrumentation.grpc",
-            instrumentation_scope_version=instrumentation_grpc_version.__version__,
-            rpc_service="event_store.client.streams.Streams",
-            rpc_method="BatchAppend",
-        )
-        self.check_spans(
-            num_spans=2,
-            span_index=1,
             parent_span_index=None,
             span_name="streams.append",
             span_kind=trace_api.SpanKind.PRODUCER,
@@ -3513,6 +3504,17 @@ class TestReadAndGetStreamWithGrpcInstrumentor(KurrentDBClientInstrumentorTestCa
                 "db.operation": "streams.append",
                 "db.kurrentdb.stream": stream_name,
             },
+        )
+        self.check_spans(
+            num_spans=2,
+            span_index=1,
+            parent_span_index=0,
+            span_name="/event_store.client.streams.Streams/BatchAppend",
+            span_kind=trace_api.SpanKind.CLIENT,
+            instrumentation_scope_name="opentelemetry.instrumentation.grpc",
+            instrumentation_scope_version=instrumentation_grpc_version.__version__,
+            rpc_service="event_store.client.streams.Streams",
+            rpc_method="BatchAppend",
         )
 
         read_response = client.read_stream(stream_name=stream_name)
@@ -3620,6 +3622,8 @@ class TestReadAndGetStreamWithGrpcInstrumentor(KurrentDBClientInstrumentorTestCa
             events=new_events,
             current_version=StreamState.NO_STREAM,
         )
+
+        sleep(1)
 
         self.check_spans(num_spans=2)
 

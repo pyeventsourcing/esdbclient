@@ -344,7 +344,10 @@ def handle_rpc_error(e: grpc.RpcError) -> KurrentDBClientError:  # noqa: PLR0911
             if "SSL_ERROR" in details_str:
                 # root_certificates is None and CA cert not installed
                 return SSLError(details_str)
-            if "empty address list" in details_str:
+            if (
+                "empty address list" in details_str
+                or "Failed to create security handshaker" in details_str
+            ):
                 # given root_certificates is invalid
                 return SSLError(details_str)
             return ServiceUnavailableError(details_str)

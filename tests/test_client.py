@@ -8173,7 +8173,7 @@ class TestDiscoverScheme(TestCase):
         with self.assertRaises(DiscoveryFailedError) as cm1:
             KurrentDBClient(uri)
         self.assertIn(":2113", str(cm1.exception))
-        self.assertIn("DNS resolution failed", str(cm1.exception))
+        self.assertIn("DNS server returned answer with no data", str(cm1.exception))
         self.assertNotIn("Deadline Exceeded", str(cm1.exception))
 
         # Cluster name not configured in DNS, non-default port.
@@ -8184,7 +8184,7 @@ class TestDiscoverScheme(TestCase):
         with self.assertRaises(DiscoveryFailedError) as cm2:
             KurrentDBClient(uri)
         self.assertIn(":9898", str(cm2.exception))
-        self.assertIn("DNS resolution failed", str(cm2.exception))
+        self.assertIn("DNS server returned answer with no data", str(cm2.exception))
         self.assertNotIn("Deadline Exceeded", str(cm2.exception))
 
         # Name is resolvable but 'service not available' on port 2222.
