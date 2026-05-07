@@ -4540,7 +4540,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 print("Received event:", event.id)
                 unacked_events_received.update([event.id])
         print("Stopped persistent subscription consumer #2")
-        print("None of the acked events was redelivered")
+        print("None of the acked events were redelivered")
 
     def test_subscription_to_stream_event_not_redelivered_after_ack(
         self,
@@ -4633,7 +4633,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 print("Received event:", event.id)
                 unacked_events_received.update([event.id])
         print("Stopped persistent subscription consumer #2")
-        print("None of the acked events was redelivered")
+        print("None of the acked events were redelivered")
 
     def test_subscription_get_info(self) -> None:
         self.construct_client()

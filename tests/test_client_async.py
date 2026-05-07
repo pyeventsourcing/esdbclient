@@ -2685,7 +2685,7 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 print("Received event:", event.id)
                 unacked_events_received.update([event.id])
         print("Stopped persistent subscription consumer #2")
-        print("None of the acked events was redelivered")
+        print("None of the acked events were redelivered")
 
     async def test_subscription_to_stream_event_not_redelivered_after_ack(
         self,
@@ -2776,7 +2776,7 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 print("Received event:", event.id)
                 unacked_events_received.update([event.id])
         print("Stopped persistent subscription consumer #2")
-        print("None of the acked events was redelivered")
+        print("None of the acked events were redelivered")
 
     async def test_create_projection(self) -> None:
         # Create "continuous" projection.
