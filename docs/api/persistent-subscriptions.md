@@ -293,26 +293,26 @@ client.append_to_stream(
 )
 
 # Connect to a persistent subscription for a specific stream
-subscription = client.read_subscription_to_stream(
+with client.read_subscription_to_stream(
     group_name="stream-subscription",
     stream_name="order-123"
-)
+) as subscription:
 
-# Process events and acknowledge them
-for event in subscription:
-    try:
-        # Process the event
-        print(f"Processing event: {event.type}")
+    # Process events and acknowledge them
+    for event in subscription:
+        try:
+            # Process the event
+            print(f"Processing event: {event.type}")
 
-        # Acknowledge successful processing
-        subscription.ack(event)
+            # Acknowledge successful processing
+            subscription.ack(event)
 
-    except Exception as e:
-        # Handle processing errors
-        print(f"Error processing event: {e}")
-        subscription.nack(event, action="retry")
+        except Exception as e:
+            # Handle processing errors
+            print(f"Error processing event: {e}")
+            subscription.nack(event, action="retry")
 
-    break  # <- so we can continue with the examples
+        break  # <- so we can continue with the examples
 ```
 @tab async
 ```python:no-line-numbers
@@ -330,26 +330,26 @@ await client.append_to_stream(
 )
 
 # Connect to a persistent subscription for a specific stream
-subscription = await client.read_subscription_to_stream(
+async with await client.read_subscription_to_stream(
     group_name="stream-subscription",
     stream_name="order-123"
-)
+) as subscription:
 
-# Process events and acknowledge them
-async for event in subscription:
-    try:
-        # Process the event
-        print(f"Processing event: {event.type}")
+    # Process events and acknowledge them
+    async for event in subscription:
+        try:
+            # Process the event
+            print(f"Processing event: {event.type}")
 
-        # Acknowledge successful processing
-        await subscription.ack(event)
+            # Acknowledge successful processing
+            await subscription.ack(event)
 
-    except Exception as e:
-        # Handle processing errors
-        print(f"Error processing event: {e}")
-        await subscription.nack(event, action="retry")
+        except Exception as e:
+            # Handle processing errors
+            print(f"Error processing event: {e}")
+            await subscription.nack(event, action="retry")
 
-    break  # <- so we can continue with the examples
+        break  # <- so we can continue with the examples
 ```
 :::
 
@@ -377,48 +377,48 @@ Here's an example showing how to consume events from a subscription to the globa
 @tab sync
 ```python:no-line-numbers
 # Connect to a persistent subscription for all events
-subscription = client.read_subscription_to_all(
+with client.read_subscription_to_all(
     group_name="transaction-log-subscription"
-)
+) as subscription:
 
-# Process events and acknowledge them
-for event in subscription:
-    try:
-        # Process the event
-        print(f"Processing event: {event.type} from stream {event.stream_name}")
+    # Process events and acknowledge them
+    for event in subscription:
+        try:
+            # Process the event
+            print(f"Processing event: {event.type} from stream {event.stream_name}")
 
-        # Acknowledge successful processing
-        subscription.ack(event)
+            # Acknowledge successful processing
+            subscription.ack(event)
 
-    except Exception as e:
-        # Handle processing errors
-        print(f"Error processing event: {e}")
-        subscription.nack(event, action="retry")
+        except Exception as e:
+            # Handle processing errors
+            print(f"Error processing event: {e}")
+            subscription.nack(event, action="retry")
 
-    break  # <- so we can continue with the examples
+        break  # <- so we can continue with the examples
 ```
 @tab async
 ```python:no-line-numbers
 # Connect to a persistent subscription for all events
-subscription = await client.read_subscription_to_all(
+async with await client.read_subscription_to_all(
     group_name="transaction-log-subscription"
-)
+) as subscription:
 
-# Process events and acknowledge them
-async for event in subscription:
-    try:
-        # Process the event
-        print(f"Processing event: {event.type} from stream {event.stream_name}")
+    # Process events and acknowledge them
+    async for event in subscription:
+        try:
+            # Process the event
+            print(f"Processing event: {event.type} from stream {event.stream_name}")
 
-        # Acknowledge successful processing
-        await subscription.ack(event)
+            # Acknowledge successful processing
+            await subscription.ack(event)
 
-    except Exception as e:
-        # Handle processing errors
-        print(f"Error processing event: {e}")
-        await subscription.nack(event, action="retry")
+        except Exception as e:
+            # Handle processing errors
+            print(f"Error processing event: {e}")
+            await subscription.nack(event, action="retry")
 
-    break  # <- so we can continue with the examples
+        break  # <- so we can continue with the examples
 ```
 :::
 

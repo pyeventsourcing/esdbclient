@@ -334,13 +334,15 @@ events to construct a decision model in a command handler.
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-for event in client.read_stream(stream_name="order-123"):
-    print(f"Event: {event.type} at position {event.stream_position}")
+with client.read_stream(stream_name="order-123") as events:
+    for event in events:
+        print(f"Event: {event.type} at position {event.stream_position}")
 ```
 @tab async
 ```python:no-line-numbers
-async for event in await client.read_stream(stream_name="order-123"):
-    print(f"Event: {event.type} at position {event.stream_position}")
+async with await client.read_stream(stream_name="order-123") as events:
+    async for event in events:
+        print(f"Event: {event.type} at position {event.stream_position}")
 ```
 :::
 
@@ -352,22 +354,24 @@ Set `backwards=True` to read stream events in reverse order.
 @tab sync
 ```python:no-line-numbers
 # Read all events backwards from the end
-for event in client.read_stream(
+with client.read_stream(
     stream_name="order-123",
     backwards=True,
-):
-    assert event.stream_position == 2
-    break
+) as events:
+    for event in events:
+        assert event.stream_position == 2
+        break
 ```
 @tab async
 ```python:no-line-numbers
 # Read all events backwards from the end
-async for event in await client.read_stream(
+async with await client.read_stream(
     stream_name="order-123",
     backwards=True,
-):
-    assert event.stream_position == 2
-    break
+) as events:
+    async for event in events:
+        assert event.stream_position == 2
+        break
 ```
 :::
 
@@ -384,21 +388,19 @@ Passing in a `limit` argument allows you to restrict the number of events that a
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-events = client.read_stream(
+with client.read_stream(
     stream_name="order-123",
     limit=2
-)
-
-assert len(tuple(events)) == 2
+) as events:
+    assert len(tuple(events)) == 2
 ```
 @tab async
 ```python:no-line-numbers
-events = await client.read_stream(
+async with await client.read_stream(
     stream_name="order-123",
     limit=2
-)
-
-assert len([e async for e in events]) == 2
+) as events:
+    assert len([e async for e in events]) == 2
 ```
 :::
 
@@ -412,22 +414,24 @@ useful, for example, when advancing a snapshot of an aggregate to the latest cur
 @tab sync
 ```python:no-line-numbers
 # Read from a specific stream position
-for event in client.read_stream(
+with client.read_stream(
     stream_name="order-123",
     stream_position=1,
-):
-    assert event.stream_position == 1
-    break
+) as events:
+    for event in events:
+        assert event.stream_position == 1
+        break
 ```
 @tab async
 ```python:no-line-numbers
 # Read from a specific stream position
-async for event in await client.read_stream(
+async with await client.read_stream(
     stream_name="order-123",
     stream_position=1,
-):
-    assert event.stream_position == 1
-    break
+) as events:
+    async for event in events:
+        assert event.stream_position == 1
+        break
 ```
 :::
 
@@ -443,19 +447,21 @@ Set `resolve_links=True` so that KurrentDB will resolve the "link events" and re
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-for event in client.read_stream(
+with client.read_stream(
     stream_name="$et-OrderCreated",
     resolve_links=True
-):
-    assert event.type == "OrderCreated"
+) as events:
+    for event in events:
+        assert event.type == "OrderCreated"
 ```
 @tab async
 ```python:no-line-numbers
-async for event in await client.read_stream(
+async with await client.read_stream(
     stream_name="$et-OrderCreated",
     resolve_links=True
-):
-    assert event.type == "OrderCreated"
+) as events:
+    async for event in events:
+        assert event.type == "OrderCreated"
 ```
 :::
 
@@ -470,7 +476,10 @@ Reading a stream that doesn't exist will raise a `NotFoundError` exception.
 from kurrentdbclient.exceptions import NotFoundError
 
 try:
-    client.read_stream(stream_name="not-a-stream")
+    with client.read_stream(
+        stream_name="not-a-stream"
+    ) as events:
+        ...
 except NotFoundError:
     print("Success: Stream does not exist")
 except Exception as e:
@@ -481,7 +490,10 @@ except Exception as e:
 from kurrentdbclient.exceptions import NotFoundError
 
 try:
-    await client.read_stream(stream_name="not-a-stream")
+    async with await client.read_stream(
+        stream_name="not-a-stream"
+    ) as events:
+        ...
 except NotFoundError:
     print("Success: Stream does not exist")
 except Exception as e:
@@ -562,20 +574,18 @@ The simplest way to read events from the global transaction log is to call `read
 @tab sync
 ```python:no-line-numbers
 # Read all events from the beginning
-events = client.read_all()
-
-# Iterate through the sync streaming response with a 'for' loop
-for event in events:
-    print(f"Event: {event.type} from stream {event.stream_name}")
+with client.read_all() as events:
+    # Iterate through the sync streaming response with a 'for' loop
+    for event in events:
+        print(f"Event: {event.type} from stream {event.stream_name}")
 ```
 @tab async
 ```python:no-line-numbers
 # Read all events from the beginning
-events = await client.read_all()
-
-# Iterate through the async streaming response with an 'async for' loop
-async for event in events:
-    print(f"Event: {event.type} from stream {event.stream_name}")
+async with await client.read_all() as events:
+    # Iterate through the async streaming response with an 'async for' loop
+    async for event in events:
+        print(f"Event: {event.type} from stream {event.stream_name}")
 ```
 :::
 
@@ -587,24 +597,28 @@ Set `backwards=True` to read the global transaction log backwards from the end.
 @tab sync
 ```python:no-line-numbers
 # Read all events backwards from the end
-events = client.read_all(backwards=True)
+with client.read_all(backwards=True) as events:
+    ...
 
 # Read backwards from a specific commit position
-events = client.read_all(
+with client.read_all(
     commit_position=commit_position,
     backwards=True,
-)
+) as events:
+    ...
 ```
 @tab async
 ```python:no-line-numbers
 # Read all events backwards from the end
-events = await client.read_all(backwards=True)
+async with await client.read_all(backwards=True) as events:
+    ...
 
 # Read backwards from a specific commit position
-events = await client.read_all(
+async with await client.read_all(
     commit_position=commit_position,
     backwards=True,
-)
+) as events:
+    ...
 ```
 :::
 
@@ -623,11 +637,17 @@ In the example below, we read a maximum of 100 events:
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-events = client.read_all(limit=100)
+with client.read_all(
+    limit=100
+) as events:
+    ...
 ```
 @tab async
 ```python:no-line-numbers
-events = await client.read_all(limit=100)
+async with await client.read_all(
+    limit=100
+) as events:
+    ...
 ```
 :::
 
@@ -639,12 +659,18 @@ You can also start reading from a specific position in the global transaction lo
 @tab sync
 ```python:no-line-numbers
 # Read from a specific commit position
-events = client.read_all(commit_position=commit_position)
+with client.read_all(
+    commit_position=commit_position
+) as events:
+    ...
 ```
 @tab async
 ```python:no-line-numbers
 # Read from a specific commit position
-events = await client.read_all(commit_position=commit_position)
+async with await client.read_all(
+    commit_position=commit_position
+) as events:
+    ...
 ```
 :::
 
@@ -661,11 +687,17 @@ Set `resolve_links=True` so that KurrentDB will resolve the "link events" and re
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-events = client.read_all(resolve_links=True)
+with client.read_all(
+    resolve_links=True
+) as events:
+    ...
 ```
 @tab async
 ```python:no-line-numbers
-events = await client.read_all(resolve_links=True)
+async with await client.read_all(
+    resolve_links=True
+) as events:
+    ...
 ```
 :::
 
@@ -682,11 +714,17 @@ Here's an example that reads all events that have a `type` starting with `"Order
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-events = client.read_all(filter_include=["Order.*"])
+with client.read_all(
+    filter_include=["Order.*"]
+) as events:
+    ...
 ```
 @tab async
 ```python:no-line-numbers
-events = await client.read_all(filter_include=["Order.*"])
+async with await client.read_all(
+    filter_include=["Order.*"]
+) as events:
+    ...
 ```
 :::
 
@@ -695,11 +733,17 @@ Here's an example that selects all events that do not have a `type` starting wit
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-events = client.read_all(filter_exclude=["Order.*"])
+with client.read_all(
+    filter_exclude=["Order.*"]
+) as events:
+    ...
 ```
 @tab async
 ```python:no-line-numbers
-events = await client.read_all(filter_exclude=["Order.*"])
+async with await client.read_all(
+    filter_exclude=["Order.*"]
+) as events:
+    ...
 ```
 :::
 
@@ -708,17 +752,19 @@ Here's an example that selects all events that have a `stream_name` starting wit
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-events = client.read_all(
+with client.read_all(
     filter_include=["order.*"],
     filter_by_stream_name=True,
-)
+) as events:
+    ...
 ```
 @tab async
 ```python:no-line-numbers
-events = await client.read_all(
+async with await client.read_all(
     filter_include=["order.*"],
     filter_by_stream_name=True,
-)
+) as events:
+    ...
 ```
 :::
 
@@ -727,17 +773,19 @@ Here's an example that selects all events that do not have a `stream_name` start
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-events = client.read_all(
+with client.read_all(
     filter_exclude=["order.*"],
     filter_by_stream_name=True,
-)
+) as events:
+    ...
 ```
 @tab async
 ```python:no-line-numbers
-events = await client.read_all(
+async with await client.read_all(
     filter_exclude=["order.*"],
     filter_by_stream_name=True,
-)
+) as events:
+    ...
 ```
 :::
 
@@ -772,20 +820,24 @@ Here's an example of reading all events with type string `"OrderCreated"`.
 @tab sync
 ```python:no-line-numbers
 # Read all OrderCreated events
-events = client.read_index(index_name="et-OrderCreated")
+with client.read_index(
+    index_name="et-OrderCreated"
+) as events:
 
-# Iterate through the sync streaming response with a 'for' loop
-for event in events:
-    print(f"Event: {event.type} from stream {event.stream_name}")
+    # Iterate through the sync streaming response with a 'for' loop
+    for event in events:
+        print(f"Event: {event.type} from stream {event.stream_name}")
 ```
 @tab async
 ```python:no-line-numbers
 # Read all OrderCreated events
-events = await client.read_index(index_name="et-OrderCreated")
+async with await client.read_index(
+    index_name="et-OrderCreated"
+) as events:
 
-# Iterate through the async streaming response with an 'async for' loop
-async for event in events:
-    print(f"Event: {event.type} from stream {event.stream_name}")
+    # Iterate through the async streaming response with an 'async for' loop
+    async for event in events:
+        print(f"Event: {event.type} from stream {event.stream_name}")
 ```
 :::
 
@@ -800,19 +852,22 @@ Here's an example of reading a secondary index from a specific commit position.
 @tab sync
 ```python:no-line-numbers
 # Read from a specific commit position
-for event in client.read_index(
+with client.read_index(
     index_name="et-OrderCreated",
     commit_position=commit_position,
-):
-    break
+) as events:
+    for event in events:
+        break
 ```
 @tab async
 ```python:no-line-numbers
 # Read from a specific commit position
-events = await client.read_index(
+async with await client.read_index(
     index_name="et-OrderCreated",
     commit_position=commit_position,
-)
+) as events:
+    async for event in events:
+        break
 ```
 :::
 
@@ -829,16 +884,18 @@ Here's an example of reading a maximum of 100 events from a secondary index.
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-events = client.read_index(
+with client.read_index(
     index_name="et-OrderCreated",
     limit=100,
-)
+) as events:
+    ...
 ```
 @tab async
 ```python:no-line-numbers
-events = await client.read_index(
+async with await client.read_index(
     index_name="et-OrderCreated",
     limit=100,
-)
+) as events:
+    ...
 ```
 :::

@@ -131,25 +131,23 @@ The simplest way to subscribe to a stream is to supply a `stream_name` argument.
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-# Subscribe to all events in a stream
-subscription = client.subscribe_to_stream(stream_name="order-123")
-
-# Iterate through the subscription with a 'for' loop
-for event in subscription:
-    assert event.stream_position == 0
-    assert event.id == event1.id
-    break  # <-- so we can continue with the examples
+# Subscribe to all events in a stream (use context manager for auto-cleanup)
+with client.subscribe_to_stream(stream_name="order-123") as subscription:
+    # Iterate through the subscription with a 'for' loop
+    for event in subscription:
+        assert event.stream_position == 0
+        assert event.id == event1.id
+        break  # <-- so we can continue with the examples
 ```
 @tab async
 ```python:no-line-numbers
-# Subscribe to all events in a stream
-subscription = await client.subscribe_to_stream(stream_name="order-123")
-
-# Iterate through the subscription with an async 'for' loop
-async for event in subscription:
-    assert event.stream_position == 0
-    assert event.id == event1.id
-    break  # <-- so we can continue with the examples
+# Subscribe to all events in a stream (use context manager for auto-cleanup)
+async with await client.subscribe_to_stream(stream_name="order-123") as subscription:
+    # Iterate through the subscription with an 'async for' loop
+    async for event in subscription:
+        assert event.stream_position == 0
+        assert event.id == event1.id
+        break  # <-- so we can continue with the examples
 ```
 :::
 
@@ -161,24 +159,26 @@ Specifying a `stream_position` argument will get events after that position.
 @tab sync
 ```python:no-line-numbers
 # Get events after a specific stream position
-for event in client.subscribe_to_stream(
+with client.subscribe_to_stream(
     stream_name="order-123",
     stream_position=1,
-):
-    assert event.stream_position == 2
-    assert event.id == event3.id
-    break  # <-- so we can continue with the examples
+) as subscription:
+    for event in subscription:
+        assert event.stream_position == 2
+        assert event.id == event3.id
+        break  # <-- so we can continue with the examples
 ```
 @tab async
 ```python:no-line-numbers
 # Get events after a specific stream position
-async for event in await client.subscribe_to_stream(
+async with await client.subscribe_to_stream(
     stream_name="order-123",
     stream_position=1,
-):
-    assert event.stream_position == 2
-    assert event.id == event3.id
-    break  # <-- so we can continue with the examples
+) as subscription:
+    async for event in subscription:
+        assert event.stream_position == 2
+        assert event.id == event3.id
+        break  # <-- so we can continue with the examples
 ```
 :::
 
@@ -189,17 +189,19 @@ Here's an example of subscribing from the end of a stream for "live events" only
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-subscription = client.subscribe_to_stream(
+with client.subscribe_to_stream(
     stream_name="order-123",
     from_end=True,
-)
+) as subscription:
+    ...
 ```
 @tab async
 ```python:no-line-numbers
-subscription = await client.subscribe_to_stream(
+async with await client.subscribe_to_stream(
     stream_name="order-123",
     from_end=True,
-)
+) as subscription:
+    ...
 ```
 :::
 
@@ -210,21 +212,23 @@ When you subscribe to a stream with link events (e.g., category streams), set `r
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-for event in client.subscribe_to_stream(
+with client.subscribe_to_stream(
     stream_name="$et-OrderCreated",
     resolve_links=True
-):
-    assert event.type == "OrderCreated"
-    break  # <-- so we can continue with the examples
+) as subscription:
+    for event in subscription:
+        assert event.type == "OrderCreated"
+        break  # <-- so we can continue with the examples
 ```
 @tab async
 ```python:no-line-numbers
-async for event in await client.subscribe_to_stream(
+async with await client.subscribe_to_stream(
     stream_name="$et-OrderCreated",
     resolve_links=True
-):
-    assert event.type == "OrderCreated"
-    break  # <-- so we can continue with the examples
+) as subscription:
+    async for event in subscription:
+        assert event.type == "OrderCreated"
+        break  # <-- so we can continue with the examples
 ```
 :::
 
@@ -246,7 +250,10 @@ Subscribing to a stream that doesn't exist will raise a `NotFoundError` exceptio
 from kurrentdbclient.exceptions import NotFoundError
 
 try:
-    client.subscribe_to_stream(stream_name="not-a-stream")
+    with client.subscribe_to_stream(
+        stream_name="not-a-stream"
+    ) as subscription:
+        ...
 except NotFoundError:
     print("Success: Stream does not exist")
 except Exception as e:
@@ -257,7 +264,10 @@ except Exception as e:
 from kurrentdbclient.exceptions import NotFoundError
 
 try:
-    await client.subscribe_to_stream(stream_name="not-a-stream")
+    async with await client.subscribe_to_stream(
+        stream_name="not-a-stream"
+    ) as subscription:
+        ...
 except NotFoundError:
     print("Success: Stream does not exist")
 except Exception as e:
@@ -302,22 +312,20 @@ Let's see how to use `subscribe_to_all()` by looking at some examples.
 @tab sync
 ```python:no-line-numbers
 # Subscribe to all events in global transaction log
-subscription = client.subscribe_to_all()
-
-# Iterate through the subscription with a 'for' loop
-for event in subscription:
-    print(f"Event: {event.type} at position {event.commit_position}")
-    break  # <-- so we can continue with the examples
+with client.subscribe_to_all() as subscription:
+    # Iterate through the subscription with a 'for' loop
+    for event in subscription:
+        print(f"Event: {event.type} at position {event.commit_position}")
+        break  # <-- so we can continue with the examples
 ```
 @tab async
 ```python:no-line-numbers
 # Subscribe to all events in global transaction log
-subscription = await client.subscribe_to_all()
-
-# Iterate through the subscription with an async 'for' loop
-async for event in subscription:
-    print(f"Event: {event.type} at position {event.commit_position}")
-    break  # <-- so we can continue with the examples
+async with await client.subscribe_to_all() as subscription:
+    # Iterate through the subscription with an async 'for' loop
+    async for event in subscription:
+        print(f"Event: {event.type} at position {event.commit_position}")
+        break  # <-- so we can continue with the examples
 ```
 :::
 
@@ -329,20 +337,22 @@ Specifying a `commit_position` argument will get events after that position in t
 @tab sync
 ```python:no-line-numbers
 # Get events after a specific commit position
-for event in client.subscribe_to_all(
+with client.subscribe_to_all(
     commit_position=commit_position,
-):
-    assert event.id == event2.id
-    break  # <-- so we can continue with the examples
+) as subscription:
+    for event in subscription:
+        assert event.id == event2.id
+        break  # <-- so we can continue with the examples
 ```
 @tab async
 ```python:no-line-numbers
 # Get events after a specific commit position
-async for event in await client.subscribe_to_all(
+async with await client.subscribe_to_all(
     commit_position=commit_position,
-):
-    assert event.id == event2.id
-    break  # <-- so we can continue with the examples
+) as subscription:
+    async for event in subscription:
+        assert event.id == event2.id
+        break  # <-- so we can continue with the examples
 ```
 :::
 
@@ -354,12 +364,14 @@ Here's an example of subscribing from the end of the global transaction log.
 @tab sync
 ```python:no-line-numbers
 # Get events after a specific stream position
-subscription = client.subscribe_to_all(from_end=True)
+with client.subscribe_to_all(from_end=True) as subscription:
+    ...
 ```
 @tab async
 ```python:no-line-numbers
 # Get events after a specific stream position
-subscription = await client.subscribe_to_all(from_end=True)
+async with await client.subscribe_to_all(from_end=True) as subscription:
+    ...
 ```
 :::
 
@@ -372,11 +384,13 @@ Set `resolve_links=True` so that KurrentDB will resolve the "link events" and re
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-subscription = client.subscribe_to_all(resolve_links=True)
+with client.subscribe_to_all(resolve_links=True) as subscription:
+    ...
 ```
 @tab async
 ```python:no-line-numbers
-subscription = await client.subscribe_to_all(resolve_links=True)
+async with await client.subscribe_to_all(resolve_links=True) as subscription:
+    ...
 ```
 :::
 
@@ -388,19 +402,21 @@ Here's an example of filtering for certain event types.
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-for event in client.subscribe_to_all(
+with client.subscribe_to_all(
     filter_include=["OrderCreated", "OrderUpdated"],
-):
-    assert event.type in ["OrderCreated", "OrderUpdated"]
-    break  # <-- so we can continue with the examples
+) as subscription:
+    for event in subscription:
+        assert event.type in ["OrderCreated", "OrderUpdated"]
+        break  # <-- so we can continue with the examples
 ```
 @tab async
 ```python:no-line-numbers
-async for event in await client.subscribe_to_all(
+async with await client.subscribe_to_all(
     filter_include=["OrderCreated", "OrderUpdated"],
-):
-    assert event.type in ["OrderCreated", "OrderUpdated"]
-    break  # <-- so we can continue with the examples
+) as subscription:
+    async for event in subscription:
+        assert event.type in ["OrderCreated", "OrderUpdated"]
+        break  # <-- so we can continue with the examples
 ```
 :::
 
@@ -412,22 +428,24 @@ Here's an example of filtering for a stream category.
 @tab sync
 ```python:no-line-numbers
 # Filter by stream name prefix
-for event in client.subscribe_to_all(
+with client.subscribe_to_all(
     filter_include=["order-.*"],
     filter_by_stream_name=True
-):
-    assert event.stream_name.startswith("order")
-    break  # <-- so we can continue with the examples
+) as subscription:
+    for event in subscription:
+        assert event.stream_name.startswith("order")
+        break  # <-- so we can continue with the examples
 ```
 @tab async
 ```python:no-line-numbers
 # Filter by stream name prefix
-async for event in await client.subscribe_to_all(
+async with await client.subscribe_to_all(
     filter_include=['order-.*'],
     filter_by_stream_name=True
-):
-    assert event.stream_name.startswith("order")
-    break  # <-- so we can continue with the examples
+) as subscription:
+    async for event in subscription:
+        assert event.stream_name.startswith("order")
+        break  # <-- so we can continue with the examples
 ```
 :::
 
@@ -459,23 +477,22 @@ def process_events_with_checkpointing(client, projection):
     last_commit_position = projection.get_last_checkpoint()
 
     # Subscribe using the last checkpoint
-    subscription = client.subscribe_to_all(
+    with client.subscribe_to_all(
         commit_position=last_commit_position,
         include_checkpoints=True
-    )
+    ) as subscription:
+        for item in subscription:
+            if type(item) is RecordedEvent:
+                # Regular event processing
+                new_state = {"key": "value"}
+                # Record commit position with new state
+                projection.update_state(new_state, item.commit_position)
 
-    for item in subscription:
-        if type(item) is RecordedEvent:
-            # Regular event processing
-            new_state = {"key": "value"}
-            # Record commit position with new state
-            projection.update_state(new_state, item.commit_position)
+            elif type(item) is Checkpoint:
+                # Record commit position
+                projection.save_checkpoint(item.commit_position)
 
-        elif type(item) is Checkpoint:
-            # Record commit position
-            projection.save_checkpoint(item.commit_position)
-
-        break  # <-- so we can continue with the examples
+            break  # <-- so we can continue with the examples
 
 
 
@@ -520,23 +537,23 @@ async def process_events_with_checkpointing(client, projection):
     last_commit_position = await projection.get_last_checkpoint()
 
     # Subscribe using the last checkpoint
-    subscription = await client.subscribe_to_all(
+    async with await client.subscribe_to_all(
         commit_position=last_commit_position,
         include_checkpoints=True
-    )
+    ) as subscription:
 
-    async for item in subscription:
-        if type(item) is RecordedEvent:
-            # Regular event processing
-            new_state = {"key": "value"}
-            # Record commit position with new state
-            await projection.update_state(new_state, item.commit_position)
+        async for item in subscription:
+            if type(item) is RecordedEvent:
+                # Regular event processing
+                new_state = {"key": "value"}
+                # Record commit position with new state
+                await projection.update_state(new_state, item.commit_position)
 
-        elif type(item) is Checkpoint:
-            # Record commit position
-            await projection.save_checkpoint(item.commit_position)
+            elif type(item) is Checkpoint:
+                # Record commit position
+                await projection.save_checkpoint(item.commit_position)
 
-        break  # <-- so we can continue with the examples
+            break  # <-- so we can continue with the examples
 
 
 class Projection:
@@ -602,22 +619,20 @@ Let's see how to use `subscribe_to_index()` by looking at some examples.
 @tab sync
 ```python:no-line-numbers
 # Subscribe to all events in a secondary index
-subscription = client.subscribe_to_index(index_name="et-OrderCreated")
-
-# Iterate through the subscription with a 'for' loop
-for event in subscription:
-    assert event.type == "OrderCreated"
-    break  # <-- so we can continue with the examples
+with client.subscribe_to_index(index_name="et-OrderCreated") as subscription:
+    # Iterate through the subscription with a 'for' loop
+    for event in subscription:
+        assert event.type == "OrderCreated"
+        break  # <-- so we can continue with the examples
 ```
 @tab async
 ```python:no-line-numbers
 # Subscribe to all events in a secondary index
-subscription = await client.subscribe_to_index(index_name="et-OrderCreated")
-
-# Iterate through the subscription with a 'for' loop
-async for event in subscription:
-    assert event.type == "OrderCreated"
-    break  # <-- so we can continue with the examples
+async with await client.subscribe_to_index(index_name="et-OrderCreated") as subscription:
+    # Iterate through the subscription with an 'async for' loop
+    async for event in subscription:
+        assert event.type == "OrderCreated"
+        break  # <-- so we can continue with the examples
 ```
 :::
 
@@ -628,28 +643,26 @@ async for event in subscription:
 @tab sync
 ```python:no-line-numbers
 # Subscribe to all events in a secondary index
-subscription = client.subscribe_to_index(
+with client.subscribe_to_index(
     index_name="et-OrderUpdated",
     commit_position=commit_position,
-)
-
-# Iterate through the subscription with a 'for' loop
-for event in subscription:
-    assert event.type == "OrderUpdated"
-    break  # <-- so we can continue with the examples
+) as subscription:
+    # Iterate through the subscription with a 'for' loop
+    for event in subscription:
+        assert event.type == "OrderUpdated"
+        break  # <-- so we can continue with the examples
 ```
 @tab async
 ```python:no-line-numbers
 # Subscribe to all events in a secondary index
-subscription = await client.subscribe_to_index(
+async with await client.subscribe_to_index(
     index_name="et-OrderUpdated",
     commit_position=commit_position,
-)
-
-# Iterate through the subscription with a 'for' loop
-async for event in subscription:
-    assert event.type == "OrderUpdated"
-    break  # <-- so we can continue with the examples
+) as subscription:
+    # Iterate through the subscription with an 'async for' loop
+    async for event in subscription:
+        assert event.type == "OrderUpdated"
+        break  # <-- so we can continue with the examples
 ```
 :::
 
@@ -718,37 +731,36 @@ of the catch-up subscription methods.
 from kurrentdbclient import CaughtUp
 
 # Subscribe with caught-up notifications
-subscription = client.subscribe_to_stream(
+with client.subscribe_to_stream(
     stream_name="order-123",
     include_caught_up=True,
-)
+) as subscription:
 
-for item in subscription:
-    if type(item) is CaughtUp:
-        print("Subscription has caught up to live events")
-        break  # <-- so we can continue with the examples
-    else:
-        # Regular event processing
-        print(f"Processing event: {item.type}")
-
+    for item in subscription:
+        if type(item) is CaughtUp:
+            print("Subscription has caught up to live events")
+            break  # <-- so we can continue with the examples
+        else:
+            # Regular event processing
+            print(f"Processing event: {item.type}")
 ```
 @tab async
 ```python:no-line-numbers
 from kurrentdbclient import CaughtUp
 
 # Subscribe with caught-up notifications
-subscription = await client.subscribe_to_stream(
+async with await client.subscribe_to_stream(
     stream_name="order-123",
     include_caught_up=True,
-)
+) as subscription:
 
-async for item in subscription:
-    if type(item) is CaughtUp:
-        print("Subscription has caught up to live events")
-        break  # <-- so we can continue with the examples
-    else:
-        # Regular event processing
-        print(f"Processing event: {item.type}")
+    async for item in subscription:
+        if type(item) is CaughtUp:
+            print("Subscription has caught up to live events")
+            break  # <-- so we can continue with the examples
+        else:
+            # Regular event processing
+            print(f"Processing event: {item.type}")
 
 ```
 :::
