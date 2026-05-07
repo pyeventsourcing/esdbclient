@@ -99,6 +99,8 @@ started = datetime.datetime.now()
 last = datetime.datetime.now()
 
 KURRENTDB_DOCKER_IMAGE = os.environ.get("KURRENTDB_DOCKER_IMAGE", "25.1")
+# KURRENTDB_DOCKER_IMAGE = os.environ.get("KURRENTDB_DOCKER_IMAGE", "26.0")
+# KURRENTDB_DOCKER_IMAGE = os.environ.get("KURRENTDB_DOCKER_IMAGE", "26.1")
 
 if "21.9" in KURRENTDB_DOCKER_IMAGE:
     SERVER_VERSION = (21, 9)
@@ -118,6 +120,8 @@ elif "25.1" in KURRENTDB_DOCKER_IMAGE:
     SERVER_VERSION = (25, 1)
 elif "26.0" in KURRENTDB_DOCKER_IMAGE:
     SERVER_VERSION = (26, 0)
+elif "26.1" in KURRENTDB_DOCKER_IMAGE:
+    SERVER_VERSION = (26, 1)
 else:
     msg = "Couldn't extract server version from KURRENTDB_DOCKER_IMAGE"
     raise ValueError(msg)
