@@ -5,7 +5,6 @@ import datetime
 import math
 import sys
 from abc import abstractmethod
-from asyncio import CancelledError
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, overload, runtime_checkable
@@ -162,63 +161,87 @@ class BaseReadResponse:
 class AsyncReadResponse(BaseReadResponse, AsyncGrpcStreamer, AbstractAsyncReadResponse):
     def __init__(
         self,
-        aio_call: grpc.aio.UnaryStreamCall[streams_pb2.ReadReq, streams_pb2.ReadResp],
+        unary_stream_call: grpc.aio.UnaryStreamCall[
+            streams_pb2.ReadReq, streams_pb2.ReadResp
+        ],
         stream_name: str | None,
         grpc_streamers: AsyncGrpcStreamers,
     ):
         BaseReadResponse.__init__(self, stream_name=stream_name)
         AsyncGrpcStreamer.__init__(self, grpc_streamers=grpc_streamers)
         AbstractAsyncReadResponse.__init__(self)
-        self._aio_call = aio_call
-        self.read_resp_iter = aio_call.__aiter__()
+        self._is_stopping = False
+        self._unary_stream_call = unary_stream_call
+        self._read_resp_iter = unary_stream_call.__aiter__()
+        self._read_resp_queue = asyncio.Queue[streams_pb2.ReadResp | None](maxsize=10)
+        self._stream_worker_co = self._stream_worker()
+        self._stream_worker_task = asyncio.create_task(self._stream_worker_co)
+
+    async def _stream_worker(self) -> None:
+        """Coroutine for isolated task that only handles the gRPC stream."""
+        try:
+            while True:
+                read_resp = await self._read_resp_iter.__anext__()
+                await self._read_resp_queue.put(read_resp)
+                if self._has_iter_error_for_testing():
+                    raise AioRpcError(
+                        grpc.StatusCode.INTERNAL,
+                        grpc.aio.Metadata(),
+                        grpc.aio.Metadata(),
+                        "",
+                        "",
+                    )
+        except StopAsyncIteration:
+            await self._read_resp_queue.put(None)
+        except BaseException:
+            try:
+                while True:
+                    self._read_resp_queue.get_nowait()
+            except asyncio.queues.QueueEmpty:
+                pass
+            await self._read_resp_queue.put(None)
+            raise
 
     async def __anext__(self) -> RecordedEvent:
-        while True:
-            try:
-                read_resp = await self._get_next_read_resp()
-            except BaseException:
-                await self.stop()
-                raise
-            recorded_event = self._filter_recorded_event(
-                self._convert_read_resp(read_resp)
-            )
-            if recorded_event is not None:
-                return recorded_event
-
-    async def _get_next_read_resp(self) -> streams_pb2.ReadResp:
         try:
-            read_resp = await self.read_resp_iter.__anext__()
-            if self._has_iter_error_for_testing():
-                raise AioRpcError(
-                    grpc.StatusCode.INTERNAL,
-                    grpc.aio.Metadata(),
-                    grpc.aio.Metadata(),
-                    "",
-                    "",
+            while True:
+                # if self._is_context_manager_active and self._is_stopping:
+                #     raise StopAsyncIteration
+                read_resp = await self._read_resp_queue.get()
+                if read_resp is None:
+                    raise StopAsyncIteration
+                recorded_event = self._filter_recorded_event(
+                    self._convert_read_resp(read_resp)
                 )
-        except CancelledError as e:
+                if recorded_event is not None:
+                    return recorded_event
+        except BaseException:
             await self.stop()
-            task = asyncio.current_task()
-            if task is not None and task.cancelling():
-                raise
-            raise StopAsyncIteration from e
-        except grpc.RpcError as e:
-            raise handle_streams_rpc_error(e) from e
-        else:
-            assert isinstance(read_resp, streams_pb2.ReadResp)
-            return read_resp
+            raise
 
-    async def stop(self) -> None:
-        self._grpc_streamers.remove(self)
-        if not self._aio_call.cancelled():
-            self._aio_call.cancel()
+    async def stop(self, *, wait_until_stopped: bool = True) -> None:
+        if self._is_context_manager_active:
+            self._is_stopping = True
+        elif not await self._set_is_stopped():
+            self._stream_worker_task.cancel()
+            self._unary_stream_call.cancel()
+            self._grpc_streamers.remove(self)
+
+            try:
+                await self._stream_worker_task
+            except asyncio.CancelledError:
+                pass
+            except grpc.RpcError as e:
+                raise handle_streams_rpc_error(e) from e
 
 
 class AsyncCatchupSubscription(AsyncReadResponse, AbstractAsyncCatchupSubscription):
     def __init__(
         self,
         *,
-        aio_call: grpc.aio.UnaryStreamCall[streams_pb2.ReadReq, streams_pb2.ReadResp],
+        unary_stream_call: grpc.aio.UnaryStreamCall[
+            streams_pb2.ReadReq, streams_pb2.ReadResp
+        ],
         stream_name: str | None,
         grpc_streamers: AsyncGrpcStreamers,
         include_checkpoints: bool = False,
@@ -226,16 +249,20 @@ class AsyncCatchupSubscription(AsyncReadResponse, AbstractAsyncCatchupSubscripti
         include_fell_behind: bool = False,
     ):
         super().__init__(
-            aio_call=aio_call, stream_name=stream_name, grpc_streamers=grpc_streamers
+            unary_stream_call=unary_stream_call,
+            stream_name=stream_name,
+            grpc_streamers=grpc_streamers,
         )
         self._include_checkpoints = include_checkpoints
         self._include_caught_up = include_caught_up
         self._include_fell_behind = include_fell_behind
 
     async def check_confirmation(self) -> None:
-        read_resp = await self._get_next_read_resp()
-        content_oneof = read_resp.WhichOneof("content")
-        if content_oneof != "confirmation":  # pragma: no cover
+        read_resp = await self._read_resp_queue.get()
+        if read_resp is None:  # pragma: no cover
+            msg = "Expected subscription confirmation, got EOF"
+            raise SubscriptionConfirmationError(msg)
+        if read_resp.WhichOneof("content") != "confirmation":  # pragma: no cover
             msg = f"Expected subscription confirmation, got: {read_resp}"
             raise SubscriptionConfirmationError(msg)
         self._subscription_id = read_resp.confirmation.subscription_id
@@ -942,13 +969,13 @@ class AsyncStreamsService(BaseStreamsService[AsyncGrpcStreamers]):
 
         if not subscribe:
             response = AsyncReadResponse(
-                aio_call=unary_stream_call,
+                unary_stream_call=unary_stream_call,
                 stream_name=stream_name,
                 grpc_streamers=self._grpc_streamers,
             )
         else:
             response = AsyncCatchupSubscription(
-                aio_call=unary_stream_call,
+                unary_stream_call=unary_stream_call,
                 stream_name=stream_name,
                 include_checkpoints=include_checkpoints,
                 include_caught_up=include_caught_up,

@@ -789,12 +789,12 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 self.event_id = event_id
 
             async def run(self) -> None:
-                subscription = await self.client.subscribe_to_stream(self.stream_name)
-                events = []
-                async for event in subscription:
-                    events.append(event)
-                    if event.id == self.event_id:
-                        await subscription.stop()
+                async with await self.client.subscribe_to_stream(
+                    stream_name=self.stream_name
+                ) as subscription:
+                    async for event in subscription:
+                        if event.id == self.event_id:
+                            break
 
         await asyncio.gather(
             Worker(self.client, stream_name1, event1.id).run(),
@@ -806,7 +806,37 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         if current_task is not None:
             self.assertFalse(current_task.cancelled())
 
-    async def test_subscribe_to_all_with_task_cancel(self) -> None:
+    async def test_subscribe_to_all_with_task_cancel_no_context_manager(self) -> None:
+
+        at_async_for = asyncio.Event()
+
+        class Worker:
+            def __init__(self, subscription: AbstractAsyncCatchupSubscription) -> None:
+                self.subscription = subscription
+                self.was_cancelled = False
+
+            async def run(self) -> None:
+                at_async_for.set()
+                try:
+                    async for event in self.subscription:
+                        msg = f"async for didn't raise asyncio.CancelledError {event}"
+                        raise AssertionError(msg)
+                except asyncio.CancelledError:
+                    self.was_cancelled = True
+                    raise
+
+        subscription = await self.client.subscribe_to_stream(str(uuid4()))
+        worker = Worker(subscription)
+        task = asyncio.create_task(worker.run())
+        await at_async_for.wait()
+        await asyncio.sleep(0.1)  # Try to make sure we got into _get_next_read_resp
+        # await asyncio.sleep(10)  # Try to make sure we got into _get_next_read_resp
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertTrue(worker.was_cancelled)
+
+    async def test_subscribe_to_all_with_task_cancel_with_context_manager(self) -> None:
 
         at_async_for = asyncio.Event()
 
