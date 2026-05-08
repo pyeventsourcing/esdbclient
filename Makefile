@@ -23,7 +23,7 @@
 #KURRENTDB_DOCKER_IMAGE ?= docker.cloudsmith.io/eventstore/eventstore/eventstoredb-ee:24.10.6-x64-8.0-bookworm-slim
 #KURRENTDB_DOCKER_IMAGE ?= docker.kurrent.io/kurrent-latest/kurrentdb:25.0.1-x64-8.0-bookworm-slim
 #KURRENTDB_DOCKER_IMAGE ?= docker.kurrent.io/kurrent-latest/kurrentdb:25.1.0-x64-8.0-bookworm-slim
-#KURRENTDB_DOCKER_IMAGE ?= kurrentplatform/kurrentdb:26.0.2
+#KURRENTDB_DOCKER_IMAGE ?= kurrentplatform/kurrentdb:26.0.2   # somehow test suite doesn't complete (hangs on creating a projection in docs/api/projections.md line 159 when run with full test suite)
 KURRENTDB_DOCKER_IMAGE ?= kurrentplatform/kurrentdb:26.1.0
 
 PYTHONUNBUFFERED=1
@@ -225,7 +225,8 @@ docker-up:
 	@docker --version
 	@docker compose up -d
 	@echo "Waiting for containers to be healthy"
-	@until docker compose ps | grep -in "healthy" | wc -l | grep -in 3 > /dev/null; do printf "." && sleep 1; done; echo ""
+	@#until docker compose ps | grep -in "healthy" | wc -l | grep -in 3 > /dev/null; do printf "." && sleep 1; done; echo ""
+	@until docker compose ps | grep -in "healthy" | wc -l | grep -in 3 > /dev/null; do docker compose ps && sleep 1; done; echo ""
 	@docker compose ps
 	@sleep 15
 
