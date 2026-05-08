@@ -50,7 +50,6 @@ from kurrentdbclient.exceptions import (
     ConsumerTooSlowError,
     DeadlineExceededError,
     DiscoveryFailedError,
-    ExceptionIteratingRequestsError,
     ExceptionThrownByHandlerError,
     FailedPreconditionError,
     FollowerNotFoundError,
@@ -3564,10 +3563,10 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             pass
 
         # Ack with wrong type of object.
-        with self.assertRaises(ExceptionIteratingRequestsError) as cm:
+        with self.assertRaises(ValueError) as cm:
             for _ in subscription:
                 subscription.ack(NotUUID())  # type: ignore
-        self.assertIsInstance(cm.exception.__cause__, ValueError)
+        self.assertIn("is not a UUID", str(cm.exception))
 
     def test_subscription_to_stream_replay_parked(self) -> None:
         self.construct_client()

@@ -35,7 +35,6 @@ from kurrentdbclient.exceptions import (
     AlreadyExistsError,
     DeadlineExceededError,
     DiscoveryFailedError,
-    ExceptionIteratingRequestsError,
     ExceptionThrownByHandlerError,
     FollowerNotFoundError,
     GrpcDeadlineExceededError,
@@ -1601,9 +1600,10 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         # Read subscription - error iterating requests is propagated.
         persistent_subscription = await self.client.read_subscription_to_all(group_name)
-        with self.assertRaises(ExceptionIteratingRequestsError):
+        with self.assertRaises(ValueError) as cm:
             async for _ in persistent_subscription:
                 await persistent_subscription.ack("a")  # type: ignore[arg-type]
+        self.assertIn("event_id 'a' is not a UUID", str(cm.exception))
 
         # Read subscription - success.
         persistent_subscription = await self.client.read_subscription_to_all(group_name)
@@ -2420,9 +2420,10 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         subscription = await self.client.read_subscription_to_stream(
             group_name, stream_name1
         )
-        with self.assertRaises(ExceptionIteratingRequestsError):
+        with self.assertRaises(ValueError) as cm:
             async for _ in subscription:
                 await subscription.ack("a")  # type: ignore[arg-type]
+        self.assertIn("event_id 'a' is not a UUID", str(cm.exception))
 
         # Read subscription - success.
         subscription = await self.client.read_subscription_to_stream(

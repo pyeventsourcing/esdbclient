@@ -239,6 +239,13 @@ class AsyncReadResponse(BaseReadResponse, AsyncGrpcStreamer, AbstractAsyncReadRe
             except grpc.RpcError as e:
                 raise handle_streams_rpc_error(e) from e
 
+    def __del__(self) -> None:
+        # Safety net, last chance to cancel the streaming call.
+        if hasattr(self, "_unary_stream_call"):
+            self._unary_stream_call.cancel()
+        else:  # pragma: no cover
+            pass
+
 
 class AsyncCatchupSubscription(AsyncReadResponse, AbstractAsyncCatchupSubscription):
     def __init__(

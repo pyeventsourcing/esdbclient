@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from typing_extensions import deprecated
+
 if TYPE_CHECKING:
     from typing import Any
     from uuid import UUID
@@ -246,6 +248,7 @@ class ReadOnlyReplicaNotFoundError(DiscoveryFailedError):
     """
 
 
+@deprecated("Actual error raised instead")
 class ExceptionIteratingRequestsError(KurrentDBClientError):
     """
     Raised when a persistent subscription errors whilst iterating requests.

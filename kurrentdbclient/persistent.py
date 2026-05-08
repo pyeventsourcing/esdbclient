@@ -54,7 +54,6 @@ from kurrentdbclient.common import (
 from kurrentdbclient.events import RecordedEvent
 from kurrentdbclient.exceptions import (
     CancelledByClientError,
-    ExceptionIteratingRequestsError,
     KurrentDBClientError,
     NodeIsNotLeaderError,
     ProgrammingError,
@@ -620,7 +619,7 @@ class AsyncPersistentSubscription(
             except grpc.RpcError as e:
                 raise handle_rpc_error(e) from e
             if self._read_reqs.errored:
-                raise ExceptionIteratingRequestsError from self._read_reqs.errored
+                raise self._read_reqs.errored
 
     async def ack(self, item: UUID | RecordedEvent) -> None:
         await self._read_reqs.ack(event_id=self._get_event_id(item))
@@ -637,6 +636,13 @@ class AsyncPersistentSubscription(
         if isinstance(item, RecordedEvent):
             return item.ack_id
         return item
+
+    def __del__(self) -> None:
+        # Safety net, last chance to cancel the streaming call.
+        if hasattr(self, "_stream_stream_call"):
+            self._stream_stream_call.cancel()
+        else:  # pragma: no cover
+            pass
 
 
 class PersistentSubscription(
@@ -717,7 +723,7 @@ class PersistentSubscription(
                 and "Exception iterating requests!" in details
                 and self._read_reqs.errored
             ):
-                raise ExceptionIteratingRequestsError from self._read_reqs.errored
+                raise self._read_reqs.errored from None
             raise handle_rpc_error(e) from None
         assert isinstance(read_resp, persistent_pb2.ReadResp)
         return read_resp
