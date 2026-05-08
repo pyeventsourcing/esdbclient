@@ -1685,10 +1685,10 @@ so far, in the order they were recorded. We can see the three events of `stream_
 
 ```python
 # Read all events (creates a streaming gRPC call).
-read_response = client.read_all()
+with client.read_all() as read_response:
+    # Convert the iterator into a sequence of recorded events.
+    events = tuple(read_response)
 
-# Convert the iterator into a sequence of recorded events.
-events = tuple(read_response)
 assert len(events) > 3  # more than three
 
 # Convert the sequence of recorded events into a set of event IDs.
@@ -1707,17 +1707,14 @@ receive, `event2` is the second, and `event3` is the third.
 
 ```python
 # Read all events forwards from a commit position.
-read_response = client.read_all(
+with client.read_all(
     commit_position=commit_position1
-)
+) as read_response:
 
-# Step through the "read response" iterator.
-assert next(read_response) == event1
-assert next(read_response) == event2
-assert next(read_response) == event3
-
-# Stop the iterator.
-read_response.stop()
+    # Step through the "read response" iterator.
+    assert next(read_response) == event1
+    assert next(read_response) == event2
+    assert next(read_response) == event3
 ```
 
 The example below shows how to read all events recorded in the database in reverse
@@ -1727,31 +1724,27 @@ and the snapshot.
 
 ```python
 # Read all events backwards from the end.
-read_response = client.read_all(
+with client.read_all(
     backwards=True
-)
+) as read_response:
 
-# Step through the "read response" iterator.
-assert next(read_response).type == "DogLearnedTrick"
-assert next(read_response).type == "Snapshot"
-assert next(read_response).type == "DogLearnedTrick"
-assert next(read_response).type == "DogLearnedTrick"
-assert next(read_response).type == "DogRegistered"
-
-# Stop the iterator.
-read_response.stop()
+    # Step through the "read response" iterator.
+    assert next(read_response).type == "DogLearnedTrick"
+    assert next(read_response).type == "Snapshot"
+    assert next(read_response).type == "DogLearnedTrick"
+    assert next(read_response).type == "DogLearnedTrick"
+    assert next(read_response).type == "DogRegistered"
 ```
 
 The example below shows how to read a limited number of events
 forwards from a specific commit position.
 
 ```python
-events = tuple(
-    client.read_all(
-        commit_position=commit_position1,
-        limit=1,
-    )
-)
+with client.read_all(
+    commit_position=commit_position1,
+    limit=1,
+) as read_response:
+    events = tuple(read_response)
 
 assert len(events) == 1
 assert events[0] == event1
@@ -1762,12 +1755,11 @@ in the database backwards from the end. In this case, the limit is 1, and
 so we receive the last recorded event.
 
 ```python
-events = tuple(
-    client.read_all(
-        backwards=True,
-        limit=1,
-    )
-)
+with client.read_all(
+    backwards=True,
+    limit=1,
+) as read_response:
+    events = tuple(read_response)
 
 assert len(events) == 1
 
@@ -2066,16 +2058,17 @@ from the first recorded event in the database.
 
 ```python
 # Subscribe from the first recorded event in the database.
-catchup_subscription = client.subscribe_to_all()
+with client.subscribe_to_all() as catchup_subscription:
+    ...
 ```
 
-The example below shows that catch-up subscriptions do not stop
-automatically, but block when the last recorded event is received,
-and then continue when subsequent events are recorded.
+The example below shows that catch-up subscriptions block when the
+last recorded event is received, and then continue when subsequent
+events are recorded.
 
 ```python
-from time import sleep
-from threading import Thread
+import time
+import threading
 
 
 # Append a new event to a new stream.
@@ -2089,30 +2082,53 @@ client.append_to_stream(
 )
 
 
-# Receive events from the catch-up subscription in a different thread.
-received_events = []
+# Receive events from a catch-up subscription in a different thread.
+class SubscribeToAll(threading.Thread):
+    def __init__(self, client, **subscription_kwargs):
+        super().__init__()
+        self._client = client
+        self._is_running = threading.Event()
+        self._subscription_kwargs = subscription_kwargs
+        self._subscription = None
+        self._seen_event_ids = set()
+        self._last_commit_position = None
+        self.start()
 
-def receive_events():
-    for event in catchup_subscription:
-        received_events.append(event)
+    def run(self):
+        with self._client.subscribe_to_all(
+            **self._subscription_kwargs
+        ) as subscription:
+            self._subscription = subscription
+            self._is_running.set()
+            for event in subscription:
+                self._seen_event_ids.add(event.id)
+                self._last_commit_position = event.commit_position
 
+    def stop(self):
+        if not self._is_running.wait(timeout=5):
+            raise TimeoutError("Subscription thread didn't start")
+        self._subscription.stop()
+        self.join()
+        self._subscription = None
 
-def wait_for_event(event):
-    for _ in range(100):
-        for received in reversed(received_events):
-            if event == received:
+    def wait_for_event(self, event):
+        for _ in range(100):
+            if event.id in self._seen_event_ids:
                 return
+            else:
+                time.sleep(0.1)
         else:
-            sleep(0.1)
-    else:
-        raise AssertionError("Event wasn't received")
+            raise AssertionError("Event wasn't received")
+
+    @property
+    def last_commit_position(self):
+        return self._last_commit_position
 
 
-thread = Thread(target=receive_events, daemon=True)
-thread.start()
+subscription_to_all = SubscribeToAll(client=client)
 
 # Wait to receive event4.
-wait_for_event(event4)
+subscription_to_all.wait_for_event(event4)
 
 # Append another event whilst the subscription is running.
 event5 = NewEvent(type='OrderUpdated', data=b'{}')
@@ -2122,17 +2138,16 @@ client.append_to_stream(
     events=[event5],
 )
 
-# Wait for the subscription to block.
-wait_for_event(event5)
+# Wait to receive event5.
+subscription_to_all.wait_for_event(event5)
 
-# Stop the subscription.
-catchup_subscription.stop()
-thread.join()
+# Stop the subscription thread.
+subscription_to_all.stop()
 ```
 
 The example below shows how to subscribe to events recorded after a
 particular commit position, in this case from the commit position of
-the last recorded event that was received above. Then, another event is
+the last recorded event that was received above. Another event is
 recorded before the subscription is restarted. And three more events are
 recorded whilst the subscription is running. These four events are
 received in the order they were recorded.
@@ -2150,15 +2165,13 @@ client.append_to_stream(
 
 # Restart subscribing to all events after the
 # commit position of the last received event.
-catchup_subscription = client.subscribe_to_all(
-    commit_position=received_events[-1].commit_position
+subscription_to_all = SubscribeToAll(
+    client=client,
+    commit_position=subscription_to_all.last_commit_position
 )
 
-thread = Thread(target=receive_events, daemon=True)
-thread.start()
-
 # Wait for event6.
-wait_for_event(event6)
+subscription_to_all.wait_for_event(event6)
 
 # Append three more events to a new stream.
 stream_name3 = str(uuid.uuid4())
@@ -2173,13 +2186,12 @@ client.append_to_stream(
 )
 
 # Wait for events 7, 8 and 9.
-wait_for_event(event7)
-wait_for_event(event8)
-wait_for_event(event9)
+subscription_to_all.wait_for_event(event7)
+subscription_to_all.wait_for_event(event8)
+subscription_to_all.wait_for_event(event9)
 
-# Stop the subscription.
-catchup_subscription.stop()
-thread.join()
+# Stop the subscription thread.
+subscription_to_all.stop()
 ```
 
 The catch-up subscription call is ended as soon as the subscription object's
@@ -2233,7 +2245,10 @@ the first recorded event in a stream.
 
 ```python
 # Subscribe from the start of 'stream2'.
-subscription = client.subscribe_to_stream(stream_name=stream_name2)
+with client.subscribe_to_stream(
+    stream_name=stream_name2
+) as subscription:
+    ...
 ```
 
 The example below shows how to start a catch-up subscription from
@@ -2241,10 +2256,11 @@ a particular stream position.
 
 ```python
 # Subscribe to stream2, from the second recorded event.
-subscription = client.subscribe_to_stream(
+with client.subscribe_to_stream(
     stream_name=stream_name2,
     stream_position=1,
-)
+) as subscription:
+    ...
 ```
 
 ### Subscribe using secondary index<a id="subscribe-to-index"></a>
@@ -2580,9 +2596,6 @@ class ExampleConsumer:
                     self.subscription.ack(event)
                     self.after_ack(event)
 
-    def stop(self):
-        self.subscription.stop()
-
     def policy(self, event):
         # Raise an exception when we see "event5".
         if event == event5:
@@ -2600,17 +2613,17 @@ class ExampleConsumer:
             # Stop the consumer, so we can continue with the examples.
             self.stop()
 
+    def stop(self):
+        self.subscription.stop()
+
 
 # Create subscription.
 group_name = f"group-{uuid.uuid4()}"
 client.create_subscription_to_all(group_name, commit_position=commit_position1)
 
-# Read subscription.
-subscription = client.read_subscription_to_all(group_name)
-
 # Construct consumer.
 consumer = ExampleConsumer(
-    subscription=subscription,
+    subscription=client.read_subscription_to_all(group_name),
     max_retry_count=5,
     final_action="park",
 )
@@ -3162,7 +3175,7 @@ to process all the recorded events, the projection "state" is obtained.
 We can see that the projection has processed three events.
 
 ```python
-sleep(1)  # allow time for projection to process recorded events
+time.sleep(1)  # allow time for projection to process recorded events
 
 projection_state = client.get_projection_state(projection_name)
 
