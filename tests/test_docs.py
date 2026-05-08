@@ -94,7 +94,7 @@ class TestDocs(TestCase):
         # Extract lines of Python code from the README.md file.
 
         print_block_line_numbers = True
-        lines = ["import sys"] if print_block_line_numbers else []
+        lines: list[str] = []
         num_code_lines = 0
         num_code_lines_in_block = 0
         is_code = False
@@ -142,8 +142,8 @@ class TestDocs(TestCase):
                     is_md = True
                     if print_block_line_numbers:
                         line = (
-                            f"sys.stderr.write('Block on line: {line_index}\\n') and"
-                            " sys.stderr.flush()"
+                            f"sys.stderr.write('Block on line: {line_index + 1}\\n')"
+                            " and sys.stderr.flush()"
                         )
                     else:
                         line = ""
@@ -260,6 +260,10 @@ class TestDocs(TestCase):
                 lines[i] = ""
             if "uninstrument()" in line:
                 lines[i] = ""
+
+        if print_block_line_numbers:
+            assert not lines[0].strip()
+            lines[0] = "import sys"
 
         source = "\n".join(lines) + "\n"
 

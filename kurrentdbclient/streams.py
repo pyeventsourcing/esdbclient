@@ -174,10 +174,12 @@ class AsyncReadResponse(BaseReadResponse, AsyncGrpcStreamer, AbstractAsyncReadRe
         self._unary_stream_call = unary_stream_call
         self._read_resp_iter = unary_stream_call.__aiter__()
         self._read_resp_queue = asyncio.Queue[streams_pb2.ReadResp | None](maxsize=10)
-        self._stream_worker_co = self._stream_worker()
-        self._stream_worker_task = asyncio.create_task(self._stream_worker_co)
+        self._read_resp_stream_worker_co = self._read_resp_stream_worker()
+        self._read_resp_stream_worker_task = asyncio.create_task(
+            self._read_resp_stream_worker_co
+        )
 
-    async def _stream_worker(self) -> None:
+    async def _read_resp_stream_worker(self) -> None:
         """Coroutine for isolated task that only handles the gRPC stream."""
         try:
             while True:
@@ -192,21 +194,25 @@ class AsyncReadResponse(BaseReadResponse, AsyncGrpcStreamer, AbstractAsyncReadRe
                         "",
                     )
         except StopAsyncIteration:
+            # End of the stream, signal to end the iteration.
             await self._read_resp_queue.put(None)
         except BaseException:
+            # Drain the queue (to avoid blocking on put).
             try:
                 while True:
                     self._read_resp_queue.get_nowait()
             except asyncio.queues.QueueEmpty:
                 pass
+            # Unblock waiting on get().
             await self._read_resp_queue.put(None)
+            # Reraise the error (appears at 'await task').
             raise
 
     async def __anext__(self) -> RecordedEvent:
         try:
             while True:
-                # if self._is_context_manager_active and self._is_stopping:
-                #     raise StopAsyncIteration
+                if self._is_context_manager_active and self._is_stopping:
+                    raise StopAsyncIteration
                 read_resp = await self._read_resp_queue.get()
                 if read_resp is None:
                     raise StopAsyncIteration
@@ -223,12 +229,11 @@ class AsyncReadResponse(BaseReadResponse, AsyncGrpcStreamer, AbstractAsyncReadRe
         if self._is_context_manager_active:
             self._is_stopping = True
         elif not await self._set_is_stopped():
-            self._stream_worker_task.cancel()
+            self._read_resp_stream_worker_task.cancel()
             self._unary_stream_call.cancel()
             self._grpc_streamers.remove(self)
-
             try:
-                await self._stream_worker_task
+                await self._read_resp_stream_worker_task
             except asyncio.CancelledError:
                 pass
             except grpc.RpcError as e:

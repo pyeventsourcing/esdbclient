@@ -2514,7 +2514,10 @@ giving `RecordedEvent` objects. It also has `ack()`, `nack()` and `stop()`
 methods.
 
 ```python
-subscription = client.read_subscription_to_all(group_name=group_name1)
+with client.read_subscription_to_all(
+    group_name=group_name1
+) as subscription:
+    ...
 ```
 
 The `ack()` method should be used by a consumer to "acknowledge" to the server that
@@ -2536,15 +2539,18 @@ examples below.
 ```python
 received_events = []
 
-for event in subscription:
-    received_events.append(event)
+with client.read_subscription_to_all(
+    group_name=group_name1
+) as subscription:
+    for event in subscription:
+        received_events.append(event)
 
-    # Acknowledge the received event.
-    subscription.ack(event)
+        # Acknowledge the received event.
+        subscription.ack(event)
 
-    # Stop when 'event9' has been received.
-    if event == event9:
-        subscription.stop()
+        # Stop when 'event9' has been received.
+        if event == event9:
+            subscription.stop()
 ```
 
 The `nack()` should be used by a consumer to "negatively acknowledge" to the server that
@@ -2802,28 +2808,25 @@ This method returns a `PersistentSubscription` object, which is an iterator
 giving `RecordedEvent` objects, that also has `ack()`, `nack()` and `stop()`
 methods.
 
-```python
-subscription = client.read_subscription_to_stream(
-    group_name=group_name2,
-    stream_name=stream_name2,
-)
-```
-
 The example below iterates over the subscription object, and calls `ack()`.
 The subscription's `stop()` method is called when we have received `event6`,
 stopping the iteration, so that we can continue with the examples below.
 
 ```python
 events = []
-for event in subscription:
-    events.append(event)
+with client.read_subscription_to_stream(
+    group_name=group_name2,
+    stream_name=stream_name2,
+) as subscription:
+    for event in subscription:
+        events.append(event)
 
-    # Acknowledge the received event.
-    subscription.ack(event)
+        # Acknowledge the received event.
+        subscription.ack(event)
 
-    # Stop when 'event6' has been received.
-    if event == event6:
-        subscription.stop()
+        # Stop when 'event6' has been received.
+        if event == event6:
+            break
 ```
 
 We can check we received all the events that were appended to `stream_name2`

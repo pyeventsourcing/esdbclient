@@ -21,6 +21,7 @@ import kurrentdbclient.protos.v1.persistent_pb2 as grpc_persistent
 from kurrentdbclient import (
     DEFAULT_EXCLUDE_FILTER,
     KDB_SYSTEM_EVENTS_REGEX,
+    CatchupSubscription,
     RecordedEvent,
     StreamState,
 )
@@ -3057,6 +3058,19 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         # Iterating should stop.
         list(subscription)
 
+        # Exiting the context manager should stop the subscription.
+        subscription = self.client.subscribe_to_all()
+        with subscription:
+            pass
+        self.assertTrue(cast(CatchupSubscription, subscription)._is_stopped)
+
+        # Calling stop inside the context manager should terminate the iteration.
+        subscription = self.client.subscribe_to_all()
+        with subscription:
+            subscription.stop()
+            list(subscription)
+        self.assertTrue(cast(CatchupSubscription, subscription)._is_stopped)
+
     def _test_subscribe_to_all_raises_consumer_too_slow(self) -> None:
         # Todo: The server behaviour is too unreliable to run this test.
         self.construct_client()
@@ -3720,7 +3734,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         assert events[-2].data == event2.data
         assert events[-1].data == event3.data
 
-    def test_persistent_subscription_ack_after_stop(self) -> None:
+    def test_subscription_to_all_ack_after_stop(self) -> None:
         self.construct_client()
 
         group_name = str(uuid4())

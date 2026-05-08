@@ -28,6 +28,7 @@ from kurrentdbclient.common import (
     DEFAULT_PERSISTENT_SUB_MIN_CHECKPOINT_COUNT,
     DEFAULT_PERSISTENT_SUB_READ_BATCH_SIZE,
     AbstractAsyncCatchupSubscription,
+    AbstractAsyncPersistentSubscription,
 )
 from kurrentdbclient.events import CaughtUp, NewEvents
 from kurrentdbclient.exceptions import (
@@ -48,6 +49,7 @@ from kurrentdbclient.exceptions import (
     SSLError,
     StreamIsDeletedError,
     StreamTombstonedError,
+    SubscriptionConfirmationError,
     UnauthenticatedError,
     WrongCurrentVersionError,
 )
@@ -759,6 +761,42 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 await catchup_subscription.stop()
         self.assertEqual(events[-2].id, event1.id)
         self.assertEqual(events[-1].id, event2.id)
+
+    async def test_subscribe_to_all_can_be_stopped(self) -> None:
+        # Append new events.
+        event1 = NewEvent(type="OrderCreated", data=b"{}", metadata=b"{}")
+        event2 = NewEvent(type="OrderUpdated", data=b"{}", metadata=b"{}")
+        event3 = NewEvent(type="OrderDeleted", data=b"{}", metadata=b"{}")
+        stream_name1 = str(uuid4())
+        await self.client.append_events(
+            stream_name1,
+            current_version=StreamState.NO_STREAM,
+            events=[event1, event2, event3],
+        )
+
+        # Subscribe from the beginning.
+        subscription = await self.client.subscribe_to_all()
+
+        # Stop subscription.
+        await subscription.stop()
+
+        # Iterating should stop.
+        async for _ in subscription:
+            pass
+
+        # Exiting the context manager should stop the subscription.
+        subscription = await self.client.subscribe_to_all()
+        async with subscription:
+            pass
+        self.assertTrue(cast(AsyncCatchupSubscription, subscription)._is_stopped)
+
+        # Calling stop inside the context manager should terminate the iteration.
+        subscription = await self.client.subscribe_to_all()
+        async with subscription:
+            await subscription.stop()
+            async for _ in subscription:
+                pass
+        self.assertTrue(cast(AsyncCatchupSubscription, subscription)._is_stopped)
 
     async def test_subscribe_to_stream_with_gather_all_complete(self) -> None:
         # Append events.
@@ -1682,6 +1720,183 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             await self.client.get_subscription_info(group_name)
         with self.assertRaises(NotFoundError):
             await self.client.replay_parked_events(group_name)
+
+    async def test_persistent_subscription_init_error_confirmation_is_none(
+        self,
+    ) -> None:
+        # Check subscription does not exist.
+        group_name = str(uuid4())
+        with self.assertRaises(NotFoundError):
+            await self.client.get_subscription_info(group_name)
+
+        # Create subscription.
+        await self.client.create_subscription_to_all(group_name, from_end=True)
+
+        # Consume the subscription.
+        persistent_subscription = cast(
+            AsyncPersistentSubscription,
+            await self.client.read_subscription_to_all(group_name),
+        )
+        with self.assertRaises(SubscriptionConfirmationError) as cm:
+            async with persistent_subscription:
+                await persistent_subscription._read_resp_queue.put(None)
+                # Wrongly call init() again, should choke on the None.
+                await persistent_subscription.init()
+
+        self.assertIn(
+            "Expected subscription confirmation, got: None", str(cm.exception)
+        )
+
+    async def test_persistent_subscription_init_error_confirmation_is_event(
+        self,
+    ) -> None:
+        # Check subscription does not exist.
+        group_name = str(uuid4())
+        with self.assertRaises(NotFoundError):
+            await self.client.get_subscription_info(group_name)
+
+        # Create subscription.
+        await self.client.create_subscription_to_all(group_name, from_end=True)
+
+        # Append an event
+        stream_name1 = str(uuid4())
+        event1 = NewEvent(type="OrderCreated1", data=b"{}")
+        await self.client.append_events(
+            stream_name=stream_name1,
+            events=[event1],
+            current_version=StreamState.NO_STREAM,
+        )
+
+        # Consume the subscription.
+        persistent_subscription = cast(
+            AsyncPersistentSubscription,
+            await self.client.read_subscription_to_all(group_name),
+        )
+        with self.assertRaises(SubscriptionConfirmationError) as cm:
+            async with persistent_subscription:
+                # Wrongly call init() again, should choke on the event.
+                await persistent_subscription.init()
+
+        self.assertIn(
+            "Expected subscription confirmation, got: event", str(cm.exception)
+        )
+
+    async def test_persistent_subscription_init_error_confirmation_wrong_group(
+        self,
+    ) -> None:
+        # Check subscription does not exist.
+        group_name = str(uuid4())
+        with self.assertRaises(NotFoundError):
+            await self.client.get_subscription_info(group_name)
+
+        # Create subscription.
+        await self.client.create_subscription_to_all(group_name, from_end=True)
+
+        # Consume the subscription.
+        read_reqs = AsyncSubscriptionReadReqs(group_name=group_name)
+        stream_stream_call = self.client.connection.persistent_subscriptions._stub.Read(
+            read_reqs,
+            metadata=self.client._call_metadata,
+            credentials=self.client._call_credentials,
+        )
+
+        wrong_group_name = group_name + "wrong"
+        persistent_subscription = AsyncPersistentSubscription(
+            read_reqs=read_reqs,
+            stream_stream_call=stream_stream_call,
+            expected_group_name=wrong_group_name,
+            stream_name=None,
+            grpc_streamers=self.client.connection._grpc_streamers,
+        )
+
+        with self.assertRaises(SubscriptionConfirmationError) as cm:
+            async with persistent_subscription:
+                # First time calling init(), but expected group name in wrong.
+                await persistent_subscription.init()
+
+        self.assertIn(f"Expected group name: {wrong_group_name}", str(cm.exception))
+
+    async def test_read_subscription_to_all_with_task_cancel_no_context_manager(
+        self,
+    ) -> None:
+        # Check subscription does not exist.
+        group_name = str(uuid4())
+        with self.assertRaises(NotFoundError):
+            await self.client.get_subscription_info(group_name)
+
+        # Create subscription.
+        await self.client.create_subscription_to_all(group_name, from_end=True)
+
+        at_async_for = asyncio.Event()
+
+        class Worker:
+            def __init__(
+                self, subscription: AbstractAsyncPersistentSubscription
+            ) -> None:
+                self.subscription = subscription
+                self.was_cancelled = False
+
+            async def run(self) -> None:
+                at_async_for.set()
+                try:
+                    async for event in self.subscription:
+                        msg = f"async for didn't raise asyncio.CancelledError {event}"
+                        raise AssertionError(msg)
+                except asyncio.CancelledError:
+                    self.was_cancelled = True
+                    raise
+
+        subscription = await self.client.read_subscription_to_all(group_name)
+        worker = Worker(subscription)
+        task = asyncio.create_task(worker.run())
+        await at_async_for.wait()
+        await asyncio.sleep(0.1)  # Try to make sure we got into _get_next_read_resp
+        task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await task
+        self.assertTrue(worker.was_cancelled)
+
+    async def test_read_subscription_to_all_with_task_cancel_with_context_manager(
+        self,
+    ) -> None:
+        # Check subscription does not exist.
+        group_name = str(uuid4())
+        with self.assertRaises(NotFoundError):
+            await self.client.get_subscription_info(group_name)
+
+        # Create subscription.
+        await self.client.create_subscription_to_all(group_name, from_end=True)
+
+        at_async_for = asyncio.Event()
+
+        class Worker:
+            def __init__(
+                self, subscription: AbstractAsyncPersistentSubscription
+            ) -> None:
+                self.subscription = subscription
+                self.was_cancelled = False
+
+            async def run(self) -> None:
+                at_async_for.set()
+                try:
+                    async for event in self.subscription:
+                        msg = f"async for didn't raise asyncio.CancelledError {event}"
+                        raise AssertionError(msg)
+                except asyncio.CancelledError:
+                    self.was_cancelled = True
+                    raise
+
+        async with await self.client.read_subscription_to_all(
+            group_name
+        ) as subscription:
+            worker = Worker(subscription)
+            task = asyncio.create_task(worker.run())
+            await at_async_for.wait()
+            await asyncio.sleep(0.1)  # Try to make sure we got into _get_next_read_resp
+            task.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+            self.assertTrue(worker.was_cancelled)
 
     async def test_subscription_to_all_update(self) -> None:
         group_name = f"my-subscription-{uuid4().hex}"

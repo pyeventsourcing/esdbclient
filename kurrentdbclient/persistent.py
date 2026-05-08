@@ -501,15 +501,51 @@ class AsyncPersistentSubscription(
         AbstractAsyncPersistentSubscription.__init__(self)
         self._read_reqs = read_reqs
         self._stream_stream_call = stream_stream_call
-        self._stream_stream_call_iter = stream_stream_call.__aiter__()
         self._expected_group_name = expected_group_name
         self._stream_name = stream_name
         self._is_stopping = False
+        self._read_resp_iter = stream_stream_call.__aiter__()
+        self._read_resp_queue = asyncio.Queue[persistent_pb2.ReadResp | None](
+            maxsize=10
+        )
+        self._read_resp_stream_worker_co = self._read_resp_stream_worker()
+        self._read_resp_stream_worker_task = asyncio.create_task(
+            self._read_resp_stream_worker_co
+        )
+
+    async def _read_resp_stream_worker(self) -> None:
+        """Coroutine for isolated task that only handles the gRPC stream."""
+        try:
+            while True:
+                read_resp = await self._read_resp_iter.__anext__()
+                await self._read_resp_queue.put(read_resp)
+                if self._has_iter_error_for_testing():
+                    raise AioRpcError(
+                        grpc.StatusCode.INTERNAL,
+                        grpc.aio.Metadata(),
+                        grpc.aio.Metadata(),
+                        "",
+                        "",
+                    )
+        except BaseException:
+            # Drain the queue (to avoid blocking on put).
+            try:
+                while True:
+                    self._read_resp_queue.get_nowait()
+            except asyncio.queues.QueueEmpty:
+                pass
+            # Unblock waiting on get().
+            await self._read_resp_queue.put(None)
+            # Reraise the error (appears at 'await task').
+            raise
 
     async def init(self) -> None:
         try:
-            first_read_resp = await self._get_next_read_resp()
-            if first_read_resp.WhichOneof("content") == "subscription_confirmation":
+            first_read_resp = await self._read_resp_queue.get()
+            if (
+                first_read_resp is not None
+                and first_read_resp.WhichOneof("content") == "subscription_confirmation"
+            ):
                 expected_stream_name = (
                     self._stream_name if self._stream_name is not None else "$all"
                 )
@@ -522,14 +558,20 @@ class AsyncPersistentSubscription(
                 if (
                     confirmed_group_name != self._expected_group_name
                     or confirmed_stream_name != expected_stream_name
-                ):  # pragma: no cover
-                    raise SubscriptionConfirmationError
+                ):
+                    msg = (
+                        f"Expected group name: {self._expected_group_name}, "
+                        f"confirmed group name: {confirmed_group_name}, "
+                        f"expected stream name: {expected_stream_name}, "
+                        f"confirmed stream name: {expected_stream_name}"
+                    )
+                    raise SubscriptionConfirmationError(msg)
                 self._subscription_id = subscription_id
                 self._read_reqs.subscription_id = subscription_id.encode()
 
-            else:  # pragma: no cover
+            else:
                 msg = f"Expected subscription confirmation, got: {first_read_resp}"
-                raise KurrentDBClientError(msg)
+                raise SubscriptionConfirmationError(msg)
         except BaseException:
             await self.stop(wait_until_stopped=False)
             raise
@@ -539,11 +581,13 @@ class AsyncPersistentSubscription(
         return self._subscription_id
 
     async def __anext__(self) -> RecordedEvent:
-        if self._is_context_manager_active and self._is_stopping:
-            raise StopAsyncIteration
         try:
             while True:
-                read_resp = await self._get_next_read_resp()
+                if self._is_context_manager_active and self._is_stopping:
+                    raise StopAsyncIteration
+                read_resp = await self._read_resp_queue.get()
+                if read_resp is None:
+                    raise StopAsyncIteration
                 content_oneof = read_resp.WhichOneof("content")
                 if content_oneof == "event":
                     recorded_event = construct_recorded_event(read_resp.event)
@@ -560,37 +604,23 @@ class AsyncPersistentSubscription(
             await self.stop(wait_until_stopped=False)
             raise
 
-    async def _get_next_read_resp(self) -> persistent_pb2.ReadResp:
-        try:
-            response = await self._stream_stream_call_iter.__anext__()
-            if self._has_iter_error_for_testing():
-                raise AioRpcError(
-                    grpc.StatusCode.INTERNAL,
-                    grpc.aio.Metadata(),
-                    grpc.aio.Metadata(),
-                    "",
-                    "",
-                )
-
-        except asyncio.CancelledError as e:
-            await self.stop(wait_until_stopped=False)
-            if self._read_reqs.errored:
-                raise ExceptionIteratingRequestsError from self._read_reqs.errored
-            raise StopAsyncIteration from e
-        except grpc.aio.AioRpcError as e:
-            await self.stop(wait_until_stopped=False)
-            raise handle_rpc_error(e) from None
-        else:
-            return response
-
     async def stop(self, *, wait_until_stopped: bool = True) -> None:
         if self._is_context_manager_active:
             self._is_stopping = True
         elif not await self._set_is_stopped():
             await self._read_reqs.stop(wait_until_stopped=wait_until_stopped)
+            self._read_resp_stream_worker_task.cancel()
             self._stream_stream_call.cancel()
             await asyncio.sleep(0.05)
             self._grpc_streamers.remove(self)
+            try:
+                await self._read_resp_stream_worker_task
+            except asyncio.CancelledError:
+                pass
+            except grpc.RpcError as e:
+                raise handle_rpc_error(e) from e
+            if self._read_reqs.errored:
+                raise ExceptionIteratingRequestsError from self._read_reqs.errored
 
     async def ack(self, item: UUID | RecordedEvent) -> None:
         await self._read_reqs.ack(event_id=self._get_event_id(item))
