@@ -22,9 +22,9 @@
 #KURRENTDB_DOCKER_IMAGE ?= docker.cloudsmith.io/eventstore/eventstore-ce/eventstoredb-oss:23.10.7-bookworm-slim
 #KURRENTDB_DOCKER_IMAGE ?= docker.cloudsmith.io/eventstore/eventstore/eventstoredb-ee:24.10.6-x64-8.0-bookworm-slim
 #KURRENTDB_DOCKER_IMAGE ?= docker.kurrent.io/kurrent-latest/kurrentdb:25.0.1-x64-8.0-bookworm-slim
-KURRENTDB_DOCKER_IMAGE ?= docker.kurrent.io/kurrent-latest/kurrentdb:25.1.0-x64-8.0-bookworm-slim
+#KURRENTDB_DOCKER_IMAGE ?= docker.kurrent.io/kurrent-latest/kurrentdb:25.1.0-x64-8.0-bookworm-slim
 #KURRENTDB_DOCKER_IMAGE ?= kurrentplatform/kurrentdb:26.0.2
-#KURRENTDB_DOCKER_IMAGE ?= kurrentplatform/kurrentdb:26.1.0
+KURRENTDB_DOCKER_IMAGE ?= kurrentplatform/kurrentdb:26.1.0
 
 PYTHONUNBUFFERED=1
 PYTHONPATH=./tests
