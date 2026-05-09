@@ -75,6 +75,10 @@ The `kurrentdbclient` Python package provides sync and async clients for Kurrent
 
 * Async client – **asynchronous** interface suitable for high-concurrency applications
 
+These clients have been tested with KurrentDB versions 25.0, 25.1, 26.0,
+and 26.1, and EventStoreDB versions 23.10 and 24.10, with and without SSL/TLS, in both
+single-server and cluster modes, across Python versions 3.10, 3.11, 3.12, 3.13, and 3.14.
+
 ## Client Configuration
 
 KurrentDB clients use a standardized [connection string](./connection-strings.md) to configure their connection to KurrentDB.
