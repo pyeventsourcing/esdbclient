@@ -236,7 +236,6 @@ docker-up:
 	@sleep 15
 	@docker compose ps
 	@docker compose logs
-	@docker inspect $(docker compose ps -q <service>) --format '{{json .State.Health}}'
 
 .PHONY: docker-stop
 docker-stop:

@@ -22,6 +22,7 @@ services:
       && es-gencert-cli create-node -out ./node1 -ip-addresses 127.0.0.1,172.30.240.11 -dns-names localhost
       && es-gencert-cli create-node -out ./node2 -ip-addresses 127.0.0.1,172.30.240.12 -dns-names localhost
       && es-gencert-cli create-node -out ./node3 -ip-addresses 127.0.0.1,172.30.240.13 -dns-names localhost"
+      && find . -type f -name '*.key' -exec chmod 644 {} \;"
 #      && find . -type f -print0 | xargs -0 chmod 666"
     volumes:
       - "./certs:/certs"
@@ -55,7 +56,8 @@ services:
       - ./certs:/etc/eventstore/certs
     restart: unless-stopped
     depends_on:
-      - cert-gen
+      cert-gen:
+        condition: service_completed_successfully
 
   kurrentdb-node2:
     image: ${KURRENTDB_DOCKER_IMAGE}
@@ -84,7 +86,8 @@ services:
       - ./certs:/etc/eventstore/certs
     restart: unless-stopped
     depends_on:
-      - cert-gen
+      cert-gen:
+        condition: service_completed_successfully
 
   kurrentdb-node3:
     image: ${KURRENTDB_DOCKER_IMAGE}
@@ -113,7 +116,8 @@ services:
       - ./certs:/etc/eventstore/certs
     restart: unless-stopped
     depends_on:
-      - cert-gen
+      cert-gen:
+        condition: service_completed_successfully
 
 networks:
   clusternetwork:
