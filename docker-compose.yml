@@ -22,10 +22,9 @@ services:
       && es-gencert-cli create-node -out ./node1 -ip-addresses 127.0.0.1,172.30.240.11 -dns-names localhost
       && es-gencert-cli create-node -out ./node2 -ip-addresses 127.0.0.1,172.30.240.12 -dns-names localhost
       && es-gencert-cli create-node -out ./node3 -ip-addresses 127.0.0.1,172.30.240.13 -dns-names localhost"
-      && find . -type d -exec chmod 755 {} \;
-      && find . -type f -name '*.key' -exec chmod 644 {} \;
-      && find . -type f -name '*.crt' -exec chmod 644 {} \;
-#      && find . -type f -print0 | xargs -0 chmod 666"
+      && chmod -R a+rX /certs
+      && ls -lR /certs
+      #      && find . -type f -print0 | xargs -0 chmod 666"
     volumes:
       - "./certs:/certs"
     depends_on:

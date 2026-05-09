@@ -233,9 +233,24 @@ docker-build:
 docker-up:
 	@docker --version
 	@docker compose up -d
-	@sleep 15
-	@docker compose ps
-	@docker compose logs
+	@for i in $$(seq 1 60); do \
+		if [ "$$(docker compose ps --format json | jq -r '.Health' | grep -c '^healthy$$')" -eq 3 ]; then \
+			echo ""; \
+			echo "All containers healthy. Sleeping for 15s anyway"; \
+			sleep 15; \
+			break; \
+		fi; \
+		printf "."; \
+		sleep 1; \
+		docker compose ps; \
+		if [ $$i -eq 60 ]; then \
+			echo ""; \
+			echo "Timed out"; \
+			docker compose ps; \
+			docker compose logs; \
+			exit 1; \
+		fi; \
+	done
 
 .PHONY: docker-stop
 docker-stop:
