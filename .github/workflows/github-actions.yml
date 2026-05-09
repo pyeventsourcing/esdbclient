@@ -14,7 +14,7 @@ jobs:
           - docker.cloudsmith.io/eventstore/eventstore/eventstoredb-ee:24.10.6-x64-8.0-bookworm-slim
           - docker.kurrent.io/kurrent-latest/kurrentdb:25.0.1-x64-8.0-bookworm-slim
           - docker.kurrent.io/kurrent-latest/kurrentdb:25.1.0-x64-8.0-bookworm-slim
-#          - kurrentplatform/kurrentdb:26.0.2
+          - kurrentplatform/kurrentdb:26.0.2
           - kurrentplatform/kurrentdb:26.1.0
     env:
       KURRENTDB_DOCKER_IMAGE: ${{ matrix.kurrentdb-docker-image }}
