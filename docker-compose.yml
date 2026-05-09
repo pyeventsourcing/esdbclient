@@ -21,10 +21,10 @@ services:
       && es-gencert-cli create-ca
       && es-gencert-cli create-node -out ./node1 -ip-addresses 127.0.0.1,172.30.240.11 -dns-names localhost
       && es-gencert-cli create-node -out ./node2 -ip-addresses 127.0.0.1,172.30.240.12 -dns-names localhost
-      && es-gencert-cli create-node -out ./node3 -ip-addresses 127.0.0.1,172.30.240.13 -dns-names localhost"
+      && es-gencert-cli create-node -out ./node3 -ip-addresses 127.0.0.1,172.30.240.13 -dns-names localhost
       && chmod -R a+rX /certs
       && echo 'Certs file permissions:'
-      && ls -lR /certs
+      && ls -lR /certs"
     volumes:
       - "./certs:/certs"
     depends_on:
