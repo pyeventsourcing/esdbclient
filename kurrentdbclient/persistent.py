@@ -110,6 +110,7 @@ class BaseSubscriptionReadReqs:
         self._max_ack_delay = max_ack_delay
         self._stopping_grace = stopping_grace
         self._has_requested_options = False
+        self._num_constructed_acks = 0
         self.subscription_id = b""
 
     def _construct_initial_read_req(self) -> persistent_pb2.ReadReq:
@@ -130,10 +131,10 @@ class BaseSubscriptionReadReqs:
             options.all.CopyFrom(shared_pb2.Empty())
         return persistent_pb2.ReadReq(options=options)
 
-    @staticmethod
     def _construct_ack_or_nack_read_req(
-        subscription_id: bytes, event_ids: list[UUID], action: str
+        self, subscription_id: bytes, event_ids: list[UUID], action: str
     ) -> persistent_pb2.ReadReq:
+        self._num_constructed_acks = len(event_ids)
         ids = [shared_pb2.UUID(string=str(event_id)) for event_id in event_ids]
         if action == "ack":
             read_req = persistent_pb2.ReadReq(
@@ -210,17 +211,19 @@ class AsyncSubscriptionReadReqs(
             # First return read request with options, then return read request
             # with batch of n/acks whenever the batch is full, or when the n/ack
             # actions changes, or periodically, or when stopping.
-
             if not self._has_requested_options:
                 # Return initial read request with options.
                 self._has_requested_options = True
                 return self._construct_initial_read_req()
 
+            # Account on queue for previously returned n/acks.
+            for _ in range(self._num_constructed_acks):
+                self._ack_queue.task_done()
+            self._num_constructed_acks = 0
+
             # Return read request with a batch of n/acks...
 
             # Initialise batch, maybe from held n/ack.
-            for _ in self._batch_ids:
-                self._ack_queue.task_done()
             self._batch_ids = []
             batch_action: str | None = None
             if self._ack_held is not None:
@@ -234,7 +237,6 @@ class AsyncSubscriptionReadReqs(
                 if self._is_stopping:
                     # Allow time for server to process last n/acks.
                     await asyncio.sleep(self._stopping_grace)
-                    self._ack_queue.task_done()
                     raise StopAsyncIteration from None
 
                 try:
@@ -316,12 +318,11 @@ class AsyncSubscriptionReadReqs(
         assert action in ["unknown", "park", "retry", "skip", "stop"]
         await self._ack_queue.put((event_id, action))
 
-    async def stop(self, *, wait_until_stopped: bool = True) -> None:
+    async def stop(self, *, timeout: float | None = None) -> None:
         if not self._is_poisoned:
             self._is_poisoned = True
             await self._ack_queue.put((None, "poison"))
-            if wait_until_stopped:
-                await self._is_stopped.wait()
+            await asyncio.wait_for(self._is_stopped.wait(), timeout)
 
 
 class SubscriptionReadReqs(BaseSubscriptionReadReqs):
@@ -364,6 +365,11 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                 self._has_requested_options = True
                 return self._construct_initial_read_req()
 
+            # Account on queue for previously returned n/acks.
+            for _ in range(self._num_constructed_acks):
+                self._ack_queue.task_done()
+            self._num_constructed_acks = 0
+
             # Send a batch of n/acks...
 
             # Initialise batch, maybe from held n/ack.
@@ -387,7 +393,6 @@ class SubscriptionReadReqs(BaseSubscriptionReadReqs):
                     # Wait for next n/ack, timeout with "max ack delay".
                     get_timeout = max(0.0, self._calc_time_until_next_ack_batch())
                     event_id, action = self._ack_queue.get(timeout=get_timeout)
-                    self._ack_queue.task_done()
 
                     # If queue was poisoned, send non-empty batch now.
                     if action == "poison":
@@ -572,7 +577,7 @@ class AsyncPersistentSubscription(
                 msg = f"Expected subscription confirmation, got: {first_read_resp}"
                 raise SubscriptionConfirmationError(msg)
         except BaseException:
-            await self.stop(wait_until_stopped=False)
+            await self.stop(timeout=1)
             raise
 
     @property
@@ -600,26 +605,27 @@ class AsyncPersistentSubscription(
                 else:  # pragma: no cover
                     pass
         except BaseException:
-            await self.stop(wait_until_stopped=False)
+            await self.stop(timeout=1)
             raise
 
-    async def stop(self, *, wait_until_stopped: bool = True) -> None:
+    async def stop(self, *, timeout: float | None = None) -> None:
         if self._is_context_manager_active:
             self._is_stopping = True
         elif not await self._set_is_stopped():
-            await self._read_reqs.stop(wait_until_stopped=wait_until_stopped)
-            self._read_resp_stream_worker_task.cancel()
-            self._stream_stream_call.cancel()
-            await asyncio.sleep(0.05)
-            self._grpc_streamers.remove(self)
             try:
-                await self._read_resp_stream_worker_task
-            except asyncio.CancelledError:
-                pass
-            except grpc.RpcError as e:
-                raise handle_rpc_error(e) from e
-            if self._read_reqs.errored:
-                raise self._read_reqs.errored
+                await self._read_reqs.stop(timeout=timeout)
+            finally:
+                self._read_resp_stream_worker_task.cancel()
+                self._stream_stream_call.cancel()
+                self._grpc_streamers.remove(self)
+                try:
+                    await self._read_resp_stream_worker_task
+                except asyncio.CancelledError:
+                    pass
+                except grpc.RpcError as e:
+                    raise handle_rpc_error(e) from e
+                if self._read_reqs.errored:
+                    raise self._read_reqs.errored
 
     async def ack(self, item: UUID | RecordedEvent) -> None:
         await self._read_reqs.ack(event_id=self._get_event_id(item))

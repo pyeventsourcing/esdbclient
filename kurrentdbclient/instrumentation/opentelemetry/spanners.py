@@ -956,8 +956,8 @@ class TracedAsyncRecordedEventIterator(
                 span.end()
                 self._current_span = None
 
-    async def stop(self) -> None:
-        await self.response.stop()
+    async def stop(self, *, timeout: float | None = None) -> None:
+        await self.response.stop(timeout=timeout)
 
     async def __aenter__(self) -> Self:
         await self.response.__aenter__()

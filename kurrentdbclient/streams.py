@@ -225,7 +225,7 @@ class AsyncReadResponse(BaseReadResponse, AsyncGrpcStreamer, AbstractAsyncReadRe
             await self.stop()
             raise
 
-    async def stop(self, *, wait_until_stopped: bool = True) -> None:
+    async def stop(self, *, timeout: float | None = None) -> None:
         if self._is_context_manager_active:
             self._is_stopping = True
         elif not await self._set_is_stopped():

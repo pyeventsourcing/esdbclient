@@ -167,7 +167,7 @@ class AsyncGrpcStreamer(BaseGrpcStreamer, ABC):
         self._is_stopped_lock = asyncio.Lock()
 
     @abstractmethod
-    async def stop(self) -> None:
+    async def stop(self, *, timeout: float | None = None) -> None:
         """
         Stops the iterator(s) of streaming call.
         """
@@ -188,7 +188,7 @@ class AsyncGrpcStreamers(BaseGrpcStreamers[AsyncGrpcStreamer]):
     async def close(self) -> None:
         for async_grpc_streamer in self:
             # print("closing streamer")
-            await async_grpc_streamer.stop()
+            await async_grpc_streamer.stop(timeout=1)
             # print("closed streamer")
 
 
@@ -577,7 +577,7 @@ class AsyncRecordedEventIterator(
         self._is_context_manager_active = False
 
     @abstractmethod
-    async def stop(self) -> None:
+    async def stop(self, *, timeout: float | None = None) -> None:
         pass  # pragma: no cover
 
     def __aiter__(self) -> Self:
@@ -589,7 +589,7 @@ class AsyncRecordedEventIterator(
 
     async def __aexit__(self, *args: object, **kwargs: Any) -> None:
         self._is_context_manager_active = False
-        await self.stop()
+        await self.stop(timeout=5)
 
     def _set_iter_error_for_testing(self) -> None:
         # This, because I can't find a good way to inspire an error during iterating

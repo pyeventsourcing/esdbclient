@@ -2752,12 +2752,8 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         req5 = await reqs.__anext__()
         self.assertEqual(len(req5.ack.ids), 2)
 
-        # Cover the case of stopping without waiting (wait_until_stopped=False).
-        reqs = AsyncSubscriptionReadReqs("group1", max_ack_batch_size=3)
-        await reqs.stop(wait_until_stopped=False)
-
-        # Cover the case of calling this method twice.
-        await reqs.stop(wait_until_stopped=False)
+        # Cover the case of calling stop() twice.
+        await reqs.stop()
 
         # Iterate until stopped.
         async for _ in reqs:
@@ -2772,9 +2768,19 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
 
         async def sleep_then_stop() -> None:
             await asyncio.sleep(1)
-            await reqs.stop(wait_until_stopped=False)
+            await reqs.stop()
 
         await asyncio.gather(iterate_until_stopped(), sleep_then_stop())
+
+        # Iterate and stop with timeout when request iterator is not being called.
+        reqs = AsyncSubscriptionReadReqs("group1", max_ack_batch_size=3)
+        await reqs.ack(uuid4())
+
+        async def sleep_then_stop_with_timeout() -> None:
+            await reqs.stop(timeout=1)
+
+        with self.assertRaises(TimeoutError):
+            await sleep_then_stop_with_timeout()
 
         # Can't call ack() after stopped.
         with self.assertRaises(ProgrammingError):
