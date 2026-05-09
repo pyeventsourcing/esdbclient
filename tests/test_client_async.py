@@ -2779,7 +2779,9 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         async def sleep_then_stop_with_timeout() -> None:
             await reqs.stop(timeout=1)
 
-        with self.assertRaises(TimeoutError):
+        # NB asyncio.exceptions.TimeoutError is not the same
+        # as builtins.TimeoutError in Python 3.10.
+        with self.assertRaises(asyncio.exceptions.TimeoutError):
             await sleep_then_stop_with_timeout()
 
         # Can't call ack() after stopped.
