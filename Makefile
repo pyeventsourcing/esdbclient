@@ -220,15 +220,23 @@ docker-pull:
 docker-build:
 	@docker compose build
 
+#.PHONY: docker-up
+#docker-up:
+#	@docker --version
+#	@docker compose up -d
+#	@echo "Waiting for containers to be healthy"
+#	@until docker compose ps | grep -in "healthy" | wc -l | grep -in 3 > /dev/null; do printf "." && sleep 1; done; echo ""
+#	@docker compose ps
+#	@sleep 15
+
 .PHONY: docker-up
 docker-up:
 	@docker --version
 	@docker compose up -d
-	@echo "Waiting for containers to be healthy"
-	@#until docker compose ps | grep -in "healthy" | wc -l | grep -in 3 > /dev/null; do printf "." && sleep 1; done; echo ""
-	@until docker compose ps | grep -in "healthy" | wc -l | grep -in 3 > /dev/null; do docker compose ps && sleep 1; done; echo ""
-	@docker compose ps
 	@sleep 15
+	@docker compose ps
+	@docker compose logs
+	@docker inspect $(docker compose ps -q <service>) --format '{{json .State.Health}}'
 
 .PHONY: docker-stop
 docker-stop:
