@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from typing_extensions import deprecated
@@ -331,3 +332,28 @@ class InvalidCommitPositionError(KurrentDBClientError):
     """
     Raised when reading from an commit position that does not exist.
     """
+
+
+class ConsistencyChecksFailedError(KurrentDBClientError):
+    """
+    Raised when appending records with a consistency check that fails.
+    """
+
+    def __init__(
+        self, *args: Any, failures: tuple[ConsistencyCheckFailure, ...]
+    ) -> None:
+        self.failures = failures
+        super().__init__(*args)
+
+
+@dataclass(frozen=True)
+class ConsistencyCheckFailure:
+    check_index: int
+    stream_state_failure: StreamStateCheckFailure | None
+
+
+@dataclass(frozen=True)
+class StreamStateCheckFailure:
+    stream_name: str
+    expected_state: int
+    actual_state: int

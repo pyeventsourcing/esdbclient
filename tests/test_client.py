@@ -43,10 +43,18 @@ from kurrentdbclient.connection_spec import (
     NODE_PREFERENCE_LEADER,
     ConnectionSpec,
 )
-from kurrentdbclient.events import CaughtUp, Checkpoint, NewEvent, NewEvents
+from kurrentdbclient.events import (
+    CaughtUp,
+    Checkpoint,
+    NewEvent,
+    NewEvents,
+    NewRecord,
+    StreamStateCheck,
+)
 from kurrentdbclient.exceptions import (
     AbortedByServerError,
     AlreadyExistsError,
+    ConsistencyChecksFailedError,
     ConsumerTooSlowError,
     DeadlineExceededError,
     DiscoveryFailedError,
@@ -81,6 +89,7 @@ from kurrentdbclient.projections import ProjectionStatistics
 from kurrentdbclient.protos.v1 import persistent_pb2
 from kurrentdbclient.streams import handle_streams_rpc_error
 from tests.test_unpack_error_status import (
+    status_with_append_consistency_violation_error_details_v2,
     status_with_append_record_size_exceeded_error_details_v2,
     status_with_append_transaction_size_exceeded_error_details_v2,
     status_with_not_leader_node_error_details_v2,
@@ -7891,6 +7900,99 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 timeout=0,
             )
 
+    @skipIf(SERVER_VERSION < (26, 1), "Doesn't support append records RPC")
+    def test_stream_append_records_one_record_one_check(self) -> None:
+        self.construct_client()
+
+        commit_position = self.client.get_commit_position()
+
+        stream_name = str(uuid4())
+        result = self.client.append_records(
+            records=NewRecord(
+                stream_name=stream_name,
+                type="OrderCreated",
+                data=random_data(),
+                content_type="application/octet-stream",
+            ),
+            checks=StreamStateCheck(
+                stream_name=stream_name,
+                expected_state=StreamState.NO_STREAM,
+            ),
+        )
+        self.assertGreater(result.commit_position, commit_position)
+        self.assertEqual(len(result.stream_positions), 1)
+        self.assertEqual(result.stream_positions[0].stream_name, stream_name)
+        self.assertEqual(result.stream_positions[0].stream_position, 0)
+
+    @skipIf(SERVER_VERSION < (26, 1), "Doesn't support append records RPC")
+    def test_stream_append_records_two_records_two_checks(self) -> None:
+        self.construct_client()
+
+        commit_position = self.client.get_commit_position()
+
+        stream_name1 = str(uuid4())
+        stream_name2 = str(uuid4())
+        result = self.client.append_records(
+            records=[
+                NewRecord(
+                    stream_name=stream_name1,
+                    type="OrderCreated",
+                    data=random_data(),
+                    content_type="application/octet-stream",
+                ),
+                NewRecord(
+                    stream_name=stream_name2,
+                    type="OrderCreated",
+                    data=random_data(),
+                    content_type="application/octet-stream",
+                ),
+            ],
+            checks=[
+                StreamStateCheck(
+                    stream_name=stream_name1,
+                    expected_state=StreamState.NO_STREAM,
+                ),
+                StreamStateCheck(
+                    stream_name=stream_name2,
+                    expected_state=StreamState.NO_STREAM,
+                ),
+            ],
+        )
+        self.assertGreater(result.commit_position, commit_position)
+        self.assertEqual(len(result.stream_positions), 2)
+        self.assertEqual(result.stream_positions[0].stream_name, stream_name1)
+        self.assertEqual(result.stream_positions[0].stream_position, 0)
+        self.assertEqual(result.stream_positions[1].stream_name, stream_name2)
+        self.assertEqual(result.stream_positions[1].stream_position, 0)
+
+    @skipIf(SERVER_VERSION < (26, 1), "Doesn't support append records RPC")
+    def test_stream_append_records_raises_consistency_check_failed_error(self) -> None:
+        self.construct_client()
+
+        stream_name = str(uuid4())
+        with self.assertRaises(ConsistencyChecksFailedError) as cm:
+            self.client.append_records(
+                records=NewRecord(
+                    stream_name=stream_name,
+                    type="OrderCreated",
+                    data=random_data(),
+                    content_type="application/octet-stream",
+                ),
+                checks=StreamStateCheck(
+                    stream_name=stream_name,
+                    expected_state=StreamState.EXISTS,
+                ),
+            )
+        self.assertIn("Append failed due to consistency violations.", str(cm.exception))
+        self.assertIn(f"Stream '{stream_name}' does not exist.", str(cm.exception))
+        self.assertEqual(len(cm.exception.failures), 1)
+        self.assertEqual(cm.exception.failures[0].check_index, 0)
+        stream_state_failure = cm.exception.failures[0].stream_state_failure
+        assert stream_state_failure is not None
+        self.assertEqual(stream_state_failure.stream_name, stream_name)
+        self.assertEqual(stream_state_failure.expected_state, -4)
+        self.assertEqual(stream_state_failure.actual_state, -1)
+
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support secondary indexes")
     def test_read_index(self) -> None:
         self.construct_client()
@@ -9419,6 +9521,24 @@ class TestHandleRpcError(TestCase):
         self.assertEqual(size, cm.exception.size)
         self.assertEqual(max_size, cm.exception.max_size)
 
+    def test_handle_append_consistency_violation_error_v2(self) -> None:
+        stream_name = str(uuid4())
+        with self.assertRaises(ConsistencyChecksFailedError) as cm:
+            raise handle_rpc_error(
+                FakeAppendConsistencyViolationV2RpcError(
+                    stream_name,
+                )
+            ) from None
+
+        self.assertEqual(len(cm.exception.failures), 1)
+        failure = cm.exception.failures[0]
+        self.assertEqual(failure.check_index, 0)
+        stream_state_failure = failure.stream_state_failure
+        assert stream_state_failure is not None
+        self.assertEqual(stream_state_failure.stream_name, stream_name)
+        self.assertEqual(stream_state_failure.expected_state, -4)
+        self.assertEqual(stream_state_failure.actual_state, -1)
+
     def test_handle_consumer_too_slow_error(self) -> None:
         with self.assertRaises(ConsumerTooSlowError):
             raise handle_rpc_error(FakeConsumerTooSlowError()) from None
@@ -9684,6 +9804,24 @@ class FakeUnsupportedV2RpcError(FakeRpcError):
                     "grpc-status-details-bin",
                     status_with_some_unsupported_error_details_v2(
                         message=message,
+                    ).SerializeToString(),
+                ),
+            ],
+        )
+
+
+class FakeAppendConsistencyViolationV2RpcError(FakeRpcError):
+    def __init__(self, stream: str) -> None:
+        message = "Append failed due to consistency violations....."
+        super().__init__(
+            status_code=StatusCode.FAILED_PRECONDITION,
+            details=message,
+            trailing_metadata=[
+                (
+                    "grpc-status-details-bin",
+                    status_with_append_consistency_violation_error_details_v2(
+                        message=message,
+                        stream=stream,
                     ).SerializeToString(),
                 ),
             ],

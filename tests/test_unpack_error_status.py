@@ -5,8 +5,10 @@ from google.rpc import error_details_pb2, status_pb2
 
 from kurrentdbclient.protos.kurrent.rpc.errors_pb2 import NotLeaderNodeErrorDetails
 from kurrentdbclient.protos.v2.streams.errors_pb2 import (
+    AppendConsistencyViolationErrorDetails,
     AppendRecordSizeExceededErrorDetails,
     AppendTransactionSizeExceededErrorDetails,
+    ConsistencyViolation,
     StreamAlreadyInAppendSessionErrorDetails,
     StreamRevisionConflictErrorDetails,
     StreamTombstonedErrorDetails,
@@ -194,6 +196,38 @@ def status_with_some_unsupported_error_details_v2(message: str) -> status_pb2.St
                     reason="ACTUALLY_OK",
                     domain="server",
                 )
+            ),
+        ],
+    )
+
+
+def status_with_append_consistency_violation_error_details_v2(
+    message: str,
+    stream: str,
+) -> status_pb2.Status:
+    return status_pb2.Status(
+        code=grpc.StatusCode.FAILED_PRECONDITION.value[0],
+        message=message,
+        details=[
+            pack_any(
+                error_details_pb2.ErrorInfo(
+                    reason="APPEND_CONSISTENCY_VIOLATION",
+                    domain="streams",
+                )
+            ),
+            pack_any(
+                AppendConsistencyViolationErrorDetails(
+                    violations=[
+                        ConsistencyViolation(
+                            check_index=0,
+                            stream_state=ConsistencyViolation.StreamStateViolation(
+                                stream=stream,
+                                expected_state=-4,
+                                actual_state=-1,
+                            ),
+                        )
+                    ],
+                ),
             ),
         ],
     )

@@ -7,7 +7,7 @@ import os
 import threading
 from abc import ABC, abstractmethod
 from base64 import b64encode
-from collections.abc import AsyncIterator, Iterator, Sequence
+from collections.abc import AsyncIterator, Iterable, Iterator, Sequence
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from typing import (
     TYPE_CHECKING,
@@ -31,6 +31,8 @@ from kurrentdbclient.exceptions import (
     AbortedByServerError,
     AlreadyExistsError,
     CancelledByClientError,
+    ConsistencyCheckFailure,
+    ConsistencyChecksFailedError,
     ConsumerTooSlowError,
     ExceptionThrownByHandlerError,
     FailedPreconditionError,
@@ -47,6 +49,7 @@ from kurrentdbclient.exceptions import (
     RecordMaxSizeExceededError,
     ServiceUnavailableError,
     SSLError,
+    StreamStateCheckFailure,
     StreamTombstonedError,
     TransactionMaxSizeExceededError,
     UnauthenticatedError,
@@ -249,6 +252,16 @@ def handle_rpc_error(e: grpc.RpcError) -> KurrentDBClientError:  # noqa: PLR0911
                         return StreamTombstonedError(
                             rich_status.message, stream_name=unpacked_detail.stream
                         )
+                    if isinstance(
+                        unpacked_detail,
+                        v2streams_errors_pb2.AppendConsistencyViolationErrorDetails,
+                    ):
+                        return ConsistencyChecksFailedError(
+                            rich_status.message,
+                            failures=_convert_append_consistency_violations(
+                                unpacked_detail.violations
+                            ),
+                        )
                 if status_msg.code == grpc.StatusCode.INVALID_ARGUMENT:  # noqa: SIM102
                     if isinstance(
                         unpacked_detail,
@@ -379,6 +392,29 @@ def handle_rpc_error(e: grpc.RpcError) -> KurrentDBClientError:  # noqa: PLR0911
         if e.code() == grpc.StatusCode.INTERNAL:  # pragma: no cover
             return InternalError(details_str)
     return GrpcError(str(e))
+
+
+def _convert_append_consistency_violations(
+    violations: Iterable[v2streams_errors_pb2.ConsistencyViolation],
+) -> tuple[ConsistencyCheckFailure, ...]:
+    failures = []
+    for violation in violations:
+        which_type = violation.WhichOneof("type")
+        if which_type == "stream_state":
+            stream_state_violation = violation.stream_state
+            failures.append(
+                ConsistencyCheckFailure(
+                    check_index=violation.check_index,
+                    stream_state_failure=StreamStateCheckFailure(
+                        stream_name=stream_state_violation.stream,
+                        expected_state=stream_state_violation.expected_state,
+                        actual_state=stream_state_violation.actual_state,
+                    ),
+                )
+            )
+        else:  # pragma: no cover
+            pass
+    return tuple(failures)
 
 
 class KurrentDBService(Generic[TGrpcStreamers]):

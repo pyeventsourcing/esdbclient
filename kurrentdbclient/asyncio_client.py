@@ -45,7 +45,14 @@ from kurrentdbclient.connection_spec import (
     URI_SCHEMES_NON_DISCOVER,
     grpc_target,
 )
-from kurrentdbclient.events import NewEvent, NewEvents, RecordedEvent, StreamState
+from kurrentdbclient.events import (
+    NewEvent,
+    NewEvents,
+    NewRecord,
+    RecordedEvent,
+    StreamState,
+    StreamStateCheck,
+)
 from kurrentdbclient.exceptions import (
     DeadlineExceededError,
     DiscoveryFailedError,
@@ -62,6 +69,7 @@ if TYPE_CHECKING:
     from kurrentdbclient.persistent import ConsumerStrategy, SubscriptionInfo
     from kurrentdbclient.projections import ProjectionState, ProjectionStatistics
     from kurrentdbclient.streams import AsyncReadResponse
+    from kurrentdbclient.v2streams import AppendRecordsResult
 
 _TCallable = TypeVar("_TCallable", bound=Callable[..., Any])
 
@@ -326,6 +334,33 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
             events = [events]
         return await self.connection.v2streams.multi_append(
             events=events,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    async def append_records(
+        self,
+        /,
+        records: NewRecord | Iterable[NewRecord],
+        checks: StreamStateCheck | Iterable[StreamStateCheck],
+        *,
+        timeout: float | None = None,
+        credentials: grpc.CallCredentials | None = None,
+    ) -> AppendRecordsResult:  # pragma: <26.1 no cover
+        """
+        Appends new events to one or many streams.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+        if isinstance(records, NewRecord):
+            records = [records]
+        if isinstance(checks, StreamStateCheck):
+            checks = [checks]
+        return await self.connection.v2streams.append_records(
+            records=records,
+            checks=checks,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,

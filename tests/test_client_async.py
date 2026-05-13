@@ -30,9 +30,10 @@ from kurrentdbclient.common import (
     AbstractAsyncCatchupSubscription,
     AbstractAsyncPersistentSubscription,
 )
-from kurrentdbclient.events import CaughtUp, NewEvents
+from kurrentdbclient.events import CaughtUp, NewEvents, NewRecord, StreamStateCheck
 from kurrentdbclient.exceptions import (
     AlreadyExistsError,
+    ConsistencyChecksFailedError,
     DeadlineExceededError,
     DiscoveryFailedError,
     ExceptionThrownByHandlerError,
@@ -4214,6 +4215,98 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             json.loads(events[1].metadata.decode()),
             {"$schema.format": "Bytes", "$schema.name": "OrderCreated", "a": "1"},
         )
+
+    @skipIf(SERVER_VERSION < (26, 1), "Doesn't support append records RPC")
+    async def test_stream_append_records_one_record_one_check(self) -> None:
+
+        commit_position = await self.client.get_commit_position()
+
+        stream_name = str(uuid4())
+        result = await self.client.append_records(
+            records=NewRecord(
+                stream_name=stream_name,
+                type="OrderCreated",
+                data=random_data(),
+                content_type="application/octet-stream",
+            ),
+            checks=StreamStateCheck(
+                stream_name=stream_name,
+                expected_state=StreamState.NO_STREAM,
+            ),
+        )
+        self.assertGreater(result.commit_position, commit_position)
+        self.assertEqual(len(result.stream_positions), 1)
+        self.assertEqual(result.stream_positions[0].stream_name, stream_name)
+        self.assertEqual(result.stream_positions[0].stream_position, 0)
+
+    @skipIf(SERVER_VERSION < (26, 1), "Doesn't support append records RPC")
+    async def test_stream_append_records_two_records_two_checks(self) -> None:
+
+        commit_position = await self.client.get_commit_position()
+
+        stream_name1 = str(uuid4())
+        stream_name2 = str(uuid4())
+        result = await self.client.append_records(
+            records=[
+                NewRecord(
+                    stream_name=stream_name1,
+                    type="OrderCreated",
+                    data=random_data(),
+                    content_type="application/octet-stream",
+                ),
+                NewRecord(
+                    stream_name=stream_name2,
+                    type="OrderCreated",
+                    data=random_data(),
+                    content_type="application/octet-stream",
+                ),
+            ],
+            checks=[
+                StreamStateCheck(
+                    stream_name=stream_name1,
+                    expected_state=StreamState.NO_STREAM,
+                ),
+                StreamStateCheck(
+                    stream_name=stream_name2,
+                    expected_state=StreamState.NO_STREAM,
+                ),
+            ],
+        )
+        self.assertGreater(result.commit_position, commit_position)
+        self.assertEqual(len(result.stream_positions), 2)
+        self.assertEqual(result.stream_positions[0].stream_name, stream_name1)
+        self.assertEqual(result.stream_positions[0].stream_position, 0)
+        self.assertEqual(result.stream_positions[1].stream_name, stream_name2)
+        self.assertEqual(result.stream_positions[1].stream_position, 0)
+
+    @skipIf(SERVER_VERSION < (26, 1), "Doesn't support append records RPC")
+    async def test_stream_append_records_raises_consistency_check_failed_error(
+        self,
+    ) -> None:
+
+        stream_name = str(uuid4())
+        with self.assertRaises(ConsistencyChecksFailedError) as cm:
+            await self.client.append_records(
+                records=NewRecord(
+                    stream_name=stream_name,
+                    type="OrderCreated",
+                    data=random_data(),
+                    content_type="application/octet-stream",
+                ),
+                checks=StreamStateCheck(
+                    stream_name=stream_name,
+                    expected_state=StreamState.EXISTS,
+                ),
+            )
+        self.assertIn("Append failed due to consistency violations.", str(cm.exception))
+        self.assertIn(f"Stream '{stream_name}' does not exist.", str(cm.exception))
+        self.assertEqual(len(cm.exception.failures), 1)
+        self.assertEqual(cm.exception.failures[0].check_index, 0)
+        stream_state_failure = cm.exception.failures[0].stream_state_failure
+        assert stream_state_failure is not None
+        self.assertEqual(stream_state_failure.stream_name, stream_name)
+        self.assertEqual(stream_state_failure.expected_state, -4)
+        self.assertEqual(stream_state_failure.actual_state, -1)
 
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support secondary indexes")
     async def test_read_index(self) -> None:

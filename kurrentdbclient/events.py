@@ -48,6 +48,32 @@ class NewEvents:
 
 
 @dataclass(frozen=True)
+class NewRecord:
+    """
+    Encapsulates event data to be recorded in KurrentDB.
+    """
+
+    stream_name: str
+    type: str
+    data: bytes
+    metadata: bytes = b""
+    content_type: ContentType = "application/json"
+    id: UUID = field(default_factory=uuid4)
+
+    def __eq__(self, other: object) -> bool:  # pragma: no cover
+        return isinstance(other, NewRecord) and self.id == other.id
+
+
+@dataclass(frozen=True)
+class StreamStateCheck:
+    stream_name: str
+    expected_state: StreamState | int
+
+
+ConsistencyCheck = StreamStateCheck  #  ... | QueryPredicateCheck
+
+
+@dataclass(frozen=True)
 class RecordedEvent:
     """
     Encapsulates event data that has been recorded in KurrentDB.

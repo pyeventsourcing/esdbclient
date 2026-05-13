@@ -52,7 +52,15 @@ from kurrentdbclient.connection_spec import (
     ConnectionSpec,
     grpc_target,
 )
-from kurrentdbclient.events import NewEvent, NewEvents, RecordedEvent, StreamState
+from kurrentdbclient.events import (
+    ConsistencyCheck,
+    NewEvent,
+    NewEvents,
+    NewRecord,
+    RecordedEvent,
+    StreamState,
+    StreamStateCheck,
+)
 from kurrentdbclient.exceptions import (
     DiscoveryFailedError,
     FollowerNotFoundError,
@@ -85,7 +93,7 @@ if TYPE_CHECKING:
         ProjectionStatistics,
     )
     from kurrentdbclient.streams import StreamsService
-    from kurrentdbclient.v2streams import V2StreamsService
+    from kurrentdbclient.v2streams import AppendRecordsResult, V2StreamsService
 
 # Matches the 'type' of "system" events.
 KDB_SYSTEM_EVENTS_REGEX = r"\$.+"
@@ -573,6 +581,33 @@ class KurrentDBClient(BaseKurrentDBClient):
             events = [events]
         return self.v2streams.multi_append(
             events=events,
+            timeout=timeout,
+            metadata=self._call_metadata,
+            credentials=credentials or self._call_credentials,
+        )
+
+    @retrygrpc
+    @autoreconnect
+    def append_records(
+        self,
+        /,
+        records: NewRecord | Iterable[NewRecord],
+        checks: ConsistencyCheck | Iterable[ConsistencyCheck],
+        *,
+        timeout: float | None = None,
+        credentials: grpc.CallCredentials | None = None,
+    ) -> AppendRecordsResult:  # pragma: <26.1 no cover
+        """
+        Appends new events to one or many streams.
+        """
+        timeout = timeout if timeout is not None else self._default_deadline
+        if isinstance(records, NewRecord):
+            records = [records]
+        if isinstance(checks, StreamStateCheck):
+            checks = [checks]
+        return self.v2streams.append_records(
+            records=records,
+            checks=checks,
             timeout=timeout,
             metadata=self._call_metadata,
             credentials=credentials or self._call_credentials,
