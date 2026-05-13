@@ -6,18 +6,24 @@ This protocol is UNSTABLE in the sense of being subject to change.
 ******************************************************************************************
 """
 
-import builtins
-import google.protobuf.descriptor
-import google.protobuf.descriptor_pb2
-import google.protobuf.internal.extension_dict
-import google.protobuf.message
-import kurrentdbclient.protos.google.rpc.code_pb2
-import typing
+from google.protobuf import descriptor as _descriptor
+from google.protobuf import descriptor_pb2 as _descriptor_pb2
+from google.protobuf import message as _message
+from google.protobuf.internal import extension_dict as _extension_dict
+from kurrentdbclient.protos.google.rpc import code_pb2 as _code_pb2
+import builtins as _builtins
+import sys
+import typing as _typing
 
-DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
+else:
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
-@typing.final
-class ErrorMetadata(google.protobuf.message.Message):
+DESCRIPTOR: _descriptor.FileDescriptor
+
+@_typing.final
+class ErrorMetadata(_message.Message):
     """ErrorMetadata provides actionable information for error enum values to enable automated
     code generation, documentation, and consistent error handling across the Kurrent platform.
 
@@ -47,11 +53,11 @@ class ErrorMetadata(google.protobuf.message.Message):
     See individual field documentation for conventions and defaults.
     """
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    STATUS_CODE_FIELD_NUMBER: builtins.int
-    HAS_DETAILS_FIELD_NUMBER: builtins.int
-    status_code: kurrentdbclient.protos.google.rpc.code_pb2.Code.ValueType
+    STATUS_CODE_FIELD_NUMBER: _builtins.int
+    HAS_DETAILS_FIELD_NUMBER: _builtins.int
+    status_code: _code_pb2.Code.ValueType
     """Maps the error to a standard gRPC status code for transport-level compatibility.
     This field is REQUIRED for every error annotation.
 
@@ -62,7 +68,7 @@ class ErrorMetadata(google.protobuf.message.Message):
     - Generate HTTP status code mappings
     - Create transport-agnostic error handling
     """
-    has_details: builtins.bool
+    has_details: _builtins.bool
     """Indicates whether this error supports rich, typed detail messages.
     Defaults to false (simple message string only).
     The message type name must be derived from the enum name by convention.
@@ -80,15 +86,19 @@ class ErrorMetadata(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        status_code: kurrentdbclient.protos.google.rpc.code_pb2.Code.ValueType = ...,
-        has_details: builtins.bool = ...,
+        status_code: _code_pb2.Code.ValueType = ...,
+        has_details: _builtins.bool = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["has_details", b"has_details", "status_code", b"status_code"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["has_details", b"has_details", "status_code", b"status_code"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ErrorMetadata = ErrorMetadata
+Global___ErrorMetadata: _TypeAlias = ErrorMetadata  # noqa: Y015
 
-ERROR_FIELD_NUMBER: builtins.int
-error: google.protobuf.internal.extension_dict._ExtensionFieldDescriptor[google.protobuf.descriptor_pb2.EnumValueOptions, global___ErrorMetadata]
+ERROR_FIELD_NUMBER: _builtins.int
+error: _extension_dict._ExtensionFieldDescriptor[_descriptor_pb2.EnumValueOptions, Global___ErrorMetadata]
 """Provides additional information about error conditions for automated
 code generation and documentation.
 """

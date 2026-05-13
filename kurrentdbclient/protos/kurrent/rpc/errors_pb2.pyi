@@ -6,26 +6,26 @@ This protocol is UNSTABLE in the sense of being subject to change.
 ******************************************************************************************
 """
 
-import builtins
-import google.protobuf.descriptor
-import google.protobuf.internal.enum_type_wrapper
-import google.protobuf.message
+from google.protobuf import descriptor as _descriptor
+from google.protobuf import message as _message
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+import builtins as _builtins
 import sys
-import typing
+import typing as _typing
 
-if sys.version_info >= (3, 10):
-    import typing as typing_extensions
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
 else:
-    import typing_extensions
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
-DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+DESCRIPTOR: _descriptor.FileDescriptor
 
 class _ServerError:
-    ValueType = typing.NewType("ValueType", builtins.int)
-    V: typing_extensions.TypeAlias = ValueType
+    ValueType = _typing.NewType("ValueType", _builtins.int)
+    V: _TypeAlias = ValueType  # noqa: Y015
 
-class _ServerErrorEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_ServerError.ValueType], builtins.type):
-    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+class _ServerErrorEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_ServerError.ValueType], _builtins.type):
+    DESCRIPTOR: _descriptor.EnumDescriptor
     UNSPECIFIED: _ServerError.ValueType  # 0
     """Default value. This value is not used.
     An error code MUST always be set to a non-zero value.
@@ -212,82 +212,95 @@ Common causes:
 Client action: Report to server administrators with request details.
 May be retriable, but likely indicates a server-side issue requiring investigation.
 """
-global___ServerError = ServerError
+Global___ServerError: _TypeAlias = ServerError  # noqa: Y015
 
-@typing.final
-class AccessDeniedErrorDetails(google.protobuf.message.Message):
+@_typing.final
+class AccessDeniedErrorDetails(_message.Message):
     """Details for ACCESS_DENIED errors."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    OPERATION_FIELD_NUMBER: builtins.int
-    USERNAME_FIELD_NUMBER: builtins.int
-    PERMISSION_FIELD_NUMBER: builtins.int
-    operation: builtins.str
+    OPERATION_FIELD_NUMBER: _builtins.int
+    USERNAME_FIELD_NUMBER: _builtins.int
+    PERMISSION_FIELD_NUMBER: _builtins.int
+    operation: _builtins.str
     """The friendly name of the operation that was denied."""
-    username: builtins.str
+    username: _builtins.str
     """The username of the user who was denied access."""
-    permission: builtins.str
+    permission: _builtins.str
     """The permission that was required for this operation."""
     def __init__(
         self,
         *,
-        operation: builtins.str = ...,
-        username: builtins.str | None = ...,
-        permission: builtins.str | None = ...,
+        operation: _builtins.str = ...,
+        username: _builtins.str | None = ...,
+        permission: _builtins.str | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_permission", b"_permission", "_username", b"_username", "permission", b"permission", "username", b"username"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_permission", b"_permission", "_username", b"_username", "operation", b"operation", "permission", b"permission", "username", b"username"]) -> None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_permission", b"_permission"]) -> typing.Literal["permission"] | None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["_username", b"_username"]) -> typing.Literal["username"] | None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_permission", b"_permission", "_username", b"_username", "permission", b"permission", "username", b"username"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_permission", b"_permission", "_username", b"_username", "operation", b"operation", "permission", b"permission", "username", b"username"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__permission: _TypeAlias = _typing.Literal["permission"]  # noqa: Y015
+    _WhichOneofArgType__permission: _TypeAlias = _typing.Literal["_permission", b"_permission"]  # noqa: Y015
+    _WhichOneofReturnType__username: _TypeAlias = _typing.Literal["username"]  # noqa: Y015
+    _WhichOneofArgType__username: _TypeAlias = _typing.Literal["_username", b"_username"]  # noqa: Y015
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__permission) -> _WhichOneofReturnType__permission | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__username) -> _WhichOneofReturnType__username | None: ...
 
-global___AccessDeniedErrorDetails = AccessDeniedErrorDetails
+Global___AccessDeniedErrorDetails: _TypeAlias = AccessDeniedErrorDetails  # noqa: Y015
 
-@typing.final
-class NotLeaderNodeErrorDetails(google.protobuf.message.Message):
+@_typing.final
+class NotLeaderNodeErrorDetails(_message.Message):
     """Details for NOT_LEADER_NODE errors."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    @typing.final
-    class NodeInfo(google.protobuf.message.Message):
+    @_typing.final
+    class NodeInfo(_message.Message):
         """Information about a cluster node."""
 
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+        DESCRIPTOR: _descriptor.Descriptor
 
-        HOST_FIELD_NUMBER: builtins.int
-        PORT_FIELD_NUMBER: builtins.int
-        NODE_ID_FIELD_NUMBER: builtins.int
-        host: builtins.str
+        HOST_FIELD_NUMBER: _builtins.int
+        PORT_FIELD_NUMBER: _builtins.int
+        NODE_ID_FIELD_NUMBER: _builtins.int
+        host: _builtins.str
         """The hostname or IP address of the node."""
-        port: builtins.int
+        port: _builtins.int
         """The gRPC port of the node."""
-        node_id: builtins.str
+        node_id: _builtins.str
         """The unique instance ID of the node."""
         def __init__(
             self,
             *,
-            host: builtins.str = ...,
-            port: builtins.int = ...,
-            node_id: builtins.str | None = ...,
+            host: _builtins.str = ...,
+            port: _builtins.int = ...,
+            node_id: _builtins.str | None = ...,
         ) -> None: ...
-        def HasField(self, field_name: typing.Literal["_node_id", b"_node_id", "node_id", b"node_id"]) -> builtins.bool: ...
-        def ClearField(self, field_name: typing.Literal["_node_id", b"_node_id", "host", b"host", "node_id", b"node_id", "port", b"port"]) -> None: ...
-        def WhichOneof(self, oneof_group: typing.Literal["_node_id", b"_node_id"]) -> typing.Literal["node_id"] | None: ...
+        _HasFieldArgType: _TypeAlias = _typing.Literal["_node_id", b"_node_id", "node_id", b"node_id"]  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["_node_id", b"_node_id", "host", b"host", "node_id", b"node_id", "port", b"port"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        _WhichOneofReturnType__node_id: _TypeAlias = _typing.Literal["node_id"]  # noqa: Y015
+        _WhichOneofArgType__node_id: _TypeAlias = _typing.Literal["_node_id", b"_node_id"]  # noqa: Y015
+        def WhichOneof(self, oneof_group: _WhichOneofArgType__node_id) -> _WhichOneofReturnType__node_id | None: ...
 
-    CURRENT_LEADER_FIELD_NUMBER: builtins.int
-    @property
-    def current_leader(self) -> global___NotLeaderNodeErrorDetails.NodeInfo:
+    CURRENT_LEADER_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def current_leader(self) -> Global___NotLeaderNodeErrorDetails.NodeInfo:
         """Information about the current cluster leader node."""
 
     def __init__(
         self,
         *,
-        current_leader: global___NotLeaderNodeErrorDetails.NodeInfo | None = ...,
+        current_leader: Global___NotLeaderNodeErrorDetails.NodeInfo | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["current_leader", b"current_leader"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["current_leader", b"current_leader"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["current_leader", b"current_leader"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["current_leader", b"current_leader"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___NotLeaderNodeErrorDetails = NotLeaderNodeErrorDetails
+Global___NotLeaderNodeErrorDetails: _TypeAlias = NotLeaderNodeErrorDetails  # noqa: Y015

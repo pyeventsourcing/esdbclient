@@ -3,354 +3,389 @@
 isort:skip_file
 """
 
-import builtins
-import collections.abc
-import google.protobuf.descriptor
-import google.protobuf.internal.containers
-import google.protobuf.internal.enum_type_wrapper
-import google.protobuf.message
-import kurrentdbclient.protos.v1.shared_pb2
+from collections import abc as _abc
+from google.protobuf import descriptor as _descriptor
+from google.protobuf import message as _message
+from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+from kurrentdbclient.protos.v1 import shared_pb2 as _shared_pb2
+import builtins as _builtins
 import sys
-import typing
+import typing as _typing
 
-if sys.version_info >= (3, 10):
-    import typing as typing_extensions
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
 else:
-    import typing_extensions
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
-DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+DESCRIPTOR: _descriptor.FileDescriptor
 
-@typing.final
-class GossipRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class GossipRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    INFO_FIELD_NUMBER: builtins.int
-    SERVER_FIELD_NUMBER: builtins.int
-    @property
-    def info(self) -> global___ClusterInfo: ...
-    @property
-    def server(self) -> global___EndPoint: ...
+    INFO_FIELD_NUMBER: _builtins.int
+    SERVER_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def info(self) -> Global___ClusterInfo: ...
+    @_builtins.property
+    def server(self) -> Global___EndPoint: ...
     def __init__(
         self,
         *,
-        info: global___ClusterInfo | None = ...,
-        server: global___EndPoint | None = ...,
+        info: Global___ClusterInfo | None = ...,
+        server: Global___EndPoint | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["info", b"info", "server", b"server"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["info", b"info", "server", b"server"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["info", b"info", "server", b"server"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["info", b"info", "server", b"server"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___GossipRequest = GossipRequest
+Global___GossipRequest: _TypeAlias = GossipRequest  # noqa: Y015
 
-@typing.final
-class ViewChangeRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ViewChangeRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    SERVER_ID_FIELD_NUMBER: builtins.int
-    SERVER_HTTP_FIELD_NUMBER: builtins.int
-    ATTEMPTED_VIEW_FIELD_NUMBER: builtins.int
-    attempted_view: builtins.int
-    @property
-    def server_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def server_http(self) -> global___EndPoint: ...
+    SERVER_ID_FIELD_NUMBER: _builtins.int
+    SERVER_HTTP_FIELD_NUMBER: _builtins.int
+    ATTEMPTED_VIEW_FIELD_NUMBER: _builtins.int
+    attempted_view: _builtins.int
+    @_builtins.property
+    def server_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def server_http(self) -> Global___EndPoint: ...
     def __init__(
         self,
         *,
-        server_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        server_http: global___EndPoint | None = ...,
-        attempted_view: builtins.int = ...,
+        server_id: _shared_pb2.UUID | None = ...,
+        server_http: Global___EndPoint | None = ...,
+        attempted_view: _builtins.int = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["server_http", b"server_http", "server_id", b"server_id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["attempted_view", b"attempted_view", "server_http", b"server_http", "server_id", b"server_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["server_http", b"server_http", "server_id", b"server_id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["attempted_view", b"attempted_view", "server_http", b"server_http", "server_id", b"server_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ViewChangeRequest = ViewChangeRequest
+Global___ViewChangeRequest: _TypeAlias = ViewChangeRequest  # noqa: Y015
 
-@typing.final
-class ViewChangeProofRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ViewChangeProofRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    SERVER_ID_FIELD_NUMBER: builtins.int
-    SERVER_HTTP_FIELD_NUMBER: builtins.int
-    INSTALLED_VIEW_FIELD_NUMBER: builtins.int
-    installed_view: builtins.int
-    @property
-    def server_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def server_http(self) -> global___EndPoint: ...
+    SERVER_ID_FIELD_NUMBER: _builtins.int
+    SERVER_HTTP_FIELD_NUMBER: _builtins.int
+    INSTALLED_VIEW_FIELD_NUMBER: _builtins.int
+    installed_view: _builtins.int
+    @_builtins.property
+    def server_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def server_http(self) -> Global___EndPoint: ...
     def __init__(
         self,
         *,
-        server_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        server_http: global___EndPoint | None = ...,
-        installed_view: builtins.int = ...,
+        server_id: _shared_pb2.UUID | None = ...,
+        server_http: Global___EndPoint | None = ...,
+        installed_view: _builtins.int = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["server_http", b"server_http", "server_id", b"server_id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["installed_view", b"installed_view", "server_http", b"server_http", "server_id", b"server_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["server_http", b"server_http", "server_id", b"server_id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["installed_view", b"installed_view", "server_http", b"server_http", "server_id", b"server_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ViewChangeProofRequest = ViewChangeProofRequest
+Global___ViewChangeProofRequest: _TypeAlias = ViewChangeProofRequest  # noqa: Y015
 
-@typing.final
-class PrepareRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class PrepareRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    SERVER_ID_FIELD_NUMBER: builtins.int
-    SERVER_HTTP_FIELD_NUMBER: builtins.int
-    VIEW_FIELD_NUMBER: builtins.int
-    view: builtins.int
-    @property
-    def server_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def server_http(self) -> global___EndPoint: ...
+    SERVER_ID_FIELD_NUMBER: _builtins.int
+    SERVER_HTTP_FIELD_NUMBER: _builtins.int
+    VIEW_FIELD_NUMBER: _builtins.int
+    view: _builtins.int
+    @_builtins.property
+    def server_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def server_http(self) -> Global___EndPoint: ...
     def __init__(
         self,
         *,
-        server_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        server_http: global___EndPoint | None = ...,
-        view: builtins.int = ...,
+        server_id: _shared_pb2.UUID | None = ...,
+        server_http: Global___EndPoint | None = ...,
+        view: _builtins.int = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["server_http", b"server_http", "server_id", b"server_id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["server_http", b"server_http", "server_id", b"server_id", "view", b"view"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["server_http", b"server_http", "server_id", b"server_id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["server_http", b"server_http", "server_id", b"server_id", "view", b"view"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___PrepareRequest = PrepareRequest
+Global___PrepareRequest: _TypeAlias = PrepareRequest  # noqa: Y015
 
-@typing.final
-class PrepareOkRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class PrepareOkRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    VIEW_FIELD_NUMBER: builtins.int
-    SERVER_ID_FIELD_NUMBER: builtins.int
-    SERVER_HTTP_FIELD_NUMBER: builtins.int
-    EPOCH_NUMBER_FIELD_NUMBER: builtins.int
-    EPOCH_POSITION_FIELD_NUMBER: builtins.int
-    EPOCH_ID_FIELD_NUMBER: builtins.int
-    EPOCH_LEADER_INSTANCE_ID_FIELD_NUMBER: builtins.int
-    LAST_COMMIT_POSITION_FIELD_NUMBER: builtins.int
-    WRITER_CHECKPOINT_FIELD_NUMBER: builtins.int
-    CHASER_CHECKPOINT_FIELD_NUMBER: builtins.int
-    NODE_PRIORITY_FIELD_NUMBER: builtins.int
-    CLUSTER_INFO_FIELD_NUMBER: builtins.int
-    view: builtins.int
-    epoch_number: builtins.int
-    epoch_position: builtins.int
-    last_commit_position: builtins.int
-    writer_checkpoint: builtins.int
-    chaser_checkpoint: builtins.int
-    node_priority: builtins.int
-    @property
-    def server_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def server_http(self) -> global___EndPoint: ...
-    @property
-    def epoch_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def epoch_leader_instance_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def cluster_info(self) -> global___ClusterInfo: ...
+    VIEW_FIELD_NUMBER: _builtins.int
+    SERVER_ID_FIELD_NUMBER: _builtins.int
+    SERVER_HTTP_FIELD_NUMBER: _builtins.int
+    EPOCH_NUMBER_FIELD_NUMBER: _builtins.int
+    EPOCH_POSITION_FIELD_NUMBER: _builtins.int
+    EPOCH_ID_FIELD_NUMBER: _builtins.int
+    EPOCH_LEADER_INSTANCE_ID_FIELD_NUMBER: _builtins.int
+    LAST_COMMIT_POSITION_FIELD_NUMBER: _builtins.int
+    WRITER_CHECKPOINT_FIELD_NUMBER: _builtins.int
+    CHASER_CHECKPOINT_FIELD_NUMBER: _builtins.int
+    NODE_PRIORITY_FIELD_NUMBER: _builtins.int
+    CLUSTER_INFO_FIELD_NUMBER: _builtins.int
+    view: _builtins.int
+    epoch_number: _builtins.int
+    epoch_position: _builtins.int
+    last_commit_position: _builtins.int
+    writer_checkpoint: _builtins.int
+    chaser_checkpoint: _builtins.int
+    node_priority: _builtins.int
+    @_builtins.property
+    def server_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def server_http(self) -> Global___EndPoint: ...
+    @_builtins.property
+    def epoch_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def epoch_leader_instance_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def cluster_info(self) -> Global___ClusterInfo: ...
     def __init__(
         self,
         *,
-        view: builtins.int = ...,
-        server_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        server_http: global___EndPoint | None = ...,
-        epoch_number: builtins.int = ...,
-        epoch_position: builtins.int = ...,
-        epoch_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        epoch_leader_instance_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        last_commit_position: builtins.int = ...,
-        writer_checkpoint: builtins.int = ...,
-        chaser_checkpoint: builtins.int = ...,
-        node_priority: builtins.int = ...,
-        cluster_info: global___ClusterInfo | None = ...,
+        view: _builtins.int = ...,
+        server_id: _shared_pb2.UUID | None = ...,
+        server_http: Global___EndPoint | None = ...,
+        epoch_number: _builtins.int = ...,
+        epoch_position: _builtins.int = ...,
+        epoch_id: _shared_pb2.UUID | None = ...,
+        epoch_leader_instance_id: _shared_pb2.UUID | None = ...,
+        last_commit_position: _builtins.int = ...,
+        writer_checkpoint: _builtins.int = ...,
+        chaser_checkpoint: _builtins.int = ...,
+        node_priority: _builtins.int = ...,
+        cluster_info: Global___ClusterInfo | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["cluster_info", b"cluster_info", "epoch_id", b"epoch_id", "epoch_leader_instance_id", b"epoch_leader_instance_id", "server_http", b"server_http", "server_id", b"server_id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["chaser_checkpoint", b"chaser_checkpoint", "cluster_info", b"cluster_info", "epoch_id", b"epoch_id", "epoch_leader_instance_id", b"epoch_leader_instance_id", "epoch_number", b"epoch_number", "epoch_position", b"epoch_position", "last_commit_position", b"last_commit_position", "node_priority", b"node_priority", "server_http", b"server_http", "server_id", b"server_id", "view", b"view", "writer_checkpoint", b"writer_checkpoint"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["cluster_info", b"cluster_info", "epoch_id", b"epoch_id", "epoch_leader_instance_id", b"epoch_leader_instance_id", "server_http", b"server_http", "server_id", b"server_id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["chaser_checkpoint", b"chaser_checkpoint", "cluster_info", b"cluster_info", "epoch_id", b"epoch_id", "epoch_leader_instance_id", b"epoch_leader_instance_id", "epoch_number", b"epoch_number", "epoch_position", b"epoch_position", "last_commit_position", b"last_commit_position", "node_priority", b"node_priority", "server_http", b"server_http", "server_id", b"server_id", "view", b"view", "writer_checkpoint", b"writer_checkpoint"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___PrepareOkRequest = PrepareOkRequest
+Global___PrepareOkRequest: _TypeAlias = PrepareOkRequest  # noqa: Y015
 
-@typing.final
-class ProposalRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ProposalRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    SERVER_ID_FIELD_NUMBER: builtins.int
-    SERVER_HTTP_FIELD_NUMBER: builtins.int
-    LEADER_ID_FIELD_NUMBER: builtins.int
-    LEADER_HTTP_FIELD_NUMBER: builtins.int
-    VIEW_FIELD_NUMBER: builtins.int
-    EPOCH_NUMBER_FIELD_NUMBER: builtins.int
-    EPOCH_POSITION_FIELD_NUMBER: builtins.int
-    EPOCH_ID_FIELD_NUMBER: builtins.int
-    EPOCH_LEADER_INSTANCE_ID_FIELD_NUMBER: builtins.int
-    LAST_COMMIT_POSITION_FIELD_NUMBER: builtins.int
-    WRITER_CHECKPOINT_FIELD_NUMBER: builtins.int
-    CHASER_CHECKPOINT_FIELD_NUMBER: builtins.int
-    NODE_PRIORITY_FIELD_NUMBER: builtins.int
-    view: builtins.int
-    epoch_number: builtins.int
-    epoch_position: builtins.int
-    last_commit_position: builtins.int
-    writer_checkpoint: builtins.int
-    chaser_checkpoint: builtins.int
-    node_priority: builtins.int
-    @property
-    def server_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def server_http(self) -> global___EndPoint: ...
-    @property
-    def leader_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def leader_http(self) -> global___EndPoint: ...
-    @property
-    def epoch_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def epoch_leader_instance_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
+    SERVER_ID_FIELD_NUMBER: _builtins.int
+    SERVER_HTTP_FIELD_NUMBER: _builtins.int
+    LEADER_ID_FIELD_NUMBER: _builtins.int
+    LEADER_HTTP_FIELD_NUMBER: _builtins.int
+    VIEW_FIELD_NUMBER: _builtins.int
+    EPOCH_NUMBER_FIELD_NUMBER: _builtins.int
+    EPOCH_POSITION_FIELD_NUMBER: _builtins.int
+    EPOCH_ID_FIELD_NUMBER: _builtins.int
+    EPOCH_LEADER_INSTANCE_ID_FIELD_NUMBER: _builtins.int
+    LAST_COMMIT_POSITION_FIELD_NUMBER: _builtins.int
+    WRITER_CHECKPOINT_FIELD_NUMBER: _builtins.int
+    CHASER_CHECKPOINT_FIELD_NUMBER: _builtins.int
+    NODE_PRIORITY_FIELD_NUMBER: _builtins.int
+    view: _builtins.int
+    epoch_number: _builtins.int
+    epoch_position: _builtins.int
+    last_commit_position: _builtins.int
+    writer_checkpoint: _builtins.int
+    chaser_checkpoint: _builtins.int
+    node_priority: _builtins.int
+    @_builtins.property
+    def server_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def server_http(self) -> Global___EndPoint: ...
+    @_builtins.property
+    def leader_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def leader_http(self) -> Global___EndPoint: ...
+    @_builtins.property
+    def epoch_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def epoch_leader_instance_id(self) -> _shared_pb2.UUID: ...
     def __init__(
         self,
         *,
-        server_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        server_http: global___EndPoint | None = ...,
-        leader_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        leader_http: global___EndPoint | None = ...,
-        view: builtins.int = ...,
-        epoch_number: builtins.int = ...,
-        epoch_position: builtins.int = ...,
-        epoch_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        epoch_leader_instance_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        last_commit_position: builtins.int = ...,
-        writer_checkpoint: builtins.int = ...,
-        chaser_checkpoint: builtins.int = ...,
-        node_priority: builtins.int = ...,
+        server_id: _shared_pb2.UUID | None = ...,
+        server_http: Global___EndPoint | None = ...,
+        leader_id: _shared_pb2.UUID | None = ...,
+        leader_http: Global___EndPoint | None = ...,
+        view: _builtins.int = ...,
+        epoch_number: _builtins.int = ...,
+        epoch_position: _builtins.int = ...,
+        epoch_id: _shared_pb2.UUID | None = ...,
+        epoch_leader_instance_id: _shared_pb2.UUID | None = ...,
+        last_commit_position: _builtins.int = ...,
+        writer_checkpoint: _builtins.int = ...,
+        chaser_checkpoint: _builtins.int = ...,
+        node_priority: _builtins.int = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["epoch_id", b"epoch_id", "epoch_leader_instance_id", b"epoch_leader_instance_id", "leader_http", b"leader_http", "leader_id", b"leader_id", "server_http", b"server_http", "server_id", b"server_id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["chaser_checkpoint", b"chaser_checkpoint", "epoch_id", b"epoch_id", "epoch_leader_instance_id", b"epoch_leader_instance_id", "epoch_number", b"epoch_number", "epoch_position", b"epoch_position", "last_commit_position", b"last_commit_position", "leader_http", b"leader_http", "leader_id", b"leader_id", "node_priority", b"node_priority", "server_http", b"server_http", "server_id", b"server_id", "view", b"view", "writer_checkpoint", b"writer_checkpoint"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["epoch_id", b"epoch_id", "epoch_leader_instance_id", b"epoch_leader_instance_id", "leader_http", b"leader_http", "leader_id", b"leader_id", "server_http", b"server_http", "server_id", b"server_id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["chaser_checkpoint", b"chaser_checkpoint", "epoch_id", b"epoch_id", "epoch_leader_instance_id", b"epoch_leader_instance_id", "epoch_number", b"epoch_number", "epoch_position", b"epoch_position", "last_commit_position", b"last_commit_position", "leader_http", b"leader_http", "leader_id", b"leader_id", "node_priority", b"node_priority", "server_http", b"server_http", "server_id", b"server_id", "view", b"view", "writer_checkpoint", b"writer_checkpoint"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ProposalRequest = ProposalRequest
+Global___ProposalRequest: _TypeAlias = ProposalRequest  # noqa: Y015
 
-@typing.final
-class AcceptRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class AcceptRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    SERVER_ID_FIELD_NUMBER: builtins.int
-    SERVER_HTTP_FIELD_NUMBER: builtins.int
-    LEADER_ID_FIELD_NUMBER: builtins.int
-    LEADER_HTTP_FIELD_NUMBER: builtins.int
-    VIEW_FIELD_NUMBER: builtins.int
-    view: builtins.int
-    @property
-    def server_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def server_http(self) -> global___EndPoint: ...
-    @property
-    def leader_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def leader_http(self) -> global___EndPoint: ...
+    SERVER_ID_FIELD_NUMBER: _builtins.int
+    SERVER_HTTP_FIELD_NUMBER: _builtins.int
+    LEADER_ID_FIELD_NUMBER: _builtins.int
+    LEADER_HTTP_FIELD_NUMBER: _builtins.int
+    VIEW_FIELD_NUMBER: _builtins.int
+    view: _builtins.int
+    @_builtins.property
+    def server_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def server_http(self) -> Global___EndPoint: ...
+    @_builtins.property
+    def leader_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def leader_http(self) -> Global___EndPoint: ...
     def __init__(
         self,
         *,
-        server_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        server_http: global___EndPoint | None = ...,
-        leader_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        leader_http: global___EndPoint | None = ...,
-        view: builtins.int = ...,
+        server_id: _shared_pb2.UUID | None = ...,
+        server_http: Global___EndPoint | None = ...,
+        leader_id: _shared_pb2.UUID | None = ...,
+        leader_http: Global___EndPoint | None = ...,
+        view: _builtins.int = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["leader_http", b"leader_http", "leader_id", b"leader_id", "server_http", b"server_http", "server_id", b"server_id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["leader_http", b"leader_http", "leader_id", b"leader_id", "server_http", b"server_http", "server_id", b"server_id", "view", b"view"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["leader_http", b"leader_http", "leader_id", b"leader_id", "server_http", b"server_http", "server_id", b"server_id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["leader_http", b"leader_http", "leader_id", b"leader_id", "server_http", b"server_http", "server_id", b"server_id", "view", b"view"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___AcceptRequest = AcceptRequest
+Global___AcceptRequest: _TypeAlias = AcceptRequest  # noqa: Y015
 
-@typing.final
-class LeaderIsResigningRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class LeaderIsResigningRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    LEADER_ID_FIELD_NUMBER: builtins.int
-    LEADER_HTTP_FIELD_NUMBER: builtins.int
-    @property
-    def leader_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def leader_http(self) -> global___EndPoint: ...
+    LEADER_ID_FIELD_NUMBER: _builtins.int
+    LEADER_HTTP_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def leader_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def leader_http(self) -> Global___EndPoint: ...
     def __init__(
         self,
         *,
-        leader_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        leader_http: global___EndPoint | None = ...,
+        leader_id: _shared_pb2.UUID | None = ...,
+        leader_http: Global___EndPoint | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["leader_http", b"leader_http", "leader_id", b"leader_id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["leader_http", b"leader_http", "leader_id", b"leader_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["leader_http", b"leader_http", "leader_id", b"leader_id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["leader_http", b"leader_http", "leader_id", b"leader_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___LeaderIsResigningRequest = LeaderIsResigningRequest
+Global___LeaderIsResigningRequest: _TypeAlias = LeaderIsResigningRequest  # noqa: Y015
 
-@typing.final
-class LeaderIsResigningOkRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class LeaderIsResigningOkRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    LEADER_ID_FIELD_NUMBER: builtins.int
-    LEADER_HTTP_FIELD_NUMBER: builtins.int
-    SERVER_ID_FIELD_NUMBER: builtins.int
-    SERVER_HTTP_FIELD_NUMBER: builtins.int
-    @property
-    def leader_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def leader_http(self) -> global___EndPoint: ...
-    @property
-    def server_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def server_http(self) -> global___EndPoint: ...
+    LEADER_ID_FIELD_NUMBER: _builtins.int
+    LEADER_HTTP_FIELD_NUMBER: _builtins.int
+    SERVER_ID_FIELD_NUMBER: _builtins.int
+    SERVER_HTTP_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def leader_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def leader_http(self) -> Global___EndPoint: ...
+    @_builtins.property
+    def server_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def server_http(self) -> Global___EndPoint: ...
     def __init__(
         self,
         *,
-        leader_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        leader_http: global___EndPoint | None = ...,
-        server_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        server_http: global___EndPoint | None = ...,
+        leader_id: _shared_pb2.UUID | None = ...,
+        leader_http: Global___EndPoint | None = ...,
+        server_id: _shared_pb2.UUID | None = ...,
+        server_http: Global___EndPoint | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["leader_http", b"leader_http", "leader_id", b"leader_id", "server_http", b"server_http", "server_id", b"server_id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["leader_http", b"leader_http", "leader_id", b"leader_id", "server_http", b"server_http", "server_id", b"server_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["leader_http", b"leader_http", "leader_id", b"leader_id", "server_http", b"server_http", "server_id", b"server_id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["leader_http", b"leader_http", "leader_id", b"leader_id", "server_http", b"server_http", "server_id", b"server_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___LeaderIsResigningOkRequest = LeaderIsResigningOkRequest
+Global___LeaderIsResigningOkRequest: _TypeAlias = LeaderIsResigningOkRequest  # noqa: Y015
 
-@typing.final
-class ClusterInfo(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ClusterInfo(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    MEMBERS_FIELD_NUMBER: builtins.int
-    @property
-    def members(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___MemberInfo]: ...
+    MEMBERS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def members(self) -> _containers.RepeatedCompositeFieldContainer[Global___MemberInfo]: ...
     def __init__(
         self,
         *,
-        members: collections.abc.Iterable[global___MemberInfo] | None = ...,
+        members: _abc.Iterable[Global___MemberInfo] | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["members", b"members"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["members", b"members"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ClusterInfo = ClusterInfo
+Global___ClusterInfo: _TypeAlias = ClusterInfo  # noqa: Y015
 
-@typing.final
-class EndPoint(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class EndPoint(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    ADDRESS_FIELD_NUMBER: builtins.int
-    PORT_FIELD_NUMBER: builtins.int
-    address: builtins.str
-    port: builtins.int
+    ADDRESS_FIELD_NUMBER: _builtins.int
+    PORT_FIELD_NUMBER: _builtins.int
+    address: _builtins.str
+    port: _builtins.int
     def __init__(
         self,
         *,
-        address: builtins.str = ...,
-        port: builtins.int = ...,
+        address: _builtins.str = ...,
+        port: _builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["address", b"address", "port", b"port"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["address", b"address", "port", b"port"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___EndPoint = EndPoint
+Global___EndPoint: _TypeAlias = EndPoint  # noqa: Y015
 
-@typing.final
-class MemberInfo(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class MemberInfo(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
     class _VNodeState:
-        ValueType = typing.NewType("ValueType", builtins.int)
-        V: typing_extensions.TypeAlias = ValueType
+        ValueType = _typing.NewType("ValueType", _builtins.int)
+        V: _TypeAlias = ValueType  # noqa: Y015
 
-    class _VNodeStateEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[MemberInfo._VNodeState.ValueType], builtins.type):
-        DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+    class _VNodeStateEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[MemberInfo._VNodeState.ValueType], _builtins.type):
+        DESCRIPTOR: _descriptor.EnumDescriptor
         Initializing: MemberInfo._VNodeState.ValueType  # 0
         DiscoverLeader: MemberInfo._VNodeState.ValueType  # 1
         Unknown: MemberInfo._VNodeState.ValueType  # 2
@@ -386,380 +421,435 @@ class MemberInfo(google.protobuf.message.Message):
     ReadOnlyReplica: MemberInfo.VNodeState.ValueType  # 14
     ResigningLeader: MemberInfo.VNodeState.ValueType  # 15
 
-    INSTANCE_ID_FIELD_NUMBER: builtins.int
-    TIME_STAMP_FIELD_NUMBER: builtins.int
-    STATE_FIELD_NUMBER: builtins.int
-    IS_ALIVE_FIELD_NUMBER: builtins.int
-    HTTP_END_POINT_FIELD_NUMBER: builtins.int
-    INTERNAL_TCP_FIELD_NUMBER: builtins.int
-    EXTERNAL_TCP_FIELD_NUMBER: builtins.int
-    INTERNAL_TCP_USES_TLS_FIELD_NUMBER: builtins.int
-    EXTERNAL_TCP_USES_TLS_FIELD_NUMBER: builtins.int
-    LAST_COMMIT_POSITION_FIELD_NUMBER: builtins.int
-    WRITER_CHECKPOINT_FIELD_NUMBER: builtins.int
-    CHASER_CHECKPOINT_FIELD_NUMBER: builtins.int
-    EPOCH_POSITION_FIELD_NUMBER: builtins.int
-    EPOCH_NUMBER_FIELD_NUMBER: builtins.int
-    EPOCH_ID_FIELD_NUMBER: builtins.int
-    NODE_PRIORITY_FIELD_NUMBER: builtins.int
-    IS_READ_ONLY_REPLICA_FIELD_NUMBER: builtins.int
-    ADVERTISE_HOST_TO_CLIENT_AS_FIELD_NUMBER: builtins.int
-    ADVERTISE_HTTP_PORT_TO_CLIENT_AS_FIELD_NUMBER: builtins.int
-    ADVERTISE_TCP_PORT_TO_CLIENT_AS_FIELD_NUMBER: builtins.int
-    ES_VERSION_FIELD_NUMBER: builtins.int
-    time_stamp: builtins.int
-    state: global___MemberInfo.VNodeState.ValueType
-    is_alive: builtins.bool
-    internal_tcp_uses_tls: builtins.bool
-    external_tcp_uses_tls: builtins.bool
-    last_commit_position: builtins.int
-    writer_checkpoint: builtins.int
-    chaser_checkpoint: builtins.int
-    epoch_position: builtins.int
-    epoch_number: builtins.int
-    node_priority: builtins.int
-    is_read_only_replica: builtins.bool
-    advertise_host_to_client_as: builtins.str
-    advertise_http_port_to_client_as: builtins.int
-    advertise_tcp_port_to_client_as: builtins.int
-    es_version: builtins.str
-    @property
-    def instance_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def http_end_point(self) -> global___EndPoint: ...
-    @property
-    def internal_tcp(self) -> global___EndPoint: ...
-    @property
-    def external_tcp(self) -> global___EndPoint: ...
-    @property
-    def epoch_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
+    INSTANCE_ID_FIELD_NUMBER: _builtins.int
+    TIME_STAMP_FIELD_NUMBER: _builtins.int
+    STATE_FIELD_NUMBER: _builtins.int
+    IS_ALIVE_FIELD_NUMBER: _builtins.int
+    HTTP_END_POINT_FIELD_NUMBER: _builtins.int
+    INTERNAL_TCP_FIELD_NUMBER: _builtins.int
+    EXTERNAL_TCP_FIELD_NUMBER: _builtins.int
+    INTERNAL_TCP_USES_TLS_FIELD_NUMBER: _builtins.int
+    EXTERNAL_TCP_USES_TLS_FIELD_NUMBER: _builtins.int
+    LAST_COMMIT_POSITION_FIELD_NUMBER: _builtins.int
+    WRITER_CHECKPOINT_FIELD_NUMBER: _builtins.int
+    CHASER_CHECKPOINT_FIELD_NUMBER: _builtins.int
+    EPOCH_POSITION_FIELD_NUMBER: _builtins.int
+    EPOCH_NUMBER_FIELD_NUMBER: _builtins.int
+    EPOCH_ID_FIELD_NUMBER: _builtins.int
+    NODE_PRIORITY_FIELD_NUMBER: _builtins.int
+    IS_READ_ONLY_REPLICA_FIELD_NUMBER: _builtins.int
+    ADVERTISE_HOST_TO_CLIENT_AS_FIELD_NUMBER: _builtins.int
+    ADVERTISE_HTTP_PORT_TO_CLIENT_AS_FIELD_NUMBER: _builtins.int
+    ADVERTISE_TCP_PORT_TO_CLIENT_AS_FIELD_NUMBER: _builtins.int
+    ES_VERSION_FIELD_NUMBER: _builtins.int
+    time_stamp: _builtins.int
+    state: Global___MemberInfo.VNodeState.ValueType
+    is_alive: _builtins.bool
+    internal_tcp_uses_tls: _builtins.bool
+    external_tcp_uses_tls: _builtins.bool
+    last_commit_position: _builtins.int
+    writer_checkpoint: _builtins.int
+    chaser_checkpoint: _builtins.int
+    epoch_position: _builtins.int
+    epoch_number: _builtins.int
+    node_priority: _builtins.int
+    is_read_only_replica: _builtins.bool
+    advertise_host_to_client_as: _builtins.str
+    advertise_http_port_to_client_as: _builtins.int
+    advertise_tcp_port_to_client_as: _builtins.int
+    es_version: _builtins.str
+    @_builtins.property
+    def instance_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def http_end_point(self) -> Global___EndPoint: ...
+    @_builtins.property
+    def internal_tcp(self) -> Global___EndPoint: ...
+    @_builtins.property
+    def external_tcp(self) -> Global___EndPoint: ...
+    @_builtins.property
+    def epoch_id(self) -> _shared_pb2.UUID: ...
     def __init__(
         self,
         *,
-        instance_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        time_stamp: builtins.int = ...,
-        state: global___MemberInfo.VNodeState.ValueType = ...,
-        is_alive: builtins.bool = ...,
-        http_end_point: global___EndPoint | None = ...,
-        internal_tcp: global___EndPoint | None = ...,
-        external_tcp: global___EndPoint | None = ...,
-        internal_tcp_uses_tls: builtins.bool = ...,
-        external_tcp_uses_tls: builtins.bool = ...,
-        last_commit_position: builtins.int = ...,
-        writer_checkpoint: builtins.int = ...,
-        chaser_checkpoint: builtins.int = ...,
-        epoch_position: builtins.int = ...,
-        epoch_number: builtins.int = ...,
-        epoch_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        node_priority: builtins.int = ...,
-        is_read_only_replica: builtins.bool = ...,
-        advertise_host_to_client_as: builtins.str = ...,
-        advertise_http_port_to_client_as: builtins.int = ...,
-        advertise_tcp_port_to_client_as: builtins.int = ...,
-        es_version: builtins.str = ...,
+        instance_id: _shared_pb2.UUID | None = ...,
+        time_stamp: _builtins.int = ...,
+        state: Global___MemberInfo.VNodeState.ValueType = ...,
+        is_alive: _builtins.bool = ...,
+        http_end_point: Global___EndPoint | None = ...,
+        internal_tcp: Global___EndPoint | None = ...,
+        external_tcp: Global___EndPoint | None = ...,
+        internal_tcp_uses_tls: _builtins.bool = ...,
+        external_tcp_uses_tls: _builtins.bool = ...,
+        last_commit_position: _builtins.int = ...,
+        writer_checkpoint: _builtins.int = ...,
+        chaser_checkpoint: _builtins.int = ...,
+        epoch_position: _builtins.int = ...,
+        epoch_number: _builtins.int = ...,
+        epoch_id: _shared_pb2.UUID | None = ...,
+        node_priority: _builtins.int = ...,
+        is_read_only_replica: _builtins.bool = ...,
+        advertise_host_to_client_as: _builtins.str = ...,
+        advertise_http_port_to_client_as: _builtins.int = ...,
+        advertise_tcp_port_to_client_as: _builtins.int = ...,
+        es_version: _builtins.str = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["epoch_id", b"epoch_id", "external_tcp", b"external_tcp", "http_end_point", b"http_end_point", "instance_id", b"instance_id", "internal_tcp", b"internal_tcp"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["advertise_host_to_client_as", b"advertise_host_to_client_as", "advertise_http_port_to_client_as", b"advertise_http_port_to_client_as", "advertise_tcp_port_to_client_as", b"advertise_tcp_port_to_client_as", "chaser_checkpoint", b"chaser_checkpoint", "epoch_id", b"epoch_id", "epoch_number", b"epoch_number", "epoch_position", b"epoch_position", "es_version", b"es_version", "external_tcp", b"external_tcp", "external_tcp_uses_tls", b"external_tcp_uses_tls", "http_end_point", b"http_end_point", "instance_id", b"instance_id", "internal_tcp", b"internal_tcp", "internal_tcp_uses_tls", b"internal_tcp_uses_tls", "is_alive", b"is_alive", "is_read_only_replica", b"is_read_only_replica", "last_commit_position", b"last_commit_position", "node_priority", b"node_priority", "state", b"state", "time_stamp", b"time_stamp", "writer_checkpoint", b"writer_checkpoint"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["epoch_id", b"epoch_id", "external_tcp", b"external_tcp", "http_end_point", b"http_end_point", "instance_id", b"instance_id", "internal_tcp", b"internal_tcp"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["advertise_host_to_client_as", b"advertise_host_to_client_as", "advertise_http_port_to_client_as", b"advertise_http_port_to_client_as", "advertise_tcp_port_to_client_as", b"advertise_tcp_port_to_client_as", "chaser_checkpoint", b"chaser_checkpoint", "epoch_id", b"epoch_id", "epoch_number", b"epoch_number", "epoch_position", b"epoch_position", "es_version", b"es_version", "external_tcp", b"external_tcp", "external_tcp_uses_tls", b"external_tcp_uses_tls", "http_end_point", b"http_end_point", "instance_id", b"instance_id", "internal_tcp", b"internal_tcp", "internal_tcp_uses_tls", b"internal_tcp_uses_tls", "is_alive", b"is_alive", "is_read_only_replica", b"is_read_only_replica", "last_commit_position", b"last_commit_position", "node_priority", b"node_priority", "state", b"state", "time_stamp", b"time_stamp", "writer_checkpoint", b"writer_checkpoint"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___MemberInfo = MemberInfo
+Global___MemberInfo: _TypeAlias = MemberInfo  # noqa: Y015
 
-@typing.final
-class ReplicaLogWrite(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ReplicaLogWrite(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    LOG_POSITION_FIELD_NUMBER: builtins.int
-    REPLICA_ID_FIELD_NUMBER: builtins.int
-    log_position: builtins.int
-    replica_id: builtins.bytes
+    LOG_POSITION_FIELD_NUMBER: _builtins.int
+    REPLICA_ID_FIELD_NUMBER: _builtins.int
+    log_position: _builtins.int
+    replica_id: _builtins.bytes
     def __init__(
         self,
         *,
-        log_position: builtins.int = ...,
-        replica_id: builtins.bytes = ...,
+        log_position: _builtins.int = ...,
+        replica_id: _builtins.bytes = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["log_position", b"log_position", "replica_id", b"replica_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["log_position", b"log_position", "replica_id", b"replica_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ReplicaLogWrite = ReplicaLogWrite
+Global___ReplicaLogWrite: _TypeAlias = ReplicaLogWrite  # noqa: Y015
 
-@typing.final
-class ReplicatedTo(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ReplicatedTo(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    LOG_POSITION_FIELD_NUMBER: builtins.int
-    log_position: builtins.int
+    LOG_POSITION_FIELD_NUMBER: _builtins.int
+    log_position: _builtins.int
     def __init__(
         self,
         *,
-        log_position: builtins.int = ...,
+        log_position: _builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["log_position", b"log_position"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["log_position", b"log_position"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ReplicatedTo = ReplicatedTo
+Global___ReplicatedTo: _TypeAlias = ReplicatedTo  # noqa: Y015
 
-@typing.final
-class Epoch(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class Epoch(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    EPOCH_POSITION_FIELD_NUMBER: builtins.int
-    EPOCH_NUMBER_FIELD_NUMBER: builtins.int
-    EPOCH_ID_FIELD_NUMBER: builtins.int
-    epoch_position: builtins.int
-    epoch_number: builtins.int
-    epoch_id: builtins.bytes
+    EPOCH_POSITION_FIELD_NUMBER: _builtins.int
+    EPOCH_NUMBER_FIELD_NUMBER: _builtins.int
+    EPOCH_ID_FIELD_NUMBER: _builtins.int
+    epoch_position: _builtins.int
+    epoch_number: _builtins.int
+    epoch_id: _builtins.bytes
     def __init__(
         self,
         *,
-        epoch_position: builtins.int = ...,
-        epoch_number: builtins.int = ...,
-        epoch_id: builtins.bytes = ...,
+        epoch_position: _builtins.int = ...,
+        epoch_number: _builtins.int = ...,
+        epoch_id: _builtins.bytes = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["epoch_id", b"epoch_id", "epoch_number", b"epoch_number", "epoch_position", b"epoch_position"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["epoch_id", b"epoch_id", "epoch_number", b"epoch_number", "epoch_position", b"epoch_position"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___Epoch = Epoch
+Global___Epoch: _TypeAlias = Epoch  # noqa: Y015
 
-@typing.final
-class SubscribeReplica(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class SubscribeReplica(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    LOG_POSITION_FIELD_NUMBER: builtins.int
-    CHUNK_ID_FIELD_NUMBER: builtins.int
-    LASTEPOCHS_FIELD_NUMBER: builtins.int
-    IP_FIELD_NUMBER: builtins.int
-    PORT_FIELD_NUMBER: builtins.int
-    LEADER_ID_FIELD_NUMBER: builtins.int
-    SUBSCRIPTION_ID_FIELD_NUMBER: builtins.int
-    IS_PROMOTABLE_FIELD_NUMBER: builtins.int
-    VERSION_FIELD_NUMBER: builtins.int
-    log_position: builtins.int
-    chunk_id: builtins.bytes
-    ip: builtins.bytes
-    port: builtins.int
-    leader_id: builtins.bytes
-    subscription_id: builtins.bytes
-    is_promotable: builtins.bool
-    version: builtins.int
-    @property
-    def LastEpochs(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___Epoch]: ...
+    LOG_POSITION_FIELD_NUMBER: _builtins.int
+    CHUNK_ID_FIELD_NUMBER: _builtins.int
+    LASTEPOCHS_FIELD_NUMBER: _builtins.int
+    IP_FIELD_NUMBER: _builtins.int
+    PORT_FIELD_NUMBER: _builtins.int
+    LEADER_ID_FIELD_NUMBER: _builtins.int
+    SUBSCRIPTION_ID_FIELD_NUMBER: _builtins.int
+    IS_PROMOTABLE_FIELD_NUMBER: _builtins.int
+    VERSION_FIELD_NUMBER: _builtins.int
+    log_position: _builtins.int
+    chunk_id: _builtins.bytes
+    ip: _builtins.bytes
+    port: _builtins.int
+    leader_id: _builtins.bytes
+    subscription_id: _builtins.bytes
+    is_promotable: _builtins.bool
+    version: _builtins.int
+    @_builtins.property
+    def LastEpochs(self) -> _containers.RepeatedCompositeFieldContainer[Global___Epoch]: ...
     def __init__(
         self,
         *,
-        log_position: builtins.int = ...,
-        chunk_id: builtins.bytes = ...,
-        LastEpochs: collections.abc.Iterable[global___Epoch] | None = ...,
-        ip: builtins.bytes = ...,
-        port: builtins.int = ...,
-        leader_id: builtins.bytes = ...,
-        subscription_id: builtins.bytes = ...,
-        is_promotable: builtins.bool = ...,
-        version: builtins.int = ...,
+        log_position: _builtins.int = ...,
+        chunk_id: _builtins.bytes = ...,
+        LastEpochs: _abc.Iterable[Global___Epoch] | None = ...,
+        ip: _builtins.bytes = ...,
+        port: _builtins.int = ...,
+        leader_id: _builtins.bytes = ...,
+        subscription_id: _builtins.bytes = ...,
+        is_promotable: _builtins.bool = ...,
+        version: _builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["LastEpochs", b"LastEpochs", "chunk_id", b"chunk_id", "ip", b"ip", "is_promotable", b"is_promotable", "leader_id", b"leader_id", "log_position", b"log_position", "port", b"port", "subscription_id", b"subscription_id", "version", b"version"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["LastEpochs", b"LastEpochs", "chunk_id", b"chunk_id", "ip", b"ip", "is_promotable", b"is_promotable", "leader_id", b"leader_id", "log_position", b"log_position", "port", b"port", "subscription_id", b"subscription_id", "version", b"version"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___SubscribeReplica = SubscribeReplica
+Global___SubscribeReplica: _TypeAlias = SubscribeReplica  # noqa: Y015
 
-@typing.final
-class ReplicaSubscriptionRetry(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ReplicaSubscriptionRetry(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    LEADER_ID_FIELD_NUMBER: builtins.int
-    SUBSCRIPTION_ID_FIELD_NUMBER: builtins.int
-    leader_id: builtins.bytes
-    subscription_id: builtins.bytes
+    LEADER_ID_FIELD_NUMBER: _builtins.int
+    SUBSCRIPTION_ID_FIELD_NUMBER: _builtins.int
+    leader_id: _builtins.bytes
+    subscription_id: _builtins.bytes
     def __init__(
         self,
         *,
-        leader_id: builtins.bytes = ...,
-        subscription_id: builtins.bytes = ...,
+        leader_id: _builtins.bytes = ...,
+        subscription_id: _builtins.bytes = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["leader_id", b"leader_id", "subscription_id", b"subscription_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["leader_id", b"leader_id", "subscription_id", b"subscription_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ReplicaSubscriptionRetry = ReplicaSubscriptionRetry
+Global___ReplicaSubscriptionRetry: _TypeAlias = ReplicaSubscriptionRetry  # noqa: Y015
 
-@typing.final
-class ReplicaSubscribed(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ReplicaSubscribed(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    LEADER_ID_FIELD_NUMBER: builtins.int
-    SUBSCRIPTION_ID_FIELD_NUMBER: builtins.int
-    SUBSCRIPTION_POSITION_FIELD_NUMBER: builtins.int
-    leader_id: builtins.bytes
-    subscription_id: builtins.bytes
-    subscription_position: builtins.int
+    LEADER_ID_FIELD_NUMBER: _builtins.int
+    SUBSCRIPTION_ID_FIELD_NUMBER: _builtins.int
+    SUBSCRIPTION_POSITION_FIELD_NUMBER: _builtins.int
+    leader_id: _builtins.bytes
+    subscription_id: _builtins.bytes
+    subscription_position: _builtins.int
     def __init__(
         self,
         *,
-        leader_id: builtins.bytes = ...,
-        subscription_id: builtins.bytes = ...,
-        subscription_position: builtins.int = ...,
+        leader_id: _builtins.bytes = ...,
+        subscription_id: _builtins.bytes = ...,
+        subscription_position: _builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["leader_id", b"leader_id", "subscription_id", b"subscription_id", "subscription_position", b"subscription_position"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["leader_id", b"leader_id", "subscription_id", b"subscription_id", "subscription_position", b"subscription_position"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ReplicaSubscribed = ReplicaSubscribed
+Global___ReplicaSubscribed: _TypeAlias = ReplicaSubscribed  # noqa: Y015
 
-@typing.final
-class ReplicaLogPositionAck(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ReplicaLogPositionAck(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    SUBSCRIPTION_ID_FIELD_NUMBER: builtins.int
-    REPLICATION_LOG_POSITION_FIELD_NUMBER: builtins.int
-    WRITER_LOG_POSITION_FIELD_NUMBER: builtins.int
-    subscription_id: builtins.bytes
-    replication_log_position: builtins.int
-    writer_log_position: builtins.int
+    SUBSCRIPTION_ID_FIELD_NUMBER: _builtins.int
+    REPLICATION_LOG_POSITION_FIELD_NUMBER: _builtins.int
+    WRITER_LOG_POSITION_FIELD_NUMBER: _builtins.int
+    subscription_id: _builtins.bytes
+    replication_log_position: _builtins.int
+    writer_log_position: _builtins.int
     def __init__(
         self,
         *,
-        subscription_id: builtins.bytes = ...,
-        replication_log_position: builtins.int = ...,
-        writer_log_position: builtins.int = ...,
+        subscription_id: _builtins.bytes = ...,
+        replication_log_position: _builtins.int = ...,
+        writer_log_position: _builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["replication_log_position", b"replication_log_position", "subscription_id", b"subscription_id", "writer_log_position", b"writer_log_position"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["replication_log_position", b"replication_log_position", "subscription_id", b"subscription_id", "writer_log_position", b"writer_log_position"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ReplicaLogPositionAck = ReplicaLogPositionAck
+Global___ReplicaLogPositionAck: _TypeAlias = ReplicaLogPositionAck  # noqa: Y015
 
-@typing.final
-class CreateChunk(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class CreateChunk(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    LEADER_ID_FIELD_NUMBER: builtins.int
-    SUBSCRIPTION_ID_FIELD_NUMBER: builtins.int
-    CHUNK_HEADER_BYTES_FIELD_NUMBER: builtins.int
-    FILE_SIZE_FIELD_NUMBER: builtins.int
-    IS_COMPLETED_CHUNK_FIELD_NUMBER: builtins.int
-    leader_id: builtins.bytes
-    subscription_id: builtins.bytes
-    chunk_header_bytes: builtins.bytes
-    file_size: builtins.int
-    is_completed_chunk: builtins.bool
+    LEADER_ID_FIELD_NUMBER: _builtins.int
+    SUBSCRIPTION_ID_FIELD_NUMBER: _builtins.int
+    CHUNK_HEADER_BYTES_FIELD_NUMBER: _builtins.int
+    FILE_SIZE_FIELD_NUMBER: _builtins.int
+    IS_COMPLETED_CHUNK_FIELD_NUMBER: _builtins.int
+    leader_id: _builtins.bytes
+    subscription_id: _builtins.bytes
+    chunk_header_bytes: _builtins.bytes
+    file_size: _builtins.int
+    is_completed_chunk: _builtins.bool
     def __init__(
         self,
         *,
-        leader_id: builtins.bytes = ...,
-        subscription_id: builtins.bytes = ...,
-        chunk_header_bytes: builtins.bytes = ...,
-        file_size: builtins.int = ...,
-        is_completed_chunk: builtins.bool = ...,
+        leader_id: _builtins.bytes = ...,
+        subscription_id: _builtins.bytes = ...,
+        chunk_header_bytes: _builtins.bytes = ...,
+        file_size: _builtins.int = ...,
+        is_completed_chunk: _builtins.bool = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["chunk_header_bytes", b"chunk_header_bytes", "file_size", b"file_size", "is_completed_chunk", b"is_completed_chunk", "leader_id", b"leader_id", "subscription_id", b"subscription_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["chunk_header_bytes", b"chunk_header_bytes", "file_size", b"file_size", "is_completed_chunk", b"is_completed_chunk", "leader_id", b"leader_id", "subscription_id", b"subscription_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___CreateChunk = CreateChunk
+Global___CreateChunk: _TypeAlias = CreateChunk  # noqa: Y015
 
-@typing.final
-class RawChunkBulk(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class RawChunkBulk(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    LEADER_ID_FIELD_NUMBER: builtins.int
-    SUBSCRIPTION_ID_FIELD_NUMBER: builtins.int
-    CHUNK_START_NUMBER_FIELD_NUMBER: builtins.int
-    CHUNK_END_NUMBER_FIELD_NUMBER: builtins.int
-    RAW_POSITION_FIELD_NUMBER: builtins.int
-    RAW_BYTES_FIELD_NUMBER: builtins.int
-    COMPLETE_CHUNK_FIELD_NUMBER: builtins.int
-    leader_id: builtins.bytes
-    subscription_id: builtins.bytes
-    chunk_start_number: builtins.int
-    chunk_end_number: builtins.int
-    raw_position: builtins.int
-    raw_bytes: builtins.bytes
-    complete_chunk: builtins.bool
+    LEADER_ID_FIELD_NUMBER: _builtins.int
+    SUBSCRIPTION_ID_FIELD_NUMBER: _builtins.int
+    CHUNK_START_NUMBER_FIELD_NUMBER: _builtins.int
+    CHUNK_END_NUMBER_FIELD_NUMBER: _builtins.int
+    RAW_POSITION_FIELD_NUMBER: _builtins.int
+    RAW_BYTES_FIELD_NUMBER: _builtins.int
+    COMPLETE_CHUNK_FIELD_NUMBER: _builtins.int
+    leader_id: _builtins.bytes
+    subscription_id: _builtins.bytes
+    chunk_start_number: _builtins.int
+    chunk_end_number: _builtins.int
+    raw_position: _builtins.int
+    raw_bytes: _builtins.bytes
+    complete_chunk: _builtins.bool
     def __init__(
         self,
         *,
-        leader_id: builtins.bytes = ...,
-        subscription_id: builtins.bytes = ...,
-        chunk_start_number: builtins.int = ...,
-        chunk_end_number: builtins.int = ...,
-        raw_position: builtins.int = ...,
-        raw_bytes: builtins.bytes = ...,
-        complete_chunk: builtins.bool = ...,
+        leader_id: _builtins.bytes = ...,
+        subscription_id: _builtins.bytes = ...,
+        chunk_start_number: _builtins.int = ...,
+        chunk_end_number: _builtins.int = ...,
+        raw_position: _builtins.int = ...,
+        raw_bytes: _builtins.bytes = ...,
+        complete_chunk: _builtins.bool = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["chunk_end_number", b"chunk_end_number", "chunk_start_number", b"chunk_start_number", "complete_chunk", b"complete_chunk", "leader_id", b"leader_id", "raw_bytes", b"raw_bytes", "raw_position", b"raw_position", "subscription_id", b"subscription_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["chunk_end_number", b"chunk_end_number", "chunk_start_number", b"chunk_start_number", "complete_chunk", b"complete_chunk", "leader_id", b"leader_id", "raw_bytes", b"raw_bytes", "raw_position", b"raw_position", "subscription_id", b"subscription_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___RawChunkBulk = RawChunkBulk
+Global___RawChunkBulk: _TypeAlias = RawChunkBulk  # noqa: Y015
 
-@typing.final
-class DataChunkBulk(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class DataChunkBulk(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    LEADER_ID_FIELD_NUMBER: builtins.int
-    SUBSCRIPTION_ID_FIELD_NUMBER: builtins.int
-    CHUNK_START_NUMBER_FIELD_NUMBER: builtins.int
-    CHUNK_END_NUMBER_FIELD_NUMBER: builtins.int
-    SUBSCRIPTION_POSITION_FIELD_NUMBER: builtins.int
-    DATA_BYTES_FIELD_NUMBER: builtins.int
-    COMPLETE_CHUNK_FIELD_NUMBER: builtins.int
-    leader_id: builtins.bytes
-    subscription_id: builtins.bytes
-    chunk_start_number: builtins.int
-    chunk_end_number: builtins.int
-    subscription_position: builtins.int
-    data_bytes: builtins.bytes
-    complete_chunk: builtins.bool
+    LEADER_ID_FIELD_NUMBER: _builtins.int
+    SUBSCRIPTION_ID_FIELD_NUMBER: _builtins.int
+    CHUNK_START_NUMBER_FIELD_NUMBER: _builtins.int
+    CHUNK_END_NUMBER_FIELD_NUMBER: _builtins.int
+    SUBSCRIPTION_POSITION_FIELD_NUMBER: _builtins.int
+    DATA_BYTES_FIELD_NUMBER: _builtins.int
+    COMPLETE_CHUNK_FIELD_NUMBER: _builtins.int
+    leader_id: _builtins.bytes
+    subscription_id: _builtins.bytes
+    chunk_start_number: _builtins.int
+    chunk_end_number: _builtins.int
+    subscription_position: _builtins.int
+    data_bytes: _builtins.bytes
+    complete_chunk: _builtins.bool
     def __init__(
         self,
         *,
-        leader_id: builtins.bytes = ...,
-        subscription_id: builtins.bytes = ...,
-        chunk_start_number: builtins.int = ...,
-        chunk_end_number: builtins.int = ...,
-        subscription_position: builtins.int = ...,
-        data_bytes: builtins.bytes = ...,
-        complete_chunk: builtins.bool = ...,
+        leader_id: _builtins.bytes = ...,
+        subscription_id: _builtins.bytes = ...,
+        chunk_start_number: _builtins.int = ...,
+        chunk_end_number: _builtins.int = ...,
+        subscription_position: _builtins.int = ...,
+        data_bytes: _builtins.bytes = ...,
+        complete_chunk: _builtins.bool = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["chunk_end_number", b"chunk_end_number", "chunk_start_number", b"chunk_start_number", "complete_chunk", b"complete_chunk", "data_bytes", b"data_bytes", "leader_id", b"leader_id", "subscription_id", b"subscription_id", "subscription_position", b"subscription_position"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["chunk_end_number", b"chunk_end_number", "chunk_start_number", b"chunk_start_number", "complete_chunk", b"complete_chunk", "data_bytes", b"data_bytes", "leader_id", b"leader_id", "subscription_id", b"subscription_id", "subscription_position", b"subscription_position"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___DataChunkBulk = DataChunkBulk
+Global___DataChunkBulk: _TypeAlias = DataChunkBulk  # noqa: Y015
 
-@typing.final
-class FollowerAssignment(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class FollowerAssignment(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    LEADER_ID_FIELD_NUMBER: builtins.int
-    SUBSCRIPTION_ID_FIELD_NUMBER: builtins.int
-    leader_id: builtins.bytes
-    subscription_id: builtins.bytes
+    LEADER_ID_FIELD_NUMBER: _builtins.int
+    SUBSCRIPTION_ID_FIELD_NUMBER: _builtins.int
+    leader_id: _builtins.bytes
+    subscription_id: _builtins.bytes
     def __init__(
         self,
         *,
-        leader_id: builtins.bytes = ...,
-        subscription_id: builtins.bytes = ...,
+        leader_id: _builtins.bytes = ...,
+        subscription_id: _builtins.bytes = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["leader_id", b"leader_id", "subscription_id", b"subscription_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["leader_id", b"leader_id", "subscription_id", b"subscription_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___FollowerAssignment = FollowerAssignment
+Global___FollowerAssignment: _TypeAlias = FollowerAssignment  # noqa: Y015
 
-@typing.final
-class CloneAssignment(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class CloneAssignment(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    LEADER_ID_FIELD_NUMBER: builtins.int
-    SUBSCRIPTION_ID_FIELD_NUMBER: builtins.int
-    leader_id: builtins.bytes
-    subscription_id: builtins.bytes
+    LEADER_ID_FIELD_NUMBER: _builtins.int
+    SUBSCRIPTION_ID_FIELD_NUMBER: _builtins.int
+    leader_id: _builtins.bytes
+    subscription_id: _builtins.bytes
     def __init__(
         self,
         *,
-        leader_id: builtins.bytes = ...,
-        subscription_id: builtins.bytes = ...,
+        leader_id: _builtins.bytes = ...,
+        subscription_id: _builtins.bytes = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["leader_id", b"leader_id", "subscription_id", b"subscription_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["leader_id", b"leader_id", "subscription_id", b"subscription_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___CloneAssignment = CloneAssignment
+Global___CloneAssignment: _TypeAlias = CloneAssignment  # noqa: Y015
 
-@typing.final
-class DropSubscription(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class DropSubscription(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    LEADER_ID_FIELD_NUMBER: builtins.int
-    SUBSCRIPTION_ID_FIELD_NUMBER: builtins.int
-    leader_id: builtins.bytes
-    subscription_id: builtins.bytes
+    LEADER_ID_FIELD_NUMBER: _builtins.int
+    SUBSCRIPTION_ID_FIELD_NUMBER: _builtins.int
+    leader_id: _builtins.bytes
+    subscription_id: _builtins.bytes
     def __init__(
         self,
         *,
-        leader_id: builtins.bytes = ...,
-        subscription_id: builtins.bytes = ...,
+        leader_id: _builtins.bytes = ...,
+        subscription_id: _builtins.bytes = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["leader_id", b"leader_id", "subscription_id", b"subscription_id"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["leader_id", b"leader_id", "subscription_id", b"subscription_id"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___DropSubscription = DropSubscription
+Global___DropSubscription: _TypeAlias = DropSubscription  # noqa: Y015

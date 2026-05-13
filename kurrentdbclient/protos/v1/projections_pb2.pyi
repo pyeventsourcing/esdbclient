@@ -3,556 +3,686 @@
 isort:skip_file
 """
 
-import builtins
-import google.protobuf.descriptor
-import google.protobuf.message
-import google.protobuf.struct_pb2
-import kurrentdbclient.protos.v1.shared_pb2
-import typing
+from google.protobuf import descriptor as _descriptor
+from google.protobuf import message as _message
+from google.protobuf import struct_pb2 as _struct_pb2
+from kurrentdbclient.protos.v1 import shared_pb2 as _shared_pb2
+import builtins as _builtins
+import sys
+import typing as _typing
 
-DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
+else:
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
-@typing.final
-class CreateReq(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+if sys.version_info >= (3, 13):
+    from warnings import deprecated as _deprecated
+else:
+    from typing_extensions import deprecated as _deprecated
 
-    @typing.final
-    class Options(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+DESCRIPTOR: _descriptor.FileDescriptor
 
-        @typing.final
-        class Transient(google.protobuf.message.Message):
-            DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class CreateReq(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-            NAME_FIELD_NUMBER: builtins.int
-            name: builtins.str
+    @_typing.final
+    class Options(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
+
+        @_typing.final
+        class Transient(_message.Message):
+            DESCRIPTOR: _descriptor.Descriptor
+
+            NAME_FIELD_NUMBER: _builtins.int
+            name: _builtins.str
             def __init__(
                 self,
                 *,
-                name: builtins.str = ...,
+                name: _builtins.str = ...,
             ) -> None: ...
-            def ClearField(self, field_name: typing.Literal["name", b"name"]) -> None: ...
+            _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+            def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+            _ClearFieldArgType: _TypeAlias = _typing.Literal["name", b"name"]  # noqa: Y015
+            def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+            def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-        @typing.final
-        class Continuous(google.protobuf.message.Message):
-            DESCRIPTOR: google.protobuf.descriptor.Descriptor
+        @_typing.final
+        class Continuous(_message.Message):
+            DESCRIPTOR: _descriptor.Descriptor
 
-            NAME_FIELD_NUMBER: builtins.int
-            EMIT_ENABLED_FIELD_NUMBER: builtins.int
-            TRACK_EMITTED_STREAMS_FIELD_NUMBER: builtins.int
-            name: builtins.str
-            emit_enabled: builtins.bool
-            track_emitted_streams: builtins.bool
+            NAME_FIELD_NUMBER: _builtins.int
+            EMIT_ENABLED_FIELD_NUMBER: _builtins.int
+            TRACK_EMITTED_STREAMS_FIELD_NUMBER: _builtins.int
+            name: _builtins.str
+            emit_enabled: _builtins.bool
+            track_emitted_streams: _builtins.bool
             def __init__(
                 self,
                 *,
-                name: builtins.str = ...,
-                emit_enabled: builtins.bool = ...,
-                track_emitted_streams: builtins.bool = ...,
+                name: _builtins.str = ...,
+                emit_enabled: _builtins.bool = ...,
+                track_emitted_streams: _builtins.bool = ...,
             ) -> None: ...
-            def ClearField(self, field_name: typing.Literal["emit_enabled", b"emit_enabled", "name", b"name", "track_emitted_streams", b"track_emitted_streams"]) -> None: ...
+            _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+            def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+            _ClearFieldArgType: _TypeAlias = _typing.Literal["emit_enabled", b"emit_enabled", "name", b"name", "track_emitted_streams", b"track_emitted_streams"]  # noqa: Y015
+            def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+            def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-        ONE_TIME_FIELD_NUMBER: builtins.int
-        TRANSIENT_FIELD_NUMBER: builtins.int
-        CONTINUOUS_FIELD_NUMBER: builtins.int
-        QUERY_FIELD_NUMBER: builtins.int
-        query: builtins.str
-        @property
-        def one_time(self) -> kurrentdbclient.protos.v1.shared_pb2.Empty: ...
-        @property
-        def transient(self) -> global___CreateReq.Options.Transient: ...
-        @property
-        def continuous(self) -> global___CreateReq.Options.Continuous: ...
+        ONE_TIME_FIELD_NUMBER: _builtins.int
+        TRANSIENT_FIELD_NUMBER: _builtins.int
+        CONTINUOUS_FIELD_NUMBER: _builtins.int
+        QUERY_FIELD_NUMBER: _builtins.int
+        ENGINE_VERSION_FIELD_NUMBER: _builtins.int
+        query: _builtins.str
+        engine_version: _builtins.int
+        """NEW. 0 or 1 = v1 (default), 2 = v2"""
+        @_builtins.property
+        def one_time(self) -> _shared_pb2.Empty: ...
+        @_builtins.property
+        @_deprecated("""This field has been marked as deprecated using proto field options.""")
+        def transient(self) -> Global___CreateReq.Options.Transient: ...
+        @_builtins.property
+        def continuous(self) -> Global___CreateReq.Options.Continuous: ...
         def __init__(
             self,
             *,
-            one_time: kurrentdbclient.protos.v1.shared_pb2.Empty | None = ...,
-            transient: global___CreateReq.Options.Transient | None = ...,
-            continuous: global___CreateReq.Options.Continuous | None = ...,
-            query: builtins.str = ...,
+            one_time: _shared_pb2.Empty | None = ...,
+            transient: Global___CreateReq.Options.Transient | None = ...,
+            continuous: Global___CreateReq.Options.Continuous | None = ...,
+            query: _builtins.str = ...,
+            engine_version: _builtins.int = ...,
         ) -> None: ...
-        def HasField(self, field_name: typing.Literal["continuous", b"continuous", "mode", b"mode", "one_time", b"one_time", "transient", b"transient"]) -> builtins.bool: ...
-        def ClearField(self, field_name: typing.Literal["continuous", b"continuous", "mode", b"mode", "one_time", b"one_time", "query", b"query", "transient", b"transient"]) -> None: ...
-        def WhichOneof(self, oneof_group: typing.Literal["mode", b"mode"]) -> typing.Literal["one_time", "transient", "continuous"] | None: ...
+        _HasFieldArgType: _TypeAlias = _typing.Literal["continuous", b"continuous", "mode", b"mode", "one_time", b"one_time", "transient", b"transient"]  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["continuous", b"continuous", "engine_version", b"engine_version", "mode", b"mode", "one_time", b"one_time", "query", b"query", "transient", b"transient"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        _WhichOneofReturnType_mode: _TypeAlias = _typing.Literal["one_time", "transient", "continuous"]  # noqa: Y015
+        _WhichOneofArgType_mode: _TypeAlias = _typing.Literal["mode", b"mode"]  # noqa: Y015
+        def WhichOneof(self, oneof_group: _WhichOneofArgType_mode) -> _WhichOneofReturnType_mode | None: ...
 
-    OPTIONS_FIELD_NUMBER: builtins.int
-    @property
-    def options(self) -> global___CreateReq.Options: ...
+    OPTIONS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def options(self) -> Global___CreateReq.Options: ...
     def __init__(
         self,
         *,
-        options: global___CreateReq.Options | None = ...,
+        options: Global___CreateReq.Options | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["options", b"options"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["options", b"options"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___CreateReq = CreateReq
+Global___CreateReq: _TypeAlias = CreateReq  # noqa: Y015
 
-@typing.final
-class CreateResp(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class CreateResp(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
     def __init__(
         self,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___CreateResp = CreateResp
+Global___CreateResp: _TypeAlias = CreateResp  # noqa: Y015
 
-@typing.final
-class UpdateReq(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class UpdateReq(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    @typing.final
-    class Options(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    @_typing.final
+    class Options(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
 
-        NAME_FIELD_NUMBER: builtins.int
-        QUERY_FIELD_NUMBER: builtins.int
-        EMIT_ENABLED_FIELD_NUMBER: builtins.int
-        NO_EMIT_OPTIONS_FIELD_NUMBER: builtins.int
-        name: builtins.str
-        query: builtins.str
-        emit_enabled: builtins.bool
-        @property
-        def no_emit_options(self) -> kurrentdbclient.protos.v1.shared_pb2.Empty: ...
+        NAME_FIELD_NUMBER: _builtins.int
+        QUERY_FIELD_NUMBER: _builtins.int
+        EMIT_ENABLED_FIELD_NUMBER: _builtins.int
+        NO_EMIT_OPTIONS_FIELD_NUMBER: _builtins.int
+        name: _builtins.str
+        query: _builtins.str
+        emit_enabled: _builtins.bool
+        @_builtins.property
+        def no_emit_options(self) -> _shared_pb2.Empty: ...
         def __init__(
             self,
             *,
-            name: builtins.str = ...,
-            query: builtins.str = ...,
-            emit_enabled: builtins.bool = ...,
-            no_emit_options: kurrentdbclient.protos.v1.shared_pb2.Empty | None = ...,
+            name: _builtins.str = ...,
+            query: _builtins.str = ...,
+            emit_enabled: _builtins.bool = ...,
+            no_emit_options: _shared_pb2.Empty | None = ...,
         ) -> None: ...
-        def HasField(self, field_name: typing.Literal["emit_enabled", b"emit_enabled", "emit_option", b"emit_option", "no_emit_options", b"no_emit_options"]) -> builtins.bool: ...
-        def ClearField(self, field_name: typing.Literal["emit_enabled", b"emit_enabled", "emit_option", b"emit_option", "name", b"name", "no_emit_options", b"no_emit_options", "query", b"query"]) -> None: ...
-        def WhichOneof(self, oneof_group: typing.Literal["emit_option", b"emit_option"]) -> typing.Literal["emit_enabled", "no_emit_options"] | None: ...
+        _HasFieldArgType: _TypeAlias = _typing.Literal["emit_enabled", b"emit_enabled", "emit_option", b"emit_option", "no_emit_options", b"no_emit_options"]  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["emit_enabled", b"emit_enabled", "emit_option", b"emit_option", "name", b"name", "no_emit_options", b"no_emit_options", "query", b"query"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        _WhichOneofReturnType_emit_option: _TypeAlias = _typing.Literal["emit_enabled", "no_emit_options"]  # noqa: Y015
+        _WhichOneofArgType_emit_option: _TypeAlias = _typing.Literal["emit_option", b"emit_option"]  # noqa: Y015
+        def WhichOneof(self, oneof_group: _WhichOneofArgType_emit_option) -> _WhichOneofReturnType_emit_option | None: ...
 
-    OPTIONS_FIELD_NUMBER: builtins.int
-    @property
-    def options(self) -> global___UpdateReq.Options: ...
+    OPTIONS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def options(self) -> Global___UpdateReq.Options: ...
     def __init__(
         self,
         *,
-        options: global___UpdateReq.Options | None = ...,
+        options: Global___UpdateReq.Options | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["options", b"options"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["options", b"options"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___UpdateReq = UpdateReq
+Global___UpdateReq: _TypeAlias = UpdateReq  # noqa: Y015
 
-@typing.final
-class UpdateResp(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class UpdateResp(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
     def __init__(
         self,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___UpdateResp = UpdateResp
+Global___UpdateResp: _TypeAlias = UpdateResp  # noqa: Y015
 
-@typing.final
-class DeleteReq(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class DeleteReq(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    @typing.final
-    class Options(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    @_typing.final
+    class Options(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
 
-        NAME_FIELD_NUMBER: builtins.int
-        DELETE_EMITTED_STREAMS_FIELD_NUMBER: builtins.int
-        DELETE_STATE_STREAM_FIELD_NUMBER: builtins.int
-        DELETE_CHECKPOINT_STREAM_FIELD_NUMBER: builtins.int
-        name: builtins.str
-        delete_emitted_streams: builtins.bool
-        delete_state_stream: builtins.bool
-        delete_checkpoint_stream: builtins.bool
+        NAME_FIELD_NUMBER: _builtins.int
+        DELETE_EMITTED_STREAMS_FIELD_NUMBER: _builtins.int
+        DELETE_STATE_STREAM_FIELD_NUMBER: _builtins.int
+        DELETE_CHECKPOINT_STREAM_FIELD_NUMBER: _builtins.int
+        name: _builtins.str
+        delete_emitted_streams: _builtins.bool
+        delete_state_stream: _builtins.bool
+        delete_checkpoint_stream: _builtins.bool
         def __init__(
             self,
             *,
-            name: builtins.str = ...,
-            delete_emitted_streams: builtins.bool = ...,
-            delete_state_stream: builtins.bool = ...,
-            delete_checkpoint_stream: builtins.bool = ...,
+            name: _builtins.str = ...,
+            delete_emitted_streams: _builtins.bool = ...,
+            delete_state_stream: _builtins.bool = ...,
+            delete_checkpoint_stream: _builtins.bool = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["delete_checkpoint_stream", b"delete_checkpoint_stream", "delete_emitted_streams", b"delete_emitted_streams", "delete_state_stream", b"delete_state_stream", "name", b"name"]) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["delete_checkpoint_stream", b"delete_checkpoint_stream", "delete_emitted_streams", b"delete_emitted_streams", "delete_state_stream", b"delete_state_stream", "name", b"name"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-    OPTIONS_FIELD_NUMBER: builtins.int
-    @property
-    def options(self) -> global___DeleteReq.Options: ...
+    OPTIONS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def options(self) -> Global___DeleteReq.Options: ...
     def __init__(
         self,
         *,
-        options: global___DeleteReq.Options | None = ...,
+        options: Global___DeleteReq.Options | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["options", b"options"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["options", b"options"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___DeleteReq = DeleteReq
+Global___DeleteReq: _TypeAlias = DeleteReq  # noqa: Y015
 
-@typing.final
-class DeleteResp(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class DeleteResp(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
     def __init__(
         self,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___DeleteResp = DeleteResp
+Global___DeleteResp: _TypeAlias = DeleteResp  # noqa: Y015
 
-@typing.final
-class StatisticsReq(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class StatisticsReq(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    @typing.final
-    class Options(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    @_typing.final
+    class Options(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
 
-        NAME_FIELD_NUMBER: builtins.int
-        ALL_FIELD_NUMBER: builtins.int
-        TRANSIENT_FIELD_NUMBER: builtins.int
-        CONTINUOUS_FIELD_NUMBER: builtins.int
-        ONE_TIME_FIELD_NUMBER: builtins.int
-        name: builtins.str
-        @property
-        def all(self) -> kurrentdbclient.protos.v1.shared_pb2.Empty: ...
-        @property
-        def transient(self) -> kurrentdbclient.protos.v1.shared_pb2.Empty: ...
-        @property
-        def continuous(self) -> kurrentdbclient.protos.v1.shared_pb2.Empty: ...
-        @property
-        def one_time(self) -> kurrentdbclient.protos.v1.shared_pb2.Empty: ...
+        NAME_FIELD_NUMBER: _builtins.int
+        ALL_FIELD_NUMBER: _builtins.int
+        TRANSIENT_FIELD_NUMBER: _builtins.int
+        CONTINUOUS_FIELD_NUMBER: _builtins.int
+        ONE_TIME_FIELD_NUMBER: _builtins.int
+        name: _builtins.str
+        @_builtins.property
+        def all(self) -> _shared_pb2.Empty: ...
+        @_builtins.property
+        def transient(self) -> _shared_pb2.Empty: ...
+        @_builtins.property
+        def continuous(self) -> _shared_pb2.Empty: ...
+        @_builtins.property
+        def one_time(self) -> _shared_pb2.Empty: ...
         def __init__(
             self,
             *,
-            name: builtins.str = ...,
-            all: kurrentdbclient.protos.v1.shared_pb2.Empty | None = ...,
-            transient: kurrentdbclient.protos.v1.shared_pb2.Empty | None = ...,
-            continuous: kurrentdbclient.protos.v1.shared_pb2.Empty | None = ...,
-            one_time: kurrentdbclient.protos.v1.shared_pb2.Empty | None = ...,
+            name: _builtins.str = ...,
+            all: _shared_pb2.Empty | None = ...,
+            transient: _shared_pb2.Empty | None = ...,
+            continuous: _shared_pb2.Empty | None = ...,
+            one_time: _shared_pb2.Empty | None = ...,
         ) -> None: ...
-        def HasField(self, field_name: typing.Literal["all", b"all", "continuous", b"continuous", "mode", b"mode", "name", b"name", "one_time", b"one_time", "transient", b"transient"]) -> builtins.bool: ...
-        def ClearField(self, field_name: typing.Literal["all", b"all", "continuous", b"continuous", "mode", b"mode", "name", b"name", "one_time", b"one_time", "transient", b"transient"]) -> None: ...
-        def WhichOneof(self, oneof_group: typing.Literal["mode", b"mode"]) -> typing.Literal["name", "all", "transient", "continuous", "one_time"] | None: ...
+        _HasFieldArgType: _TypeAlias = _typing.Literal["all", b"all", "continuous", b"continuous", "mode", b"mode", "name", b"name", "one_time", b"one_time", "transient", b"transient"]  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["all", b"all", "continuous", b"continuous", "mode", b"mode", "name", b"name", "one_time", b"one_time", "transient", b"transient"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        _WhichOneofReturnType_mode: _TypeAlias = _typing.Literal["name", "all", "transient", "continuous", "one_time"]  # noqa: Y015
+        _WhichOneofArgType_mode: _TypeAlias = _typing.Literal["mode", b"mode"]  # noqa: Y015
+        def WhichOneof(self, oneof_group: _WhichOneofArgType_mode) -> _WhichOneofReturnType_mode | None: ...
 
-    OPTIONS_FIELD_NUMBER: builtins.int
-    @property
-    def options(self) -> global___StatisticsReq.Options: ...
+    OPTIONS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def options(self) -> Global___StatisticsReq.Options: ...
     def __init__(
         self,
         *,
-        options: global___StatisticsReq.Options | None = ...,
+        options: Global___StatisticsReq.Options | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["options", b"options"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["options", b"options"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___StatisticsReq = StatisticsReq
+Global___StatisticsReq: _TypeAlias = StatisticsReq  # noqa: Y015
 
-@typing.final
-class StatisticsResp(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class StatisticsResp(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    @typing.final
-    class Details(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    @_typing.final
+    class Details(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
 
-        COREPROCESSINGTIME_FIELD_NUMBER: builtins.int
-        VERSION_FIELD_NUMBER: builtins.int
-        EPOCH_FIELD_NUMBER: builtins.int
-        EFFECTIVENAME_FIELD_NUMBER: builtins.int
-        WRITESINPROGRESS_FIELD_NUMBER: builtins.int
-        READSINPROGRESS_FIELD_NUMBER: builtins.int
-        PARTITIONSCACHED_FIELD_NUMBER: builtins.int
-        STATUS_FIELD_NUMBER: builtins.int
-        STATEREASON_FIELD_NUMBER: builtins.int
-        NAME_FIELD_NUMBER: builtins.int
-        MODE_FIELD_NUMBER: builtins.int
-        POSITION_FIELD_NUMBER: builtins.int
-        PROGRESS_FIELD_NUMBER: builtins.int
-        LASTCHECKPOINT_FIELD_NUMBER: builtins.int
-        EVENTSPROCESSEDAFTERRESTART_FIELD_NUMBER: builtins.int
-        CHECKPOINTSTATUS_FIELD_NUMBER: builtins.int
-        BUFFEREDEVENTS_FIELD_NUMBER: builtins.int
-        WRITEPENDINGEVENTSBEFORECHECKPOINT_FIELD_NUMBER: builtins.int
-        WRITEPENDINGEVENTSAFTERCHECKPOINT_FIELD_NUMBER: builtins.int
-        coreProcessingTime: builtins.int
-        version: builtins.int
-        epoch: builtins.int
-        effectiveName: builtins.str
-        writesInProgress: builtins.int
-        readsInProgress: builtins.int
-        partitionsCached: builtins.int
-        status: builtins.str
-        stateReason: builtins.str
-        name: builtins.str
-        mode: builtins.str
-        position: builtins.str
-        progress: builtins.float
-        lastCheckpoint: builtins.str
-        eventsProcessedAfterRestart: builtins.int
-        checkpointStatus: builtins.str
-        bufferedEvents: builtins.int
-        writePendingEventsBeforeCheckpoint: builtins.int
-        writePendingEventsAfterCheckpoint: builtins.int
+        COREPROCESSINGTIME_FIELD_NUMBER: _builtins.int
+        VERSION_FIELD_NUMBER: _builtins.int
+        EPOCH_FIELD_NUMBER: _builtins.int
+        EFFECTIVENAME_FIELD_NUMBER: _builtins.int
+        WRITESINPROGRESS_FIELD_NUMBER: _builtins.int
+        READSINPROGRESS_FIELD_NUMBER: _builtins.int
+        PARTITIONSCACHED_FIELD_NUMBER: _builtins.int
+        STATUS_FIELD_NUMBER: _builtins.int
+        STATEREASON_FIELD_NUMBER: _builtins.int
+        NAME_FIELD_NUMBER: _builtins.int
+        MODE_FIELD_NUMBER: _builtins.int
+        POSITION_FIELD_NUMBER: _builtins.int
+        PROGRESS_FIELD_NUMBER: _builtins.int
+        LASTCHECKPOINT_FIELD_NUMBER: _builtins.int
+        EVENTSPROCESSEDAFTERRESTART_FIELD_NUMBER: _builtins.int
+        CHECKPOINTSTATUS_FIELD_NUMBER: _builtins.int
+        BUFFEREDEVENTS_FIELD_NUMBER: _builtins.int
+        WRITEPENDINGEVENTSBEFORECHECKPOINT_FIELD_NUMBER: _builtins.int
+        WRITEPENDINGEVENTSAFTERCHECKPOINT_FIELD_NUMBER: _builtins.int
+        coreProcessingTime: _builtins.int
+        version: _builtins.int
+        epoch: _builtins.int
+        effectiveName: _builtins.str
+        writesInProgress: _builtins.int
+        readsInProgress: _builtins.int
+        partitionsCached: _builtins.int
+        status: _builtins.str
+        stateReason: _builtins.str
+        name: _builtins.str
+        mode: _builtins.str
+        position: _builtins.str
+        progress: _builtins.float
+        lastCheckpoint: _builtins.str
+        eventsProcessedAfterRestart: _builtins.int
+        checkpointStatus: _builtins.str
+        bufferedEvents: _builtins.int
+        writePendingEventsBeforeCheckpoint: _builtins.int
+        writePendingEventsAfterCheckpoint: _builtins.int
         def __init__(
             self,
             *,
-            coreProcessingTime: builtins.int = ...,
-            version: builtins.int = ...,
-            epoch: builtins.int = ...,
-            effectiveName: builtins.str = ...,
-            writesInProgress: builtins.int = ...,
-            readsInProgress: builtins.int = ...,
-            partitionsCached: builtins.int = ...,
-            status: builtins.str = ...,
-            stateReason: builtins.str = ...,
-            name: builtins.str = ...,
-            mode: builtins.str = ...,
-            position: builtins.str = ...,
-            progress: builtins.float = ...,
-            lastCheckpoint: builtins.str = ...,
-            eventsProcessedAfterRestart: builtins.int = ...,
-            checkpointStatus: builtins.str = ...,
-            bufferedEvents: builtins.int = ...,
-            writePendingEventsBeforeCheckpoint: builtins.int = ...,
-            writePendingEventsAfterCheckpoint: builtins.int = ...,
+            coreProcessingTime: _builtins.int = ...,
+            version: _builtins.int = ...,
+            epoch: _builtins.int = ...,
+            effectiveName: _builtins.str = ...,
+            writesInProgress: _builtins.int = ...,
+            readsInProgress: _builtins.int = ...,
+            partitionsCached: _builtins.int = ...,
+            status: _builtins.str = ...,
+            stateReason: _builtins.str = ...,
+            name: _builtins.str = ...,
+            mode: _builtins.str = ...,
+            position: _builtins.str = ...,
+            progress: _builtins.float = ...,
+            lastCheckpoint: _builtins.str = ...,
+            eventsProcessedAfterRestart: _builtins.int = ...,
+            checkpointStatus: _builtins.str = ...,
+            bufferedEvents: _builtins.int = ...,
+            writePendingEventsBeforeCheckpoint: _builtins.int = ...,
+            writePendingEventsAfterCheckpoint: _builtins.int = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["bufferedEvents", b"bufferedEvents", "checkpointStatus", b"checkpointStatus", "coreProcessingTime", b"coreProcessingTime", "effectiveName", b"effectiveName", "epoch", b"epoch", "eventsProcessedAfterRestart", b"eventsProcessedAfterRestart", "lastCheckpoint", b"lastCheckpoint", "mode", b"mode", "name", b"name", "partitionsCached", b"partitionsCached", "position", b"position", "progress", b"progress", "readsInProgress", b"readsInProgress", "stateReason", b"stateReason", "status", b"status", "version", b"version", "writePendingEventsAfterCheckpoint", b"writePendingEventsAfterCheckpoint", "writePendingEventsBeforeCheckpoint", b"writePendingEventsBeforeCheckpoint", "writesInProgress", b"writesInProgress"]) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["bufferedEvents", b"bufferedEvents", "checkpointStatus", b"checkpointStatus", "coreProcessingTime", b"coreProcessingTime", "effectiveName", b"effectiveName", "epoch", b"epoch", "eventsProcessedAfterRestart", b"eventsProcessedAfterRestart", "lastCheckpoint", b"lastCheckpoint", "mode", b"mode", "name", b"name", "partitionsCached", b"partitionsCached", "position", b"position", "progress", b"progress", "readsInProgress", b"readsInProgress", "stateReason", b"stateReason", "status", b"status", "version", b"version", "writePendingEventsAfterCheckpoint", b"writePendingEventsAfterCheckpoint", "writePendingEventsBeforeCheckpoint", b"writePendingEventsBeforeCheckpoint", "writesInProgress", b"writesInProgress"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-    DETAILS_FIELD_NUMBER: builtins.int
-    @property
-    def details(self) -> global___StatisticsResp.Details: ...
+    DETAILS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def details(self) -> Global___StatisticsResp.Details: ...
     def __init__(
         self,
         *,
-        details: global___StatisticsResp.Details | None = ...,
+        details: Global___StatisticsResp.Details | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["details", b"details"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["details", b"details"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["details", b"details"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["details", b"details"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___StatisticsResp = StatisticsResp
+Global___StatisticsResp: _TypeAlias = StatisticsResp  # noqa: Y015
 
-@typing.final
-class StateReq(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class StateReq(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    @typing.final
-    class Options(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    @_typing.final
+    class Options(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
 
-        NAME_FIELD_NUMBER: builtins.int
-        PARTITION_FIELD_NUMBER: builtins.int
-        name: builtins.str
-        partition: builtins.str
+        NAME_FIELD_NUMBER: _builtins.int
+        PARTITION_FIELD_NUMBER: _builtins.int
+        name: _builtins.str
+        partition: _builtins.str
         def __init__(
             self,
             *,
-            name: builtins.str = ...,
-            partition: builtins.str = ...,
+            name: _builtins.str = ...,
+            partition: _builtins.str = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["name", b"name", "partition", b"partition"]) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["name", b"name", "partition", b"partition"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-    OPTIONS_FIELD_NUMBER: builtins.int
-    @property
-    def options(self) -> global___StateReq.Options: ...
+    OPTIONS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def options(self) -> Global___StateReq.Options: ...
     def __init__(
         self,
         *,
-        options: global___StateReq.Options | None = ...,
+        options: Global___StateReq.Options | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["options", b"options"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["options", b"options"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___StateReq = StateReq
+Global___StateReq: _TypeAlias = StateReq  # noqa: Y015
 
-@typing.final
-class StateResp(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class StateResp(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    STATE_FIELD_NUMBER: builtins.int
-    @property
-    def state(self) -> google.protobuf.struct_pb2.Value: ...
+    STATE_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def state(self) -> _struct_pb2.Value: ...
     def __init__(
         self,
         *,
-        state: google.protobuf.struct_pb2.Value | None = ...,
+        state: _struct_pb2.Value | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["state", b"state"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["state", b"state"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["state", b"state"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["state", b"state"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___StateResp = StateResp
+Global___StateResp: _TypeAlias = StateResp  # noqa: Y015
 
-@typing.final
-class ResultReq(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ResultReq(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    @typing.final
-    class Options(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    @_typing.final
+    class Options(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
 
-        NAME_FIELD_NUMBER: builtins.int
-        PARTITION_FIELD_NUMBER: builtins.int
-        name: builtins.str
-        partition: builtins.str
+        NAME_FIELD_NUMBER: _builtins.int
+        PARTITION_FIELD_NUMBER: _builtins.int
+        name: _builtins.str
+        partition: _builtins.str
         def __init__(
             self,
             *,
-            name: builtins.str = ...,
-            partition: builtins.str = ...,
+            name: _builtins.str = ...,
+            partition: _builtins.str = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["name", b"name", "partition", b"partition"]) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["name", b"name", "partition", b"partition"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-    OPTIONS_FIELD_NUMBER: builtins.int
-    @property
-    def options(self) -> global___ResultReq.Options: ...
+    OPTIONS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def options(self) -> Global___ResultReq.Options: ...
     def __init__(
         self,
         *,
-        options: global___ResultReq.Options | None = ...,
+        options: Global___ResultReq.Options | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["options", b"options"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["options", b"options"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ResultReq = ResultReq
+Global___ResultReq: _TypeAlias = ResultReq  # noqa: Y015
 
-@typing.final
-class ResultResp(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ResultResp(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    RESULT_FIELD_NUMBER: builtins.int
-    @property
-    def result(self) -> google.protobuf.struct_pb2.Value: ...
+    RESULT_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def result(self) -> _struct_pb2.Value: ...
     def __init__(
         self,
         *,
-        result: google.protobuf.struct_pb2.Value | None = ...,
+        result: _struct_pb2.Value | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["result", b"result"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["result", b"result"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["result", b"result"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["result", b"result"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ResultResp = ResultResp
+Global___ResultResp: _TypeAlias = ResultResp  # noqa: Y015
 
-@typing.final
-class ResetReq(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ResetReq(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    @typing.final
-    class Options(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    @_typing.final
+    class Options(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
 
-        NAME_FIELD_NUMBER: builtins.int
-        WRITE_CHECKPOINT_FIELD_NUMBER: builtins.int
-        name: builtins.str
-        write_checkpoint: builtins.bool
+        NAME_FIELD_NUMBER: _builtins.int
+        WRITE_CHECKPOINT_FIELD_NUMBER: _builtins.int
+        name: _builtins.str
+        write_checkpoint: _builtins.bool
         def __init__(
             self,
             *,
-            name: builtins.str = ...,
-            write_checkpoint: builtins.bool = ...,
+            name: _builtins.str = ...,
+            write_checkpoint: _builtins.bool = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["name", b"name", "write_checkpoint", b"write_checkpoint"]) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["name", b"name", "write_checkpoint", b"write_checkpoint"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-    OPTIONS_FIELD_NUMBER: builtins.int
-    @property
-    def options(self) -> global___ResetReq.Options: ...
+    OPTIONS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def options(self) -> Global___ResetReq.Options: ...
     def __init__(
         self,
         *,
-        options: global___ResetReq.Options | None = ...,
+        options: Global___ResetReq.Options | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["options", b"options"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["options", b"options"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ResetReq = ResetReq
+Global___ResetReq: _TypeAlias = ResetReq  # noqa: Y015
 
-@typing.final
-class ResetResp(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ResetResp(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
     def __init__(
         self,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ResetResp = ResetResp
+Global___ResetResp: _TypeAlias = ResetResp  # noqa: Y015
 
-@typing.final
-class EnableReq(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class EnableReq(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    @typing.final
-    class Options(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    @_typing.final
+    class Options(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
 
-        NAME_FIELD_NUMBER: builtins.int
-        name: builtins.str
+        NAME_FIELD_NUMBER: _builtins.int
+        name: _builtins.str
         def __init__(
             self,
             *,
-            name: builtins.str = ...,
+            name: _builtins.str = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["name", b"name"]) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["name", b"name"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-    OPTIONS_FIELD_NUMBER: builtins.int
-    @property
-    def options(self) -> global___EnableReq.Options: ...
+    OPTIONS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def options(self) -> Global___EnableReq.Options: ...
     def __init__(
         self,
         *,
-        options: global___EnableReq.Options | None = ...,
+        options: Global___EnableReq.Options | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["options", b"options"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["options", b"options"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___EnableReq = EnableReq
+Global___EnableReq: _TypeAlias = EnableReq  # noqa: Y015
 
-@typing.final
-class EnableResp(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class EnableResp(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
     def __init__(
         self,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___EnableResp = EnableResp
+Global___EnableResp: _TypeAlias = EnableResp  # noqa: Y015
 
-@typing.final
-class DisableReq(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class DisableReq(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    @typing.final
-    class Options(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    @_typing.final
+    class Options(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
 
-        NAME_FIELD_NUMBER: builtins.int
-        WRITE_CHECKPOINT_FIELD_NUMBER: builtins.int
-        name: builtins.str
-        write_checkpoint: builtins.bool
+        NAME_FIELD_NUMBER: _builtins.int
+        WRITE_CHECKPOINT_FIELD_NUMBER: _builtins.int
+        name: _builtins.str
+        write_checkpoint: _builtins.bool
         def __init__(
             self,
             *,
-            name: builtins.str = ...,
-            write_checkpoint: builtins.bool = ...,
+            name: _builtins.str = ...,
+            write_checkpoint: _builtins.bool = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["name", b"name", "write_checkpoint", b"write_checkpoint"]) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["name", b"name", "write_checkpoint", b"write_checkpoint"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-    OPTIONS_FIELD_NUMBER: builtins.int
-    @property
-    def options(self) -> global___DisableReq.Options: ...
+    OPTIONS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def options(self) -> Global___DisableReq.Options: ...
     def __init__(
         self,
         *,
-        options: global___DisableReq.Options | None = ...,
+        options: Global___DisableReq.Options | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["options", b"options"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["options", b"options"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["options", b"options"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___DisableReq = DisableReq
+Global___DisableReq: _TypeAlias = DisableReq  # noqa: Y015
 
-@typing.final
-class DisableResp(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class DisableResp(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
     def __init__(
         self,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___DisableResp = DisableResp
+Global___DisableResp: _TypeAlias = DisableResp  # noqa: Y015

@@ -39,7 +39,7 @@ Let's get started by [connecting to KurrentDB](./getting-started.md#connecting-t
 from kurrentdbclient import KurrentDBClient, NewEvent, StreamState
 
 # Connect to KurrentDB
-uri = "kurrentdb://127.0.0.1:2113?tls=false"
+uri = "kurrentdb://127.0.0.1:2113?tls=false&defaultDeadline=5"
 client = KurrentDBClient(uri)
 
 # Construct new event objects
@@ -68,7 +68,7 @@ commit_position = client.append_to_stream(
 from kurrentdbclient import AsyncKurrentDBClient, NewEvent, StreamState
 
 # Connect to KurrentDB
-uri = "kurrentdb://127.0.0.1:2113?tls=false"
+uri = "kurrentdb://127.0.0.1:2113?tls=false&defaultDeadline=5"
 client = AsyncKurrentDBClient(uri)
 
 # Construct new event objects

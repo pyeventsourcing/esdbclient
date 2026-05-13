@@ -16,25 +16,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
-import builtins
-import google.protobuf.descriptor
-import google.protobuf.internal.enum_type_wrapper
+from google.protobuf import descriptor as _descriptor
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+import builtins as _builtins
 import sys
-import typing
+import typing as _typing
 
 if sys.version_info >= (3, 10):
-    import typing as typing_extensions
+    from typing import TypeAlias as _TypeAlias
 else:
-    import typing_extensions
+    from typing_extensions import TypeAlias as _TypeAlias
 
-DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+DESCRIPTOR: _descriptor.FileDescriptor
 
 class _Code:
-    ValueType = typing.NewType("ValueType", builtins.int)
-    V: typing_extensions.TypeAlias = ValueType
+    ValueType = _typing.NewType("ValueType", _builtins.int)
+    V: _TypeAlias = ValueType  # noqa: Y015
 
-class _CodeEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_Code.ValueType], builtins.type):
-    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+class _CodeEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_Code.ValueType], _builtins.type):
+    DESCRIPTOR: _descriptor.EnumDescriptor
     OK: _Code.ValueType  # 0
     """Not an error; returned on success.
 
@@ -354,4 +354,4 @@ DATA_LOSS: Code.ValueType  # 15
 
 HTTP Mapping: 500 Internal Server Error
 """
-global___Code = Code
+Global___Code: _TypeAlias = Code  # noqa: Y015

@@ -6,29 +6,29 @@ This protocol is UNSTABLE in the sense of being subject to change.
 ******************************************************************************************
 """
 
-import builtins
-import collections.abc
-import google.protobuf.descriptor
-import google.protobuf.internal.containers
-import google.protobuf.internal.enum_type_wrapper
-import google.protobuf.message
-import google.protobuf.struct_pb2
+from collections import abc as _abc
+from google.protobuf import descriptor as _descriptor
+from google.protobuf import message as _message
+from google.protobuf import struct_pb2 as _struct_pb2
+from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+import builtins as _builtins
 import sys
-import typing
+import typing as _typing
 
-if sys.version_info >= (3, 10):
-    import typing as typing_extensions
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
 else:
-    import typing_extensions
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
-DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+DESCRIPTOR: _descriptor.FileDescriptor
 
 class _SchemaFormat:
-    ValueType = typing.NewType("ValueType", builtins.int)
-    V: typing_extensions.TypeAlias = ValueType
+    ValueType = _typing.NewType("ValueType", _builtins.int)
+    V: _TypeAlias = ValueType  # noqa: Y015
 
-class _SchemaFormatEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_SchemaFormat.ValueType], builtins.type):
-    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+class _SchemaFormatEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_SchemaFormat.ValueType], _builtins.type):
+    DESCRIPTOR: _descriptor.EnumDescriptor
     SCHEMA_FORMAT_UNSPECIFIED: _SchemaFormat.ValueType  # 0
     """Default value, should not be used."""
     SCHEMA_FORMAT_JSON: _SchemaFormat.ValueType  # 1
@@ -45,14 +45,14 @@ SCHEMA_FORMAT_JSON: SchemaFormat.ValueType  # 1
 SCHEMA_FORMAT_PROTOBUF: SchemaFormat.ValueType  # 2
 SCHEMA_FORMAT_AVRO: SchemaFormat.ValueType  # 3
 SCHEMA_FORMAT_BYTES: SchemaFormat.ValueType  # 4
-global___SchemaFormat = SchemaFormat
+Global___SchemaFormat: _TypeAlias = SchemaFormat  # noqa: Y015
 
 class _ExpectedRevisionConstants:
-    ValueType = typing.NewType("ValueType", builtins.int)
-    V: typing_extensions.TypeAlias = ValueType
+    ValueType = _typing.NewType("ValueType", _builtins.int)
+    V: _TypeAlias = ValueType  # noqa: Y015
 
-class _ExpectedRevisionConstantsEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_ExpectedRevisionConstants.ValueType], builtins.type):
-    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+class _ExpectedRevisionConstantsEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_ExpectedRevisionConstants.ValueType], _builtins.type):
+    DESCRIPTOR: _descriptor.EnumDescriptor
     EXPECTED_REVISION_CONSTANTS_SINGLE_EVENT: _ExpectedRevisionConstants.ValueType  # 0
     """The stream must have exactly one event at revision 0.
     Used for scenarios requiring strict single-event semantics.
@@ -91,20 +91,20 @@ EXPECTED_REVISION_CONSTANTS_EXISTS: ExpectedRevisionConstants.ValueType  # -4
 """The stream must exist (have at least one record).
 Fails if the stream doesn't exist yet.
 """
-global___ExpectedRevisionConstants = ExpectedRevisionConstants
+Global___ExpectedRevisionConstants: _TypeAlias = ExpectedRevisionConstants  # noqa: Y015
 
-@typing.final
-class AppendRequest(google.protobuf.message.Message):
+@_typing.final
+class AppendRequest(_message.Message):
     """Represents the input for appending records to a specific stream."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    STREAM_FIELD_NUMBER: builtins.int
-    RECORDS_FIELD_NUMBER: builtins.int
-    EXPECTED_REVISION_FIELD_NUMBER: builtins.int
-    stream: builtins.str
+    STREAM_FIELD_NUMBER: _builtins.int
+    RECORDS_FIELD_NUMBER: _builtins.int
+    EXPECTED_REVISION_FIELD_NUMBER: _builtins.int
+    stream: _builtins.str
     """The stream to append records to."""
-    expected_revision: builtins.int
+    expected_revision: _builtins.int
     """The expected revision for optimistic concurrency control.
     Can be either:
     - A specific revision number (0, 1, 2, ...) - the stream must be at exactly this revision
@@ -112,89 +112,101 @@ class AppendRequest(google.protobuf.message.Message):
 
     If omitted, defaults to EXPECTED_REVISION_CONSTANTS_ANY (-2).
     """
-    @property
-    def records(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___AppendRecord]:
+    @_builtins.property
+    def records(self) -> _containers.RepeatedCompositeFieldContainer[Global___AppendRecord]:
         """The records to append to the stream."""
 
     def __init__(
         self,
         *,
-        stream: builtins.str = ...,
-        records: collections.abc.Iterable[global___AppendRecord] | None = ...,
-        expected_revision: builtins.int | None = ...,
+        stream: _builtins.str = ...,
+        records: _abc.Iterable[Global___AppendRecord] | None = ...,
+        expected_revision: _builtins.int | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_expected_revision", b"_expected_revision", "expected_revision", b"expected_revision"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_expected_revision", b"_expected_revision", "expected_revision", b"expected_revision", "records", b"records", "stream", b"stream"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["_expected_revision", b"_expected_revision"]) -> typing.Literal["expected_revision"] | None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_expected_revision", b"_expected_revision", "expected_revision", b"expected_revision"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_expected_revision", b"_expected_revision", "expected_revision", b"expected_revision", "records", b"records", "stream", b"stream"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__expected_revision: _TypeAlias = _typing.Literal["expected_revision"]  # noqa: Y015
+    _WhichOneofArgType__expected_revision: _TypeAlias = _typing.Literal["_expected_revision", b"_expected_revision"]  # noqa: Y015
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__expected_revision) -> _WhichOneofReturnType__expected_revision | None: ...
 
-global___AppendRequest = AppendRequest
+Global___AppendRequest: _TypeAlias = AppendRequest  # noqa: Y015
 
-@typing.final
-class AppendResponse(google.protobuf.message.Message):
+@_typing.final
+class AppendResponse(_message.Message):
     """Represents the outcome of an append operation."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    STREAM_FIELD_NUMBER: builtins.int
-    STREAM_REVISION_FIELD_NUMBER: builtins.int
-    POSITION_FIELD_NUMBER: builtins.int
-    stream: builtins.str
+    STREAM_FIELD_NUMBER: _builtins.int
+    STREAM_REVISION_FIELD_NUMBER: _builtins.int
+    POSITION_FIELD_NUMBER: _builtins.int
+    stream: _builtins.str
     """The stream to which records were appended."""
-    stream_revision: builtins.int
+    stream_revision: _builtins.int
     """The actual/current revision of the stream after the append.
     This is the revision number of the last record written to this stream.
     """
-    position: builtins.int
+    position: _builtins.int
     """The position of the last appended record in the global log."""
     def __init__(
         self,
         *,
-        stream: builtins.str = ...,
-        stream_revision: builtins.int = ...,
-        position: builtins.int | None = ...,
+        stream: _builtins.str = ...,
+        stream_revision: _builtins.int = ...,
+        position: _builtins.int | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_position", b"_position", "position", b"position"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_position", b"_position", "position", b"position", "stream", b"stream", "stream_revision", b"stream_revision"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["_position", b"_position"]) -> typing.Literal["position"] | None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_position", b"_position", "position", b"position"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_position", b"_position", "position", b"position", "stream", b"stream", "stream_revision", b"stream_revision"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__position: _TypeAlias = _typing.Literal["position"]  # noqa: Y015
+    _WhichOneofArgType__position: _TypeAlias = _typing.Literal["_position", b"_position"]  # noqa: Y015
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__position) -> _WhichOneofReturnType__position | None: ...
 
-global___AppendResponse = AppendResponse
+Global___AppendResponse: _TypeAlias = AppendResponse  # noqa: Y015
 
-@typing.final
-class AppendSessionResponse(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class AppendSessionResponse(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    OUTPUT_FIELD_NUMBER: builtins.int
-    POSITION_FIELD_NUMBER: builtins.int
-    position: builtins.int
+    OUTPUT_FIELD_NUMBER: _builtins.int
+    POSITION_FIELD_NUMBER: _builtins.int
+    position: _builtins.int
     """The global commit position of the last appended record in the session."""
-    @property
-    def output(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___AppendResponse]:
+    @_builtins.property
+    def output(self) -> _containers.RepeatedCompositeFieldContainer[Global___AppendResponse]:
         """The results of each append request in the session."""
 
     def __init__(
         self,
         *,
-        output: collections.abc.Iterable[global___AppendResponse] | None = ...,
-        position: builtins.int = ...,
+        output: _abc.Iterable[Global___AppendResponse] | None = ...,
+        position: _builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["output", b"output", "position", b"position"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["output", b"output", "position", b"position"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___AppendSessionResponse = AppendSessionResponse
+Global___AppendSessionResponse: _TypeAlias = AppendSessionResponse  # noqa: Y015
 
-@typing.final
-class SchemaInfo(google.protobuf.message.Message):
+@_typing.final
+class SchemaInfo(_message.Message):
     """Schema information for record validation and interpretation."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    FORMAT_FIELD_NUMBER: builtins.int
-    NAME_FIELD_NUMBER: builtins.int
-    ID_FIELD_NUMBER: builtins.int
-    format: global___SchemaFormat.ValueType
+    FORMAT_FIELD_NUMBER: _builtins.int
+    NAME_FIELD_NUMBER: _builtins.int
+    ID_FIELD_NUMBER: _builtins.int
+    format: Global___SchemaFormat.ValueType
     """The format of the data payload.
     Determines how the bytes in AppendRecord.data should be interpreted.
     """
-    name: builtins.str
+    name: _builtins.str
     """The schema name (replaces the legacy "event type" concept).
     Identifies what kind of data this record contains.
 
@@ -204,7 +216,7 @@ class SchemaInfo(google.protobuf.message.Message):
       - Dotted namespace: "Teams.Player.V1", "Orders.OrderPlaced.V2"
       - Reverse domain: "com.acme.orders.placed"
     """
-    id: builtins.str
+    id: _builtins.str
     """The identifier of the specific version of the schema that the record payload
     conforms to. This should match a registered schema version in the system.
     Not necessary when not enforcing schema validation.
@@ -212,54 +224,61 @@ class SchemaInfo(google.protobuf.message.Message):
     def __init__(
         self,
         *,
-        format: global___SchemaFormat.ValueType = ...,
-        name: builtins.str = ...,
-        id: builtins.str | None = ...,
+        format: Global___SchemaFormat.ValueType = ...,
+        name: _builtins.str = ...,
+        id: _builtins.str | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_id", b"_id", "id", b"id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_id", b"_id", "format", b"format", "id", b"id", "name", b"name"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["_id", b"_id"]) -> typing.Literal["id"] | None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_id", b"_id", "id", b"id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_id", b"_id", "format", b"format", "id", b"id", "name", b"name"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__id: _TypeAlias = _typing.Literal["id"]  # noqa: Y015
+    _WhichOneofArgType__id: _TypeAlias = _typing.Literal["_id", b"_id"]  # noqa: Y015
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__id) -> _WhichOneofReturnType__id | None: ...
 
-global___SchemaInfo = SchemaInfo
+Global___SchemaInfo: _TypeAlias = SchemaInfo  # noqa: Y015
 
-@typing.final
-class AppendRecord(google.protobuf.message.Message):
+@_typing.final
+class AppendRecord(_message.Message):
     """Record to be appended to a stream."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    @typing.final
-    class PropertiesEntry(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    @_typing.final
+    class PropertiesEntry(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
 
-        KEY_FIELD_NUMBER: builtins.int
-        VALUE_FIELD_NUMBER: builtins.int
-        key: builtins.str
-        @property
-        def value(self) -> google.protobuf.struct_pb2.Value: ...
+        KEY_FIELD_NUMBER: _builtins.int
+        VALUE_FIELD_NUMBER: _builtins.int
+        key: _builtins.str
+        @_builtins.property
+        def value(self) -> _struct_pb2.Value: ...
         def __init__(
             self,
             *,
-            key: builtins.str = ...,
-            value: google.protobuf.struct_pb2.Value | None = ...,
+            key: _builtins.str = ...,
+            value: _struct_pb2.Value | None = ...,
         ) -> None: ...
-        def HasField(self, field_name: typing.Literal["value", b"value"]) -> builtins.bool: ...
-        def ClearField(self, field_name: typing.Literal["key", b"key", "value", b"value"]) -> None: ...
+        _HasFieldArgType: _TypeAlias = _typing.Literal["value", b"value"]  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["key", b"key", "value", b"value"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-    RECORD_ID_FIELD_NUMBER: builtins.int
-    PROPERTIES_FIELD_NUMBER: builtins.int
-    SCHEMA_FIELD_NUMBER: builtins.int
-    DATA_FIELD_NUMBER: builtins.int
-    record_id: builtins.str
+    RECORD_ID_FIELD_NUMBER: _builtins.int
+    PROPERTIES_FIELD_NUMBER: _builtins.int
+    SCHEMA_FIELD_NUMBER: _builtins.int
+    DATA_FIELD_NUMBER: _builtins.int
+    record_id: _builtins.str
     """Unique identifier for this record (must be a valid UUID/GUID).
     If not provided, the server will generate a new one.
     """
-    data: builtins.bytes
+    data: _builtins.bytes
     """The record payload as raw bytes.
     The format specified in SchemaInfo determines how to interpret these bytes.
     """
-    @property
-    def properties(self) -> google.protobuf.internal.containers.MessageMap[builtins.str, google.protobuf.struct_pb2.Value]:
+    @_builtins.property
+    def properties(self) -> _containers.MessageMap[_builtins.str, _struct_pb2.Value]:
         """A collection of properties providing additional information about the
         record. Can contain user-defined or system propreties.
         System keys will be prefixed with "$" (e.g., "$timestamp").
@@ -277,20 +296,24 @@ class AppendRecord(google.protobuf.message.Message):
             - "$timestamp": "2025-01-15T10:30:00.000Z"         // ISO 8601 timestamp
         """
 
-    @property
-    def schema(self) -> global___SchemaInfo:
+    @_builtins.property
+    def schema(self) -> Global___SchemaInfo:
         """Schema information for this record."""
 
     def __init__(
         self,
         *,
-        record_id: builtins.str | None = ...,
-        properties: collections.abc.Mapping[builtins.str, google.protobuf.struct_pb2.Value] | None = ...,
-        schema: global___SchemaInfo | None = ...,
-        data: builtins.bytes = ...,
+        record_id: _builtins.str | None = ...,
+        properties: _abc.Mapping[_builtins.str, _struct_pb2.Value] | None = ...,
+        schema: Global___SchemaInfo | None = ...,
+        data: _builtins.bytes = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["_record_id", b"_record_id", "record_id", b"record_id", "schema", b"schema"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["_record_id", b"_record_id", "data", b"data", "properties", b"properties", "record_id", b"record_id", "schema", b"schema"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["_record_id", b"_record_id"]) -> typing.Literal["record_id"] | None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["_record_id", b"_record_id", "record_id", b"record_id", "schema", b"schema"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_record_id", b"_record_id", "data", b"data", "properties", b"properties", "record_id", b"record_id", "schema", b"schema"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType__record_id: _TypeAlias = _typing.Literal["record_id"]  # noqa: Y015
+    _WhichOneofArgType__record_id: _TypeAlias = _typing.Literal["_record_id", b"_record_id"]  # noqa: Y015
+    def WhichOneof(self, oneof_group: _WhichOneofArgType__record_id) -> _WhichOneofReturnType__record_id | None: ...
 
-global___AppendRecord = AppendRecord
+Global___AppendRecord: _TypeAlias = AppendRecord  # noqa: Y015

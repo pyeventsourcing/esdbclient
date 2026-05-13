@@ -3,216 +3,280 @@
 isort:skip_file
 """
 
-import builtins
-import google.protobuf.descriptor
-import google.protobuf.empty_pb2
-import google.protobuf.message
-import typing
+from google.protobuf import descriptor as _descriptor
+from google.protobuf import empty_pb2 as _empty_pb2
+from google.protobuf import message as _message
+import builtins as _builtins
+import sys
+import typing as _typing
 
-DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
+else:
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
-@typing.final
-class UUID(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+DESCRIPTOR: _descriptor.FileDescriptor
 
-    @typing.final
-    class Structured(google.protobuf.message.Message):
-        DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class UUID(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-        MOST_SIGNIFICANT_BITS_FIELD_NUMBER: builtins.int
-        LEAST_SIGNIFICANT_BITS_FIELD_NUMBER: builtins.int
-        most_significant_bits: builtins.int
-        least_significant_bits: builtins.int
+    @_typing.final
+    class Structured(_message.Message):
+        DESCRIPTOR: _descriptor.Descriptor
+
+        MOST_SIGNIFICANT_BITS_FIELD_NUMBER: _builtins.int
+        LEAST_SIGNIFICANT_BITS_FIELD_NUMBER: _builtins.int
+        most_significant_bits: _builtins.int
+        least_significant_bits: _builtins.int
         def __init__(
             self,
             *,
-            most_significant_bits: builtins.int = ...,
-            least_significant_bits: builtins.int = ...,
+            most_significant_bits: _builtins.int = ...,
+            least_significant_bits: _builtins.int = ...,
         ) -> None: ...
-        def ClearField(self, field_name: typing.Literal["least_significant_bits", b"least_significant_bits", "most_significant_bits", b"most_significant_bits"]) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["least_significant_bits", b"least_significant_bits", "most_significant_bits", b"most_significant_bits"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-    STRUCTURED_FIELD_NUMBER: builtins.int
-    STRING_FIELD_NUMBER: builtins.int
-    string: builtins.str
-    @property
-    def structured(self) -> global___UUID.Structured: ...
+    STRUCTURED_FIELD_NUMBER: _builtins.int
+    STRING_FIELD_NUMBER: _builtins.int
+    string: _builtins.str
+    @_builtins.property
+    def structured(self) -> Global___UUID.Structured: ...
     def __init__(
         self,
         *,
-        structured: global___UUID.Structured | None = ...,
-        string: builtins.str = ...,
+        structured: Global___UUID.Structured | None = ...,
+        string: _builtins.str = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["string", b"string", "structured", b"structured", "value", b"value"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["string", b"string", "structured", b"structured", "value", b"value"]) -> None: ...
-    def WhichOneof(self, oneof_group: typing.Literal["value", b"value"]) -> typing.Literal["structured", "string"] | None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["string", b"string", "structured", b"structured", "value", b"value"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["string", b"string", "structured", b"structured", "value", b"value"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType_value: _TypeAlias = _typing.Literal["structured", "string"]  # noqa: Y015
+    _WhichOneofArgType_value: _TypeAlias = _typing.Literal["value", b"value"]  # noqa: Y015
+    def WhichOneof(self, oneof_group: _WhichOneofArgType_value) -> _WhichOneofReturnType_value | None: ...
 
-global___UUID = UUID
+Global___UUID: _TypeAlias = UUID  # noqa: Y015
 
-@typing.final
-class Empty(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class Empty(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
     def __init__(
         self,
     ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___Empty = Empty
+Global___Empty: _TypeAlias = Empty  # noqa: Y015
 
-@typing.final
-class StreamIdentifier(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class StreamIdentifier(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    STREAM_NAME_FIELD_NUMBER: builtins.int
-    stream_name: builtins.bytes
-    def __init__(
-        self,
-        *,
-        stream_name: builtins.bytes = ...,
-    ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["stream_name", b"stream_name"]) -> None: ...
-
-global___StreamIdentifier = StreamIdentifier
-
-@typing.final
-class AllStreamPosition(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    COMMIT_POSITION_FIELD_NUMBER: builtins.int
-    PREPARE_POSITION_FIELD_NUMBER: builtins.int
-    commit_position: builtins.int
-    prepare_position: builtins.int
+    STREAM_NAME_FIELD_NUMBER: _builtins.int
+    stream_name: _builtins.bytes
     def __init__(
         self,
         *,
-        commit_position: builtins.int = ...,
-        prepare_position: builtins.int = ...,
+        stream_name: _builtins.bytes = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["commit_position", b"commit_position", "prepare_position", b"prepare_position"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["stream_name", b"stream_name"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___AllStreamPosition = AllStreamPosition
+Global___StreamIdentifier: _TypeAlias = StreamIdentifier  # noqa: Y015
 
-@typing.final
-class WrongExpectedVersion(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class AllStreamPosition(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    CURRENT_STREAM_REVISION_FIELD_NUMBER: builtins.int
-    CURRENT_NO_STREAM_FIELD_NUMBER: builtins.int
-    EXPECTED_STREAM_POSITION_FIELD_NUMBER: builtins.int
-    EXPECTED_ANY_FIELD_NUMBER: builtins.int
-    EXPECTED_STREAM_EXISTS_FIELD_NUMBER: builtins.int
-    EXPECTED_NO_STREAM_FIELD_NUMBER: builtins.int
-    current_stream_revision: builtins.int
-    expected_stream_position: builtins.int
-    @property
-    def current_no_stream(self) -> google.protobuf.empty_pb2.Empty: ...
-    @property
-    def expected_any(self) -> google.protobuf.empty_pb2.Empty: ...
-    @property
-    def expected_stream_exists(self) -> google.protobuf.empty_pb2.Empty: ...
-    @property
-    def expected_no_stream(self) -> google.protobuf.empty_pb2.Empty: ...
+    COMMIT_POSITION_FIELD_NUMBER: _builtins.int
+    PREPARE_POSITION_FIELD_NUMBER: _builtins.int
+    commit_position: _builtins.int
+    prepare_position: _builtins.int
     def __init__(
         self,
         *,
-        current_stream_revision: builtins.int = ...,
-        current_no_stream: google.protobuf.empty_pb2.Empty | None = ...,
-        expected_stream_position: builtins.int = ...,
-        expected_any: google.protobuf.empty_pb2.Empty | None = ...,
-        expected_stream_exists: google.protobuf.empty_pb2.Empty | None = ...,
-        expected_no_stream: google.protobuf.empty_pb2.Empty | None = ...,
+        commit_position: _builtins.int = ...,
+        prepare_position: _builtins.int = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["current_no_stream", b"current_no_stream", "current_stream_revision", b"current_stream_revision", "current_stream_revision_option", b"current_stream_revision_option", "expected_any", b"expected_any", "expected_no_stream", b"expected_no_stream", "expected_stream_exists", b"expected_stream_exists", "expected_stream_position", b"expected_stream_position", "expected_stream_position_option", b"expected_stream_position_option"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["current_no_stream", b"current_no_stream", "current_stream_revision", b"current_stream_revision", "current_stream_revision_option", b"current_stream_revision_option", "expected_any", b"expected_any", "expected_no_stream", b"expected_no_stream", "expected_stream_exists", b"expected_stream_exists", "expected_stream_position", b"expected_stream_position", "expected_stream_position_option", b"expected_stream_position_option"]) -> None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["current_stream_revision_option", b"current_stream_revision_option"]) -> typing.Literal["current_stream_revision", "current_no_stream"] | None: ...
-    @typing.overload
-    def WhichOneof(self, oneof_group: typing.Literal["expected_stream_position_option", b"expected_stream_position_option"]) -> typing.Literal["expected_stream_position", "expected_any", "expected_stream_exists", "expected_no_stream"] | None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["commit_position", b"commit_position", "prepare_position", b"prepare_position"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___WrongExpectedVersion = WrongExpectedVersion
+Global___AllStreamPosition: _TypeAlias = AllStreamPosition  # noqa: Y015
 
-@typing.final
-class AccessDenied(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class WrongExpectedVersion(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    def __init__(
-        self,
-    ) -> None: ...
-
-global___AccessDenied = AccessDenied
-
-@typing.final
-class StreamDeleted(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    STREAM_IDENTIFIER_FIELD_NUMBER: builtins.int
-    @property
-    def stream_identifier(self) -> global___StreamIdentifier: ...
-    def __init__(
-        self,
-        *,
-        stream_identifier: global___StreamIdentifier | None = ...,
-    ) -> None: ...
-    def HasField(self, field_name: typing.Literal["stream_identifier", b"stream_identifier"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["stream_identifier", b"stream_identifier"]) -> None: ...
-
-global___StreamDeleted = StreamDeleted
-
-@typing.final
-class Timeout(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    def __init__(
-        self,
-    ) -> None: ...
-
-global___Timeout = Timeout
-
-@typing.final
-class Unknown(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    def __init__(
-        self,
-    ) -> None: ...
-
-global___Unknown = Unknown
-
-@typing.final
-class InvalidTransaction(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    def __init__(
-        self,
-    ) -> None: ...
-
-global___InvalidTransaction = InvalidTransaction
-
-@typing.final
-class MaximumAppendSizeExceeded(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
-
-    MAXAPPENDSIZE_FIELD_NUMBER: builtins.int
-    maxAppendSize: builtins.int
+    CURRENT_STREAM_REVISION_FIELD_NUMBER: _builtins.int
+    CURRENT_NO_STREAM_FIELD_NUMBER: _builtins.int
+    EXPECTED_STREAM_POSITION_FIELD_NUMBER: _builtins.int
+    EXPECTED_ANY_FIELD_NUMBER: _builtins.int
+    EXPECTED_STREAM_EXISTS_FIELD_NUMBER: _builtins.int
+    EXPECTED_NO_STREAM_FIELD_NUMBER: _builtins.int
+    current_stream_revision: _builtins.int
+    expected_stream_position: _builtins.int
+    @_builtins.property
+    def current_no_stream(self) -> _empty_pb2.Empty: ...
+    @_builtins.property
+    def expected_any(self) -> _empty_pb2.Empty: ...
+    @_builtins.property
+    def expected_stream_exists(self) -> _empty_pb2.Empty: ...
+    @_builtins.property
+    def expected_no_stream(self) -> _empty_pb2.Empty: ...
     def __init__(
         self,
         *,
-        maxAppendSize: builtins.int = ...,
+        current_stream_revision: _builtins.int = ...,
+        current_no_stream: _empty_pb2.Empty | None = ...,
+        expected_stream_position: _builtins.int = ...,
+        expected_any: _empty_pb2.Empty | None = ...,
+        expected_stream_exists: _empty_pb2.Empty | None = ...,
+        expected_no_stream: _empty_pb2.Empty | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["maxAppendSize", b"maxAppendSize"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["current_no_stream", b"current_no_stream", "current_stream_revision", b"current_stream_revision", "current_stream_revision_option", b"current_stream_revision_option", "expected_any", b"expected_any", "expected_no_stream", b"expected_no_stream", "expected_stream_exists", b"expected_stream_exists", "expected_stream_position", b"expected_stream_position", "expected_stream_position_option", b"expected_stream_position_option"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["current_no_stream", b"current_no_stream", "current_stream_revision", b"current_stream_revision", "current_stream_revision_option", b"current_stream_revision_option", "expected_any", b"expected_any", "expected_no_stream", b"expected_no_stream", "expected_stream_exists", b"expected_stream_exists", "expected_stream_position", b"expected_stream_position", "expected_stream_position_option", b"expected_stream_position_option"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType_current_stream_revision_option: _TypeAlias = _typing.Literal["current_stream_revision", "current_no_stream"]  # noqa: Y015
+    _WhichOneofArgType_current_stream_revision_option: _TypeAlias = _typing.Literal["current_stream_revision_option", b"current_stream_revision_option"]  # noqa: Y015
+    _WhichOneofReturnType_expected_stream_position_option: _TypeAlias = _typing.Literal["expected_stream_position", "expected_any", "expected_stream_exists", "expected_no_stream"]  # noqa: Y015
+    _WhichOneofArgType_expected_stream_position_option: _TypeAlias = _typing.Literal["expected_stream_position_option", b"expected_stream_position_option"]  # noqa: Y015
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType_current_stream_revision_option) -> _WhichOneofReturnType_current_stream_revision_option | None: ...
+    @_typing.overload
+    def WhichOneof(self, oneof_group: _WhichOneofArgType_expected_stream_position_option) -> _WhichOneofReturnType_expected_stream_position_option | None: ...
 
-global___MaximumAppendSizeExceeded = MaximumAppendSizeExceeded
+Global___WrongExpectedVersion: _TypeAlias = WrongExpectedVersion  # noqa: Y015
 
-@typing.final
-class BadRequest(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class AccessDenied(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    MESSAGE_FIELD_NUMBER: builtins.int
-    message: builtins.str
+    def __init__(
+        self,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___AccessDenied: _TypeAlias = AccessDenied  # noqa: Y015
+
+@_typing.final
+class StreamDeleted(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    STREAM_IDENTIFIER_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def stream_identifier(self) -> Global___StreamIdentifier: ...
     def __init__(
         self,
         *,
-        message: builtins.str = ...,
+        stream_identifier: Global___StreamIdentifier | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["message", b"message"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["stream_identifier", b"stream_identifier"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["stream_identifier", b"stream_identifier"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___BadRequest = BadRequest
+Global___StreamDeleted: _TypeAlias = StreamDeleted  # noqa: Y015
+
+@_typing.final
+class Timeout(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    def __init__(
+        self,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___Timeout: _TypeAlias = Timeout  # noqa: Y015
+
+@_typing.final
+class Unknown(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    def __init__(
+        self,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___Unknown: _TypeAlias = Unknown  # noqa: Y015
+
+@_typing.final
+class InvalidTransaction(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    def __init__(
+        self,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___InvalidTransaction: _TypeAlias = InvalidTransaction  # noqa: Y015
+
+@_typing.final
+class MaximumAppendSizeExceeded(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    MAXAPPENDSIZE_FIELD_NUMBER: _builtins.int
+    maxAppendSize: _builtins.int
+    def __init__(
+        self,
+        *,
+        maxAppendSize: _builtins.int = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["maxAppendSize", b"maxAppendSize"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___MaximumAppendSizeExceeded: _TypeAlias = MaximumAppendSizeExceeded  # noqa: Y015
+
+@_typing.final
+class BadRequest(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
+
+    MESSAGE_FIELD_NUMBER: _builtins.int
+    message: _builtins.str
+    def __init__(
+        self,
+        *,
+        message: _builtins.str = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["message", b"message"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___BadRequest: _TypeAlias = BadRequest  # noqa: Y015

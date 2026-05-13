@@ -6,26 +6,26 @@ This protocol is UNSTABLE in the sense of being subject to change.
 ******************************************************************************************
 """
 
-import builtins
-import google.protobuf.descriptor
-import google.protobuf.internal.enum_type_wrapper
-import google.protobuf.message
+from google.protobuf import descriptor as _descriptor
+from google.protobuf import message as _message
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+import builtins as _builtins
 import sys
-import typing
+import typing as _typing
 
-if sys.version_info >= (3, 10):
-    import typing as typing_extensions
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
 else:
-    import typing_extensions
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
-DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+DESCRIPTOR: _descriptor.FileDescriptor
 
 class _StreamsError:
-    ValueType = typing.NewType("ValueType", builtins.int)
-    V: typing_extensions.TypeAlias = ValueType
+    ValueType = _typing.NewType("ValueType", _builtins.int)
+    V: _TypeAlias = ValueType  # noqa: Y015
 
-class _StreamsErrorEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[_StreamsError.ValueType], builtins.type):
-    DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+class _StreamsErrorEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_StreamsError.ValueType], _builtins.type):
+    DESCRIPTOR: _descriptor.EnumDescriptor
     STREAMS_ERROR_UNSPECIFIED: _StreamsError.ValueType  # 0
     """Default value. This value is not used.
     An error code MUST always be set to a non-zero value.
@@ -244,172 +244,204 @@ Common causes:
 Client action: Ensure at least one AppendRequest is sent before completing the stream.
 Recoverable by properly implementing the append session protocol.
 """
-global___StreamsError = StreamsError
+Global___StreamsError: _TypeAlias = StreamsError  # noqa: Y015
 
-@typing.final
-class StreamNotFoundErrorDetails(google.protobuf.message.Message):
+@_typing.final
+class StreamNotFoundErrorDetails(_message.Message):
     """Details for STREAM_NOT_FOUND errors."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    STREAM_FIELD_NUMBER: builtins.int
-    stream: builtins.str
+    STREAM_FIELD_NUMBER: _builtins.int
+    stream: _builtins.str
     """The name of the stream that was not found."""
     def __init__(
         self,
         *,
-        stream: builtins.str = ...,
+        stream: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["stream", b"stream"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["stream", b"stream"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___StreamNotFoundErrorDetails = StreamNotFoundErrorDetails
+Global___StreamNotFoundErrorDetails: _TypeAlias = StreamNotFoundErrorDetails  # noqa: Y015
 
-@typing.final
-class StreamAlreadyExistsErrorDetails(google.protobuf.message.Message):
+@_typing.final
+class StreamAlreadyExistsErrorDetails(_message.Message):
     """Details for STREAM_ALREADY_EXISTS errors."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    STREAM_FIELD_NUMBER: builtins.int
-    stream: builtins.str
+    STREAM_FIELD_NUMBER: _builtins.int
+    stream: _builtins.str
     """The name of the stream that already exists."""
     def __init__(
         self,
         *,
-        stream: builtins.str = ...,
+        stream: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["stream", b"stream"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["stream", b"stream"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___StreamAlreadyExistsErrorDetails = StreamAlreadyExistsErrorDetails
+Global___StreamAlreadyExistsErrorDetails: _TypeAlias = StreamAlreadyExistsErrorDetails  # noqa: Y015
 
-@typing.final
-class StreamDeletedErrorDetails(google.protobuf.message.Message):
+@_typing.final
+class StreamDeletedErrorDetails(_message.Message):
     """Details for STREAM_DELETED errors."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    STREAM_FIELD_NUMBER: builtins.int
-    stream: builtins.str
+    STREAM_FIELD_NUMBER: _builtins.int
+    stream: _builtins.str
     """The name of the stream that was deleted."""
     def __init__(
         self,
         *,
-        stream: builtins.str = ...,
+        stream: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["stream", b"stream"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["stream", b"stream"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___StreamDeletedErrorDetails = StreamDeletedErrorDetails
+Global___StreamDeletedErrorDetails: _TypeAlias = StreamDeletedErrorDetails  # noqa: Y015
 
-@typing.final
-class StreamTombstonedErrorDetails(google.protobuf.message.Message):
+@_typing.final
+class StreamTombstonedErrorDetails(_message.Message):
     """Details for STREAM_TOMBSTONED errors."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    STREAM_FIELD_NUMBER: builtins.int
-    stream: builtins.str
+    STREAM_FIELD_NUMBER: _builtins.int
+    stream: _builtins.str
     """The name of the stream that was tombstoned."""
     def __init__(
         self,
         *,
-        stream: builtins.str = ...,
+        stream: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["stream", b"stream"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["stream", b"stream"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___StreamTombstonedErrorDetails = StreamTombstonedErrorDetails
+Global___StreamTombstonedErrorDetails: _TypeAlias = StreamTombstonedErrorDetails  # noqa: Y015
 
-@typing.final
-class StreamRevisionConflictErrorDetails(google.protobuf.message.Message):
+@_typing.final
+class StreamRevisionConflictErrorDetails(_message.Message):
     """Details for STREAM_REVISION_CONFLICT errors."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    STREAM_FIELD_NUMBER: builtins.int
-    EXPECTED_REVISION_FIELD_NUMBER: builtins.int
-    ACTUAL_REVISION_FIELD_NUMBER: builtins.int
-    stream: builtins.str
+    STREAM_FIELD_NUMBER: _builtins.int
+    EXPECTED_REVISION_FIELD_NUMBER: _builtins.int
+    ACTUAL_REVISION_FIELD_NUMBER: _builtins.int
+    stream: _builtins.str
     """The name of the stream that had a revision conflict."""
-    expected_revision: builtins.int
+    expected_revision: _builtins.int
     """The expected revision that was provided in the append request."""
-    actual_revision: builtins.int
+    actual_revision: _builtins.int
     """The actual current revision of the stream."""
     def __init__(
         self,
         *,
-        stream: builtins.str = ...,
-        expected_revision: builtins.int = ...,
-        actual_revision: builtins.int = ...,
+        stream: _builtins.str = ...,
+        expected_revision: _builtins.int = ...,
+        actual_revision: _builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["actual_revision", b"actual_revision", "expected_revision", b"expected_revision", "stream", b"stream"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["actual_revision", b"actual_revision", "expected_revision", b"expected_revision", "stream", b"stream"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___StreamRevisionConflictErrorDetails = StreamRevisionConflictErrorDetails
+Global___StreamRevisionConflictErrorDetails: _TypeAlias = StreamRevisionConflictErrorDetails  # noqa: Y015
 
-@typing.final
-class AppendRecordSizeExceededErrorDetails(google.protobuf.message.Message):
+@_typing.final
+class AppendRecordSizeExceededErrorDetails(_message.Message):
     """Details for APPEND_RECORD_SIZE_EXCEEDED errors."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    STREAM_FIELD_NUMBER: builtins.int
-    RECORD_ID_FIELD_NUMBER: builtins.int
-    SIZE_FIELD_NUMBER: builtins.int
-    MAX_SIZE_FIELD_NUMBER: builtins.int
-    stream: builtins.str
+    STREAM_FIELD_NUMBER: _builtins.int
+    RECORD_ID_FIELD_NUMBER: _builtins.int
+    SIZE_FIELD_NUMBER: _builtins.int
+    MAX_SIZE_FIELD_NUMBER: _builtins.int
+    stream: _builtins.str
     """The name of the stream where the append was attempted."""
-    record_id: builtins.str
+    record_id: _builtins.str
     """The identifier of the record that exceeded the size limit."""
-    size: builtins.int
+    size: _builtins.int
     """The actual size of the record in bytes."""
-    max_size: builtins.int
+    max_size: _builtins.int
     """The maximum allowed size of a single record in bytes."""
     def __init__(
         self,
         *,
-        stream: builtins.str = ...,
-        record_id: builtins.str = ...,
-        size: builtins.int = ...,
-        max_size: builtins.int = ...,
+        stream: _builtins.str = ...,
+        record_id: _builtins.str = ...,
+        size: _builtins.int = ...,
+        max_size: _builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["max_size", b"max_size", "record_id", b"record_id", "size", b"size", "stream", b"stream"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["max_size", b"max_size", "record_id", b"record_id", "size", b"size", "stream", b"stream"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___AppendRecordSizeExceededErrorDetails = AppendRecordSizeExceededErrorDetails
+Global___AppendRecordSizeExceededErrorDetails: _TypeAlias = AppendRecordSizeExceededErrorDetails  # noqa: Y015
 
-@typing.final
-class AppendTransactionSizeExceededErrorDetails(google.protobuf.message.Message):
+@_typing.final
+class AppendTransactionSizeExceededErrorDetails(_message.Message):
     """Details for APPEND_TRANSACTION_SIZE_EXCEEDED errors."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    SIZE_FIELD_NUMBER: builtins.int
-    MAX_SIZE_FIELD_NUMBER: builtins.int
-    size: builtins.int
+    SIZE_FIELD_NUMBER: _builtins.int
+    MAX_SIZE_FIELD_NUMBER: _builtins.int
+    size: _builtins.int
     """The actual size of the transaction in bytes."""
-    max_size: builtins.int
+    max_size: _builtins.int
     """The maximum allowed size of an append transaction in bytes."""
     def __init__(
         self,
         *,
-        size: builtins.int = ...,
-        max_size: builtins.int = ...,
+        size: _builtins.int = ...,
+        max_size: _builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["max_size", b"max_size", "size", b"size"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["max_size", b"max_size", "size", b"size"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___AppendTransactionSizeExceededErrorDetails = AppendTransactionSizeExceededErrorDetails
+Global___AppendTransactionSizeExceededErrorDetails: _TypeAlias = AppendTransactionSizeExceededErrorDetails  # noqa: Y015
 
-@typing.final
-class StreamAlreadyInAppendSessionErrorDetails(google.protobuf.message.Message):
+@_typing.final
+class StreamAlreadyInAppendSessionErrorDetails(_message.Message):
     """Details for STREAM_ALREADY_IN_APPEND_SESSION errors."""
 
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+    DESCRIPTOR: _descriptor.Descriptor
 
-    STREAM_FIELD_NUMBER: builtins.int
-    stream: builtins.str
+    STREAM_FIELD_NUMBER: _builtins.int
+    stream: _builtins.str
     """The name of the stream that appears multiple times."""
     def __init__(
         self,
         *,
-        stream: builtins.str = ...,
+        stream: _builtins.str = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["stream", b"stream"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["stream", b"stream"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___StreamAlreadyInAppendSessionErrorDetails = StreamAlreadyInAppendSessionErrorDetails
+Global___StreamAlreadyInAppendSessionErrorDetails: _TypeAlias = StreamAlreadyInAppendSessionErrorDetails  # noqa: Y015

@@ -3,67 +3,75 @@
 isort:skip_file
 """
 
-import builtins
-import collections.abc
-import google.protobuf.descriptor
-import google.protobuf.internal.containers
-import google.protobuf.internal.enum_type_wrapper
-import google.protobuf.message
-import kurrentdbclient.protos.v1.shared_pb2
+from collections import abc as _abc
+from google.protobuf import descriptor as _descriptor
+from google.protobuf import message as _message
+from google.protobuf.internal import containers as _containers
+from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
+from kurrentdbclient.protos.v1 import shared_pb2 as _shared_pb2
+import builtins as _builtins
 import sys
-import typing
+import typing as _typing
 
-if sys.version_info >= (3, 10):
-    import typing as typing_extensions
+if sys.version_info >= (3, 11):
+    from typing import TypeAlias as _TypeAlias, Never as _Never
 else:
-    import typing_extensions
+    from typing_extensions import TypeAlias as _TypeAlias, Never as _Never
 
-DESCRIPTOR: google.protobuf.descriptor.FileDescriptor
+DESCRIPTOR: _descriptor.FileDescriptor
 
-@typing.final
-class ClusterInfo(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class ClusterInfo(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    MEMBERS_FIELD_NUMBER: builtins.int
-    @property
-    def members(self) -> google.protobuf.internal.containers.RepeatedCompositeFieldContainer[global___MemberInfo]: ...
+    MEMBERS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def members(self) -> _containers.RepeatedCompositeFieldContainer[Global___MemberInfo]: ...
     def __init__(
         self,
         *,
-        members: collections.abc.Iterable[global___MemberInfo] | None = ...,
+        members: _abc.Iterable[Global___MemberInfo] | None = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["members", b"members"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["members", b"members"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___ClusterInfo = ClusterInfo
+Global___ClusterInfo: _TypeAlias = ClusterInfo  # noqa: Y015
 
-@typing.final
-class EndPoint(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class EndPoint(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
-    ADDRESS_FIELD_NUMBER: builtins.int
-    PORT_FIELD_NUMBER: builtins.int
-    address: builtins.str
-    port: builtins.int
+    ADDRESS_FIELD_NUMBER: _builtins.int
+    PORT_FIELD_NUMBER: _builtins.int
+    address: _builtins.str
+    port: _builtins.int
     def __init__(
         self,
         *,
-        address: builtins.str = ...,
-        port: builtins.int = ...,
+        address: _builtins.str = ...,
+        port: _builtins.int = ...,
     ) -> None: ...
-    def ClearField(self, field_name: typing.Literal["address", b"address", "port", b"port"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["address", b"address", "port", b"port"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___EndPoint = EndPoint
+Global___EndPoint: _TypeAlias = EndPoint  # noqa: Y015
 
-@typing.final
-class MemberInfo(google.protobuf.message.Message):
-    DESCRIPTOR: google.protobuf.descriptor.Descriptor
+@_typing.final
+class MemberInfo(_message.Message):
+    DESCRIPTOR: _descriptor.Descriptor
 
     class _VNodeState:
-        ValueType = typing.NewType("ValueType", builtins.int)
-        V: typing_extensions.TypeAlias = ValueType
+        ValueType = _typing.NewType("ValueType", _builtins.int)
+        V: _TypeAlias = ValueType  # noqa: Y015
 
-    class _VNodeStateEnumTypeWrapper(google.protobuf.internal.enum_type_wrapper._EnumTypeWrapper[MemberInfo._VNodeState.ValueType], builtins.type):
-        DESCRIPTOR: google.protobuf.descriptor.EnumDescriptor
+    class _VNodeStateEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[MemberInfo._VNodeState.ValueType], _builtins.type):
+        DESCRIPTOR: _descriptor.EnumDescriptor
         Initializing: MemberInfo._VNodeState.ValueType  # 0
         DiscoverLeader: MemberInfo._VNodeState.ValueType  # 1
         Unknown: MemberInfo._VNodeState.ValueType  # 2
@@ -99,28 +107,31 @@ class MemberInfo(google.protobuf.message.Message):
     ReadOnlyReplica: MemberInfo.VNodeState.ValueType  # 14
     ResigningLeader: MemberInfo.VNodeState.ValueType  # 15
 
-    INSTANCE_ID_FIELD_NUMBER: builtins.int
-    TIME_STAMP_FIELD_NUMBER: builtins.int
-    STATE_FIELD_NUMBER: builtins.int
-    IS_ALIVE_FIELD_NUMBER: builtins.int
-    HTTP_END_POINT_FIELD_NUMBER: builtins.int
-    time_stamp: builtins.int
-    state: global___MemberInfo.VNodeState.ValueType
-    is_alive: builtins.bool
-    @property
-    def instance_id(self) -> kurrentdbclient.protos.v1.shared_pb2.UUID: ...
-    @property
-    def http_end_point(self) -> global___EndPoint: ...
+    INSTANCE_ID_FIELD_NUMBER: _builtins.int
+    TIME_STAMP_FIELD_NUMBER: _builtins.int
+    STATE_FIELD_NUMBER: _builtins.int
+    IS_ALIVE_FIELD_NUMBER: _builtins.int
+    HTTP_END_POINT_FIELD_NUMBER: _builtins.int
+    time_stamp: _builtins.int
+    state: Global___MemberInfo.VNodeState.ValueType
+    is_alive: _builtins.bool
+    @_builtins.property
+    def instance_id(self) -> _shared_pb2.UUID: ...
+    @_builtins.property
+    def http_end_point(self) -> Global___EndPoint: ...
     def __init__(
         self,
         *,
-        instance_id: kurrentdbclient.protos.v1.shared_pb2.UUID | None = ...,
-        time_stamp: builtins.int = ...,
-        state: global___MemberInfo.VNodeState.ValueType = ...,
-        is_alive: builtins.bool = ...,
-        http_end_point: global___EndPoint | None = ...,
+        instance_id: _shared_pb2.UUID | None = ...,
+        time_stamp: _builtins.int = ...,
+        state: Global___MemberInfo.VNodeState.ValueType = ...,
+        is_alive: _builtins.bool = ...,
+        http_end_point: Global___EndPoint | None = ...,
     ) -> None: ...
-    def HasField(self, field_name: typing.Literal["http_end_point", b"http_end_point", "instance_id", b"instance_id"]) -> builtins.bool: ...
-    def ClearField(self, field_name: typing.Literal["http_end_point", b"http_end_point", "instance_id", b"instance_id", "is_alive", b"is_alive", "state", b"state", "time_stamp", b"time_stamp"]) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["http_end_point", b"http_end_point", "instance_id", b"instance_id"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["http_end_point", b"http_end_point", "instance_id", b"instance_id", "is_alive", b"is_alive", "state", b"state", "time_stamp", b"time_stamp"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
 
-global___MemberInfo = MemberInfo
+Global___MemberInfo: _TypeAlias = MemberInfo  # noqa: Y015
