@@ -3002,7 +3002,7 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         print("Stopped persistent subscription consumer #2")
         print("None of the acked events were redelivered")
 
-    async def test_create_projection(self) -> None:
+    async def test_create_projection_v1engine(self) -> None:
         # Create "continuous" projection.
         projection_name = str(uuid4())
         await self.client.create_projection(query="", name=projection_name)
@@ -3041,6 +3041,64 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                 emit_enabled=False,
                 track_emitted_streams=True,
             )
+
+    @skipIf(SERVER_VERSION < (26, 1), "Doesn't have v2 engine")
+    async def test_create_projection_v2engine(self) -> None:
+        # Create "continuous" projection.
+        projection_name = str(uuid4())
+        await self.client.create_projection(query="", name=projection_name)
+
+        # Create "continuous" projection (emit not enabled).
+        projection_name = str(uuid4())
+        await self.client.create_projection(
+            query="",
+            name=projection_name,
+            engine_version="v2",
+        )
+
+        # Raises error if projection already exists.
+        with self.assertRaises(AlreadyExistsError):
+            await self.client.create_projection(
+                query="",
+                name=projection_name,
+                engine_version="v2",
+            )
+
+        # Create "continuous" projection (emit enabled).
+        projection_name = str(uuid4())
+        await self.client.create_projection(
+            query="",
+            name=projection_name,
+            emit_enabled=True,
+            engine_version="v2",
+        )
+
+        # Raises error if tracking emitted streams is enabled
+        projection_name = str(uuid4())
+        with self.assertRaises(ValueError) as cm:
+            await self.client.create_projection(  # type: ignore[call-overload]
+                query="",
+                name=projection_name,
+                emit_enabled=True,
+                track_emitted_streams=True,
+                engine_version="v2",
+            )
+        self.assertEqual(
+            "Tracking emitted streams is not supported with engine version 2.",
+            str(cm.exception),
+        )
+
+    async def test_create_projection_v3engine(self) -> None:
+        with self.assertRaises(ValueError) as cm:
+            await self.client.create_projection(  # type: ignore[call-overload]
+                query="",
+                name=str(uuid4()),
+                engine_version="v3",
+            )
+        self.assertEqual(
+            "Unsupported projection engine version (hint: use 'v1' or 'v2'): v3",
+            str(cm.exception),
+        )
 
     async def test_update_projection(self) -> None:
         projection_name = str(uuid4())

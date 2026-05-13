@@ -1485,6 +1485,37 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
             credentials=credentials or self._call_credentials,
         )
 
+    @overload
+    async def create_projection(
+        self,
+        *,
+        name: str,
+        query: str,
+        engine_version: Literal["v1"] = "v1",
+        emit_enabled: bool = False,
+        track_emitted_streams: bool = False,
+        timeout: float | None = None,
+        credentials: grpc.CallCredentials | None = None,
+    ) -> None:
+        """
+        Creates a projection using the v1 engine.
+        """
+
+    @overload
+    async def create_projection(
+        self,
+        *,
+        name: str,
+        query: str,
+        engine_version: Literal["v2"],
+        emit_enabled: bool = False,
+        timeout: float | None = None,
+        credentials: grpc.CallCredentials | None = None,
+    ) -> None:
+        """
+        Creates a projection using the v2 engine.
+        """
+
     @retrygrpc
     @autoreconnect
     async def create_projection(
@@ -1492,6 +1523,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         *,
         name: str,
         query: str,
+        engine_version: Literal["v1", "v2"] = "v1",
         emit_enabled: bool = False,
         track_emitted_streams: bool = False,
         timeout: float | None = None,
@@ -1503,8 +1535,9 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         timeout = timeout if timeout is not None else self._default_deadline
 
         await self.connection.projections.create(
-            query=query,
             name=name,
+            query=query,
+            engine_version=engine_version,
             emit_enabled=emit_enabled,
             track_emitted_streams=track_emitted_streams,
             timeout=timeout,

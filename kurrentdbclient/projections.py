@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import grpc
 import grpc.aio
@@ -68,17 +68,34 @@ class BaseProjectionsService(KurrentDBService[TGrpcStreamers]):
     @staticmethod
     def _construct_create_req(
         *,
-        query: str,
         name: str,
+        query: str,
+        engine_version: Literal["v1", "v2"],
         emit_enabled: bool,
         track_emitted_streams: bool,
     ) -> projections_pb2.CreateReq:
+        # Decide engine version.
+        if engine_version == "v1":
+            engine_version_option = 0
+        elif engine_version == "v2":  # pragma: <26.1 no cover
+            engine_version_option = 1
+        else:
+            msg = (
+                f"Unsupported projection engine version "
+                f"(hint: use 'v1' or 'v2'): {engine_version}"
+            )
+            raise ValueError(msg)
+        # Defend server against invalid requests.
+        if engine_version == "v2" and track_emitted_streams:  # pragma: <26.1 no cover
+            msg = "Tracking emitted streams is not supported with engine version 2."
+            raise ValueError(msg)
         options = projections_pb2.CreateReq.Options(
             continuous=projections_pb2.CreateReq.Options.Continuous(
                 name=name,
                 emit_enabled=emit_enabled,
                 track_emitted_streams=track_emitted_streams,
             ),
+            engine_version=engine_version_option,
             query=query,
         )
         return projections_pb2.CreateReq(options=options)
@@ -261,8 +278,9 @@ class AsyncProjectionsService(BaseProjectionsService[AsyncGrpcStreamers]):
     async def create(
         self,
         *,
-        query: str,
         name: str,
+        query: str,
+        engine_version: Literal["v1", "v2"],
         emit_enabled: bool,
         track_emitted_streams: bool,
         timeout: float | None = None,
@@ -270,8 +288,9 @@ class AsyncProjectionsService(BaseProjectionsService[AsyncGrpcStreamers]):
         credentials: grpc.CallCredentials | None = None,
     ) -> None:
         create_req = self._construct_create_req(
-            query=query,
             name=name,
+            query=query,
+            engine_version=engine_version,
             emit_enabled=emit_enabled,
             track_emitted_streams=track_emitted_streams,
         )
@@ -541,8 +560,9 @@ class ProjectionsService(BaseProjectionsService[GrpcStreamers]):
     def create(
         self,
         *,
-        query: str,
         name: str,
+        query: str,
+        engine_version: Literal["v1", "v2"] = "v1",
         emit_enabled: bool,
         track_emitted_streams: bool,
         timeout: float | None = None,
@@ -550,8 +570,9 @@ class ProjectionsService(BaseProjectionsService[GrpcStreamers]):
         credentials: grpc.CallCredentials | None = None,
     ) -> None:
         create_req = self._construct_create_req(
-            query=query,
             name=name,
+            query=query,
+            engine_version=engine_version,
             emit_enabled=emit_enabled,
             track_emitted_streams=track_emitted_streams,
         )

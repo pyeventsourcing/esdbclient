@@ -6560,7 +6560,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         else:
             self.fail(f"Test doesn't work with cluster size {self.KDB_CLUSTER_SIZE}")
 
-    def test_create_projection(self) -> None:
+    def test_create_projection_v1engine(self) -> None:
         self.construct_client()
         # Create "continuous" projection.
         projection_name = str(uuid4())
@@ -6600,6 +6600,66 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 emit_enabled=False,
                 track_emitted_streams=True,
             )
+
+    @skipIf(SERVER_VERSION < (26, 1), "Doesn't have v2 engine")
+    def test_create_projection_v2engine(self) -> None:
+        self.construct_client()
+        # Create "continuous" projection.
+        projection_name = str(uuid4())
+        self.client.create_projection(query="", name=projection_name)
+
+        # Create "continuous" projection (emit not enabled).
+        projection_name = str(uuid4())
+        self.client.create_projection(
+            query="",
+            name=projection_name,
+            engine_version="v2",
+        )
+
+        # Raises error if projection already exists.
+        with self.assertRaises(AlreadyExistsError):
+            self.client.create_projection(
+                query="",
+                name=projection_name,
+                engine_version="v2",
+            )
+
+        # Create "continuous" projection (emit enabled).
+        projection_name = str(uuid4())
+        self.client.create_projection(
+            query="",
+            name=projection_name,
+            emit_enabled=True,
+            engine_version="v2",
+        )
+
+        # Raises error if tracking emitted streams is enabled
+        projection_name = str(uuid4())
+        with self.assertRaises(ValueError) as cm:
+            self.client.create_projection(  # type: ignore[call-overload]
+                query="",
+                name=projection_name,
+                emit_enabled=True,
+                track_emitted_streams=True,
+                engine_version="v2",
+            )
+        self.assertEqual(
+            "Tracking emitted streams is not supported with engine version 2.",
+            str(cm.exception),
+        )
+
+    def test_create_projection_v3engine(self) -> None:
+        self.construct_client()
+        with self.assertRaises(ValueError) as cm:
+            self.client.create_projection(  # type: ignore[call-overload]
+                query="",
+                name=str(uuid4()),
+                engine_version="v3",
+            )
+        self.assertEqual(
+            "Unsupported projection engine version (hint: use 'v1' or 'v2'): v3",
+            str(cm.exception),
+        )
 
     def test_update_projection(self) -> None:
         self.construct_client()
