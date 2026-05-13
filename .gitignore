@@ -142,3 +142,4 @@ certs/
 .temp
 .cache
 node_modules
+/docs/public/
