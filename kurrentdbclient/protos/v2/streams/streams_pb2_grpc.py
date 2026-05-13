@@ -39,6 +39,11 @@ class StreamsServiceStub(object):
                 request_serializer=kurrentdbclient_dot_protos_dot_v2_dot_streams_dot_streams__pb2.AppendRequest.SerializeToString,
                 response_deserializer=kurrentdbclient_dot_protos_dot_v2_dot_streams_dot_streams__pb2.AppendSessionResponse.FromString,
                 _registered_method=True)
+        self.AppendRecords = channel.unary_unary(
+                '/kurrentdb.protocol.v2.streams.StreamsService/AppendRecords',
+                request_serializer=kurrentdbclient_dot_protos_dot_v2_dot_streams_dot_streams__pb2.AppendRecordsRequest.SerializeToString,
+                response_deserializer=kurrentdbclient_dot_protos_dot_v2_dot_streams_dot_streams__pb2.AppendRecordsResponse.FromString,
+                _registered_method=True)
 
 
 class StreamsServiceServicer(object):
@@ -69,6 +74,32 @@ class StreamsServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def AppendRecords(self, request, context):
+        """Appends records to multiple streams atomically with cross-stream consistency checks.
+
+        This is a unary RPC where the client sends all records and consistency checks
+        in a single request and receives a single AppendRecordsResponse.
+
+        Records can be interleaved across streams in any order and the global log preserves
+        the exact sequence from the request.
+
+        Consistency checks are decoupled from writes: a check can reference any stream,
+        whether or not the request writes to it. This enables Dynamic Consistency Boundary
+        (DCB) patterns where a decision depends on multiple streams but only produces
+        events for a subset.
+
+        Guarantees:
+        - Atomicity: All writes succeed or all fail together
+        - Ordering: Records maintain the exact send order in the global log
+        - Cross-stream checks: Consistency checks can reference any stream
+
+        On consistency check failure, no records are written and all failing checks
+        are reported in the response so the client can refresh stale state in one round trip.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_StreamsServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -76,6 +107,11 @@ def add_StreamsServiceServicer_to_server(servicer, server):
                     servicer.AppendSession,
                     request_deserializer=kurrentdbclient_dot_protos_dot_v2_dot_streams_dot_streams__pb2.AppendRequest.FromString,
                     response_serializer=kurrentdbclient_dot_protos_dot_v2_dot_streams_dot_streams__pb2.AppendSessionResponse.SerializeToString,
+            ),
+            'AppendRecords': grpc.unary_unary_rpc_method_handler(
+                    servicer.AppendRecords,
+                    request_deserializer=kurrentdbclient_dot_protos_dot_v2_dot_streams_dot_streams__pb2.AppendRecordsRequest.FromString,
+                    response_serializer=kurrentdbclient_dot_protos_dot_v2_dot_streams_dot_streams__pb2.AppendRecordsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -105,6 +141,33 @@ class StreamsService(object):
             '/kurrentdb.protocol.v2.streams.StreamsService/AppendSession',
             kurrentdbclient_dot_protos_dot_v2_dot_streams_dot_streams__pb2.AppendRequest.SerializeToString,
             kurrentdbclient_dot_protos_dot_v2_dot_streams_dot_streams__pb2.AppendSessionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AppendRecords(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/kurrentdb.protocol.v2.streams.StreamsService/AppendRecords',
+            kurrentdbclient_dot_protos_dot_v2_dot_streams_dot_streams__pb2.AppendRecordsRequest.SerializeToString,
+            kurrentdbclient_dot_protos_dot_v2_dot_streams_dot_streams__pb2.AppendRecordsResponse.FromString,
             options,
             channel_credentials,
             insecure,

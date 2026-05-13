@@ -6,8 +6,10 @@ This protocol is UNSTABLE in the sense of being subject to change.
 ******************************************************************************************
 """
 
+from collections import abc as _abc
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
+from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
 import builtins as _builtins
 import sys
@@ -132,6 +134,23 @@ class _StreamsErrorEnumTypeWrapper(_enum_type_wrapper._EnumTypeWrapper[_StreamsE
     Client action: Ensure at least one AppendRequest is sent before completing the stream.
     Recoverable by properly implementing the append session protocol.
     """
+    STREAMS_ERROR_APPEND_CONSISTENCY_VIOLATION: _StreamsError.ValueType  # 14
+    """One or more consistency checks failed during an AppendRecords operation.
+    The transaction is aborted — no records are written.
+
+    Each check in the request is evaluated before commit. A check can be:
+    - A stream state check: the stream must be at a specific revision or lifecycle state
+    - A query predicate: a server-side expression that must evaluate to true
+
+    Common causes:
+    - A stream state check found the stream at a different revision than expected
+    - A stream referenced in a state check does not exist, was deleted, or was tombstoned
+    - A query predicate evaluated to false
+
+    Client action: Inspect the AppendConsistencyViolationErrorDetails to determine which
+    checks failed and why, then correct the request or refresh local state and retry.
+    Recoverable by reading the current state and resubmitting with updated checks.
+    """
 
 class StreamsError(_StreamsError, metaclass=_StreamsErrorEnumTypeWrapper):
     """Error codes specific to the Streams API.
@@ -243,6 +262,23 @@ Common causes:
 
 Client action: Ensure at least one AppendRequest is sent before completing the stream.
 Recoverable by properly implementing the append session protocol.
+"""
+STREAMS_ERROR_APPEND_CONSISTENCY_VIOLATION: StreamsError.ValueType  # 14
+"""One or more consistency checks failed during an AppendRecords operation.
+The transaction is aborted — no records are written.
+
+Each check in the request is evaluated before commit. A check can be:
+- A stream state check: the stream must be at a specific revision or lifecycle state
+- A query predicate: a server-side expression that must evaluate to true
+
+Common causes:
+- A stream state check found the stream at a different revision than expected
+- A stream referenced in a state check does not exist, was deleted, or was tombstoned
+- A query predicate evaluated to false
+
+Client action: Inspect the AppendConsistencyViolationErrorDetails to determine which
+checks failed and why, then correct the request or refresh local state and retry.
+Recoverable by reading the current state and resubmitting with updated checks.
 """
 Global___StreamsError: _TypeAlias = StreamsError  # noqa: Y015
 
@@ -445,3 +481,106 @@ class StreamAlreadyInAppendSessionErrorDetails(_message.Message):
     def WhichOneof(self, oneof_group: _Never) -> None: ...
 
 Global___StreamAlreadyInAppendSessionErrorDetails: _TypeAlias = StreamAlreadyInAppendSessionErrorDetails  # noqa: Y015
+
+@_typing.final
+class AppendConsistencyViolationErrorDetails(_message.Message):
+    """Details for APPEND_CONSISTENCY_VIOLATION errors.
+
+    Contains all consistency checks that were violated during the append operation.
+    Only violated checks are included; satisfied checks are omitted.
+    """
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    VIOLATIONS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def violations(self) -> _containers.RepeatedCompositeFieldContainer[Global___ConsistencyViolation]:
+        """The consistency checks that were violated."""
+
+    def __init__(
+        self,
+        *,
+        violations: _abc.Iterable[Global___ConsistencyViolation] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["violations", b"violations"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___AppendConsistencyViolationErrorDetails: _TypeAlias = AppendConsistencyViolationErrorDetails  # noqa: Y015
+
+@_typing.final
+class ConsistencyViolation(_message.Message):
+    """Details for a single consistency check that was violated."""
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    @_typing.final
+    class StreamStateViolation(_message.Message):
+        """A stream state check was violated because the actual state did not match the expected state.
+
+        The actual_state field reports the stream's observed state:
+          >= 0   : The stream exists and is at this revision
+          -1     : The stream does not exist (NO_STREAM)
+          -5     : The stream has been soft-deleted (DELETED)
+          -6     : The stream has been tombstoned (TOMBSTONED)
+
+        Notes:
+         - ANY (-2) and EXISTS (-4) are never returned as actual_state values.
+         - When a stream exists, the server returns the actual revision number (>= 0).
+        """
+
+        DESCRIPTOR: _descriptor.Descriptor
+
+        STREAM_FIELD_NUMBER: _builtins.int
+        EXPECTED_STATE_FIELD_NUMBER: _builtins.int
+        ACTUAL_STATE_FIELD_NUMBER: _builtins.int
+        stream: _builtins.str
+        """The name of the stream whose state was checked."""
+        expected_state: _builtins.int
+        """The expected state of the stream as specified in the consistency check.
+        Non-negative values (>= 0) are real revision numbers.
+        Negative values are RevisionConstants sentinels: -2 (ANY), -4 (EXISTS), -1 (NO_STREAM), -5 (DELETED), -6 (TOMBSTONED).
+        """
+        actual_state: _builtins.int
+        """The actual state of the stream at the time the check was evaluated.
+        Non-negative values (>= 0) are real revision numbers.
+        Negative values are RevisionConstants sentinels: -1 (NO_STREAM), -5 (DELETED), -6 (TOMBSTONED).
+        """
+        def __init__(
+            self,
+            *,
+            stream: _builtins.str = ...,
+            expected_state: _builtins.int = ...,
+            actual_state: _builtins.int = ...,
+        ) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["actual_state", b"actual_state", "expected_state", b"expected_state", "stream", b"stream"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+    CHECK_INDEX_FIELD_NUMBER: _builtins.int
+    STREAM_STATE_FIELD_NUMBER: _builtins.int
+    check_index: _builtins.int
+    """Index of the check in the original consistency_checks list."""
+    @_builtins.property
+    def stream_state(self) -> Global___ConsistencyViolation.StreamStateViolation:
+        """The stream was not at the expected state."""
+
+    def __init__(
+        self,
+        *,
+        check_index: _builtins.int = ...,
+        stream_state: Global___ConsistencyViolation.StreamStateViolation | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["stream_state", b"stream_state", "type", b"type"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["check_index", b"check_index", "stream_state", b"stream_state", "type", b"type"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType_type: _TypeAlias = _typing.Literal["stream_state"]  # noqa: Y015
+    _WhichOneofArgType_type: _TypeAlias = _typing.Literal["type", b"type"]  # noqa: Y015
+    def WhichOneof(self, oneof_group: _WhichOneofArgType_type) -> _WhichOneofReturnType_type | None: ...
+
+Global___ConsistencyViolation: _TypeAlias = ConsistencyViolation  # noqa: Y015

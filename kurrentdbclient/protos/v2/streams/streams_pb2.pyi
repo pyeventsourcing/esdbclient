@@ -269,6 +269,7 @@ class AppendRecord(_message.Message):
     PROPERTIES_FIELD_NUMBER: _builtins.int
     SCHEMA_FIELD_NUMBER: _builtins.int
     DATA_FIELD_NUMBER: _builtins.int
+    STREAM_FIELD_NUMBER: _builtins.int
     record_id: _builtins.str
     """Unique identifier for this record (must be a valid UUID/GUID).
     If not provided, the server will generate a new one.
@@ -276,6 +277,11 @@ class AppendRecord(_message.Message):
     data: _builtins.bytes
     """The record payload as raw bytes.
     The format specified in SchemaInfo determines how to interpret these bytes.
+    """
+    stream: _builtins.str
+    """Target stream for this record.
+    Required for AppendRecords (each record specifies its own stream).
+    Ignored for AppendSession (the stream is specified in AppendRequest).
     """
     @_builtins.property
     def properties(self) -> _containers.MessageMap[_builtins.str, _struct_pb2.Value]:
@@ -307,13 +313,186 @@ class AppendRecord(_message.Message):
         properties: _abc.Mapping[_builtins.str, _struct_pb2.Value] | None = ...,
         schema: Global___SchemaInfo | None = ...,
         data: _builtins.bytes = ...,
+        stream: _builtins.str = ...,
     ) -> None: ...
     _HasFieldArgType: _TypeAlias = _typing.Literal["_record_id", b"_record_id", "record_id", b"record_id", "schema", b"schema"]  # noqa: Y015
     def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
-    _ClearFieldArgType: _TypeAlias = _typing.Literal["_record_id", b"_record_id", "data", b"data", "properties", b"properties", "record_id", b"record_id", "schema", b"schema"]  # noqa: Y015
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["_record_id", b"_record_id", "data", b"data", "properties", b"properties", "record_id", b"record_id", "schema", b"schema", "stream", b"stream"]  # noqa: Y015
     def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
     _WhichOneofReturnType__record_id: _TypeAlias = _typing.Literal["record_id"]  # noqa: Y015
     _WhichOneofArgType__record_id: _TypeAlias = _typing.Literal["_record_id", b"_record_id"]  # noqa: Y015
     def WhichOneof(self, oneof_group: _WhichOneofArgType__record_id) -> _WhichOneofReturnType__record_id | None: ...
 
 Global___AppendRecord: _TypeAlias = AppendRecord  # noqa: Y015
+
+@_typing.final
+class AppendRecordsRequest(_message.Message):
+    """*
+    Request to append records to one or more streams atomically.
+
+    All records are committed in a single transaction. Each record specifies its
+    target stream via AppendRecord.stream. Consistency checks are evaluated before
+    any records are written.
+    """
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    RECORDS_FIELD_NUMBER: _builtins.int
+    CHECKS_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def records(self) -> _containers.RepeatedCompositeFieldContainer[Global___AppendRecord]:
+        """The records to append. Records targeting the same stream maintain their
+        order from this list.
+        """
+
+    @_builtins.property
+    def checks(self) -> _containers.RepeatedCompositeFieldContainer[Global___ConsistencyCheck]:
+        """Optional consistency checks evaluated before commit. If any check fails,
+        the entire transaction is aborted.
+        """
+
+    def __init__(
+        self,
+        *,
+        records: _abc.Iterable[Global___AppendRecord] | None = ...,
+        checks: _abc.Iterable[Global___ConsistencyCheck] | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["checks", b"checks", "records", b"records"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___AppendRecordsRequest: _TypeAlias = AppendRecordsRequest  # noqa: Y015
+
+@_typing.final
+class AppendRecordsResponse(_message.Message):
+    """*
+    Response from a successful AppendRecords operation.
+
+    Contains the resulting revision for each stream that was written to and the
+    global commit position of the transaction.
+    """
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    REVISIONS_FIELD_NUMBER: _builtins.int
+    POSITION_FIELD_NUMBER: _builtins.int
+    position: _builtins.int
+    """The global commit position of the last record written in this transaction.
+    Can be used for read-your-writes consistency or progress tracking.
+    """
+    @_builtins.property
+    def revisions(self) -> _containers.RepeatedCompositeFieldContainer[Global___StreamRevision]:
+        """The resulting revision for each stream that received records. One entry per
+        distinct stream written to, in no guaranteed order.
+        """
+
+    def __init__(
+        self,
+        *,
+        revisions: _abc.Iterable[Global___StreamRevision] | None = ...,
+        position: _builtins.int = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["position", b"position", "revisions", b"revisions"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___AppendRecordsResponse: _TypeAlias = AppendRecordsResponse  # noqa: Y015
+
+@_typing.final
+class ConsistencyCheck(_message.Message):
+    """*
+    A pre-commit condition that must hold true for the transaction to succeed.
+
+    Consistency checks are evaluated atomically before any records are written. If
+    any check is violated, the entire transaction is aborted. Two types of checks
+    are supported: stream state checks (validates a stream's revision or lifecycle
+    state) and query predicates (evaluates a server-side expression).
+    """
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    @_typing.final
+    class StreamStateCheck(_message.Message):
+        """*
+        Asserts a stream is at a specific revision or lifecycle state before commit.
+
+        The expected_state field accepts a specific revision number (>= 0) or a
+        special state constant (e.g., -1 for NO_STREAM, -10 for DELETED). Evaluated
+        using writability semantics: a soft-deleted stream is writable (appending
+        restores it), but a tombstoned stream is never writable.
+        """
+
+        DESCRIPTOR: _descriptor.Descriptor
+
+        STREAM_FIELD_NUMBER: _builtins.int
+        EXPECTED_STATE_FIELD_NUMBER: _builtins.int
+        stream: _builtins.str
+        """The stream name."""
+        expected_state: _builtins.int
+        """The expected state of the stream (revision number or state constant)."""
+        def __init__(
+            self,
+            *,
+            stream: _builtins.str = ...,
+            expected_state: _builtins.int = ...,
+        ) -> None: ...
+        _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+        def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+        _ClearFieldArgType: _TypeAlias = _typing.Literal["expected_state", b"expected_state", "stream", b"stream"]  # noqa: Y015
+        def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+        def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+    STREAM_STATE_FIELD_NUMBER: _builtins.int
+    @_builtins.property
+    def stream_state(self) -> Global___ConsistencyCheck.StreamStateCheck:
+        """Check that a stream is at a specific revision or lifecycle state."""
+
+    def __init__(
+        self,
+        *,
+        stream_state: Global___ConsistencyCheck.StreamStateCheck | None = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _typing.Literal["stream_state", b"stream_state", "type", b"type"]  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["stream_state", b"stream_state", "type", b"type"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    _WhichOneofReturnType_type: _TypeAlias = _typing.Literal["stream_state"]  # noqa: Y015
+    _WhichOneofArgType_type: _TypeAlias = _typing.Literal["type", b"type"]  # noqa: Y015
+    def WhichOneof(self, oneof_group: _WhichOneofArgType_type) -> _WhichOneofReturnType_type | None: ...
+
+Global___ConsistencyCheck: _TypeAlias = ConsistencyCheck  # noqa: Y015
+
+@_typing.final
+class StreamRevision(_message.Message):
+    """*
+    A specific revision of a stream.
+
+    Used to represent stream positions for checkpoints, consistency checks,
+    and head position tracking.
+    """
+
+    DESCRIPTOR: _descriptor.Descriptor
+
+    STREAM_FIELD_NUMBER: _builtins.int
+    REVISION_FIELD_NUMBER: _builtins.int
+    stream: _builtins.str
+    """Stream name."""
+    revision: _builtins.int
+    """Revision within the stream."""
+    def __init__(
+        self,
+        *,
+        stream: _builtins.str = ...,
+        revision: _builtins.int = ...,
+    ) -> None: ...
+    _HasFieldArgType: _TypeAlias = _Never  # noqa: Y015
+    def HasField(self, field_name: _HasFieldArgType) -> _builtins.bool: ...
+    _ClearFieldArgType: _TypeAlias = _typing.Literal["revision", b"revision", "stream", b"stream"]  # noqa: Y015
+    def ClearField(self, field_name: _ClearFieldArgType) -> None: ...
+    def WhichOneof(self, oneof_group: _Never) -> None: ...
+
+Global___StreamRevision: _TypeAlias = StreamRevision  # noqa: Y015
