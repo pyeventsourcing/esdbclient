@@ -134,7 +134,12 @@ When appending to a stream, specify a `stream_name`, the new [`events`](./append
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-from kurrentdbclient import StreamState
+from kurrentdbclient import NewEvent, StreamState
+
+new_event = NewEvent(
+    type="OrderCreated",
+    data=b'{"name": "Greg"}',
+)
 
 client.append_to_stream(
     stream_name="order-123",
@@ -144,7 +149,7 @@ client.append_to_stream(
 ```
 @tab async
 ```python:no-line-numbers
-from kurrentdbclient import StreamState
+from kurrentdbclient import NewEvent, StreamState
 
 new_event = NewEvent(
     type="OrderCreated",
