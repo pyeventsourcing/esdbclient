@@ -43,7 +43,7 @@ separated with the `":"` character.
 
 The user info is sent by the client in a "basic auth" authorization header in each gRPC
 call to a "secure" server. This authorization header is used by the server to authenticate
-the client. The Python client does not allow call credentials to be transferred to
+the client. The Python clients do not allow call credentials to be transferred to
 "insecure" servers (option `tls=false`).
 
 ## Examples

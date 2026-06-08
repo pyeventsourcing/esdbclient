@@ -242,7 +242,7 @@ def handle_rpc_error(e: grpc.RpcError) -> KurrentDBClientError:  # noqa: PLR0911
                                 "actual", "current"
                             ),
                             stream_name=unpacked_detail.stream,
-                            current_version=unpacked_detail.actual_revision,
+                            actual_version=unpacked_detail.actual_revision,
                             expected_version=unpacked_detail.expected_revision,
                         )
                     if isinstance(

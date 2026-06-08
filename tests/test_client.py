@@ -717,6 +717,9 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.append_event(stream_name, current_version=1, event=event1)
         self.assertEqual(cm.exception.args[0], f"Stream {stream_name!r} does not exist")
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, StreamState.NO_STREAM)
+        self.assertEqual(cm.exception.expected_version, 1)
 
         # Append new event with correct expected position of StreamState.NO_STREAM.
         commit_position0 = self.client.get_commit_position()
@@ -754,6 +757,9 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             "Stream position of last event is 0 not StreamState.NO_STREAM",
             cm.exception.args[0],
         )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, StreamState.NO_STREAM)
 
         # Append another event.
         commit_position2 = self.client.append_event(
@@ -804,6 +810,9 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(
             "Stream position of last event is 1 not 0", cm.exception.args[0]
         )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 1)
+        self.assertEqual(cm.exception.expected_version, 0)
 
         # Append another new event.
         commit_position3 = self.client.append_event(
@@ -907,12 +916,18 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[2].id, event3.id)
 
         # Mixture of "idempotent" write of event2, event3, with new event4.
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.append_events(
                 stream_name,
                 current_version=0,
                 events=[event2, event3, event4],
             )
+        self.assertEqual(
+            cm.exception.args[0], "Stream position of last event is 2 not 0"
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 2)
+        self.assertEqual(cm.exception.expected_version, 0)
 
         events = self.client.get_stream(stream_name)
         self.assertEqual(len(events), 3)
@@ -1147,10 +1162,15 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         event2 = NewEvent(type="OrderUpdated", data=random_data())
 
         # Fail to append (stream does not exist).
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.append_events(
                 stream_name, current_version=1, events=[event1, event2]
             )
+
+        self.assertEqual(cm.exception.args[0], f"Stream '{stream_name}' does not exist")
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, StreamState.NO_STREAM)
+        self.assertEqual(cm.exception.expected_version, 1)
 
         # Append batch of new events.
         commit_position2 = self.client.append_events(
@@ -1173,18 +1193,31 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         # Fail to append (stream already exists).
         event3 = NewEvent(type="OrderUpdated", data=random_data())
         event4 = NewEvent(type="OrderUpdated", data=random_data())
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.append_events(
                 stream_name,
                 current_version=StreamState.NO_STREAM,
                 events=[event3, event4],
             )
+        self.assertEqual(
+            cm.exception.args[0],
+            "Stream position of last event is 1 not StreamState.NO_STREAM",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 1)
+        self.assertEqual(cm.exception.expected_version, StreamState.NO_STREAM)
 
         # Fail to append (wrong expected position).
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.append_events(
                 stream_name, current_version=10, events=[event3, event4]
             )
+        self.assertEqual(
+            cm.exception.args[0], "Stream position of last event is 1 not 10"
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 1)
+        self.assertEqual(cm.exception.expected_version, 10)
 
         # Read stream and check recorded events.
         events = self.client.get_stream(stream_name)
@@ -1251,10 +1284,14 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         event2 = NewEvent(type="OrderUpdated", data=random_data())
 
         # Append batch of new events.
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.append_events(
                 stream_name, current_version=StreamState.EXISTS, events=[event1, event2]
             )
+        self.assertEqual(cm.exception.args[0], f"Stream '{stream_name}' does not exist")
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, StreamState.NO_STREAM)
+        self.assertEqual(cm.exception.expected_version, StreamState.EXISTS)
 
         commit_position1 = self.client.append_events(
             stream_name, current_version=StreamState.NO_STREAM, events=[event1, event2]
@@ -2002,15 +2039,31 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(1, self.client.get_current_version(stream_name))
 
         # Can't delete the stream when specifying incorrect expected position.
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.delete_stream(stream_name, current_version=0)
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Delete failed due to WrongExpectedVersion. Stream: {stream_name}, "
+            f"Expected version: 0, Actual version: 1",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 1)
+        self.assertEqual(cm.exception.expected_version, 0)
 
         # Delete the stream, specifying correct expected position.
         self.client.delete_stream(stream_name, current_version=1)
 
         # Can't call delete again with incorrect expected position.
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.delete_stream(stream_name, current_version=0)
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Delete failed due to WrongExpectedVersion. Stream: {stream_name}, "
+            f"Expected version: 0, Actual version: 1",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 1)
+        self.assertEqual(cm.exception.expected_version, 0)
 
         # Can call delete again, with correct expected position.
         self.client.delete_stream(stream_name, current_version=1)
@@ -2050,8 +2103,16 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[1].id, event4.id)
 
         # Can't delete the stream again with incorrect expected position.
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.delete_stream(stream_name, current_version=0)
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Delete failed due to WrongExpectedVersion. Stream: {stream_name}, "
+            f"Expected version: 0, Actual version: 3",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 3)
+        self.assertEqual(cm.exception.expected_version, 0)
 
         # Can still read the events.
         self.assertEqual(3, self.client.get_current_version(stream_name))
@@ -2069,8 +2130,16 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         )
 
         # Can't call delete again with incorrect expected position.
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.delete_stream(stream_name, current_version=2)
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Delete failed due to WrongExpectedVersion. Stream: {stream_name}, "
+            f"Expected version: 2, Actual version: 3",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 3)
+        self.assertEqual(cm.exception.expected_version, 2)
 
         # Can delete again without error.
         self.client.delete_stream(stream_name, current_version=3)
@@ -2228,8 +2297,15 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         )
 
         # Can append to a deleted stream.
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.append_events(stream_name, current_version=0, events=[event3])
+        self.assertEqual(
+            cm.exception.args[0], "Stream position of last event is 1 not 0"
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 1)
+        self.assertEqual(cm.exception.expected_version, 0)
+
         self.client.append_events(stream_name, current_version=1, events=[event3])
 
         # Can read from deleted stream if new events have been appended.
@@ -2300,8 +2376,15 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         )
 
         # Can't append to a deleted stream with incorrect expected position.
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.append_events(stream_name, current_version=0, events=[event3])
+
+        self.assertEqual(
+            cm.exception.args[0], "Stream position of last event is 1 not 0"
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 1)
+        self.assertEqual(cm.exception.expected_version, 0)
 
         # Can append to a deleted stream with correct expected position.
         self.client.append_events(
@@ -2354,8 +2437,16 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         # Expect stream position is an int.
         self.assertEqual(1, self.client.get_current_version(stream_name))
 
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.tombstone_stream(stream_name, current_version=0)
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Delete failed due to WrongExpectedVersion. Stream: {stream_name}, "
+            f"Expected version: 0, Actual version: 1",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 1)
+        self.assertEqual(cm.exception.expected_version, 0)
 
         # Tombstone the stream, specifying expected position.
         self.client.tombstone_stream(stream_name, current_version=1)
@@ -6502,12 +6593,18 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         metadata, version = self.client.get_stream_metadata(stream_name)
         self.assertEqual(metadata["$acl"], acl)
 
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.set_stream_metadata(
                 stream_name=stream_name,
                 metadata=metadata,
                 current_version=10,
             )
+        self.assertEqual(
+            cm.exception.args[0], "Stream position of last event is 1 not 10"
+        )
+        self.assertEqual(cm.exception.stream_name, "$$" + stream_name)
+        self.assertEqual(cm.exception.actual_version, 1)
+        self.assertEqual(cm.exception.expected_version, 10)
 
         self.client.tombstone_stream(stream_name, current_version=StreamState.ANY)
 
@@ -7221,6 +7318,9 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             f"Expected version: 1. Actual version: -1.",
             cm.exception.args[0],
         )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, StreamState.NO_STREAM)
+        self.assertEqual(cm.exception.expected_version, 1)
 
         # Check get error when attempting to append new event expecting stream exists.
         with self.assertRaises(WrongCurrentVersionError) as cm:
@@ -7234,6 +7334,9 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             f"Expected version: -4. Actual version: -1.",
             cm.exception.args[0],
         )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, StreamState.NO_STREAM)
+        self.assertEqual(cm.exception.expected_version, StreamState.EXISTS)
 
         # Check the current_version value is validated.
         with self.assertRaises(ProgrammingError) as cm:
@@ -7281,6 +7384,9 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             f"Expected version: -1. Actual version: 0.",
             cm.exception.args[0],
         )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, StreamState.NO_STREAM)
 
         # Append another event.
         commit_position2 = self.client.multi_append_to_stream(
@@ -7335,6 +7441,9 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
             f"Expected version: 0. Actual version: 1.",
             cm.exception.args[0],
         )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 1)
+        self.assertEqual(cm.exception.expected_version, 0)
 
         # Append another new event.
         commit_position3 = self.client.multi_append_to_stream(
@@ -7445,7 +7554,7 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[2].id, event3.id)
 
         # Mixture of "idempotent" write of event2, event3, with new event4.
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.multi_append_to_stream(
                 NewEvents(
                     stream_name,
@@ -7453,6 +7562,14 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                     events=[event2, event3, event4],
                 )
             )
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Append failed due to a version conflict on stream '{stream_name}'. "
+            f"Expected version: 0. Actual version: 2.",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 2)
+        self.assertEqual(cm.exception.expected_version, 0)
 
         # Stream should still have 3 events.
         events = self.client.get_stream(stream_name)
@@ -7569,29 +7686,53 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
         self.assertEqual(events[0].id, event2.id)
 
         # Append errors.
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.multi_append_to_stream(
                 [
                     NewEvents(stream_name1, [event3], StreamState.NO_STREAM),
                     NewEvents(stream_name2, [event4], StreamState.NO_STREAM),
                 ]
             )
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Append failed due to a version conflict on stream '{stream_name1}'. "
+            f"Expected version: -1. Actual version: 0.",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name1)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, StreamState.NO_STREAM)
 
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.multi_append_to_stream(
                 [
                     NewEvents(stream_name1, [event3], 0),
                     NewEvents(stream_name2, [event4], StreamState.NO_STREAM),
                 ]
             )
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Append failed due to a version conflict on stream '{stream_name2}'. "
+            f"Expected version: -1. Actual version: 0.",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name2)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, StreamState.NO_STREAM)
 
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             self.client.multi_append_to_stream(
                 [
                     NewEvents(stream_name1, [event3], StreamState.NO_STREAM),
                     NewEvents(stream_name2, [event4], 0),
                 ]
             )
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Append failed due to a version conflict on stream '{stream_name1}'. "
+            f"Expected version: -1. Actual version: 0.",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name1)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, StreamState.NO_STREAM)
 
         # Expect each stream still has one event.
         events = self.client.get_stream(stream_name1)
@@ -7685,9 +7826,14 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                     current_version=StreamState.NO_STREAM,
                 ),
             )
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Append failed due to a version conflict on stream '{stream_name1}'. "
+            f"Expected version: -1. Actual version: 0.",
+        )
         self.assertEqual(cm.exception.stream_name, stream_name1)
-        self.assertEqual(cm.exception.current_version, 0)
-        self.assertEqual(cm.exception.expected_version, -1)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, StreamState.NO_STREAM)
 
     @skip("This works but clogs the server and doesn't increase test coverage")
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
@@ -7899,6 +8045,26 @@ class TestKurrentDBClient(KurrentDBClientTestCase):
                 ),
                 timeout=0,
             )
+
+    @skipIf(SERVER_VERSION < (26, 1), "Doesn't support append records RPC")
+    def test_stream_append_records_one_record_no_checks(self) -> None:
+        self.construct_client()
+
+        commit_position = self.client.get_commit_position()
+
+        stream_name = str(uuid4())
+        result = self.client.append_records(
+            records=NewRecord(
+                stream_name=stream_name,
+                type="OrderCreated",
+                data=random_data(),
+                content_type="application/octet-stream",
+            ),
+        )
+        self.assertGreater(result.commit_position, commit_position)
+        self.assertEqual(len(result.stream_positions), 1)
+        self.assertEqual(result.stream_positions[0].stream_name, stream_name)
+        self.assertEqual(result.stream_positions[0].stream_position, 0)
 
     @skipIf(SERVER_VERSION < (26, 1), "Doesn't support append records RPC")
     def test_stream_append_records_one_record_one_check(self) -> None:
@@ -9453,20 +9619,18 @@ class TestHandleRpcError(TestCase):
 
     def test_handle_stream_revision_conflict_error_v2(self) -> None:
         stream_name = str(uuid4())
-        expected_version = 0
-        current_version = -1
         with self.assertRaises(WrongCurrentVersionError) as cm:
             raise handle_rpc_error(
                 FakeStreamRevisionConflictV2RpcError(
                     stream_name,
-                    expected_revision=expected_version,
-                    actual_revision=current_version,
+                    expected_revision=0,
+                    actual_revision=(-1),
                 )
             ) from None
 
         self.assertEqual(stream_name, cm.exception.stream_name)
-        self.assertEqual(expected_version, cm.exception.expected_version)
-        self.assertEqual(current_version, cm.exception.current_version)
+        self.assertEqual(0, cm.exception.expected_version)
+        self.assertEqual(StreamState.NO_STREAM, cm.exception.actual_version)
 
     def test_handle_stream_already_in_append_session_error_v2(self) -> None:
         stream_name = str(uuid4())
@@ -9850,12 +10014,18 @@ class FakeFailedPreconditionRpcError(FakeRpcError):
 
 class FakeWrongExpectedVersionActuallyMinusOneError(FakeFailedPreconditionRpcError):
     def __init__(self) -> None:
-        super().__init__(details="WrongExpectedVersion Actual version: -1")
+        super().__init__(
+            details="Some WrongExpectedVersion reason. Stream: blah, "
+            "Expected version: 10, Actual version: -1"
+        )
 
 
 class FakeWrongExpectedVersionActuallyPlusOneError(FakeFailedPreconditionRpcError):
     def __init__(self) -> None:
-        super().__init__(details="WrongExpectedVersion Actual version: 1")
+        super().__init__(
+            details="Some WrongExpectedVersion reason. Stream: blah, "
+            "Expected version: 10, Actual version: 1"
+        )
 
 
 class FakeStreamIsDeletedError(FakeFailedPreconditionRpcError):

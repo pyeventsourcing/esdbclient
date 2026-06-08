@@ -12,8 +12,10 @@ from kurrentdbclient.events import (
     FellBehind,
     NewEvent,
     NewEvents,
+    NewRecord,
     RecordedEvent,
     StreamState,
+    StreamStateCheck,
 )
 from kurrentdbclient.persistent import (
     AsyncPersistentSubscription,
@@ -44,8 +46,10 @@ __all__ = [
     "KurrentDBClient",
     "NewEvent",
     "NewEvents",
+    "NewRecord",
     "RecordedEvent",
     "ReadResponse",
     "StreamState",
+    "StreamStateCheck",
     "PersistentSubscription",
 ]

@@ -38,7 +38,7 @@ the next scavenging process. The stream can still be reopened by appending new e
 | Parameter         | Description                                                                                                                                              | Default  |
 |-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
 | `stream_name`     | Stream to be "soft deleted".                                                                                                                             |          |
-| `current_version` | The [optimistic concurrency control](./appending-events.md#optimistic-concurrency-control) for deleting a stream.                                        |          |
+| `current_version` | The [optimistic concurrency control](./appending-events.md#consistency-checks) for deleting a stream.                                        |          |
 | `timeout`         | Maximum duration of operation (in seconds).                                                                                                              | `None`   |
 | `credentials`     | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`   |
 
@@ -152,7 +152,7 @@ the stream name, it will raise an exception if you try to append to it again.
 | Parameter         | Description                                                                                                                                              | Default  |
 |-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
 | `stream_name`     | Stream to be "hard deleted".                                                                                                                             |          |
-| `current_version` | The [optimistic concurrency control](./appending-events.md#optimistic-concurrency-control) for deleting a stream.                                        |          |
+| `current_version` | The [optimistic concurrency control](./appending-events.md#consistency-checks) for deleting a stream.                                        |          |
 | `timeout`         | Maximum duration of operation (in seconds).                                                                                                              | `None`   |
 | `credentials`     | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`   |
 

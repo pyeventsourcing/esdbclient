@@ -29,59 +29,55 @@ Please read the server docs for more details about [KurrentDB installation](@ser
 
 ## Installation
 
-The `kurrentdbclient` Python package provides the official Python clients for KurrentDB.
+The [`kurrentdbclient`](https://pypi.org/project/kurrentdbclient/) package provides the official sync and async Python clients for KurrentDB.
 
 ### Install or Update Python
 
-Before installing the Python client for KurrentDB, ensure you’re using Python 3.10 or later.
-
 For information about how to get the latest version of Python, see the official [Python documentation](https://www.python.org/downloads/).
 
-### Setup a Virtual Environment
+Before installing the Python clients for KurrentDB, ensure you’re using Python 3.10 or later.
 
-Once you have a supported version of Python installed, create a virtual environment and activate it:
+### Install the Python Clients
 
-Create a virtual environment:
+If you use `uv`:
+
+```bash:no-line-numbers
+uv add "kurrentdbclient~=1.2"
+```
+
+If you use `poetry`:
+
+```bash:no-line-numbers
+poetry add "kurrentdbclient~=1.2"
+```
+
+If you prefer a manual setup with `pip`:
 
 ```bash:no-line-numbers
 python -m venv .venv
-```
-
-Activate the virtual environment:
-
-```bash:no-line-numbers
 source .venv/bin/activate
-```
-
-### Install the Package
-
-Install the [`kurrentdbclient`](https://pypi.org/project/kurrentdbclient/) Python package via pip:
-
-```bash:no-line-numbers
-pip install "kurrentdbclient"
-```
-
-If your project requires a specific version, or has compatibility concerns with certain versions, you may provide constraints when installing:
-
-```bash:no-line-numbers
 pip install "kurrentdbclient~=1.2"
 ```
 
 ## Python Clients for KurrentDB
 
-The `kurrentdbclient` Python package provides sync and async clients for KurrentDB:
+The `kurrentdbclient` Python package provides both sync and async clients for KurrentDB.
+
+The sync and async clients have exactly the same methods and behaviors as each other.
 
 * Sync client – **blocking** interface suitable for sequential code and multi-threaded apps
 
 * Async client – **asynchronous** interface suitable for high-concurrency applications
 
-These clients have been tested with KurrentDB versions 25.0, 25.1, 26.0,
+This documentation provides examples for both sync and async clients in tabbed boxes (see below).
+
+The official sync and async Python clients have been tested with KurrentDB versions 25.0, 25.1, 26.0,
 and 26.1, and EventStoreDB versions 23.10 and 24.10, with and without SSL/TLS, in both
 single-server and cluster modes, across Python versions 3.10, 3.11, 3.12, 3.13, and 3.14.
 
 ## Client Configuration
 
-KurrentDB clients use a standardized [connection string](./connection-strings.md) to configure their connection to KurrentDB.
+All KurrentDB clients use a standardized [connection string](./connection-strings.md) to configure their connection to KurrentDB.
 
 When KurrentDB is [running locally](#running-kurrentdb-locally) with "insecure" mode, use a connection string with `tls=false`:
 
@@ -93,7 +89,7 @@ For production services, ask your service provider for a valid [connection strin
 
 ## Connecting to KurrentDB
 
-To connect to KurrentDB, instantiate a [sync or async client](#python-clients-for-kurrentdb) with a [suitable connection string](#client-configuration).
+To connect to KurrentDB from Python, instantiate a [client](#python-clients-for-kurrentdb) with a [connection string](#client-configuration).
 
 ::: tabs
 @tab sync
@@ -112,7 +108,7 @@ client = AsyncKurrentDBClient(connection_string)
 
 ## Creating New Events
 
-Use the [`NewEvent`](./appending-events.md#new-events) class to define new events with a `type` string and binary `data`.
+Use the [`NewEvent`](./appending-events.md#the-newevent-class) class to define new events with a `type` string and binary `data`.
 
 ```python:no-line-numbers
 from kurrentdbclient import NewEvent
@@ -123,13 +119,13 @@ new_event = NewEvent(
 )
 ```
 
-See the [`NewEvent`](./appending-events.md#new-events) documentation for more details.
+See the [`NewEvent`](./appending-events.md#the-newevent-class) documentation for more details.
 
 ## Appending to a Stream
 
-The Python client's [`append_to_stream()`](./appending-events.md#append-to-stream) method records new events in KurrentDB.
+The client [`append_to_stream()`](./appending-events.md#append-to-stream) method records new events in KurrentDB.
 
-When appending to a stream, specify a `stream_name`, the new [`events`](./appending-events.md#new-events) and a [`current_version`](./appending-events.md#optimistic-concurrency-control).
+When appending to a stream, specify a `stream_name`, the new [`events`](./appending-events.md#the-newevent-class) and a [`current_version`](./appending-events.md#consistency-checks).
 
 ::: tabs
 @tab sync
@@ -169,7 +165,7 @@ See [Appending Events](./appending-events.md) for more information about writing
 
 ## Reading a Stream
 
-The Python client's [`get_stream()`](./reading-events.md#get-stream) method reads events from a named stream.
+The client [`get_stream()`](./reading-events.md#get-stream) method reads events from a named stream.
 
 ::: tabs
 @tab sync

@@ -8,7 +8,7 @@ This guide describes the Python client methods for working with
 [projections](@server/features/projections.md) in KurrentDB.
 
 ::: tip
-Projections require [event data](./appending-events.md#new-events) to be JSON.
+Projections require [event data](./appending-events.md#the-newevent-class) to be JSON.
 :::
 
 ## Introduction

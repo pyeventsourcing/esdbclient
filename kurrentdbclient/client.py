@@ -592,7 +592,7 @@ class KurrentDBClient(BaseKurrentDBClient):
         self,
         /,
         records: NewRecord | Iterable[NewRecord],
-        checks: ConsistencyCheck | Iterable[ConsistencyCheck],
+        checks: ConsistencyCheck | Iterable[ConsistencyCheck] | None = None,
         *,
         timeout: float | None = None,
         credentials: grpc.CallCredentials | None = None,

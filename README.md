@@ -53,7 +53,7 @@ https://github.com/pyeventsourcing/eventsourcing-kurrentdb) package.
   * [Query string](#query-string)
   * [Examples](#examples)
 * [Event objects](#event-objects)
-  * [New events](#new-events)
+  * [New events](#the-newevent-class)
   * [Recorded events](#recorded-events)
 * [Streams](#streams)
   * [Append events](#append-events)

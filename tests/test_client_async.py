@@ -419,12 +419,18 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         metadata, version = await self.client.get_stream_metadata(stream_name)
         self.assertEqual(metadata["$acl"], acl)
 
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             await self.client.set_stream_metadata(
                 stream_name=stream_name,
                 metadata=metadata,
                 current_version=10,
             )
+        self.assertEqual(
+            cm.exception.args[0], "Stream position of last event is 1 not 10"
+        )
+        self.assertEqual(cm.exception.stream_name, "$$" + stream_name)
+        self.assertEqual(cm.exception.actual_version, 1)
+        self.assertEqual(cm.exception.expected_version, 10)
 
         await self.client.tombstone_stream(stream_name, current_version=StreamState.ANY)
 
@@ -453,10 +459,16 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
     async def test_append_events_raises_wrong_current_version(self) -> None:
         stream_name1 = str(uuid4())
         event1 = NewEvent(type="OrderCreated", data=b"{}")
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             await self.client.append_events(
                 stream_name=stream_name1, events=[event1], current_version=10
             )
+        self.assertEqual(
+            cm.exception.args[0], f"Stream '{stream_name1}' does not exist"
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name1)
+        self.assertEqual(cm.exception.actual_version, StreamState.NO_STREAM)
+        self.assertEqual(cm.exception.expected_version, 10)
 
         await self.client.append_events(
             stream_name=stream_name1,
@@ -465,10 +477,16 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         )
 
         event2 = NewEvent(type="OrderUpdated", data=b"{}")
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             await self.client.append_events(
                 stream_name=stream_name1, events=[event2], current_version=10
             )
+        self.assertEqual(
+            cm.exception.args[0], "Stream position of last event is 0 not 10"
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name1)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, 10)
 
     async def test_append_events_reconnects_closed_connection(self) -> None:
         await self.client.connect()
@@ -651,8 +669,16 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             current_version=StreamState.NO_STREAM,
         )
 
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             await self.client.delete_stream(stream_name1, current_version=10)
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Delete failed due to WrongExpectedVersion. Stream: {stream_name1}, "
+            f"Expected version: 10, Actual version: 0",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name1)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, 10)
 
     async def test_delete_stream_raises_stream_is_deleted(self) -> None:
         stream_name1 = str(uuid4())
@@ -700,8 +726,16 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             current_version=StreamState.NO_STREAM,
         )
 
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             await self.client.tombstone_stream(stream_name1, current_version=10)
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Delete failed due to WrongExpectedVersion. Stream: {stream_name1}, "
+            f"Expected version: 10, Actual version: 0",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name1)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, 10)
 
     async def test_tombstone_stream_raises_stream_is_deleted(self) -> None:
         stream_name1 = str(uuid4())
@@ -3631,6 +3665,9 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             f"Expected version: 1. Actual version: -1.",
             cm.exception.args[0],
         )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, StreamState.NO_STREAM)
+        self.assertEqual(cm.exception.expected_version, 1)
 
         # Check get error when attempting to append new event expecting stream exists.
         with self.assertRaises(WrongCurrentVersionError) as cm:
@@ -3644,6 +3681,9 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             f"Expected version: -4. Actual version: -1.",
             cm.exception.args[0],
         )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, StreamState.NO_STREAM)
+        self.assertEqual(cm.exception.expected_version, StreamState.EXISTS)
 
         # Check the current_version value is validated.
         with self.assertRaises(ProgrammingError) as cm_prog_err:
@@ -3693,6 +3733,9 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             f"Expected version: -1. Actual version: 0.",
             cm.exception.args[0],
         )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, StreamState.NO_STREAM)
 
         # Append another event.
         commit_position2 = await self.client.multi_append_to_stream(
@@ -3749,6 +3792,9 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             f"Expected version: 0. Actual version: 1.",
             cm.exception.args[0],
         )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 1)
+        self.assertEqual(cm.exception.expected_version, 0)
 
         # Append another new event.
         commit_position3 = await self.client.multi_append_to_stream(
@@ -3859,7 +3905,7 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         self.assertEqual(events[2].id, event3.id)
 
         # Mixture of "idempotent" write of event2, event3, with new event4.
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             await self.client.multi_append_to_stream(
                 NewEvents(
                     stream_name,
@@ -3867,6 +3913,14 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                     events=[event2, event3, event4],
                 )
             )
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Append failed due to a version conflict on stream '{stream_name}'. "
+            f"Expected version: 0. Actual version: 2.",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name)
+        self.assertEqual(cm.exception.actual_version, 2)
+        self.assertEqual(cm.exception.expected_version, 0)
 
         # Stream should still have 3 events.
         events = await self.client.get_stream(stream_name)
@@ -3982,29 +4036,53 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
         self.assertEqual(events[0].id, event2.id)
 
         # Append errors.
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             await self.client.multi_append_to_stream(
                 [
                     NewEvents(stream_name1, [event3], StreamState.NO_STREAM),
                     NewEvents(stream_name2, [event4], StreamState.NO_STREAM),
                 ]
             )
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Append failed due to a version conflict on stream '{stream_name1}'. "
+            f"Expected version: -1. Actual version: 0.",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name1)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, StreamState.NO_STREAM)
 
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             await self.client.multi_append_to_stream(
                 [
                     NewEvents(stream_name1, [event3], 0),
                     NewEvents(stream_name2, [event4], StreamState.NO_STREAM),
                 ]
             )
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Append failed due to a version conflict on stream '{stream_name2}'. "
+            f"Expected version: -1. Actual version: 0.",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name2)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, StreamState.NO_STREAM)
 
-        with self.assertRaises(WrongCurrentVersionError):
+        with self.assertRaises(WrongCurrentVersionError) as cm:
             await self.client.multi_append_to_stream(
                 [
                     NewEvents(stream_name1, [event3], StreamState.NO_STREAM),
                     NewEvents(stream_name2, [event4], 0),
                 ]
             )
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Append failed due to a version conflict on stream '{stream_name1}'. "
+            f"Expected version: -1. Actual version: 0.",
+        )
+        self.assertEqual(cm.exception.stream_name, stream_name1)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, StreamState.NO_STREAM)
 
         # Expect each stream still has one event.
         events = await self.client.get_stream(stream_name1)
@@ -4096,9 +4174,14 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
                     current_version=StreamState.NO_STREAM,
                 ),
             )
+        self.assertEqual(
+            cm.exception.args[0],
+            f"Append failed due to a version conflict on stream '{stream_name1}'. "
+            f"Expected version: -1. Actual version: 0.",
+        )
         self.assertEqual(cm.exception.stream_name, stream_name1)
-        self.assertEqual(cm.exception.current_version, 0)
-        self.assertEqual(cm.exception.expected_version, -1)
+        self.assertEqual(cm.exception.actual_version, 0)
+        self.assertEqual(cm.exception.expected_version, StreamState.NO_STREAM)
 
     @skipIf(SERVER_VERSION < (25, 1), "Doesn't support multi-append")
     async def test_stream_multi_append_same_stream_error(self) -> None:
@@ -4215,6 +4298,25 @@ class TestAsyncKurrentDBClient(TimedTestCase, IsolatedAsyncioTestCase):
             json.loads(events[1].metadata.decode()),
             {"$schema.format": "Bytes", "$schema.name": "OrderCreated", "a": "1"},
         )
+
+    @skipIf(SERVER_VERSION < (26, 1), "Doesn't support append records RPC")
+    async def test_stream_append_records_one_record_no_checks(self) -> None:
+
+        commit_position = await self.client.get_commit_position()
+
+        stream_name = str(uuid4())
+        result = await self.client.append_records(
+            records=NewRecord(
+                stream_name=stream_name,
+                type="OrderCreated",
+                data=random_data(),
+                content_type="application/octet-stream",
+            ),
+        )
+        self.assertGreater(result.commit_position, commit_position)
+        self.assertEqual(len(result.stream_positions), 1)
+        self.assertEqual(result.stream_positions[0].stream_name, stream_name)
+        self.assertEqual(result.stream_positions[0].stream_position, 0)
 
     @skipIf(SERVER_VERSION < (26, 1), "Doesn't support append records RPC")
     async def test_stream_append_records_one_record_one_check(self) -> None:

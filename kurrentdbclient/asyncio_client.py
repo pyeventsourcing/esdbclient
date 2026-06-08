@@ -345,7 +345,7 @@ class AsyncKurrentDBClient(BaseKurrentDBClient):
         self,
         /,
         records: NewRecord | Iterable[NewRecord],
-        checks: StreamStateCheck | Iterable[StreamStateCheck],
+        checks: StreamStateCheck | Iterable[StreamStateCheck] | None = None,
         *,
         timeout: float | None = None,
         credentials: grpc.CallCredentials | None = None,

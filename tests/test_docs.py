@@ -75,11 +75,11 @@ class TestDocs(TestCase):
     @staticmethod
     def randomize_names(source: str) -> str:
         replacements = {
-            "acc-123": f"acc-123-{uuid4()}",
             "order-123": f"order-123-{uuid4()}",
-            "order:456": f"order:456-{uuid4()}",
-            "student-123": f"student-123-{uuid4()}",
-            "course-456": f"course-456-{uuid4()}",
+            "student-1": f"student-1-{uuid4()}",
+            "student-2": f"student-2-{uuid4()}",
+            "course-1": f"course-1-{uuid4()}",
+            "course-2": f"course-2-{uuid4()}",
             "stream-subscription": f"stream-subscription-{uuid4()}",
             "transaction-log-subscription": f"transaction-log-subscription-{uuid4()}",
         }
@@ -211,7 +211,10 @@ class TestDocs(TestCase):
                         line = line[4:]
 
                     # Exclude version-specific unsupported code.
+                    # TODO: Maybe separately collect and exclude whole block?
                     if SERVER_VERSION < (25, 1) and "multi_append_to_stream" in line:
+                        is_ignoring_remainder_of_code_in_block = True
+                    if SERVER_VERSION < (26, 1) and "append_records" in line:
                         is_ignoring_remainder_of_code_in_block = True
 
                     if is_ignoring_remainder_of_code_in_block:

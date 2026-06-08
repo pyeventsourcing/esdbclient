@@ -211,7 +211,7 @@ class V2StreamsService(BaseStreamsService[GrpcStreamers]):
     def append_records(  # pragma: <26.1 no cover
         self,
         records: Iterable[NewRecord],
-        checks: Iterable[ConsistencyCheck],
+        checks: Iterable[ConsistencyCheck] | None,
         timeout: float | None = None,
         metadata: Metadata | None = None,
         credentials: grpc.CallCredentials | None = None,
@@ -249,7 +249,7 @@ def _convert_append_records_response(
 
 def _construct_append_records_request(
     records: Iterable[NewRecord],
-    checks: Iterable[ConsistencyCheck],
+    checks: Iterable[ConsistencyCheck] | None,
 ) -> streams_pb2.AppendRecordsRequest:  # pragma: <26.1 no cover
     return streams_pb2.AppendRecordsRequest(
         records=[
@@ -274,7 +274,7 @@ def _construct_append_records_request(
                     ),
                 )
             )
-            for c in checks
+            for c in checks or []
         ],
     )
 
@@ -313,7 +313,7 @@ class AsyncV2StreamsService(BaseStreamsService[AsyncGrpcStreamers]):
     async def append_records(  # pragma: <26.1 no cover
         self,
         records: Iterable[NewRecord],
-        checks: Iterable[StreamStateCheck],
+        checks: Iterable[StreamStateCheck] | None,
         timeout: float | None = None,
         metadata: Metadata | None = None,
         credentials: grpc.CallCredentials | None = None,

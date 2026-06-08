@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 
 from typing_extensions import deprecated
 
+from kurrentdbclient.events import StreamState
+
 if TYPE_CHECKING:
     from typing import Any
     from uuid import UUID
@@ -105,13 +107,24 @@ class WrongCurrentVersionError(KurrentDBClientError):
         self,
         *args: Any,
         stream_name: str | None = None,
-        current_version: int | None = None,
-        expected_version: int | None = None,
+        actual_version: int | StreamState | None = None,
+        expected_version: int | StreamState | None = None,
     ) -> None:
         self.stream_name = stream_name
-        self.current_version = current_version
-        self.expected_version = expected_version
+        self.actual_version = MAPPING_INT_TO_STREAM_STATE.get(
+            actual_version, actual_version
+        )
+        self.expected_version = MAPPING_INT_TO_STREAM_STATE.get(
+            expected_version, expected_version
+        )
         super().__init__(*args)
+
+
+MAPPING_INT_TO_STREAM_STATE: dict[int | StreamState | None, StreamState] = {
+    -1: StreamState.NO_STREAM,
+    -2: StreamState.ANY,
+    -4: StreamState.EXISTS,
+}
 
 
 class AccessDeniedError(KurrentDBClientError):

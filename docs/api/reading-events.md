@@ -23,7 +23,7 @@ The Python clients for KurrentDB have four methods for reading events:
 
 The Python client for KurrentDB uses the `RecordedEvent` class when presenting recorded events.
 
-A `RecordedEvent` object specifies the type string, binary data, metadata, content type, and ID of a [new event](./appending-events.md#new-events) that has been recorded.
+A `RecordedEvent` object specifies the type string, binary data, metadata, content type, and ID of a [new event](./appending-events.md#the-newevent-class) that has been recorded.
 
 Additionally, it specifies the event's stream name and stream position, the commit and prepare position, the recorded time, and possibly a link event and a persistent subscription consumer group retry count.
 

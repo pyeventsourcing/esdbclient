@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import math
+import re
 import sys
 from abc import abstractmethod
 from collections.abc import Iterable, Iterator, Sequence
@@ -316,7 +317,7 @@ class ReadResponse(GrpcStreamer, BaseReadResponse, AbstractReadResponse):
         try:
             read_resp = next(self._read_resps)
         except grpc.RpcError as e:
-            raise handle_streams_rpc_error(e) from None
+            raise handle_streams_rpc_error(e) from e
         else:
             assert isinstance(read_resp, streams_pb2.ReadResp)
             return read_resp
@@ -586,14 +587,24 @@ class BaseStreamsService(KurrentDBService[TGrpcStreamers]):
                 csro_oneof = unpacked_error.WhichOneof("current_stream_revision_option")
                 if csro_oneof == "current_no_stream":
                     msg = f"Stream {stream_name!r} does not exist"
-                    raise WrongCurrentVersionError(msg)
+                    raise WrongCurrentVersionError(
+                        msg,
+                        stream_name=stream_name,
+                        actual_version=StreamState.NO_STREAM,
+                        expected_version=current_version,
+                    )
                 assert csro_oneof == "current_stream_revision"
                 msg = (
                     f"Stream position of last event is"
                     f" {unpacked_error.current_stream_revision}"
                     f" not {current_version}"
                 )
-                raise WrongCurrentVersionError(msg)
+                raise WrongCurrentVersionError(
+                    msg,
+                    stream_name=stream_name,
+                    actual_version=unpacked_error.current_stream_revision,
+                    expected_version=current_version,
+                )
 
             if isinstance(unpacked_error, shared_pb2.StreamDeleted):
                 msg = f"Stream {stream_name !r} is deleted"
@@ -1246,14 +1257,24 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
             cro_oneof = wev.WhichOneof("current_revision_option")
             if cro_oneof == "current_no_stream":
                 msg = f"Stream {stream_name!r} does not exist"
-                raise WrongCurrentVersionError(msg)
+                raise WrongCurrentVersionError(
+                    msg,
+                    stream_name=stream_name,
+                    actual_version=StreamState.NO_STREAM,
+                    expected_version=current_version,
+                )
             assert cro_oneof == "current_revision", cro_oneof
             msg = (
                 f"Stream position of last event is"
                 f" {wev.current_revision}"
                 f" not {current_version}"
             )
-            raise WrongCurrentVersionError(msg)
+            raise WrongCurrentVersionError(
+                msg,
+                stream_name=stream_name,
+                actual_version=wev.current_revision,
+                expected_version=current_version,
+            )
             # if cro_oneof == "current_revision":
             #     msg = f"Current version is {wev.current_revision}"
             #     raise WrongCurrentVersion(msg)
@@ -1429,12 +1450,30 @@ class StreamsService(BaseStreamsService[GrpcStreamers]):
 def handle_streams_rpc_error(e: grpc.RpcError) -> KurrentDBClientError:
     if e.code() == grpc.StatusCode.FAILED_PRECONDITION:
         details = e.details() or ""
-        if "WrongExpectedVersion" in details:
-            if "Actual version: -1" in details:
+        pattern = re.compile(
+            r"^(?P<reason>.*WrongExpectedVersion.*?)\. "
+            r"Stream: (?P<stream>.*?), "
+            r"Expected version: (?P<expected>-?\d+), "
+            r"Actual version: (?P<actual>-?\d+)$"
+        )
+
+        match = pattern.match(details)
+
+        if match:
+            _reason = match.group("reason")
+            stream_name = match.group("stream")
+            expected_version = int(match.group("expected"))
+            actual_version = int(match.group("actual"))
+            if actual_version == -1:
                 # Get here when deleting or tombstoning a stream that
                 # does not exist whilst specifying expected version.
                 return NotFoundError(details)
-            return WrongCurrentVersionError(details)
+            return WrongCurrentVersionError(
+                details,
+                stream_name=stream_name,
+                expected_version=expected_version,
+                actual_version=actual_version,
+            )
         if "is deleted" in details:
             return StreamIsDeletedError(details)
     return handle_rpc_error(e)
