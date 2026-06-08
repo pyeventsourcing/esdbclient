@@ -95,6 +95,7 @@ class TestDocs(TestCase):
 
         print_block_line_numbers = True
         lines: list[str] = []
+        block: list[str] = []
         num_code_lines = 0
         num_code_lines_in_block = 0
         is_code = False
@@ -157,6 +158,8 @@ class TestDocs(TestCase):
                     # Finish markdown code block.
                     is_code = False
                     is_ignoring_remainder_of_code_in_block = False
+                    lines.extend(block)
+                    block = []
                     line = ""
                 elif is_code and is_rst and line.startswith("```"):
                     # Can't finish restructured text block with markdown.
@@ -200,6 +203,8 @@ class TestDocs(TestCase):
                     if not num_code_lines_in_block:
                         self.fail(f"No lines of code in block: {line_index + 1}")
                     is_code = False
+                    lines.extend(block)
+                    block = []
                     line = ""
                 elif is_code:
                     # Process line in code block.
@@ -221,6 +226,8 @@ class TestDocs(TestCase):
                         is_ignoring_remainder_of_code_in_block = True
 
                     if is_ignoring_remainder_of_code_in_block:
+                        for i in range(len(block)):
+                            block[i] = ""
                         line = ""
                     elif len(line.strip()):
                         num_code_lines_in_block += 1
@@ -254,7 +261,10 @@ class TestDocs(TestCase):
 
                 # if "Block on line" not in line.strip() and line.strip():
                 #     print(line)
-                lines.append(line)
+                if is_code:
+                    block.append(line)
+                else:
+                    lines.append(line)
                 last_line = orig_line
 
         print(f"{num_code_lines} lines of code in {doc_path}")
