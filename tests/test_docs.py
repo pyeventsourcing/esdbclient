@@ -149,9 +149,12 @@ class TestDocs(TestCase):
                         line = ""
                     num_code_lines_in_block = 0
                 elif is_code and is_md and line.startswith("```"):
-                    # Finish markdown code block.
-                    if not num_code_lines_in_block:
+                    if (
+                        not num_code_lines_in_block
+                        and not is_ignoring_remainder_of_code_in_block
+                    ):
                         self.fail(f"No lines of code in block: {line_index + 1}")
+                    # Finish markdown code block.
                     is_code = False
                     is_ignoring_remainder_of_code_in_block = False
                     line = ""
