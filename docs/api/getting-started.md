@@ -42,13 +42,13 @@ Before installing the Python clients for KurrentDB, ensure you’re using Python
 If you use `uv`:
 
 ```bash:no-line-numbers
-uv add "kurrentdbclient~=1.2"
+uv add "kurrentdbclient~=1.3"
 ```
 
 If you use `poetry`:
 
 ```bash:no-line-numbers
-poetry add "kurrentdbclient~=1.2"
+poetry add "kurrentdbclient~=1.3"
 ```
 
 If you prefer a manual setup with `pip`:
@@ -56,7 +56,7 @@ If you prefer a manual setup with `pip`:
 ```bash:no-line-numbers
 python -m venv .venv
 source .venv/bin/activate
-pip install "kurrentdbclient~=1.2"
+pip install "kurrentdbclient~=1.3"
 ```
 
 ## Python Clients for KurrentDB
