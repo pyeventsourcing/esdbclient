@@ -105,10 +105,13 @@ If `track_emitted_streams` is `True` then any emitted emitted streams can be opt
 deleted when a projection is deleted. See [`delete_projection()`](#delete-projection)
 for more details.
 
+If the `engine` is `"v2"`, the projection will run on the version 2 projections engine, which is more reliable.
+
 | Parameter               | Description                                                                                                                                              | Default |
 |-------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
 | `name`                  | Name of the projection.                                                                                                                                  |         |
 | `query`                 | Javascript projection code, defines what the projection will do.                                                                                         |         |
+| `engine`                | Projection engine version on which to run this projection. Acceptable values are `"v1"` and `"v2"`.                                                      | `"v1"`  |
 | `emit_enabled`          | Whether a projection will be able to emit events.                                                                                                        | `False` |
 | `track_emitted_streams` | Whether emitted streams are tracked.                                                                                                                     | `False` |
 | `timeout`               | Maximum duration of operation (in seconds).                                                                                                              | `None`  |
