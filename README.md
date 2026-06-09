@@ -1,4 +1,4 @@
-<a href="https://kurrent.io">
+from uuid import uuid4<a href="https://kurrent.io">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://github.com/pyeventsourcing/kurrentdbclient/raw/1.0/KurrentLogo-White.png.png">
     <source media="(prefers-color-scheme: light)" srcset="https://github.com/pyeventsourcing/kurrentdbclient/raw/1.0/KurrentLogo-Black.png">
@@ -59,6 +59,7 @@ https://github.com/pyeventsourcing/eventsourcing-kurrentdb) package.
   * [Append events](#append-events)
   * [Idempotent append operations](#idempotent-append-operations)
   * [Multi-stream append](#multi-stream-append)
+  * [Append records](#append-records)
   * [Read stream events](#read-stream-events)
   * [Get current version](#get-current-version)
   * [How to implement snapshotting with KurrentDB](#how-to-implement-snapshotting-with-kurrentdb)
@@ -1096,6 +1097,50 @@ client.multi_append_to_stream(
 
 If the `multi_append_to_stream()` operation is successful, the method returns the commit position of
 the last event in the last sequence.
+
+### Append records<a id="append-records"></a>
+
+*requires leader*
+
+*supported by KurrentDB 26.1*
+
+The `append_records()` method can be used to record many events to a different streams
+in any order. The `append_records()` operation is atomic, so that
+either all or none of the new events will be recorded.
+
+The `append_records()` method has one required argument, `records`, which can be either a single
+instance of `NewRecord` or an iterable of `NewRecord` instances.
+
+The `append_records()` method has an optional `checks` argument, which is an iterable of
+`StreamStateCheck` objects.
+
+The `append_records()` method has an optional `timeout` argument, which is a Python `float`
+that sets a maximum duration, in seconds, for the completion of the gRPC operation.
+
+The `append_records()` method has an optional `credentials` argument, which can be used to
+override call credentials derived from the connection string URI.
+
+```python
+from kurrentdbclient import NewRecord, StreamStateCheck
+
+stream_name = str(uuid.uuid4())
+
+client.append_records(
+    records=[
+        NewRecord(
+            stream_name=stream_name,
+            type='EventType1',
+            data=b'{}'
+        ),
+    ],
+    checks=[
+        StreamStateCheck(
+            stream_name=stream_name,
+            expected_state=StreamState.NO_STREAM,
+        ),
+    ],
+)
+```
 
 
 ### Read stream events<a id="read-stream-events"></a>
@@ -3061,8 +3106,13 @@ This required `name` argument is a Python `str` that specifies the name of the p
 
 This required `query` argument is a Python `str` that defines what the projection will do.
 
-This method also has four optional arguments, `emit_enabled`,
+This method also has five optional arguments, `engine`, `emit_enabled`,
 `track_emitted_streams`, `timeout`, and `credentials`.
+
+The optional `engine` argument is a Python `str` which specifies whether a
+projection will use version 1 or version 2 of the projections engine. If the
+argument is `"v2"`, the version 2 projection engine will be used, which is more
+reliable than the version 1 projection engine. The default value of `engine` is `v1`.
 
 The optional `emit_enabled` argument is a Python `bool` which specifies whether a
 projection will be able to emit events. If a `True` value is specified, the projection
