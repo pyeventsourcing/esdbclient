@@ -1,4 +1,4 @@
-from uuid import uuid4<a href="https://kurrent.io">
+<a href="https://kurrent.io">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://github.com/pyeventsourcing/kurrentdbclient/raw/1.0/KurrentLogo-White.png.png">
     <source media="(prefers-color-scheme: light)" srcset="https://github.com/pyeventsourcing/kurrentdbclient/raw/1.0/KurrentLogo-Black.png">
