@@ -4,24 +4,21 @@ order: 4
 
 # Reading Events
 
-This guide describes the Python client methods for reading events from KurrentDB.
+This guide describes methods for reading events from KurrentDB.
 
 ## Introduction
 
-Recorded events can be read from a [named stream](#read-stream), from the
-[global transaction log](#read-all), and from [secondary indexes](#read-index).
+The [Python clients for KurrentDB](getting-started.md#python-clients-for-kurrentdb) have four methods for reading events:
 
-The Python clients for KurrentDB have four methods for reading events:
-
-* [`get_stream()`](#get-stream) – returns a Python `tuple` of events from a named stream
+* [`get_stream()`](#get-stream) – returns a Python `tuple` of events from a **named stream**
 * [`read_stream()`](#read-stream) – returns a streaming iterable of events from a named stream
-* [`read_all()`](#read-all) – returns a streaming iterable of events from global transaction log
-* [`read_index()`](#read-index) – returns a streaming iterable of events from a secondary index
+* [`read_all()`](#read-all) – returns a streaming iterable of events from **global transaction log**
+* [`read_index()`](#read-index) – returns a streaming iterable of events from a **secondary index**
 
 
 ## Recorded Events
 
-The Python client for KurrentDB uses the `RecordedEvent` class when presenting recorded events.
+Recorded events are presented as `RecordedEvent` objects.
 
 A `RecordedEvent` object specifies the type string, binary data, metadata, content type, and ID of a [new event](./appending-events.md#the-newevent-class) that has been recorded.
 
@@ -46,12 +43,9 @@ presented as `RecordedEvent` objects, and so it is important to understand these
 
 ## Get Stream
 
-Use the `get_stream()` method to get a `tuple` of events from a stream in KurrentDB.
-
-You can get all the events or a sample of the events from an individual stream,
-starting from any position in the stream, either forwards or backwards.
-
-This is a convenient alternative to [`read_stream()`](#read-stream) that returns a Python `tuple` collection.
+The `get_stream()` method returns event records from a stream in KurrentDB.
+This is a convenient alternative to [`read_stream()`](#read-stream), that converts a
+streaming iterable into a Python `tuple`.
 
 | Parameter         | Description                                                                                                                          | Default  |
 |-------------------|--------------------------------------------------------------------------------------------------------------------------------------|----------|
@@ -63,7 +57,7 @@ This is a convenient alternative to [`read_stream()`](#read-stream) that returns
 | `timeout`         | Maximum duration of operation (in seconds).                                                                                         | `None`   |
 | `credentials`     | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`   |
 
-On success, `get_stream()` returns a `tuple` of [`RecordedEvent`](#recorded-events) objects.
+The `get_stream()` method returns a `tuple` of [`RecordedEvent`](#recorded-events) objects.
 
 ### Examples
 
@@ -302,14 +296,11 @@ except Exception as e:
 
 ## Read Stream
 
-Use the `read_stream()` method to read events from a stream in KurrentDB.
+The `read_stream()` method returns event records from a stream in KurrentDB.
 
-You can read all the events or a sample of the events from an individual stream,
-starting from any position in the stream, and can read either forwards or
-backwards.
-
-Alternatively, use [`get_stream()`](#get-stream) to get a Python `tuple` collection
-of events, rather then a streaming iterable response.
+You can read all the events from an individual stream, starting from any position
+in the stream, and can read either forwards or backwards, and request a limited
+number of events.
 
 | Parameter         | Description                                                                              | Default |
 |-------------------|------------------------------------------------------------------------------------------|---------|
@@ -321,9 +312,11 @@ of events, rather then a streaming iterable response.
 | `timeout`         | Maximum duration of operation (in seconds).                                             | `None`  |
 | `credentials`     | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`  |
 
-On success, `read_stream()` returns an iterable of `RecordedEvent` objects.
+The `read_stream()` method returns a streaming iterable of [`RecordedEvent`](#recorded-events) objects.
 
-Please note, a `NotFoundError` exception will be raised if the stream does not exist.
+If the stream does not exist, the `read_stream()` method raises a `NotFoundError` exception.
+
+Alternatively, use [`get_stream()`](#get-stream) to get a Python `tuple`.
 
 ### Reading Forwards
 
@@ -504,7 +497,7 @@ except Exception as e:
 
 ## Read All
 
-Use the `read_all()` method to read events from the global transaction log.
+The `read_all()` method read events from the global transaction log.
 
 No arguments are required when reading from the global transaction log.
 You can start from a particular commit position, read events backwards, and read
@@ -522,7 +515,7 @@ a limited number of events. You can also filter events by type string or stream 
 | `timeout`               | Maximum duration of operation (in seconds).                                                                                                              | `None`        |
 | `credentials`           | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`        |
 
-On success, `read_all()` returns an iterable of `RecordedEvent` objects.
+The `read_all()` method returns a streaming iterable of [`RecordedEvent`](#recorded-events) objects.
 
 ### Server-Side Filtering
 
@@ -796,7 +789,7 @@ async with await client.read_all(
 Supported by KurrentDB 25.1 and later.
 :::
 
-Use the `read_index()` method to read events from a secondary index in KurrentDB.
+The `read_index()` method reads events from a secondary index in KurrentDB.
 
 You can read events from a secondary index starting from any commit position.
 
@@ -808,7 +801,7 @@ You can read events from a secondary index starting from any commit position.
 | `timeout`         | Maximum duration of operation (in seconds).                                                                                                              | `None`  |
 | `credentials`     | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`  |
 
-On success, `read_index()` returns an iterable of `RecordedEvent` objects.
+The `read_index()` method returns a streaming iterable of [`RecordedEvent`](#recorded-events) objects.
 
 ### Reading Forwards
 
