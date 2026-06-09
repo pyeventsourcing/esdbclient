@@ -6,13 +6,13 @@ on:
       - 'v*'
 
 jobs:
-#  test:
-#    name: Tests
-#    uses: ./.github/workflows/tests.yml
+  test:
+    name: Tests
+    uses: ./.github/workflows/test.yml
 
   build:
     name: Build distributions
-#    needs: test
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
