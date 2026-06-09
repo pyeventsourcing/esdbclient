@@ -41,6 +41,12 @@ specifying new event records:
 * Use [`NewEvent`](#the-newevent-class) with [`append_to_stream()`](#append-to-stream) and [`multi_append_to_stream()`](#multi-append-to-stream).
 * Use [`NewRecord`](#the-newrecord-class) with the [`append_records()`](#append-records) method.
 
+::: info
+The difference between [`NewEvent`](#the-newevent-class) and [`NewRecord`](#the-newrecord-class) is that [`NewRecord`](#the-newrecord-class)
+represents the evolution of the KurrentDB API, has a `stream_name` field. The name
+"record" reflects the fact that users store more than just events in KurrentDB.
+:::
+
 The `data` field of [`NewEvent`](#the-newevent-class) and [`NewRecord`](#the-newrecord-class) is a
 Python bytes object that carries the event payload. If you serialize your event state as JSON,
 you can take advantage of KurrentDB's broader functionality such as projections. But you may
