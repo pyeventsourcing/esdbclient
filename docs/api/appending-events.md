@@ -2,109 +2,109 @@
 order: 3
 ---
 
-# Appending Events
+# Appending events
 
-This guide describes methods for recording new events in KurrentDB.
+This guide describes Python client methods for writing new events and records to KurrentDB.
 
 ## Overview
 
 The [Python clients for KurrentDB](getting-started.md#python-clients-for-kurrentdb) have three methods for writing new events:
 
 * [`append_to_stream()`](#append-to-stream) – write a collection of events to a single stream
-* [`multi_append_to_stream()`](#multi-append-to-stream) – write collections of events to different streams
-* [`append_records()`](#append-records) – write events to one or many streams in any order
+* [`multi_append_to_stream()`](#multi-append-to-stream) – write collections of events to multiple streams
+* [`append_records()`](#append-records) – write events to one or more streams in any order
 
-These methods are atomic and [idempotent](#idempotent-behavior).
+These methods are atomic and support [idempotent retries](#idempotent-behavior).
 
-There are also methods for getting and setting [stream metadata](@server/features/streams.md#metadata-and-reserved-names):
+The clients also provide methods for managing [stream metadata](@server/features/streams.md#metadata-and-reserved-names):
 
 * [`get_stream_metadata()`](#get-stream-metadata)
 * [`set_stream_metadata()`](#set-stream-metadata)
 
-## New Event Records
+## New event records
 
-KurrentDB organises event records in streams within a global transaction log.
+KurrentDB organises records into streams within a global transaction log.
 
-KurrentDB assigns two sequence numbers to each new event record:
+The Python clients provide two dataclasses for creating new records:
 
-* **Commit position** – The position in the global transaction log.
-* **Stream position** – The position of an event in its stream.
+* Use [`NewEvent`](#the-newevent-class) with [`append_to_stream()`](#append-to-stream) and [`multi_append_to_stream()`](#multi-append-to-stream).
+* Use [`NewRecord`](#the-newrecord-class) with the [`append_records()`](#append-records) method.
+
+::: info
+[`NewRecord`](#the-newrecord-class) reflects the evolution of the KurrentDB API. Unlike [`NewEvent`](#the-newevent-class),
+it has a `stream_name` field. The name "record" reflects the fact that users may store more than
+just events in KurrentDB.
+:::
+
+The `data` field of [`NewEvent`](#the-newevent-class) and [`NewRecord`](#the-newrecord-class) is a
+Python `bytes` object that contains the record payload. If you serialize your events as JSON,
+you can take advantage of KurrentDB features such as projections. However, you are free
+to use any serialization format that suits your requirements.
+
+The `content_type` field indicates whether `data` contains JSON or another binary format.
+You can choose between `"application/json"` and `"application/octet-stream"`. For
+example, if you use Message Pack or Protobuf, or if you compress or encrypt JSON data
+before writing it, use `"application/octet-stream"`. The default value is `"application/json"`.
+
+The `metadata` field of is a Python `bytes` object that contains additional information
+about the record, such as correlation IDs, timestamps, access information, or other
+application-specific values. Metadata is stored separately from the payload.
+See [metadata restrictions](#metadata-restrictions) when using [`multi_append_to_stream()`](#multi-append-to-stream) and [`append_records()`](#append-records).
+
+The `id` field is a `UUID` that can uniquely identify the record. KurrentDB does not
+enforce uniqueness of record IDs, but they are used to support [idempotent append behavior](#idempotent-behavior).
+By default, a new version 4 UUID is generated.
+
+When a record is written, KurrentDB assigns two sequence numbers:
+
+* **Commit position** – The position of the record in the global transaction log.
+* **Stream position** – The position of the record within its stream.
 
 Each stream has a unique name. Stream positions are zero-based and gapless.
 The position in a stream is position `0`, the second is position `1`, the
 third is position `2`, and so on. Positions in KurrentDB's global transaction log
 are not gapless.
 
-The Python clients use two different dataclasses for
-specifying new event records:
 
-* Use [`NewEvent`](#the-newevent-class) with [`append_to_stream()`](#append-to-stream) and [`multi_append_to_stream()`](#multi-append-to-stream).
-* Use [`NewRecord`](#the-newrecord-class) with the [`append_records()`](#append-records) method.
+## Consistency checks
 
-::: info
-The difference between [`NewEvent`](#the-newevent-class) and [`NewRecord`](#the-newrecord-class) is that [`NewRecord`](#the-newrecord-class)
-represents the evolution of the KurrentDB API, has a `stream_name` field. The name
-"record" reflects the fact that users store more than just events in KurrentDB.
-:::
+When writing to a stream, you can use consistency checks to ensure that the stream is
+in the expected state before events are appended.
 
-The `data` field of [`NewEvent`](#the-newevent-class) and [`NewRecord`](#the-newrecord-class) is a
-Python bytes object that carries the event payload. If you serialize your event state as JSON,
-you can take advantage of KurrentDB's broader functionality such as projections. But you may
-serialize using whatever format suits your requirements.
-
-The `content_type` field of [`NewEvent`](#the-newevent-class) and [`NewRecord`](#the-newrecord-class) indicates whether the `data`
-is serialised as JSON or another binary format. You can choose between `"application/json"` and `"application/octet-stream"`. For
-example, if you are using Message Pack or Protobuf to serialise your domain events, or you are serialising with JSON but also
-using application-level compression or encryption, then you can use `"application/octet-stream"` as the content type. The default
-value is `"application/json"`.
-
-The `metadata` field of [`NewEvent`](#the-newevent-class) and [`NewRecord`](#the-newrecord-class) is
-a Python bytes object that carries salient information about the event. It can be used for storing
-additional information alongside your event payload, such as correlation IDs, timestamps, access information,
-etc. KurrentDB allows you to store a separate byte array containing this information to keep it separate.
-See [metadata restrictions](#metadata-restrictions) when using [`multi_append_to_stream()`](#multi-append-to-stream) and [`append_records()`](#append-records).
-
-The `id` field of [`NewEvent`](#the-newevent-class) and [`NewRecord`](#the-newrecord-class) is a `UUID` object that
-can uniquely identify the event. KurrentDB does not enforce unique event IDs,
-however they are used to activate [idempotent append behavior](#idempotent-behavior). The default value is a
-new version 4 UUID.
-
-## Consistency Checks
-
-When writing to a stream, you can activate consistency checks using:
-* the `current_version` argument of the [`append_to_stream()`](#the-newevent-class) method,
-* the `current_version` field of the [`NewEvents`](#the-newevents-class) dataclass in [`multi_append_to_stream()`](#multi-append-to-stream),
+Consistency checks are specified using:
+* the `current_version` argument of [`append_to_stream()`](#the-newevent-class),
+* the `current_version` field of the [`NewEvents`](#the-newevents-class) dataclass in [`multi_append_to_stream()`](#multi-append-to-stream), or
 * the `expected_state` field of [`StreamStateCheck`](#the-streamstatecheck-class) in [`append_records()`](#append-records).
 
-There are several available options for this value:
-- `int` value - Stream position of the last recorded event
-- `StreamState.NO_STREAM` - Stream should not exist
-- `StreamState.EXISTS` - Stream should exist
-- `StreamState.ANY` - No concurrency check
+The following consistency checks are available:
+- `int` - the stream's current version must match the specified value,
+- `StreamState.NO_STREAM` - stream must not exist,
+- `StreamState.EXISTS` - stream must exist, and
+- `StreamState.ANY` - no consistency check is performed.
 
-To protect the stream from becoming inconsistent due to conflicting concurrent writers,
-use `StreamState.NO_STREAM` when writing to a new stream, and the last stream position
-when writing subsequent events. Alternatively, you may require only that the stream has at least one event by using `StreamState.EXISTS`
-or fully deactivate concurrency control by using `StreamState.ANY`.
+To prevent concurrent writers from producing unexpected results, use `StreamState.NO_STREAM` when
+creating a new stream and the stream's current version when writing subsequent events.
+Alternatively, use `StreamState.EXISTS` to require that the stream already exists.
+Consistency checks can be diabled by using `StreamState.ANY`.
 
-If any of your consistency checks fail, [`append_to_stream()`](#append-to-stream) and
-[`multi_append_to_stream()`](#multi-append-to-stream) will raise a `WrongCurrentVersionError`
-exception. The [`append_records()`](#append-records) method will raise a `ConsistencyChecksFailedError`
-exception.
+If a consistency check fails, [`append_to_stream()`](#append-to-stream) and
+[`multi_append_to_stream()`](#multi-append-to-stream) will raise a `WrongCurrentVersionError`. The
+[`append_records()`](#append-records) method raises a `ConsistencyChecksFailedError`.
 
-## Idempotent Behavior
+## Idempotent behavior
 
-KurrentDB's append operations are idempotent, with respect to the event IDs.
-So long as the event IDs are unchanged, retrying a successful append operation
-will return successfully, without failing due to any [consistency checks](#consistency-checks),
-and without appending duplicate events.
+KurrentDB append operations are idempotent. If a successful append operation is retried
+with the same [consistency checks](#consistency-checks) and the same event IDs, the
+operation will succeed without appending duplicate events.
 
-Without KurrentDB's idempotent append behavior, when an append request apparently
-fails, a client would have to probe the database to determine whether it succeeded.
+This allows clients to safely retry append operations when the outcome is uncertain,
+for example when a network failure occurs after the operation has been committed but
+before the response has been received.
 
-Please note, KurrentDB does not enforce unique event IDs.
+KurrentDB does not enforce globally unique event IDs. Event IDs are used only to detect
+retries of the same append operation.
 
-## Append to Stream
+## Append to stream
 
 The `append_to_stream()` method appends new event records to a named stream.
 
@@ -129,7 +129,7 @@ This method is atomic and [idempotent](#idempotent-behavior).
 Events can only be written to the "leader" node of a KurrentDB cluster.
 :::
 
-### The NewEvent Class
+### The NewEvent class
 
 Use the `NewEvent` dataclass with the
 [`append_to_stream()`](#append-to-stream) and [`multi_append_to_stream()`](#multi-append-to-stream) methods.
@@ -144,7 +144,7 @@ Use the `NewEvent` dataclass with the
 
 ### Examples
 
-#### Append to New Stream
+#### Append to new stream
 
 The example below appends an event to a new stream `"student-1"`.
 
@@ -202,7 +202,7 @@ await client.append_to_stream(
 The argument `current_version=StreamState.NO_STREAM` checks that no previous events
 have been appended.
 
-#### Append to Existing Stream
+#### Append to existing stream
 
 The example below appends a second event to stream `"student-1"`.
 
@@ -238,7 +238,7 @@ await client.append_to_stream(
 The argument `current_version=0` checks that exactly one event has been appended to the stream.
 
 
-#### Wrong Current Version Error
+#### Wrong current version error
 
 The example below shows consistency checks failing an append operation.
 
@@ -297,7 +297,7 @@ The `StreamState.NO_STREAM` value is wrong because the stream already
 has two events. The append operation fails by raising a `WrongCurrentVersionError`
 exception.
 
-## Multi-Append to Stream
+## Multi-append to stream
 
 The `multi_append_to_stream()` method appends groups of new events to different streams.
 
@@ -328,7 +328,7 @@ The `multi_append_to_stream()` method is supported by KurrentDB 25.1 and later.
 :::
 
 
-### The NewEvents Class
+### The NewEvents class
 
 Use the `NewEvents` dataclass with the
 [`multi_append_to_stream()`](#multi-append-to-stream) method.
@@ -408,7 +408,7 @@ await client.multi_append_to_stream(
 The `StreamState.NO_STREAM` values check that no previous events
 have been appended.
 
-#### Append to Existing Streams
+#### Append to existing streams
 
 The example below appends events to two existing streams.
 
@@ -473,7 +473,7 @@ The `current_version=1` value checks exactly two events have been appended to `"
 
 The `current_version=0` value checks exactly one event has been appended to `"course-1"`
 
-## Append Records
+## Append records
 
 The `append_records()` method appends new event records to multiple streams in any order.
 
@@ -501,7 +501,7 @@ Events can only be written to the "leader" node of a KurrentDB cluster.
 The `append_records()` method is supported by KurrentDB 26.1 and later.
 :::
 
-### The NewRecord Class
+### The NewRecord class
 
 Use the `NewRecord` dataclass with the [`append_records()`](#append-records) method.
 
@@ -515,7 +515,7 @@ Use the `NewRecord` dataclass with the [`append_records()`](#append-records) met
 | `id`           | `UUID`  | A unique ID for the event.                                   | `uuid.uuid4()`       |
 
 
-### The StreamStateCheck Class
+### The StreamStateCheck class
 
 Use the `StreamStateCheck` dataclass with the [`append_records()`](#append-records) method.
 
@@ -604,7 +604,7 @@ The `expected_state=StreamState.NO_STREAM` value checks `"student-2"` has no eve
 
 The `expected_state=0` value checks exactly one event has been appended to `"course-2"`
 
-#### Consistency Checks Failed Error
+#### Consistency checks failed error
 
 The example below shows consistency checks failing an append operation.
 
@@ -688,7 +688,7 @@ exists. The append operation fails by raising a `ConsistencyChecksFailedError`
 exception which details the failure.
 
 
-## Metadata Restrictions
+## Metadata restrictions
 
 When appending events with [`multi_append_to_stream()`](#multi-append-to-stream) and
 [`append_records()`](#append-records), the `metadata` field of `NewEvent` or
@@ -716,7 +716,7 @@ The following metadata values are NOT acceptable and will cause a
 | ❌ | Nested JSON objects                 | `b'{"a": {}}'`                                |
 
 
-## Get Stream Metadata
+## Get stream metadata
 
 The `get_stream_metadata()` method gets [stream metadata](@server/features/streams.md#metadata-and-reserved-names) for a particular stream.
 
@@ -749,7 +749,7 @@ metadata, current_version = await client.get_stream_metadata(
 ```
 :::
 
-## Set Stream Metadata
+## Set stream metadata
 
 The `set_stream_metadata()` method sets [stream metadata](@server/features/streams.md#metadata-and-reserved-names) for a particular stream.
 If the named stream does not exist, the metadata will be set anyway. This allows streams

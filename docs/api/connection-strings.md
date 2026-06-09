@@ -2,7 +2,7 @@
 order: 2
 ---
 
-# Connection Strings
+# Connection strings
 
 This guide explains the standardized connection string format used by all official KurrentDB clients.
 
@@ -12,29 +12,30 @@ For production services, ask your service provider for a valid connection string
 
 KurrentDB clients use a connection string to configure their connection to KurrentDB.
 
-## Two Protocols
+## Two protocols
 
 KurrentDB connection strings support two protocols.
 
 * **`kurrentdb://`** for **connecting directly** to specific KurrentDB server endpoints.
 
-* **`kurrentdb+discover://`** for connecting using cluster discovery **via DNS A records**.
+* **`kurrentdb+discover://`** for connecting using cluster discovery **via DNS records**.
 
-With the `kurrentdb://` protocol you can specify one or many endpoints, separated by commas. If you specify only one
-endpoint, the client will **connect directly and remain with it**. If you specify
-many endpoints, the client will use them to query for cluster information and **pick an endpoint from the
-obtained cluster information** for continuing operations, according to the node preference specified by the connection
-string - see options below. This process will be repeated if the client detects that it needs
-to reconnect to the cluster. An "endpoint" can be a specified either as a host name or an
-IP address, with a port number.
+With the `kurrentdb://` protocol, you can specify one or many endpoints, separated by
+commas. If a single endpoint is specified, the client **connects directly** to that endpoint
+and continues to use it for subsequent operations. If multiple endpoints are specified,
+the client uses them to query cluster information and selects an endpoint **from the
+discovered cluster members** according to the node preference specified in the connection
+string (see options below). If the client needs to reconnect, this discovery process is
+repeated. An endpoint may be specified as either a host name or an IP address, together
+with a port number.
 
-With the `kurrentdb+discover://` protocol you should specify a fully-qualified domain name of a KurrentDB cluster,
-with an optional port number. Using the cluster's **DNS A records**, the client will query for cluster information
-and pick an endpoint from the cluster information for continuing operations, according to the node preference
-specified by the connection string - see options below. This process will be repeated if the client detects that
-it needs to reconnect to the cluster.
+With the `kurrentdb+discover://` protocol, you should specify the fully-qualified domain
+name of a KurrentDB cluster, with an optional port number. The client **resolves the
+cluster domain name** to discover cluster nodes, queries the cluster for membership information,
+and then selects an endpoint according to the node preference specified in the
+connection string (see options below). If the client needs to reconnect, the discovery process is repeated.
 
-## User Info
+## User info
 
 Both the `kurrentdb://` and `kurrentdb+discover://` protocols support an optional user info string.
 If it exists, the user info string must be separated from the rest of the URI
@@ -68,9 +69,7 @@ For connecting to a cluster configured with DNS A records for the cluster endpoi
 kurrentdb+discover://user:pass@cluster1:2113
 ```
 
-## User Certificates
-
-<Badge type="info" vertical="middle" text="License Required"/>
+## User certificates
 
 To authenticate a client with an X.509 certificate, you need:
 
@@ -85,7 +84,11 @@ Here's an example for connecting to KurrentDB with a client certificate.
 kurrentdb://node1:2113?userCertFile=user_cert.pem&userKeyFile=user_key.pem
 ```
 
-## Connection Options
+::: info
+A licence is required to authenticate clients with user certificates.
+:::
+
+## Connection options
 
 The table below describes optional query parameters that can be used in the connection string to configure the client.
 All option field names and values are case-insensitive.

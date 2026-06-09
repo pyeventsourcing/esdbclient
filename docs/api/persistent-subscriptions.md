@@ -2,11 +2,11 @@
 order: 7
 ---
 
-# Persistent Subscriptions
+# Persistent subscriptions
 
-This guide describes the Python client methods for persistent subscriptions.
+This guide describes methods for persistent subscriptions.
 
-## Introduction
+## Overview
 
 Persistent subscriptions are similar to [catch-up subscriptions](./subscriptions.md) with two key differences:
 
@@ -19,7 +19,7 @@ Persistent subscriptions are similar to [catch-up subscriptions](./subscriptions
 
 You can read more about persistent subscriptions in the [server documentation](@server/features/persistent-subscriptions.md).
 
-### Creating Subscription Groups
+### Creating subscription groups
 
 The first step is to create a new persistent subscription group. Admin permissions are required.
 
@@ -28,7 +28,7 @@ The Python clients have two methods for creating a persistent subscription group
 * [`create_subscription_to_stream()`](#create-subscription-to-stream) – create persistent subscription to a stream
 * [`create_subscription_to_all()`](#create-subscription-to-all) – create persistent subscription to global transaction log
 
-### Consumer Strategies
+### Consumer strategies
 
 When creating a persistent subscription group, you can choose between a number of consumer strategies.
 
@@ -65,7 +65,7 @@ The main aim of this strategy is to decrease the likelihood of concurrency and
 ordering issues while maintaining load balancing. This is **not a guarantee**,
 and you should handle the usual ordering and concurrency issues.
 
-### Consuming Events
+### Consuming events
 
 Consumers read from existing subscription groups. The server distributes events to
 consumers according to the subscription group's consumer strategy setting.
@@ -92,7 +92,7 @@ event ID to send to the server, letting the server know the message has been han
 |-----------|-------------------|------------------------------|
 | `item`    | `RecordedEvent`   | Successfully consumed events |
 
-#### Negative Acknowledgements
+#### Negative acknowledgements
 
 If processing fails for some reason, the consumer should call `nack()` on its `PersistentSubscription` object,
 passing in both the `RecordedEvent` and a negative acknowledgement action.
@@ -111,7 +111,7 @@ The negative acknowledgement `action` describes what the server should do with t
 | `"skip"`  | Skip this message do not resend and do not put in poison queue.       |
 | `"stop"`  | Stop the subscription.                                                |
 
-### Adjusting Group Settings
+### Adjusting group settings
 
 You can edit the settings of an existing subscription group while it is running,
 you don't need to delete and recreate it to change settings. When you update the
@@ -124,7 +124,7 @@ The Python clients have two methods for adjusting the settings of a persistent s
 * [`update_subscription_to_stream()`](#update-subscription-to-stream) – update settings for subscription to a stream
 * [`update_subscription_to_all()`](#update-subscription-to-all) – update settings for subscription to global transaction log
 
-### Getting Subscription Info
+### Getting subscription info
 
 The Python clients have three methods for getting information about existing persistent subscriptions.
 
@@ -133,7 +133,7 @@ The Python clients have three methods for getting information about existing per
 * [`list_subscriptions()`](#list-subscriptions) – get information about all existing persistent subscriptions
 
 
-### Deleting Subscription Groups
+### Deleting subscription groups
 
 Remove a subscription group with the delete operation. Like the creating and updating,
 you must have admin permissions to delete a persistent subscription group.
@@ -143,7 +143,7 @@ The Python clients have one method for deleting a persistent subscription group.
 * [`delete_subscription()`](#delete-subscription) – delete subscription group
 
 
-## Create Subscription to Stream
+## Create subscription to stream
 
 Use `create_subscription_to_stream()` to create a group for consuming a stream.
 
@@ -206,7 +206,7 @@ await client.create_subscription_to_stream(
 :::
 
 
-## Create Subscription to All
+## Create subscription to all
 
 Use `create_subscription_to_all()` to create a group for consuming the global transaction log.
 
@@ -255,7 +255,7 @@ await client.create_subscription_to_all(
 ```
 :::
 
-## Read Subscription to Stream
+## Read subscription to stream
 
 Use `read_subscription_to_stream()` to start consuming events from a stream.
 
@@ -353,7 +353,7 @@ async with await client.read_subscription_to_stream(
 ```
 :::
 
-## Read Subscription to All
+## Read subscription to all
 
 Use `read_subscription_to_all()` to start consuming events from the global transaction log.
 
@@ -422,7 +422,7 @@ async with await client.read_subscription_to_all(
 ```
 :::
 
-## Update Subscription to Stream
+## Update subscription to stream
 
 Use `update_subscription_to_stream()` to adjust a group consuming from a stream.
 
@@ -472,7 +472,7 @@ await client.update_subscription_to_stream(
 ```
 :::
 
-## Update Subscription to All
+## Update subscription to all
 
 Use `update_subscription_to_all()` to adjust a group consuming from the global transaction log.
 
@@ -522,7 +522,7 @@ await client.update_subscription_to_all(
 ```
 :::
 
-## Get Subscription Info
+## Get subscription info
 
 Use `get_subscription_info()` to get a [`SubscriptionInfo`](#subscription-info) object for a persistent subscription group.
 
@@ -573,7 +573,7 @@ await client.get_subscription_info(
 :::
 
 
-## List Subscriptions to Stream
+## List subscriptions to stream
 
 Use `list_subscriptions_to_stream()` to return a list of [`SubscriptionInfo`](#subscription-info) objects describing persistent subscriptions to a named stream.
 
@@ -599,7 +599,7 @@ await client.list_subscriptions_to_stream(stream_name="order-123")
 :::
 
 
-## List Subscriptions
+## List subscriptions
 
 Use `list_subscriptions()` to return a list of [`SubscriptionInfo`](#subscription-info) objects describing all existing persistent subscriptions.
 
@@ -623,7 +623,7 @@ await client.list_subscriptions()
 ```
 :::
 
-## Delete Subscription
+## Delete subscription
 
 Use `delete_subscription()` to permanently delete a persistent subscription group.
 
@@ -672,7 +672,7 @@ await client.delete_subscription(
 ```
 :::
 
-## Subscription Info
+## Subscription info
 
 The `SubscriptionInfo` objects returned by [`get_subscription_info()`](#get-subscription-info),
 [`list_subscriptions_to_stream()`](#list-subscriptions-to-stream), and [`list_subscriptions()`](#list-subscriptions)

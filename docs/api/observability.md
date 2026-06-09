@@ -6,19 +6,19 @@ order: 9
 
 This guide explains how to instrument and export telemetry data from the Python clients.
 
-## Introduction
+## Overview
 
 The Python client package provide [OpenTelemetry](https://opentelemetry.io) intrumentors.
 
 This enables you to monitor, trace, and troubleshoot your event store operations with
 distributed tracing support, for both the sync and async Python clients.
 
-## Instrumenting a Client
+## Instrumenting a client
 
 The Python client instrumentors depend on various OpenTelemetry Python packages, which
 you will need to install.
 
-### Install Package
+### Install package
 
 To ensure verified version compatibility,
 install `kurrentdbclient` with the `opentelemetry` option.
@@ -27,7 +27,7 @@ install `kurrentdbclient` with the `opentelemetry` option.
 pip install kurrentdbclient[opentelemetry]
 ```
 
-### Activate Instrumentor
+### Activate instrumentor
 
 You can then activate the client instrumentors within your application code.
 
@@ -60,12 +60,12 @@ AsyncKurrentDBClientInstrumentor().uninstrument()
 :::
 
 
-## Exporting Telemetry Data
+## Exporting telemetry data
 
 In order to export telemetry data, you will need to
 initialise the global "tracer provider".
 
-### Console Exporter
+### Console exporter
 
 For example, to export data to the console you will need to install the Python
 package `opentelemetry-sdk`, and use the class `TracerProvider`, `BatchSpanProcessor`,
@@ -94,7 +94,7 @@ provider.add_span_processor(
 set_tracer_provider(provider)
 ```
 
-### OTLP Exporter
+### OTLP exporter
 
 To export data to an OpenTelemetry compatible data collector, such as
 [Jaeger](https://www.jaegertracing.io), you will need to install the Python package
@@ -140,9 +140,9 @@ You can find a list of available exporters for different platforms in the
 
 For detailed configuration options, refer to the OpenTelemetry [Python documentation](https://opentelemetry.io/docs/languages/python/).
 
-## Understanding Traces
+## Understanding traces
 
-### What Gets Traced
+### What gets traced
 
 At this time, the instrumented methods are [`append_to_stream()`](./appending-events.md#append-to-stream),
 [`multi_append_to_stream()`](./appending-events.md#multi-append-to-stream),
@@ -161,7 +161,7 @@ spans extract this information from the recorded event metadata, and make each
 "consumer" span a child of a "producer" parent span.
 
 
-### Producer Span
+### Producer span
 
 Each span includes attributes to help with monitoring and debugging.
 
@@ -228,7 +228,7 @@ Here's an instrumentor span for a successful [`append_to_stream()`](./appending-
 ```
 
 
-### Consumer Span
+### Consumer span
 
 Consumer spans have the following attributes.
 
@@ -289,7 +289,7 @@ Here's an instrumentor span from a [catch-up subscription](./subscriptions.md) o
 ```
 
 
-### Span Errors
+### Span errors
 
 Errors are traced by including a "span event" with the following attributes.
 

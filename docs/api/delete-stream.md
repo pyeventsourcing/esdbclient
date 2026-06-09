@@ -2,12 +2,11 @@
 order: 5
 ---
 
-# Deleting Events
+# Deleting events
 
-This guide describes the Python client methods for deleting streams.
+This guide describes Python client methods for deleting streams in KurrentDB.
 
-## Introduction
-
+## Overview
 
 In KurrentDB, you can delete events and streams either partially or
 completely. Stream [metadata settings](./appending-events.md#set-stream-metadata)
@@ -21,7 +20,7 @@ The Python clients have two methods for deleting streams:
 * `delete_stream()` – soft delete
 * `tombstone_stream()` – hard delete
 
-## Delete Stream
+## Delete stream
 
 The `delete_stream()` method "soft deletes" a stream in KurrentDB.
 
@@ -137,7 +136,7 @@ await client.delete_stream(
 :::
 
 
-## Tombstone Stream
+## Tombstone stream
 
 The `tombstone_stream()` method "hard deletes" a stream in KurrentDB.
 

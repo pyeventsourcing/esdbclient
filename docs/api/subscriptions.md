@@ -2,15 +2,16 @@
 order: 6
 ---
 
-# Catch-up Subscriptions
+# Catch-up subscriptions
 
-This guide describes the Python client methods for catch-up subscriptions.
+This guide describes Python client methods for catch-up subscriptions to KurrentDB.
 
-## Introduction
+Catch-up subscription methods are like the [read methods](./reading-events.md).
+The difference is that the streaming iterator responses from read methods stop
+when all recorded events have been received, whereas catch-up subscriptions
+block and then continue as new events are recorded.
 
-Catchup-subscriptions are like the responses from the read methods, with one
-useful difference: they return [already-recorded events](./reading-events.md#recorded-events), and then
-continue as new events are subsequently recorded.
+## Overview
 
 You can subscribe to individual streams, to the global transaction log, and to a secondary indexes.
 
@@ -20,7 +21,7 @@ The Python clients for KurrentDB have three methods for catch-up subscriptions.
 * [`subscribe_to_all()`](#subscribe-to-all) - returns a catch-up subscription to global transaction log
 * [`subscribe_to_index()`](#subscribe-to-index) – returns a catch-up subscription to a secondary index
 
-## Subscribe to Stream
+## Subscribe to stream
 
 The `subscribe_to_stream()` method returns a catch-up subscription to a stream.
 
@@ -40,9 +41,9 @@ optionally starting after a specific stream position or the end of the stream.
 | `timeout`             | Maximum duration of operation (in seconds).                                                                                                              | `None`  |
 | `credentials`         | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`  |
 
-On success, `subscribe_to_stream()` returns an iterable of `RecordedEvent` objects.
+The `subscribe_to_stream()` method returns an iterable of `RecordedEvent` objects.
 
-Please note, a `NotFoundError` exception will be raised if the stream does not exist.
+If the stream does not exist, a `NotFoundError` exception will be raised .
 
 
 ### Examples
@@ -124,7 +125,7 @@ await client.append_to_stream(
 ```
 :::
 
-### Basic Subscription
+### Basic subscription
 
 The simplest way to subscribe to a stream is to supply a `stream_name` argument.
 
@@ -151,7 +152,7 @@ async with await client.subscribe_to_stream(stream_name="order-123") as subscrip
 ```
 :::
 
-### After Stream Position
+### After stream position
 
 Specifying a `stream_position` argument will get events after that position.
 
@@ -182,7 +183,7 @@ async with await client.subscribe_to_stream(
 ```
 :::
 
-### From End of Stream
+### From end of stream
 
 Here's an example of subscribing from the end of a stream for "live events" only.
 
@@ -205,7 +206,7 @@ async with await client.subscribe_to_stream(
 ```
 :::
 
-### Resolving Link Events
+### Resolving link events
 
 When you subscribe to a stream with link events (e.g., category streams), set `resolve_links` to `True`.
 
@@ -240,7 +241,7 @@ a [filtered subscription](#subscribe-to-all) for a specific type or stream name 
 than subscribing to the corresponding system projection.
 
 
-### Stream Not Found Error
+### Stream not found error
 
 Subscribing to a stream that doesn't exist will raise a `NotFoundError` exception.
 
@@ -276,7 +277,7 @@ except Exception as e:
 :::
 
 
-## Subscribe To All
+## Subscribe To all
 
 The `subscribe_to_all()` method returns a catch-up subscription to the global transaction log.
 
@@ -300,13 +301,13 @@ See notes on [filtering the global transaction log](./reading-events.md#server-s
 | `timeout`               | Maximum duration of operation (in seconds).                                                                                                              | `None`        |
 | `credentials`           | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`        |
 
-On success, `subscribe_to_all()` returns an iterable of `RecordedEvent` objects.
+The `subscribe_to_all()` method returns an iterable of `RecordedEvent` objects.
 
 ### Examples
 
 Let's see how to use `subscribe_to_all()` by looking at some examples.
 
-### Basic Subscription
+### Basic subscription
 
 ::: tabs
 @tab sync
@@ -329,7 +330,7 @@ async with await client.subscribe_to_all() as subscription:
 ```
 :::
 
-### After Commit Position
+### After commit position
 
 Specifying a `commit_position` argument will get events after that position in the global transaction log.
 
@@ -356,7 +357,7 @@ async with await client.subscribe_to_all(
 ```
 :::
 
-### Live Events Only
+### Live events only
 
 Here's an example of subscribing from the end of the global transaction log.
 
@@ -375,7 +376,7 @@ async with await client.subscribe_to_all(from_end=True) as subscription:
 ```
 :::
 
-### Resolving Link Events
+### Resolving link events
 
 KurrentDB projections can create "link events" that are pointers to events you have appended to a stream.
 
@@ -395,7 +396,7 @@ async with await client.subscribe_to_all(resolve_links=True) as subscription:
 :::
 
 
-### Filtering by Event Type
+### Filtering by event type
 
 Here's an example of filtering for certain event types.
 
@@ -420,7 +421,7 @@ async with await client.subscribe_to_all(
 ```
 :::
 
-### Filtering by Stream Name
+### Filtering by stream name
 
 Here's an example of filtering for a stream category.
 
@@ -592,10 +593,6 @@ The same principles can be applied when processing events from a stream or a sec
 
 ## Subscribe to Index
 
-::: info
-Supported by KurrentDB 25.1 and later.
-:::
-
 The `subscribe_to_index()` method returns a catch-up subscription to a secondary index.
 
 You can subscribe to all the events in a secondary index, optionally starting after a commit position.
@@ -607,29 +604,35 @@ You can subscribe to all the events in a secondary index, optionally starting af
 | `timeout`         | Maximum duration of operation (in seconds).                                                                                                              | `None`  |
 | `credentials`     | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`  |
 
-On success, `subscribe_to_index()` returns an iterable of `RecordedEvent` objects.
+The `subscribe_to_index()` method returns an iterable of `RecordedEvent` objects.
+
+::: info
+Supported by KurrentDB 25.1 and later.
+:::
 
 ### Examples
 
 Let's see how to use `subscribe_to_index()` by looking at some examples.
 
-### Basic Subscription
+### Basic subscription
+
+The example below subscribes to all events in the `"et-OrderUpdated"` index.
 
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-# Subscribe to all events in a secondary index
-with client.subscribe_to_index(index_name="et-OrderCreated") as subscription:
-    # Iterate through the subscription with a 'for' loop
+with client.subscribe_to_index(
+    index_name="et-OrderCreated"
+) as subscription:
     for event in subscription:
         assert event.type == "OrderCreated"
         break  # <-- so we can continue with the examples
 ```
 @tab async
 ```python:no-line-numbers
-# Subscribe to all events in a secondary index
-async with await client.subscribe_to_index(index_name="et-OrderCreated") as subscription:
-    # Iterate through the subscription with an 'async for' loop
+async with await client.subscribe_to_index(
+    index_name="et-OrderCreated"
+) as subscription:
     async for event in subscription:
         assert event.type == "OrderCreated"
         break  # <-- so we can continue with the examples
@@ -637,29 +640,27 @@ async with await client.subscribe_to_index(index_name="et-OrderCreated") as subs
 :::
 
 
-### After Commit Position
+### After commit position
+
+The example below subscribes to the secondardy index after a specific commit position.
 
 ::: tabs
 @tab sync
 ```python:no-line-numbers
-# Subscribe to all events in a secondary index
 with client.subscribe_to_index(
     index_name="et-OrderUpdated",
     commit_position=commit_position,
 ) as subscription:
-    # Iterate through the subscription with a 'for' loop
     for event in subscription:
         assert event.type == "OrderUpdated"
         break  # <-- so we can continue with the examples
 ```
 @tab async
 ```python:no-line-numbers
-# Subscribe to all events in a secondary index
 async with await client.subscribe_to_index(
     index_name="et-OrderUpdated",
     commit_position=commit_position,
 ) as subscription:
-    # Iterate through the subscription with an 'async for' loop
     async for event in subscription:
         assert event.type == "OrderUpdated"
         break  # <-- so we can continue with the examples
@@ -667,7 +668,7 @@ async with await client.subscribe_to_index(
 :::
 
 
-## Handling Dropped Subscriptions
+## Handling dropped subscriptions
 
 An application which hosts the subscription can go offline for some time for
 different reasons. It could be a crash, infrastructure failure, or a new version
@@ -714,11 +715,7 @@ while True:
 ```
 :::
 
-## Handling Subscription State Changes
-
-::: info EventStoreDB 23.10.0+
-This feature requires EventStoreDB version 23.10.0 or later.
-:::
+## Handling subscription state changes
 
 When a subscription processes historical events and reaches the end of the
 stream, it transitions from "catching up". You can detect this
@@ -763,6 +760,11 @@ async with await client.subscribe_to_stream(
             print(f"Processing event: {item.type}")
 
 ```
+:::
+
+
+::: info EventStoreDB 23.10.0+
+This feature requires EventStoreDB version 23.10.0 or later.
 :::
 
 ::: tip

@@ -2,7 +2,7 @@
 order: 1
 ---
 
-# Getting Started
+# Getting started
 
 This guide will help you get started with the Python clients for KurrentDB:
 * [Start KurrentDB locally](#running-kurrentdb-locally)
@@ -13,7 +13,7 @@ This guide will help you get started with the Python clients for KurrentDB:
 * [Append events to streams](#appending-to-a-stream)
 * [Read streams](#reading-a-stream)
 
-## Running KurrentDB Locally
+## Running KurrentDB locally
 
 You can start KurrentDB with "insecure" mode in Docker by using the `--insecure` flag:
 
@@ -31,13 +31,13 @@ Please read the server docs for more details about [KurrentDB installation](@ser
 
 The [`kurrentdbclient`](https://pypi.org/project/kurrentdbclient/) package provides the official sync and async Python clients for KurrentDB.
 
-### Install or Update Python
+### Install or update Python
 
 For information about how to get the latest version of Python, see the official [Python documentation](https://www.python.org/downloads/).
 
 Before installing the Python clients for KurrentDB, ensure you’re using Python 3.10 or later.
 
-### Install the Python Clients
+### Install the Python clients
 
 If you use `uv`:
 
@@ -59,7 +59,7 @@ source .venv/bin/activate
 pip install "kurrentdbclient~=1.3"
 ```
 
-## Python Clients for KurrentDB
+## Python clients for KurrentDB
 
 The `kurrentdbclient` Python package provides both sync and async clients for KurrentDB.
 
@@ -75,7 +75,7 @@ The official sync and async Python clients have been tested with KurrentDB versi
 and 26.1, and EventStoreDB versions 23.10 and 24.10, with and without SSL/TLS, in both
 single-server and cluster modes, across Python versions 3.10, 3.11, 3.12, 3.13, and 3.14.
 
-## Client Configuration
+## Client configuration
 
 All KurrentDB clients use a standardized [connection string](./connection-strings.md) to configure their connection to KurrentDB.
 
@@ -106,7 +106,7 @@ client = AsyncKurrentDBClient(connection_string)
 ```
 :::
 
-## Creating New Events
+## Creating new events
 
 Use the [`NewEvent`](./appending-events.md#the-newevent-class) class to define new events with a `type` string and binary `data`.
 
@@ -121,7 +121,7 @@ new_event = NewEvent(
 
 See the [`NewEvent`](./appending-events.md#the-newevent-class) documentation for more details.
 
-## Appending to a Stream
+## Appending to a stream
 
 The client [`append_to_stream()`](./appending-events.md#append-to-stream) method records new events in KurrentDB.
 
@@ -160,10 +160,10 @@ await client.append_to_stream(
 ```
 :::
 
-See [Appending Events](./appending-events.md) for more information about writing to KurrentDB.
+See [Appending events](./appending-events.md) for more information about writing to KurrentDB.
 
 
-## Reading a Stream
+## Reading a stream
 
 The client [`get_stream()`](./reading-events.md#get-stream) method reads events from a named stream.
 
@@ -194,9 +194,9 @@ for recorded_event in await client.get_stream(
 ```
 :::
 
-See [Reading Events](./reading-events.md) for more information about reading from KurrentDB.
+See [Reading events](./reading-events.md) for more information about reading from KurrentDB.
 
-## Overriding User Credentials
+## Overriding user credentials
 
 You can use the `credentials` parameter of the Python client methods to override the [user info](./connection-strings.md#user-info) given in a client connection string.
 
