@@ -14,7 +14,7 @@ The [Python clients for KurrentDB](getting-started.md#python-clients-for-kurrent
 * [`multi_append_to_stream()`](#multi-append-to-stream) – write collections of events to different streams
 * [`append_records()`](#append-records) – write events to one or many streams in any order
 
-These methods are atomic and [idempotent](#idempotent-append-behavior).
+These methods are atomic and [idempotent](#idempotent-behavior).
 
 There are also methods for getting and setting [stream metadata](@server/features/streams.md#metadata-and-reserved-names):
 
@@ -58,10 +58,10 @@ additional information alongside your event payload, such as correlation IDs, ti
 etc. KurrentDB allows you to store a separate byte array containing this information to keep it separate.
 See [metadata restrictions](#metadata-restrictions) when using [`multi_append_to_stream()`](#multi-append-to-stream) and [`append_records()`](#append-records).
 
-The `id` field of [`NewEvent`](#the-newevent-class) and [`NewRecord`](#the-newrecord-class) is a `UUID` object that can uniquely identify the event. KurrentDB does not enforce unique event IDs,
-however they are used to activate [idempotent append behavior](#idempotent-append-behavior). If two events with the
-same `UUID` are appended to the same stream with the same optimistic concurrency control, KurrentDB will only append
-one of the events to the stream. The default value is a new version 4 UUID.
+The `id` field of [`NewEvent`](#the-newevent-class) and [`NewRecord`](#the-newrecord-class) is a `UUID` object that
+can uniquely identify the event. KurrentDB does not enforce unique event IDs,
+however they are used to activate [idempotent append behavior](#idempotent-behavior). The default value is a
+new version 4 UUID.
 
 ## Consistency Checks
 
@@ -86,7 +86,7 @@ If any of your consistency checks fail, [`append_to_stream()`](#append-to-stream
 exception. The [`append_records()`](#append-records) method will raise a `ConsistencyChecksFailedError`
 exception.
 
-## Idempotent Append Behavior
+## Idempotent Behavior
 
 KurrentDB's append operations are idempotent, with respect to the event IDs.
 So long as the event IDs are unchanged, retrying a successful append operation
@@ -117,7 +117,7 @@ newly recorded events.
 If the consistency check fails, the `append_to_stream()` method will raise will raise
 a `WrongCurrentVersionError` exception.
 
-This method is atomic and [idempotent](#idempotent-append-behavior).
+This method is atomic and [idempotent](#idempotent-behavior).
 
 ::: info Requires leader
 Events can only be written to the "leader" node of a KurrentDB cluster.
@@ -311,7 +311,7 @@ method raises a `MultiAppendToSameStreamError` exception.
 If any of the consistency checks fail, the `multi_append_to_stream()` method raises a
 `WrongCurrentVersionError` exception.
 
-This method is atomic and [idempotent](#idempotent-append-behavior).
+This method is atomic and [idempotent](#idempotent-behavior).
 
 ::: info Requires leader
 Events can only be written to the "leader" node of a KurrentDB cluster.
@@ -485,7 +485,7 @@ newly recorded events.
 If one or more of the consistency checks fail, the `append_records()` method raises a `ConsistencyChecksFailedError` that details all
 of the consistency check failures.
 
-This method is atomic and [idempotent](#idempotent-append-behavior).
+This method is atomic and [idempotent](#idempotent-behavior).
 
 ::: info Requires leader
 Events can only be written to the "leader" node of a KurrentDB cluster.
@@ -513,10 +513,10 @@ Use the `NewRecord` dataclass with the [`append_records()`](#append-records) met
 
 Use the `StreamStateCheck` dataclass with the [`append_records()`](#append-records) method.
 
-| Field            | Type                                         | Description                                                                                    |
-|------------------|----------------------------------------------|------------------------------------------------------------------------------------------------|
-| `stream_name`    | `str`                                        | Stream to which this record will be appended.                                                  |
-| `expected_state` | <nobr><code>StreamState \| int</code></nobr> | [Consistency check](#consistency-checks) for setting stream metadata. |
+| Field            | Type                                         | Description                                                                                    | Default              |
+|------------------|----------------------------------------------|------------------------------------------------------------------------------------------------|----------------------|
+| `stream_name`    | `str`                                        | Stream to which this record will be appended.                                                  |                      |
+| `expected_state` | <nobr><code>StreamState \| int</code></nobr> | [Consistency check](#consistency-checks) for setting stream metadata. |                      |
 
 
 ### Example
@@ -629,14 +629,13 @@ try:
     )
 except ConsistencyChecksFailedError as e:
     assert len(e.failures) == 1
-    assert isinstance(e.failures[0], ConsistencyCheckFailure)
-    consistency_check_failure = e.failures[0]
-    assert consistency_check_failure.check_index == 0
-    assert consistency_check_failure.stream_state_failure is not None
-    assert consistency_check_failure.stream_state_failure.stream_name == "student-2"
-    assert consistency_check_failure.stream_state_failure.expected_state == -1
-    assert consistency_check_failure.stream_state_failure.actual_state == 1
-
+    failure = e.failures[0]
+    assert isinstance(failure, ConsistencyCheckFailure)
+    assert failure.check_index == 0
+    assert failure.stream_state_failure is not None
+    assert failure.stream_state_failure.stream_name == "student-2"
+    assert failure.stream_state_failure.expected_state == -1
+    assert failure.stream_state_failure.actual_state == 1
 else:
     raise Exception("Shouldn't get here")
 ```
@@ -664,17 +663,15 @@ try:
             ),
         ],
     )
-
 except ConsistencyChecksFailedError as e:
     assert len(e.failures) == 1
-    assert isinstance(e.failures[0], ConsistencyCheckFailure)
-    consistency_check_failure = e.failures[0]
-    assert consistency_check_failure.check_index == 0
-    assert consistency_check_failure.stream_state_failure is not None
-    assert consistency_check_failure.stream_state_failure.stream_name == "student-2"
-    assert consistency_check_failure.stream_state_failure.expected_state == -1
-    assert consistency_check_failure.stream_state_failure.actual_state == 1
-
+    failure = e.failures[0]
+    assert isinstance(failure, ConsistencyCheckFailure)
+    assert failure.check_index == 0
+    assert failure.stream_state_failure is not None
+    assert failure.stream_state_failure.stream_name == "student-2"
+    assert failure.stream_state_failure.expected_state == -1
+    assert failure.stream_state_failure.actual_state == 1
 else:
     raise Exception("Shouldn't get here")
 ```
@@ -715,17 +712,15 @@ The following metadata values are NOT acceptable and will cause a
 
 ## Get Stream Metadata
 
-You can use the `get_stream_metadata()` method to get [stream metadata](@server/features/streams.md#metadata-and-reserved-names).
+The `get_stream_metadata()` method gets [stream metadata](@server/features/streams.md#metadata-and-reserved-names) for a particular stream.
 
-Provide a `stream_name` argument.
+| Parameter     | Type                                                    | Description                                                                                                                                              |
+|---------------|---------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `stream_name` | `str`                                                   | The name of a stream the metadata applies to (don't use `$$` prefix here).                                                                               |
+| `timeout`     | <nobr><code>float \| None</code></nobr>                 | Maximum duration of operation (in seconds).                                                                                                              |
+| `credentials` | <nobr><code>grpc.CallCredentials \| None</code></nobr>  | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). |
 
-| Parameter     | Description                                                                                                                                              | Default |
-|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|---------|
-| `stream_name` | Metadata for this stream will be returned.                                                                                                               |         |
-| `timeout`     | Maximum duration of operation (in seconds).                                                                                                              | `None`  |
-| `credentials` | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`  |
-
-If successful, `get_stream_metadata()` returns a Python `dict` of metadata keys and values for the named stream, along with the current version of the stream's metadata stream.
+The `get_stream_metadata()` method returns a Python `dict` of metadata keys and values for the named stream, along with the current version of the stream's metadata stream.
 If the named stream does not exist, the `dict` will be empty and the current version value will be `StreamState.NO_STREAM`. These two values can
 be used as arguments of `metadata` and `current_version` when calling [`set_stream_metadata()`](#set-stream-metadata).
 
@@ -750,23 +745,19 @@ metadata, current_version = await client.get_stream_metadata(
 
 ## Set Stream Metadata
 
-You can use the `set_stream_metadata()` method to set [stream metadata](@server/features/streams.md#metadata-and-reserved-names).
+The `set_stream_metadata()` method sets [stream metadata](@server/features/streams.md#metadata-and-reserved-names) for a particular stream.
+If the named stream does not exist, the metadata will be set anyway. This allows streams
+to be configured before they are used.
 
-Provide a `stream_name` argument, a Python `dict` of stream metadata keys and values, and optionally the current version of the stream's metadata stream.
+| Parameter         | Type                                                    | Description                                                                                                                                              |
+|-------------------|---------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `stream_name`     | `str`                                                   | The name of a stream the metadata applies to (don't use `$$` prefix here).                                                                               |
+| `metadata`        | `dict[str, Any]`                                        | A Python `dict` of stream metadata keys and values. Needs to be serializable by `json.dumps()`.                                                          |
+| `current_version` | <nobr><code>int \| StreamState</code></nobr>            | [Consistency check](#consistency-checks) for setting stream metadata.                                                                                    |
+| `timeout`         | <nobr><code>float \| None</code></nobr>                 | Maximum duration of operation (in seconds).                                                                                                              |
+| `credentials`     | <nobr><code>grpc.CallCredentials \| None</code></nobr>  | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). |
 
-The named stream's metadata will be overwritten with the given `dict`.
-
-| Parameter         | Description                                                                                                                                              | Default           |
-|-------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------|
-| `stream_name`     | Metadata for this stream will be updated.                                                                                                                |                   |
-| `metadata`        | A Python `dict` of stream metadata keys and values.                                                                                                      |                   |
-| `current_version` | [Consistency check](#consistency-checks) for setting stream metadata.                                                       | `StreamState.ANY` |
-| `timeout`         | Maximum duration of operation (in seconds).                                                                                                              | `None`            |
-| `credentials`     | [Override credentials](./getting-started.md#overriding-user-credentials) derived from [client configuration](./getting-started.md#client-configuration). | `None`            |
-
-If successful, `set_stream_metadata()` returns `None`.
-
-If the named stream does not exist, the metadata will be set anyway. This allows streams to be configured before they are used.
+The `set_stream_metadata()` method returns `None`.
 
 ### Example
 
