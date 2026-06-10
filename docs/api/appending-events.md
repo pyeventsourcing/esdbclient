@@ -46,7 +46,7 @@ You can choose between `"application/json"` and `"application/octet-stream"`. Fo
 example, if you use Message Pack or Protobuf, or if you compress or encrypt JSON data
 before writing it, use `"application/octet-stream"`. The default value is `"application/json"`.
 
-The `metadata` field of is a Python `bytes` object that contains additional information
+The `metadata` field is a Python `bytes` object that contains additional information
 about the record, such as correlation IDs, timestamps, access information, or other
 application-specific values. Metadata is stored separately from the payload.
 See [metadata restrictions](#metadata-restrictions) when using [`multi_append_to_stream()`](#multi-append-to-stream) and [`append_records()`](#append-records).
